@@ -6,7 +6,10 @@
       "Bash(swift package:*)",
       "Bash(swift build:*)",
       "Bash(swift test:*)",
-      "Bash(xcodebuild:*)"
+      "Bash(xcodebuild:*)",
+      "Bash(git commit -m \"$(cat <<''EOF''\nAdd @Fuzzable macro and per-test coverage utilities\n\n- Implement @Fuzzable macro that generates `fuzz` property using cartesian\n  product of all stored properties'' fuzz values\n- Add per-test coverage API using LLVM profile runtime functions via dlsym\n- Include demo tests for coverage isolation and macro expansion\n- Switch macro tests to MacroTesting library for proper Swift Testing support\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>\nEOF\n)\")",
+      "Bash(nm:*)",
+      "Bash(git commit:*)"
     ],
     "deny": [],
     "ask": []

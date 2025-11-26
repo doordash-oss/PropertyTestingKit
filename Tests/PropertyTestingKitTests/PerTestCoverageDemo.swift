@@ -198,3 +198,10 @@ struct PerTestCoverageDemo {
 @Test func printCoverageInstructions() {
     CoverageAnalyzer.printUsageInstructions()
 }
+
+// MARK: - Diagnostic Test
+
+@Test func testCoverageAvailability() {
+    print("🔍 Coverage instrumentation available: \(PerTestCoverage.isAvailable)")
+    print("🔍 Output directory: \(PerTestCoverage.outputDirectory)")
+}

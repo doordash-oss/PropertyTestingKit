@@ -5,41 +5,32 @@
 
 import Foundation
 
-// MARK: - LLVM Profile Runtime Interface
+// MARK: - Coverage Detection
 
-// These functions are provided by the LLVM profile runtime when code is compiled
-// with coverage instrumentation (-profile-generate or --enable-code-coverage).
-// We use dlsym to safely check if they exist before calling.
-
-private let _llvm_profile_reset_counters: (@convention(c) () -> Void)? = {
-    guard let handle = dlopen(nil, RTLD_NOW),
-          let sym = dlsym(handle, "__llvm_profile_reset_counters") else {
-        return nil
-    }
-    return unsafeBitCast(sym, to: (@convention(c) () -> Void).self)
-}()
-
-private let _llvm_profile_write_file: (@convention(c) () -> Int32)? = {
-    guard let handle = dlopen(nil, RTLD_NOW),
-          let sym = dlsym(handle, "__llvm_profile_write_file") else {
-        return nil
-    }
-    return unsafeBitCast(sym, to: (@convention(c) () -> Int32).self)
-}()
-
-private let _llvm_profile_set_filename: (@convention(c) (UnsafePointer<CChar>) -> Void)? = {
-    guard let handle = dlopen(nil, RTLD_NOW),
-          let sym = dlsym(handle, "__llvm_profile_set_filename") else {
-        return nil
-    }
-    return unsafeBitCast(sym, to: (@convention(c) (UnsafePointer<CChar>) -> Void).self)
+// Check if coverage is enabled by looking for environment variable or build flag
+private let coverageEnabled: Bool = {
+    // When swift test --enable-code-coverage is used, codecov directory is created
+    let buildDir = FileManager.default.currentDirectoryPath + "/.build/debug/codecov"
+    return FileManager.default.fileExists(atPath: buildDir)
 }()
 
 // MARK: - Per-Test Coverage API
 
-/// Manages per-test code coverage collection.
+/// Manages per-test code coverage tracking.
 ///
-/// Usage:
+/// **Important Limitation:** Due to LLVM profile runtime constraints, this API cannot
+/// write isolated coverage files per-test within a single test process. The LLVM
+/// profile functions are local symbols that cannot be safely called from user code.
+///
+/// This API provides:
+/// 1. Detection of whether coverage instrumentation is enabled
+/// 2. Logging of test execution for tracking purposes
+/// 3. A wrapper for test bodies (useful for future enhancements)
+///
+/// For **true per-test coverage isolation**, use `EnvironmentBasedCoverage.generateScript()`
+/// which runs each test in a separate process with its own `LLVM_PROFILE_FILE`.
+///
+/// Example usage for tracking:
 /// ```swift
 /// @Test func myTest() {
 ///     PerTestCoverage.run(testName: "myTest") {
@@ -50,18 +41,12 @@ private let _llvm_profile_set_filename: (@convention(c) (UnsafePointer<CChar>) -
 /// }
 /// ```
 ///
-/// Or use the throwing variant:
-/// ```swift
-/// @Test func myTest() throws {
-///     try PerTestCoverage.run(testName: "myTest") {
-///         try someThrowingOperation()
-///     }
-/// }
+/// For isolated coverage files, run the generated script:
+/// ```bash
+/// swift run --target YourTarget -- generate-coverage-script > run-coverage.sh
+/// chmod +x run-coverage.sh
+/// ./run-coverage.sh
 /// ```
-///
-/// After running tests, coverage files will be in the output directory.
-/// Merge them with: `llvm-profdata merge -sparse *.profraw -o merged.profdata`
-/// View report with: `llvm-cov report .build/debug/YourTestBundle -instr-profile=merged.profdata`
 public enum PerTestCoverage {
     /// Directory where coverage files will be written.
     /// Set via `COVERAGE_OUTPUT_DIR` environment variable, defaults to current directory.
@@ -74,9 +59,7 @@ public enum PerTestCoverage {
 
     /// Returns true if coverage instrumentation is available.
     public static var isAvailable: Bool {
-        _llvm_profile_reset_counters != nil &&
-        _llvm_profile_write_file != nil &&
-        _llvm_profile_set_filename != nil
+        coverageEnabled
     }
 
     /// Executes a test body while capturing its isolated code coverage.
@@ -87,8 +70,9 @@ public enum PerTestCoverage {
     /// - Returns: The value returned by the body closure
     @discardableResult
     public static func run<T>(testName: String, body: () throws -> T) rethrows -> T {
-        // Reset counters to isolate this test's coverage (if available)
-        _llvm_profile_reset_counters?()
+        // Note: We don't reset counters as it can cause issues with the LLVM runtime.
+        // Instead, we capture cumulative coverage up to this point.
+        // For true isolation, run tests in separate processes (see EnvironmentBasedCoverage).
 
         // Execute the test
         let result: T
@@ -109,8 +93,6 @@ public enum PerTestCoverage {
     /// Async variant for async test bodies.
     @discardableResult
     public static func run<T>(testName: String, body: () async throws -> T) async rethrows -> T {
-        _llvm_profile_reset_counters?()
-
         let result: T
         do {
             result = try await body()
@@ -124,39 +106,17 @@ public enum PerTestCoverage {
         return result
     }
 
-    /// Writes coverage data to a file named after the test.
+    /// Records that a test has completed (for logging/tracking purposes).
+    /// Note: Actual per-test coverage files require running each test in a separate process.
+    /// See EnvironmentBasedCoverage.generateScript() for that approach.
     private static func writeCoverage(testName: String) {
-        guard let setFilename = _llvm_profile_set_filename,
-              let writeFile = _llvm_profile_write_file else {
-            // Coverage not available, silently skip
-            return
-        }
+        // The LLVM profile runtime functions are not safely callable from Swift
+        // because they are local symbols and may have internal preconditions.
+        // For true per-test coverage isolation, use the environment-based approach:
+        // run each test in a separate process with LLVM_PROFILE_FILE set.
 
-        // Sanitize test name for use as filename
-        let sanitized = testName
-            .replacingOccurrences(of: "/", with: "_")
-            .replacingOccurrences(of: ":", with: "_")
-            .replacingOccurrences(of: " ", with: "_")
-
-        let filename = "\(outputDirectory)/coverage-\(sanitized).\(fileExtension)"
-
-        filename.withCString { cString in
-            setFilename(cString)
-        }
-
-        let result = writeFile()
-        if result != 0 {
-            print("⚠️ Coverage write failed for '\(testName)' (error: \(result))")
-        } else {
-            // Check file size
-            if let attrs = try? FileManager.default.attributesOfItem(atPath: filename),
-               let size = attrs[.size] as? Int {
-                if size == 0 {
-                    print("⚠️ Coverage file for '\(testName)' is empty (0 bytes)")
-                } else {
-                    print("✅ Coverage written for '\(testName)': \(size) bytes -> \(filename)")
-                }
-            }
+        if coverageEnabled {
+            print("📊 Test '\(testName)' completed (coverage accumulated in default profile)")
         }
     }
 }
