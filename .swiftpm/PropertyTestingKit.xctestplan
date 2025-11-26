@@ -1,0 +1,36 @@
+{
+  "configurations" : [
+    {
+      "id" : "28307F90-6A1C-4443-B6B7-843B5592118A",
+      "name" : "Test Scheme Action",
+      "options" : {
+
+      }
+    }
+  ],
+  "defaultOptions" : {
+    "environmentVariableEntries" : [
+      {
+        "key" : "LLVM_PROFILE_FILE",
+        "value" : "\"\/tmp\/something.profraw\""
+      }
+    ]
+  },
+  "testTargets" : [
+    {
+      "target" : {
+        "containerPath" : "container:",
+        "identifier" : "PropertyTestingKitTests",
+        "name" : "PropertyTestingKitTests"
+      }
+    },
+    {
+      "target" : {
+        "containerPath" : "container:",
+        "identifier" : "PropertyTestingKitMacrosTests",
+        "name" : "PropertyTestingKitMacrosTests"
+      }
+    }
+  ],
+  "version" : 1
+}
