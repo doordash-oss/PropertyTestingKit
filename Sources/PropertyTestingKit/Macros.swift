@@ -1,29 +1,5 @@
 import Foundation
 
-/// A macro that generates a parameterized test using fuzz values for each parameter type.
-///
-/// This macro transforms a function into a `@Test` with arguments generated from the
-/// `.fuzz` property of each parameter type. It creates a cartesian product of all
-/// fuzz values to test all combinations.
-///
-/// Example:
-/// ```swift
-/// @FuzzTest
-/// func testExample(value: Int, text: String) {
-///     // Test logic here
-/// }
-/// ```
-///
-/// Expands to:
-/// ```swift
-/// @Test("testExample", arguments: cartesianProduct(Int.fuzz, String.fuzz))
-/// func testExample(value: Int, text: String) {
-///     // Test logic here
-/// }
-/// ```
-@attached(peer, names: named(fuzzy))
-public macro FuzzTest() = #externalMacro(module: "PropertyTestingKitMacros", type: "FuzzTestMacro")
-
 /// A macro that generates a `fuzz` static property for a type.
 ///
 /// This macro creates a static `fuzz` property that returns an array of all

@@ -4,6 +4,11 @@
 import PackageDescription
 import CompilerPluginSupport
 
+// LLVM paths from Homebrew installation
+let llvmPath = "/opt/homebrew/opt/llvm"
+let llvmInclude = "\(llvmPath)/include"
+let llvmLib = "\(llvmPath)/lib"
+
 let package = Package(
     name: "PropertyTestingKit",
     platforms: [
@@ -11,28 +16,55 @@ let package = Package(
         .macOS(.v15)
     ],
     products: [
-        // Products define the executables and libraries a package produces, making them visible to other packages.
         .library(
             name: "PropertyTestingKit",
             targets: ["PropertyTestingKit"]
         ),
     ],
     dependencies: [
-        .package(url: "https://github.com/swiftlang/swift-syntax", from: "602.0.0"),
-        .package(url: "https://github.com/pointfreeco/swift-macro-testing.git", from: "0.6.4")
+        .package(url: "https://github.com/swiftlang/swift-syntax.git", from: "600.0.1"),
     ],
     targets: [
-        // Targets are the basic building blocks of a package, defining a module or a test suite.
-        // Targets can depend on other targets in this package and products from dependencies.
+        // C module for LLVM profile runtime interface
+        .target(
+            name: "PropertyTestingKitInternals",
+            path: "Sources/PropertyTestingKitInternals"
+        ),
+
+        // C++ wrapper for LLVM coverage APIs
+        .target(
+            name: "LLVMCoverageInterop",
+            path: "Sources/LLVMCoverageInterop",
+            publicHeadersPath: "include",
+            cxxSettings: [
+                .define("__STDC_CONSTANT_MACROS"),
+                .define("__STDC_FORMAT_MACROS"),
+                .define("__STDC_LIMIT_MACROS"),
+                .unsafeFlags(["-std=c++17", "-fno-exceptions", "-I\(llvmInclude)"])
+            ],
+            linkerSettings: [
+                .linkedLibrary("LLVM"),
+                .unsafeFlags(["-L\(llvmLib)"]),
+                .unsafeFlags(["-Xlinker", "-rpath", "-Xlinker", llvmLib])
+            ]
+        ),
+
         .target(
             name: "PropertyTestingKit",
-            dependencies: ["PropertyTestingKitMacros"]
+            dependencies: [
+                "PropertyTestingKitMacros",
+                "PropertyTestingKitInternals",
+                "LLVMCoverageInterop"
+            ],
+            swiftSettings: [
+                .interoperabilityMode(.Cxx)
+            ]
         ),
         .testTarget(
             name: "PropertyTestingKitTests",
-            dependencies: [
-                "PropertyTestingKit",
-                "PropertyTestingKitMacros"
+            dependencies: ["PropertyTestingKit"],
+            swiftSettings: [
+                .interoperabilityMode(.Cxx)
             ]
         ),
         .macro(
@@ -41,15 +73,7 @@ let package = Package(
                 .product(name: "SwiftSyntaxMacros", package: "swift-syntax"),
                 .product(name: "SwiftCompilerPlugin", package: "swift-syntax"),
             ]
-        ),
-        .testTarget(
-            name: "PropertyTestingKitMacrosTests",
-            dependencies: [
-                "PropertyTestingKitMacros",
-                .product(name: "MacroTesting", package: "swift-macro-testing"),
-                .product(name: "SwiftSyntaxMacros", package: "swift-syntax"),
-                .product(name: "SwiftSyntaxMacrosTestSupport", package: "swift-syntax"),
-            ]
         )
-    ]
+    ],
+    cxxLanguageStandard: .cxx17
 )

@@ -1,7 +1,5 @@
 import Testing
 @testable import PropertyTestingKit
-import PropertyTestingKitMacros
-import XCTest
 
 func testVals(input: String, otherInput: Int) -> String {
     if otherInput > 30 {

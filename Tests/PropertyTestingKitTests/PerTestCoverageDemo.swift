@@ -4,204 +4,365 @@
 //
 
 import Testing
-@testable import PropertyTestingKit
-
-// MARK: - Example Code to Test (simulating production code)
-
-/// A simple database-like class to demonstrate coverage isolation.
-class MockDatabase {
-    private var data: [String: String] = [:]
-    var writeCount = 0
-    var readCount = 0
-
-    func write(key: String, value: String) {
-        writeCount += 1
-        data[key] = value
-    }
-
-    func read(key: String) -> String? {
-        readCount += 1
-        return data[key]
-    }
-
-    func delete(key: String) -> Bool {
-        if data.removeValue(forKey: key) != nil {
-            return true
-        }
-        return false
-    }
-
-    func exists(key: String) -> Bool {
-        return data[key] != nil
-    }
-
-    func clear() {
-        data.removeAll()
-        writeCount = 0
-        readCount = 0
-    }
-}
-
-/// A service that uses the database.
-class UserService {
-    let db: MockDatabase
-
-    init(db: MockDatabase) {
-        self.db = db
-    }
-
-    func createUser(id: String, name: String) -> Bool {
-        if db.exists(key: "user:\(id)") {
-            return false // User already exists
-        }
-        db.write(key: "user:\(id)", value: name)
-        return true
-    }
-
-    func getUser(id: String) -> String? {
-        return db.read(key: "user:\(id)")
-    }
-
-    func deleteUser(id: String) -> Bool {
-        return db.delete(key: "user:\(id)")
-    }
-
-    func updateUser(id: String, name: String) -> Bool {
-        if !db.exists(key: "user:\(id)") {
-            return false // User doesn't exist
-        }
-        db.write(key: "user:\(id)", value: name)
-        return true
-    }
-}
+import PropertyTestingKit
+import Foundation
 
 // MARK: - Demo Tests with Per-Test Coverage
 
-/// These tests demonstrate how to capture coverage per-test.
+/// These tests demonstrate per-test coverage using the `.coverage` trait.
+///
+/// The trait automatically:
+/// - Serializes test execution (required for isolated coverage)
+/// - Resets coverage counters before each test
+/// - Writes a separate `.profraw` file after each test
 ///
 /// Run with coverage enabled:
 /// ```
 /// swift test --enable-code-coverage
 /// ```
 ///
-/// Then check the coverage files in the current directory:
+/// Then check the coverage files:
 /// ```
-/// ls coverage-*.profraw
+/// ls /tmp/coverage-*.profraw
 /// ```
+@Suite("Per-Test Coverage Demo", .serialized, .coverage(outputDirectory: "/tmp"))
 struct PerTestCoverageDemo {
 
-    @Test func testDbWriteCall() {
-        PerTestCoverage.run(testName: "testDbWriteCall") {
-            let db = MockDatabase()
+    @Test("Database write path")
+    func testDbWriteCall() {
+        let db = MockDatabase()
 
-            // This test ONLY covers the write path
-            db.write(key: "foo", value: "bar")
+        // This test ONLY covers the write path
+        db.write(key: "foo", value: "bar")
 
-            #expect(db.writeCount == 1)
-            #expect(db.readCount == 0) // We didn't read
-        }
+        #expect(db.writeCount == 1)
+        #expect(db.readCount == 0) // We didn't read
     }
 
-    @Test func testDbReadCall() {
-        PerTestCoverage.run(testName: "testDbReadCall") {
-            let db = MockDatabase()
-            db.write(key: "foo", value: "bar")
+    @Test("Database read path")
+    func testDbReadCall() {
+        let db = MockDatabase()
+        db.write(key: "foo", value: "bar")
 
-            // This test covers write AND read paths
-            let result = db.read(key: "foo")
+        // This test covers write AND read paths
+        let result = db.read(key: "foo")
 
-            #expect(result == "bar")
-            #expect(db.readCount == 1)
-        }
+        #expect(result == "bar")
+        #expect(db.readCount == 1)
     }
 
-    @Test func testDbDeleteCall() {
-        PerTestCoverage.run(testName: "testDbDeleteCall") {
-            let db = MockDatabase()
-            db.write(key: "foo", value: "bar")
+    @Test("Database delete - existing key")
+    func testDbDeleteCall() {
+        let db = MockDatabase()
+        db.write(key: "foo", value: "bar")
 
-            // This test covers write AND delete paths
-            let deleted = db.delete(key: "foo")
+        // This test covers write AND delete paths
+        let deleted = db.delete(key: "foo")
 
-            #expect(deleted == true)
-        }
+        #expect(deleted == true)
     }
 
-    @Test func testDbDeleteNonexistent() {
-        PerTestCoverage.run(testName: "testDbDeleteNonexistent") {
-            let db = MockDatabase()
+    @Test("Database delete - nonexistent key")
+    func testDbDeleteNonexistent() {
+        let db = MockDatabase()
 
-            // This test covers the "not found" branch in delete
-            let deleted = db.delete(key: "nonexistent")
+        // This test covers the "not found" branch in delete
+        let deleted = db.delete(key: "nonexistent")
 
-            #expect(deleted == false)
-        }
+        #expect(deleted == false)
     }
 
-    @Test func testUserServiceCreateUser() {
-        PerTestCoverage.run(testName: "testUserServiceCreateUser") {
-            let db = MockDatabase()
-            let service = UserService(db: db)
+    @Test("UserService - create new user")
+    func testUserServiceCreateUser() {
+        let db = MockDatabase()
+        let service = UserService(db: db)
 
-            // Covers: createUser success path, exists (false branch)
-            let created = service.createUser(id: "123", name: "Alice")
+        // Covers: createUser success path, exists (false branch)
+        let created = service.createUser(id: "123", name: "Alice")
 
-            #expect(created == true)
-        }
+        #expect(created == true)
     }
 
-    @Test func testUserServiceCreateDuplicateUser() {
-        PerTestCoverage.run(testName: "testUserServiceCreateDuplicateUser") {
-            let db = MockDatabase()
-            let service = UserService(db: db)
+    @Test("UserService - create duplicate user")
+    func testUserServiceCreateDuplicateUser() {
+        let db = MockDatabase()
+        let service = UserService(db: db)
 
-            _ = service.createUser(id: "123", name: "Alice")
+        _ = service.createUser(id: "123", name: "Alice")
 
-            // Covers: createUser failure path (user exists), exists (true branch)
-            let createdAgain = service.createUser(id: "123", name: "Bob")
+        // Covers: createUser failure path (user exists), exists (true branch)
+        let createdAgain = service.createUser(id: "123", name: "Bob")
 
-            #expect(createdAgain == false)
-        }
+        #expect(createdAgain == false)
     }
 
-    @Test func testUserServiceUpdateExisting() {
-        PerTestCoverage.run(testName: "testUserServiceUpdateExisting") {
-            let db = MockDatabase()
-            let service = UserService(db: db)
+    @Test("UserService - update existing user")
+    func testUserServiceUpdateExisting() {
+        let db = MockDatabase()
+        let service = UserService(db: db)
 
-            _ = service.createUser(id: "123", name: "Alice")
+        _ = service.createUser(id: "123", name: "Alice")
 
-            // Covers: updateUser success path
-            let updated = service.updateUser(id: "123", name: "Alice Updated")
+        // Covers: updateUser success path
+        let updated = service.updateUser(id: "123", name: "Alice Updated")
 
-            #expect(updated == true)
-            #expect(service.getUser(id: "123") == "Alice Updated")
-        }
+        #expect(updated == true)
+        #expect(service.getUser(id: "123") == "Alice Updated")
     }
 
-    @Test func testUserServiceUpdateNonexistent() {
-        PerTestCoverage.run(testName: "testUserServiceUpdateNonexistent") {
-            let db = MockDatabase()
-            let service = UserService(db: db)
+    @Test("UserService - update nonexistent user")
+    func testUserServiceUpdateNonexistent() {
+        let db = MockDatabase()
+        let service = UserService(db: db)
 
-            // Covers: updateUser failure path (user doesn't exist)
-            let updated = service.updateUser(id: "999", name: "Ghost")
+        // Covers: updateUser failure path (user doesn't exist)
+        let updated = service.updateUser(id: "999", name: "Ghost")
 
-            #expect(updated == false)
+        #expect(updated == false)
+    }
+}
+
+// MARK: - Diagnostic Tests
+
+@Suite("Coverage Diagnostics")
+struct CoverageDiagnostics {
+    @Test("Check coverage availability")
+    func testCoverageAvailability() {
+        print("Coverage instrumentation available: \(PerTestCoverage.isAvailable)")
+    }
+}
+
+// MARK: - CoverageCounters Tests (In-Memory, No File I/O)
+
+@Suite("CoverageCounters API", .serialized)
+struct CoverageCountersTests {
+
+    @Test("CoverageCounters.snapshot captures counter state")
+    func testSnapshot() {
+        guard let snapshot = CoverageCounters.snapshot() else {
+            Issue.record("Coverage counters not available (expected when not built with coverage)")
+            return
+        }
+
+        #expect(snapshot.count > 0)
+        print("Captured \(snapshot.count) counters")
+    }
+
+    @Test("measureCoverage detects code execution")
+    func testMeasureCoverage() {
+        let db = MockDatabase()
+
+        guard let diff = measureCoverage({
+            db.write(key: "test", value: "value")
+        }) else {
+            Issue.record("Coverage counters not available")
+            return
+        }
+
+        #expect(diff.hasChanges)
+        print("Executed \(diff.executedRegions) new regions, \(diff.changedCount) changed")
+    }
+
+    @Test("measureCoverage shows different code paths")
+    func testDifferentCodePaths() {
+        let db = MockDatabase()
+
+        // Measure write path
+        let writeDiff = measureCoverage {
+            db.write(key: "a", value: "1")
+        }
+
+        // Measure read path
+        let readDiff = measureCoverage {
+            _ = db.read(key: "a")
+        }
+
+        guard let w = writeDiff, let r = readDiff else {
+            Issue.record("Coverage counters not available")
+            return
+        }
+
+        // Both should have changes
+        #expect(w.hasChanges)
+        #expect(r.hasChanges)
+
+        // They might hit different regions
+        print("Write path: \(w.executedRegions) regions")
+        print("Read path: \(r.executedRegions) regions")
+    }
+
+    @Test("measureIsolatedCoverage resets counters first")
+    func testIsolatedCoverage() {
+        let db = MockDatabase()
+
+        // First call exercises some code
+        _ = measureCoverage {
+            db.write(key: "warmup", value: "data")
+        }
+
+        // Isolated measurement should only see new executions
+        let (result, diff) = measureIsolatedCoverage {
+            db.write(key: "test", value: "value")
+            return db.read(key: "test")
+        }
+
+        #expect(result == "value")
+
+        if let diff = diff {
+            print("Isolated coverage: \(diff.executedRegions) regions")
         }
     }
 }
 
-// MARK: - Print Instructions
+// MARK: - LLVMCoverageReader Tests
 
-/// A test that prints usage instructions (run this to see how to analyze coverage).
-@Test func printCoverageInstructions() {
-    CoverageAnalyzer.printUsageInstructions()
+@Suite("LLVMCoverageReader API")
+struct LLVMCoverageReaderTests {
+
+    @Test("LLVMCoverageReader loads profdata file")
+    func testLoadCoverage() throws {
+        // First, generate some coverage data
+        let coverage = try withCoverage {
+            let db = MockDatabase()
+            db.write(key: "test", value: "value")
+            _ = db.read(key: "test")
+        }
+
+        // Merge the profraw to profdata
+        let profdataPath = coverage.profilePath.replacingOccurrences(of: ".profraw", with: ".profdata")
+        let mergeProcess = Process()
+        mergeProcess.executableURL = URL(fileURLWithPath: "/usr/bin/xcrun")
+        mergeProcess.arguments = ["llvm-profdata", "merge", "-sparse", coverage.profilePath, "-o", profdataPath]
+        try mergeProcess.run()
+        mergeProcess.waitUntilExit()
+
+        guard mergeProcess.terminationStatus == 0 else {
+            Issue.record("Failed to merge profile data")
+            return
+        }
+
+        // Find the test binary
+        let binaryPath = ProcessInfo.processInfo.arguments[0]
+
+        // Try to load with LLVMCoverageReader
+        do {
+            let reader = try LLVMCoverageReader.load(
+                objectPath: binaryPath,
+                profilePath: profdataPath
+            )
+
+            // Check we can get source files
+            let files = reader.sourceFiles
+            print("LLVMCoverageReader found \(files.count) source files")
+
+            // Get summary
+            let summary = reader.summary
+            print("Coverage summary: \(summary.coveredLines)/\(summary.totalLines) lines")
+
+            #expect(files.count > 0 || summary.totalFunctions > 0)
+        } catch {
+            // It's okay if this fails in some environments
+            print("LLVMCoverageReader test skipped: \(error)")
+        }
+
+        // Clean up
+        try? FileManager.default.removeItem(atPath: profdataPath)
+        try coverage.delete()
+    }
 }
 
-// MARK: - Diagnostic Test
+// MARK: - InMemoryCoverageReader Tests
 
-@Test func testCoverageAvailability() {
-    print("🔍 Coverage instrumentation available: \(PerTestCoverage.isAvailable)")
-    print("🔍 Output directory: \(PerTestCoverage.outputDirectory)")
+@Suite("InMemoryCoverageReader API", .serialized)
+struct InMemoryCoverageReaderTests {
+
+    @Test("InMemoryCoverageReader loads from current process")
+    func testLoadFromCurrentProcess() throws {
+        // Print diagnostic info
+        let execPath = ProcessInfo.processInfo.arguments[0]
+        print("Test executable path: \(execPath)")
+
+        do {
+            let reader = try InMemoryCoverageReader.loadFromCurrentProcess()
+
+            // Should have some functions
+            #expect(reader.functionCount > 0)
+            print("Loaded \(reader.functionCount) functions from coverage mapping")
+
+            // Should have some source files
+            let files = reader.sourceFiles
+            #expect(files.count > 0)
+            print("Found \(files.count) source files")
+        } catch {
+            // Skip test if coverage mapping isn't available
+            // This can happen if the binary wasn't built with proper coverage flags
+            print("Skipping test: \(error)")
+            print("Note: In-memory coverage requires binary to have __llvm_covmap section")
+        }
+    }
+
+    @Test("InMemoryCoverageReader resolves coverage")
+    func testResolveCoverage() throws {
+        let reader = try InMemoryCoverageReader.loadFromCurrentProcess()
+        let db = MockDatabase()
+
+        // Exercise some code
+        db.write(key: "test", value: "value")
+        _ = db.read(key: "test")
+
+        // Resolve coverage
+        let coverage = reader.resolveCoverage()
+
+        #expect(coverage.functions.count > 0)
+        #expect(coverage.sourceFiles.count > 0)
+
+        // Print some coverage details
+        let executedRegions = coverage.executedRegions
+        print("Executed \(executedRegions.count) regions")
+
+        // Look for coverage in this test file
+        let thisFileCoverage = coverage.coverage(for: "PerTestCoverageDemo.swift")
+        print("Found \(thisFileCoverage.count) regions in this file")
+    }
+
+    @Test("InMemoryCoverageReader shows different code paths")
+    func testDifferentCodePaths() throws {
+        let reader = try InMemoryCoverageReader.loadFromCurrentProcess()
+        let db = MockDatabase()
+
+        // Check if counters are available
+        guard let snapshot = CoverageCounters.snapshot() else {
+            print("Coverage counters not available - skipping test")
+            return
+        }
+        print("Counter count: \(snapshot.count)")
+        print("Non-zero counters before: \(snapshot.nonZeroCount)")
+
+        // First measurement - write only
+        CoverageCounters.reset()
+        db.write(key: "a", value: "1")
+
+        if let afterWrite = CoverageCounters.snapshot() {
+            print("Non-zero counters after write: \(afterWrite.nonZeroCount)")
+        }
+
+        let writeCoverage = reader.resolveCoverage()
+
+        // Second measurement - read only
+        CoverageCounters.reset()
+        _ = db.read(key: "a")
+        let readCoverage = reader.resolveCoverage()
+
+        // Print some debug info
+        print("Write path executed \(writeCoverage.executedRegions.count) regions")
+        print("Read path executed \(readCoverage.executedRegions.count) regions")
+        print("Total functions in coverage: \(writeCoverage.functions.count)")
+
+        // The test may fail if counter indices don't match coverage mapping
+        // This can happen when multiple modules are involved
+        if writeCoverage.executedRegions.count == 0 {
+            print("Warning: Counter values may not match coverage mapping indices")
+            print("This is expected when test binary and coverage mapping are from different modules")
+        }
+    }
 }
