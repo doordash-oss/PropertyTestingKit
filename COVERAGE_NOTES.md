@@ -2,13 +2,48 @@
 
 ## Current Status
 
-✅ **All 31 tests pass** with `swift test --enable-code-coverage --no-parallel`
+✅ **All 27 tests pass** with `swift test --enable-code-coverage --no-parallel`
 
-⚠️ **Parallel execution fails** due to shared counter state between test suites
+✅ **Difference-based measurement** - does not interfere with Xcode or other coverage tools
+
+⚠️ **Parallel execution** - tests using coverage counters should be in `.serialized` suites
 
 ---
 
 ## Key Findings
+
+### 0. Difference-Based Measurement (Latest)
+
+**Problem:** Resetting LLVM counters via `__llvm_profile_reset_counters()` interferes with Xcode and other coverage tooling.
+
+**Solution:** `measureSourceCoverage` now uses difference-based measurement:
+1. Snapshot counters before running code
+2. Run the code under test
+3. Snapshot counters after
+4. Compute delta (after - before) for each counter
+5. Resolve coverage from the delta array
+
+This approach:
+- Does NOT reset global counters
+- Works with Xcode coverage reports
+- Isolates measurements to just the code that ran during the block
+
+**Code:**
+```swift
+// In measureSourceCoverage:
+guard let before = CoverageCounters.snapshot() else { ... }
+let result = try body()
+guard let after = CoverageCounters.snapshot() else { ... }
+
+let deltaCounters = zip(after.counters, before.counters).map { after, before in
+    after >= before ? after - before : 0
+}
+let coverage = reader.resolveCoverage(counters: deltaCounters)
+```
+
+**C++ Changes:** `buildFunctionCounterOffsetMap()` now returns offsets into the counter array instead of pointers to live memory. `resolveCoverage()` reads from the provided array at these offsets.
+
+---
 
 ### 1. ProfileData CounterPtr Offset (Fixed)
 

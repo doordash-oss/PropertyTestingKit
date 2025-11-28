@@ -372,11 +372,11 @@ struct InMemoryCoverageReader::Impl {
         return impl;
     }
 
-    /// Build a map from function hash to profile data record.
-    /// This allows us to find the correct counters for each function.
-    static std::unordered_map<uint64_t, std::pair<const uint64_t*, uint32_t>>
-    buildFunctionCounterMap(const uint64_t* globalCounterBegin, size_t globalCounterCount) {
-        std::unordered_map<uint64_t, std::pair<const uint64_t*, uint32_t>> map;
+    /// Build a map from function nameRef to counter offset and count.
+    /// This allows us to find the correct counters for each function in a provided counter array.
+    static std::unordered_map<uint64_t, std::pair<size_t, uint32_t>>
+    buildFunctionCounterOffsetMap() {
+        std::unordered_map<uint64_t, std::pair<size_t, uint32_t>> map;
 
         // Safely check if profile runtime functions are available (via dlsym)
         auto beginDataFn = getProfileBeginData();
@@ -400,6 +400,10 @@ struct InMemoryCoverageReader::Impl {
         if (beginCountersFn != nullptr && endCountersFn != nullptr) {
             counterRangeBegin = beginCountersFn();
             counterRangeEnd = endCountersFn();
+        }
+
+        if (!counterRangeBegin || !counterRangeEnd || counterRangeBegin >= counterRangeEnd) {
+            return map;
         }
 
         // Memory barrier to ensure we see the latest counter values
@@ -435,31 +439,34 @@ struct InMemoryCoverageReader::Impl {
                 );
 
                 // Validate that the computed counters are within the runtime counter range
-                if (counterRangeBegin && counterRangeEnd) {
-                    if (counters < counterRangeBegin || counters >= counterRangeEnd) {
-                        // Counter pointer is outside valid range - skip
-                        continue;
-                    }
+                if (counters < counterRangeBegin || counters >= counterRangeEnd) {
+                    // Counter pointer is outside valid range - skip
+                    continue;
                 }
 
+                // Compute offset from the beginning of the counter array
+                size_t offset = static_cast<size_t>(counters - counterRangeBegin);
+
                 // Use NameRef (MD5 of function name) as key since FuncHash is often 0
-                map[data->NameRef] = {counters, data->NumCounters};
+                map[data->NameRef] = {offset, data->NumCounters};
             }
         }
 
         return map;
     }
 
-    /// Resolve coverage using in-memory counter values from profile data records.
+    /// Resolve coverage using the provided counter array.
+    /// The counter array should match the layout of the global counter array
+    /// (e.g., a snapshot or delta from CoverageCounters.snapshot()).
     InMemoryCoverageData resolveCoverage(
-        const uint64_t* globalCounters,
-        size_t count
+        const uint64_t* providedCounters,
+        size_t providedCount
     ) const {
         InMemoryCoverageData result;
         result.sourceFiles = sourceFiles;
 
-        // Build a map from function hash to its counter array
-        auto funcCounterMap = buildFunctionCounterMap(globalCounters, count);
+        // Build a map from function nameRef to offset and count in the counter array
+        auto funcOffsetMap = buildFunctionCounterOffsetMap();
 
         for (const auto& func : functions) {
             FunctionCoverage funcCov;
@@ -467,15 +474,24 @@ struct InMemoryCoverageReader::Impl {
             funcCov.hash = func.functionHash;
             funcCov.executionCount = 0;
 
-            // Find this function's counters by nameRef (MD5 of function name)
-            auto it = funcCounterMap.find(func.nameRef);
-            if (it == funcCounterMap.end()) {
+            // Find this function's counter offset by nameRef (MD5 of function name)
+            auto it = funcOffsetMap.find(func.nameRef);
+            if (it == funcOffsetMap.end()) {
                 // No runtime data for this function - skip it
                 continue;
             }
 
-            const uint64_t* funcCounters = it->second.first;
+            size_t counterOffset = it->second.first;
             uint32_t numCounters = it->second.second;
+
+            // Validate offset is within bounds of provided array
+            if (counterOffset >= providedCount ||
+                counterOffset + numCounters > providedCount) {
+                continue;
+            }
+
+            // Get counter values from the provided array at the correct offset
+            const uint64_t* funcCounters = providedCounters + counterOffset;
 
             // Create context with this function's counters
             ArrayRef<uint64_t> counterValues(funcCounters, numCounters);

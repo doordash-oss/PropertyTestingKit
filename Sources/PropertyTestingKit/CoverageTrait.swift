@@ -70,7 +70,7 @@ private let _defaultCoverageOutputDirectory: String = {
 ///
 /// Coverage files are written to `$COVERAGE_OUTPUT_DIR` (or current directory):
 ///
-/// - `coverage-testName.profraw` for each test
+/// - `coverage-testName.profraw` for each test (cumulative coverage up to that point)
 ///
 /// Merge and view results:
 ///
@@ -78,12 +78,15 @@ private let _defaultCoverageOutputDirectory: String = {
 /// xcrun llvm-profdata merge -sparse coverage-*.profraw -o merged.profdata
 /// xcrun llvm-cov report .build/debug/TestBundle -instr-profile=merged.profdata
 /// ```
+///
+/// - Note: Per-test profraw files contain cumulative coverage (not isolated).
+///   Use `measureSourceCoverage` for isolated, difference-based measurement.
 public struct CoverageTrait: TestTrait, SuiteTrait {
-    /// Whether to reset coverage counters before each test.
+    /// This parameter is deprecated and has no effect.
     ///
-    /// When `true` (default), each test's coverage file only contains the
-    /// coverage from that specific test. When `false`, coverage accumulates
-    /// across tests.
+    /// Resetting counters interferes with Xcode and other coverage tools.
+    /// Use `measureSourceCoverage` for isolated coverage measurement instead.
+    @available(*, deprecated, message: "This parameter no longer has any effect. Use measureSourceCoverage for isolated coverage.")
     public var isolatesTests: Bool
 
     /// The directory where coverage files are written.
@@ -95,7 +98,7 @@ public struct CoverageTrait: TestTrait, SuiteTrait {
     /// Create a coverage trait.
     ///
     /// - Parameters:
-    ///   - isolatesTests: Whether to reset counters before each test.
+    ///   - isolatesTests: Deprecated, no longer has any effect.
     ///   - outputDirectory: Directory for coverage files.
     public init(
         isolatesTests: Bool = true,
@@ -122,10 +125,9 @@ extension CoverageTrait: TestScoping {
             return
         }
 
-        // Reset counters to isolate this test's coverage
-        if isolatesTests {
-            __llvm_profile_reset_counters()
-        }
+        // Note: We no longer reset counters as it interferes with Xcode coverage.
+        // The `isolatesTests` parameter is now deprecated and has no effect.
+        // Per-test profraw files will contain cumulative coverage up to that point.
 
         // Run the test
         do {

@@ -83,14 +83,12 @@ public struct CoverageCounters: Sendable {
 
     /// Capture a snapshot, resetting counters first.
     ///
-    /// This is equivalent to:
-    /// ```swift
-    /// CoverageCounters.reset()
-    /// // ... run code ...
-    /// let snapshot = CoverageCounters.snapshot()
-    /// ```
+    /// - Warning: This resets ALL coverage counters, which interferes with
+    ///   Xcode and other coverage tools. Use `snapshot()` with difference-based
+    ///   measurement instead.
     ///
     /// - Returns: A snapshot after reset (all zeros), or `nil` if unavailable.
+    @available(*, deprecated, message: "Resetting counters interferes with Xcode coverage. Use snapshot() with difference-based measurement instead.")
     public static func snapshotAfterReset() -> CoverageCounters? {
         guard CoverageTrait.isAvailable else { return nil }
         __llvm_profile_reset_counters()
@@ -98,6 +96,11 @@ public struct CoverageCounters: Sendable {
     }
 
     /// Reset all counters to zero.
+    ///
+    /// - Warning: This resets ALL coverage counters, which interferes with
+    ///   Xcode and other coverage tools. Use difference-based measurement
+    ///   (snapshot before, run code, snapshot after, compute diff) instead.
+    @available(*, deprecated, message: "Resetting counters interferes with Xcode coverage. Use difference-based measurement instead.")
     public static func reset() {
         guard CoverageTrait.isAvailable else { return }
         __llvm_profile_reset_counters()
@@ -209,7 +212,11 @@ public func measureCoverage(_ body: () async throws -> Void) async rethrows -> C
     return after.difference(from: before)
 }
 
-/// Execute a closure with isolated coverage (counters reset first).
+/// Execute a closure with isolated coverage measurement.
+///
+/// - Note: This function now uses difference-based measurement instead of
+///   resetting counters, to avoid interfering with Xcode and other coverage tools.
+///   Use `measureCoverage` for the same functionality.
 ///
 /// ```swift
 /// let (result, diff) = measureIsolatedCoverage {
@@ -219,10 +226,11 @@ public func measureCoverage(_ body: () async throws -> Void) async rethrows -> C
 ///
 /// - Parameter body: The code to measure.
 /// - Returns: Tuple of the result and counter diff.
+@available(*, deprecated, message: "Use measureCoverage instead - this function no longer resets counters")
 public func measureIsolatedCoverage<T>(
     _ body: () throws -> T
 ) rethrows -> (result: T, diff: CounterDiff?) {
-    CoverageCounters.reset()
+    // No longer resets counters to avoid interfering with Xcode coverage
     guard let before = CoverageCounters.snapshot() else {
         return (try body(), nil)
     }

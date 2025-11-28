@@ -267,7 +267,8 @@ public enum InMemoryCoverageError: Error, CustomStringConvertible {
 /// Measure coverage of a code block with source-level detail.
 ///
 /// This is the most complete coverage API, providing source locations
-/// for all executed code.
+/// for all executed code. It uses difference-based measurement to avoid
+/// interfering with Xcode and other coverage tooling.
 ///
 /// ```swift
 /// let coverage = try measureSourceCoverage {
@@ -287,12 +288,27 @@ public func measureSourceCoverage<T>(
 ) throws -> (result: T, coverage: ResolvedCoverage) {
     let reader = try InMemoryCoverageReader.loadFromCurrentProcess()
 
-    // Reset counters and run code
-    CoverageCounters.reset()
+    // Snapshot before running code
+    guard let before = CoverageCounters.snapshot() else {
+        // Coverage not available, return empty
+        let result = try body()
+        return (result, ResolvedCoverage(functions: [], sourceFiles: []))
+    }
+
     let result = try body()
 
-    // Resolve coverage
-    let coverage = reader.resolveCoverage()
+    // Snapshot after running code
+    guard let after = CoverageCounters.snapshot() else {
+        return (result, ResolvedCoverage(functions: [], sourceFiles: []))
+    }
+
+    // Compute difference (what executed during body)
+    let deltaCounters = zip(after.counters, before.counters).map { after, before in
+        after >= before ? after - before : 0
+    }
+
+    // Resolve coverage from delta
+    let coverage = reader.resolveCoverage(counters: deltaCounters)
 
     return (result, coverage)
 }
