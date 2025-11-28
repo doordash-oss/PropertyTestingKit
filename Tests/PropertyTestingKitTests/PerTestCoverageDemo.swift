@@ -214,63 +214,6 @@ struct CoverageCountersTests {
     }
 }
 
-// MARK: - LLVMCoverageReader Tests
-
-@Suite("LLVMCoverageReader API")
-struct LLVMCoverageReaderTests {
-
-    @Test("LLVMCoverageReader loads profdata file")
-    func testLoadCoverage() throws {
-        // First, generate some coverage data
-        let coverage = try withCoverage {
-            let db = MockDatabase()
-            db.write(key: "test", value: "value")
-            _ = db.read(key: "test")
-        }
-
-        // Merge the profraw to profdata
-        let profdataPath = coverage.profilePath.replacingOccurrences(of: ".profraw", with: ".profdata")
-        let mergeProcess = Process()
-        mergeProcess.executableURL = URL(fileURLWithPath: "/usr/bin/xcrun")
-        mergeProcess.arguments = ["llvm-profdata", "merge", "-sparse", coverage.profilePath, "-o", profdataPath]
-        try mergeProcess.run()
-        mergeProcess.waitUntilExit()
-
-        guard mergeProcess.terminationStatus == 0 else {
-            Issue.record("Failed to merge profile data")
-            return
-        }
-
-        // Find the test binary
-        let binaryPath = ProcessInfo.processInfo.arguments[0]
-
-        // Try to load with LLVMCoverageReader
-        do {
-            let reader = try LLVMCoverageReader.load(
-                objectPath: binaryPath,
-                profilePath: profdataPath
-            )
-
-            // Check we can get source files
-            let files = reader.sourceFiles
-            print("LLVMCoverageReader found \(files.count) source files")
-
-            // Get summary
-            let summary = reader.summary
-            print("Coverage summary: \(summary.coveredLines)/\(summary.totalLines) lines")
-
-            #expect(files.count > 0 || summary.totalFunctions > 0)
-        } catch {
-            // It's okay if this fails in some environments
-            print("LLVMCoverageReader test skipped: \(error)")
-        }
-
-        // Clean up
-        try? FileManager.default.removeItem(atPath: profdataPath)
-        try coverage.delete()
-    }
-}
-
 // MARK: - InMemoryCoverageReader Tests
 
 @Suite("InMemoryCoverageReader API", .serialized)

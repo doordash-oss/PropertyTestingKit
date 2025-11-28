@@ -12,8 +12,9 @@ import PropertyTestingKitInternals
 // MARK: - Coverage Detection
 
 /// Check if coverage instrumentation is enabled for this test run.
+/// Uses dlsym to check if profile runtime symbols are linked in.
 private let _coverageEnabled: Bool = {
-    ProcessInfo.processInfo.environment["LLVM_PROFILE_FILE"] != nil
+    ptk_profilerRuntimeAvailable()
 }()
 
 /// Get the output directory for coverage files.

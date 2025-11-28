@@ -4,8 +4,8 @@
 import PackageDescription
 import CompilerPluginSupport
 
-// LLVM paths from Homebrew installation
-let llvmPath = "/opt/homebrew/opt/llvm"
+// LLVM 18 paths from Homebrew installation (Apple's Swift 6.2 uses Coverage Mapping Version 7 from LLVM 18)
+let llvmPath = "/opt/homebrew/opt/llvm@18"
 let llvmInclude = "\(llvmPath)/include"
 let llvmLib = "\(llvmPath)/lib"
 
@@ -66,6 +66,7 @@ let package = Package(
             swiftSettings: [
                 .interoperabilityMode(.Cxx)
             ]
+            // Note: Profile runtime is automatically linked by Swift when using --enable-code-coverage
         ),
         .macro(
             name: "PropertyTestingKitMacros",

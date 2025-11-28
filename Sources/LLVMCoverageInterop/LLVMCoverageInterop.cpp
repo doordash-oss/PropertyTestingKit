@@ -22,10 +22,47 @@
 #include <mach-o/dyld.h>
 #endif
 
-// Profile runtime symbols (weak to allow graceful failure if not linked)
-extern "C" {
-    extern const void* __llvm_profile_begin_data(void) __attribute__((weak));
-    extern const void* __llvm_profile_end_data(void) __attribute__((weak));
+// Use dlsym to dynamically get profile runtime symbols (only present when coverage enabled)
+#include <dlfcn.h>
+
+using ProfileDataFunc = const void* (*)();
+using ProfileCountersFunc = uint64_t* (*)();
+
+static ProfileDataFunc getProfileBeginData() {
+    // Try our exported wrapper first, then the original symbol
+    static ProfileDataFunc fn = []() -> ProfileDataFunc {
+        auto f = reinterpret_cast<ProfileDataFunc>(dlsym(RTLD_DEFAULT, "ptk_profile_begin_data"));
+        if (!f) f = reinterpret_cast<ProfileDataFunc>(dlsym(RTLD_DEFAULT, "__llvm_profile_begin_data"));
+        return f;
+    }();
+    return fn;
+}
+
+static ProfileDataFunc getProfileEndData() {
+    static ProfileDataFunc fn = []() -> ProfileDataFunc {
+        auto f = reinterpret_cast<ProfileDataFunc>(dlsym(RTLD_DEFAULT, "ptk_profile_end_data"));
+        if (!f) f = reinterpret_cast<ProfileDataFunc>(dlsym(RTLD_DEFAULT, "__llvm_profile_end_data"));
+        return f;
+    }();
+    return fn;
+}
+
+static ProfileCountersFunc getProfileBeginCounters() {
+    static ProfileCountersFunc fn = []() -> ProfileCountersFunc {
+        auto f = reinterpret_cast<ProfileCountersFunc>(dlsym(RTLD_DEFAULT, "ptk_profile_begin_counters"));
+        if (!f) f = reinterpret_cast<ProfileCountersFunc>(dlsym(RTLD_DEFAULT, "__llvm_profile_begin_counters"));
+        return f;
+    }();
+    return fn;
+}
+
+static ProfileCountersFunc getProfileEndCounters() {
+    static ProfileCountersFunc fn = []() -> ProfileCountersFunc {
+        auto f = reinterpret_cast<ProfileCountersFunc>(dlsym(RTLD_DEFAULT, "ptk_profile_end_counters"));
+        if (!f) f = reinterpret_cast<ProfileCountersFunc>(dlsym(RTLD_DEFAULT, "__llvm_profile_end_counters"));
+        return f;
+    }();
+    return fn;
 }
 
 using namespace llvm;
@@ -310,16 +347,6 @@ struct InMemoryCoverageReader::Impl {
                 // Compute MD5 hash of function name for matching with runtime data
                 func.nameRef = IndexedInstrProf::ComputeHash(record.FunctionName);
 
-                // Debug: Print first few function name hashes
-                static int debugCount = 0;
-                if (debugCount < 3) {
-                    fprintf(stderr, "[DEBUG] Parsed function: %s, nameRef: 0x%llx, funcHash: 0x%llx\n",
-                            func.functionName.c_str(),
-                            (unsigned long long)func.nameRef,
-                            (unsigned long long)func.functionHash);
-                    debugCount++;
-                }
-
                 // Copy filenames
                 for (const auto& f : record.Filenames) {
                     func.filenames.push_back(f.str());
@@ -351,88 +378,74 @@ struct InMemoryCoverageReader::Impl {
     buildFunctionCounterMap(const uint64_t* globalCounterBegin, size_t globalCounterCount) {
         std::unordered_map<uint64_t, std::pair<const uint64_t*, uint32_t>> map;
 
-        // Safely check if profile runtime functions are available
-        if (__llvm_profile_begin_data == nullptr || __llvm_profile_end_data == nullptr) {
+        // Safely check if profile runtime functions are available (via dlsym)
+        auto beginDataFn = getProfileBeginData();
+        auto endDataFn = getProfileEndData();
+        if (beginDataFn == nullptr || endDataFn == nullptr) {
             return map;
         }
 
-        const void* beginPtr = __llvm_profile_begin_data();
-        const void* endPtr = __llvm_profile_end_data();
-
-        // Debug: Print global counter range
-        const uint64_t* globalCounterEnd = globalCounterBegin + globalCounterCount;
-        fprintf(stderr, "[DEBUG] Global counter range: %p - %p (%zu counters)\n",
-                (void*)globalCounterBegin, (void*)globalCounterEnd, globalCounterCount);
+        const void* beginPtr = beginDataFn();
+        const void* endPtr = endDataFn();
 
         if (beginPtr == nullptr || endPtr == nullptr || beginPtr >= endPtr) {
             return map;
         }
 
-        // Profile data structure (matches LLVM's __llvm_profile_data layout)
-        // IPVK_Last = 2 in current LLVM, so NumValueSites has 3 elements
+        // Get the actual counter range from the runtime
+        uint64_t* counterRangeBegin = nullptr;
+        uint64_t* counterRangeEnd = nullptr;
+        auto beginCountersFn = getProfileBeginCounters();
+        auto endCountersFn = getProfileEndCounters();
+        if (beginCountersFn != nullptr && endCountersFn != nullptr) {
+            counterRangeBegin = beginCountersFn();
+            counterRangeEnd = endCountersFn();
+        }
+
+        // Memory barrier to ensure we see the latest counter values
+        __atomic_thread_fence(__ATOMIC_SEQ_CST);
+
+        // LLVM 18 ProfileData structure (Apple's Swift 6.2 uses Coverage Mapping Version 7)
+        // See: llvm-project/llvm/include/llvm/ProfileData/InstrProfData.inc (release/18.x)
+        // Note: Apple's Swift uses raw profile format version 10 where CounterPtr is
+        // relative to the START of the ProfileData struct (not &CounterPtr).
         struct ProfileData {
-            uint64_t NameRef;           // 8 bytes
-            uint64_t FuncHash;          // 8 bytes
-            int64_t CounterDelta;       // 8 bytes - relative offset, not pointer!
-            int64_t BitmapDelta;        // 8 bytes - relative offset
-            void *FunctionPointer;      // 8 bytes (pointer)
-            void *Values;               // 8 bytes (pointer)
-            uint32_t NumCounters;       // 4 bytes
-            uint16_t NumValueSites[3];  // 6 bytes (IPVK_Last+1 = 3)
-            uint32_t NumBitmapBytes;    // 4 bytes
-            // Total: 62 bytes, padded to 64 bytes
+            uint64_t NameRef;           // 8 bytes - MD5 hash of function name
+            uint64_t FuncHash;          // 8 bytes - Structural hash
+            int64_t CounterPtr;         // 8 bytes - Relative offset to counters (from struct start)
+            int64_t BitmapPtr;          // 8 bytes - Relative offset to bitmap
+            void *FunctionPointer;      // 8 bytes - Function address for indirect calls
+            void *Values;               // 8 bytes - Value profiling data pointer
+            uint32_t NumCounters;       // 4 bytes - Number of counters
+            uint16_t NumValueSites[2];  // 4 bytes (IPVK_Last+1 = 2 in LLVM 18)
+            uint32_t NumBitmapBytes;    // 4 bytes - Bitmap size
+            // Total: 60 bytes, padded to 64 bytes
         };
 
-        static_assert(sizeof(ProfileData) == 64, "ProfileData size mismatch");
+        static_assert(sizeof(ProfileData) == 64, "ProfileData size mismatch - expected LLVM 18 layout");
 
         auto dataBegin = reinterpret_cast<const ProfileData*>(beginPtr);
         auto dataEnd = reinterpret_cast<const ProfileData*>(endPtr);
 
-        size_t totalRecords = 0;
-        // Interesting nameRef values to look for (from coverage mapping)
-        // We'll compare these with runtime values
-        uint64_t writeNameRef = IndexedInstrProf::ComputeHash("$s23PropertyTestingKitTests12MockDatabaseC5write3key5valueySS_SStF");
-        uint64_t writeWithPathNameRef = IndexedInstrProf::ComputeHash("/Users/alex.reilly/Documents/Swift/PropertyTestingKit/Tests/PropertyTestingKitTests/MockDatabase.swift:$s23PropertyTestingKitTests12MockDatabaseC5write3key5valueySS_SStF");
-        uint64_t writeCountInitNameRef = IndexedInstrProf::ComputeHash("/Users/alex.reilly/Documents/Swift/PropertyTestingKit/Tests/PropertyTestingKitTests/MockDatabase.swift:$s23PropertyTestingKitTests12MockDatabaseC10writeCountSivpfi");
-        uint64_t writeCountInitNoPathNameRef = IndexedInstrProf::ComputeHash("$s23PropertyTestingKitTests12MockDatabaseC10writeCountSivpfi");
-
-        fprintf(stderr, "[DEBUG] Expected nameRef for write() (no path): 0x%llx\n", (unsigned long long)writeNameRef);
-        fprintf(stderr, "[DEBUG] Expected nameRef for write() (with path): 0x%llx\n", (unsigned long long)writeWithPathNameRef);
-        fprintf(stderr, "[DEBUG] Expected nameRef for writeCountInit (with path): 0x%llx\n", (unsigned long long)writeCountInitNameRef);
-        fprintf(stderr, "[DEBUG] Expected nameRef for writeCountInit (no path): 0x%llx\n", (unsigned long long)writeCountInitNoPathNameRef);
-
         for (auto data = dataBegin; data < dataEnd; ++data) {
             if (data->NumCounters > 0 && data->NumCounters < 10000) {
-                // CounterDelta is a relative offset from &CounterDelta to the counters
+                // CounterPtr is a relative offset from the START of ProfileData struct to the counters
                 const uint64_t* counters = reinterpret_cast<const uint64_t*>(
-                    reinterpret_cast<const char*>(&data->CounterDelta) + data->CounterDelta
+                    reinterpret_cast<const char*>(data) + data->CounterPtr
                 );
+
+                // Validate that the computed counters are within the runtime counter range
+                if (counterRangeBegin && counterRangeEnd) {
+                    if (counters < counterRangeBegin || counters >= counterRangeEnd) {
+                        // Counter pointer is outside valid range - skip
+                        continue;
+                    }
+                }
+
                 // Use NameRef (MD5 of function name) as key since FuncHash is often 0
                 map[data->NameRef] = {counters, data->NumCounters};
-                totalRecords++;
-
-                // Check if this is one of our interesting functions
-                if (data->NameRef == writeNameRef || data->NameRef == writeWithPathNameRef) {
-                    bool inGlobalRange = (counters >= globalCounterBegin && counters < globalCounterEnd);
-                    bool withPath = (data->NameRef == writeWithPathNameRef);
-                    fprintf(stderr, "[DEBUG] Runtime write() %s found: nameRef=0x%llx, counters=%p, counters[0]=%llu, inGlobalRange=%s\n",
-                            withPath ? "(with path)" : "(no path)",
-                            (unsigned long long)data->NameRef,
-                            (void*)counters,
-                            (unsigned long long)counters[0],
-                            inGlobalRange ? "YES" : "NO");
-                }
-                if (data->NameRef == writeCountInitNameRef || data->NameRef == writeCountInitNoPathNameRef) {
-                    bool inGlobalRange = (counters >= globalCounterBegin && counters < globalCounterEnd);
-                    fprintf(stderr, "[DEBUG] Runtime writeCountInit found: nameRef=0x%llx, counters=%p, counters[0]=%llu, inGlobalRange=%s\n",
-                            (unsigned long long)data->NameRef,
-                            (void*)counters,
-                            (unsigned long long)counters[0],
-                            inGlobalRange ? "YES" : "NO");
-                }
             }
         }
-        fprintf(stderr, "[DEBUG] Total runtime profile data records: %zu\n", totalRecords);
 
         return map;
     }
@@ -448,10 +461,6 @@ struct InMemoryCoverageReader::Impl {
         // Build a map from function hash to its counter array
         auto funcCounterMap = buildFunctionCounterMap(globalCounters, count);
 
-        // Debug: print some stats
-        // fprintf(stderr, "Coverage mapping has %zu functions\n", functions.size());
-        // fprintf(stderr, "Runtime has %zu profile data records\n", funcCounterMap.size());
-
         for (const auto& func : functions) {
             FunctionCoverage funcCov;
             funcCov.name = func.functionName;
@@ -461,54 +470,12 @@ struct InMemoryCoverageReader::Impl {
             // Find this function's counters by nameRef (MD5 of function name)
             auto it = funcCounterMap.find(func.nameRef);
             if (it == funcCounterMap.end()) {
-                // Debug: show functions that couldn't be matched
-                if (func.functionName.find("MockDatabase") != std::string::npos ||
-                    func.functionName.find("TestStruct") != std::string::npos) {
-                    fprintf(stderr, "[DEBUG] No runtime match for: %s (nameRef=0x%llx)\n",
-                            func.functionName.c_str(),
-                            (unsigned long long)func.nameRef);
-                }
                 // No runtime data for this function - skip it
                 continue;
             }
 
             const uint64_t* funcCounters = it->second.first;
             uint32_t numCounters = it->second.second;
-
-            // Debug: Print counter values for MockDatabase and TestStruct functions
-            bool isMockDb = func.functionName.find("MockDatabase") != std::string::npos;
-            bool isTestStruct = func.functionName.find("TestStruct") != std::string::npos;
-            if (isMockDb || isTestStruct) {
-                bool isWrite = func.functionName.find("write3key5value") != std::string::npos;
-                bool isWriteCountInit = func.functionName.find("writeCountSivpfi") != std::string::npos;
-                bool isIncrement = func.functionName.find("increment") != std::string::npos;
-                bool isGetValue = func.functionName.find("getValue") != std::string::npos;
-                bool isValueInit = func.functionName.find("valueSivpfi") != std::string::npos;
-                if (isWrite || isWriteCountInit || isIncrement || isGetValue || isValueInit) {
-                    const char* label = isWrite ? "write()" : isWriteCountInit ? "writeCountInit" : isIncrement ? "increment()" : isGetValue ? "getValue()" : "valueInit";
-                    fprintf(stderr, "[DEBUG] %s nameRef=0x%llx, counters=%p, numCounters=%u, values=[",
-                            label, (unsigned long long)func.nameRef, (void*)funcCounters, numCounters);
-                    for (uint32_t i = 0; i < numCounters && i < 5; i++) {
-                        fprintf(stderr, "%llu%s", (unsigned long long)funcCounters[i],
-                                i < numCounters - 1 ? ", " : "");
-                    }
-                    fprintf(stderr, "]\n");
-                    fprintf(stderr, "  funcName: %s\n", func.functionName.c_str());
-
-                    // Print region counter types
-                    for (size_t i = 0; i < func.regions.size(); i++) {
-                        const auto& region = func.regions[i];
-                        const char* kindStr = "Unknown";
-                        switch (region.Count.getKind()) {
-                            case Counter::Zero: kindStr = "Zero"; break;
-                            case Counter::CounterValueReference: kindStr = "CounterRef"; break;
-                            case Counter::Expression: kindStr = "Expression"; break;
-                        }
-                        fprintf(stderr, "  Region %zu: kind=%s, counterId=%u\n",
-                                i, kindStr, region.Count.getCounterID());
-                    }
-                }
-            }
 
             // Create context with this function's counters
             ArrayRef<uint64_t> counterValues(funcCounters, numCounters);
@@ -541,7 +508,7 @@ struct InMemoryCoverageReader::Impl {
                 regCov.lineEnd = region.LineEnd;
                 regCov.columnEnd = region.ColumnEnd & 0x7FFFFFFF; // Mask gap region bit
                 regCov.executionCount = execCount;
-                regCov.isBranch = region.isBranch();
+                regCov.isBranch = (region.Kind == CounterMappingRegion::BranchRegion);
 
                 funcCov.regions.push_back(regCov);
 
@@ -582,8 +549,6 @@ InMemoryCoverageReader* InMemoryCoverageReader::loadFromCurrentProcess(
         CoverageError tryError;
         auto reader = loadFromBinary(path, tryError);
         if (reader && reader->getFunctionCount() > 0) {
-            fprintf(stderr, "[DEBUG] Loaded coverage from: %s (%zu functions)\n",
-                    path.c_str(), reader->getFunctionCount());
             outError = CoverageError::none();
             return reader;
         }

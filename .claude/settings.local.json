@@ -25,7 +25,18 @@
       "Bash(xcrun nm:*)",
       "Bash(otool:*)",
       "Bash(LLVM_PROFILE_FILE=/tmp/test.profraw swift test:*)",
-      "Bash(xcrun clang:*)"
+      "Bash(xcrun clang:*)",
+      "Bash(brew search:*)",
+      "Bash(brew info:*)",
+      "Bash(brew uninstall:*)",
+      "WebFetch(domain:llvm.org)",
+      "Bash(/opt/homebrew/opt/llvm@17/bin/llvm-config:*)",
+      "Bash(swift --version:*)",
+      "Bash(/opt/homebrew/opt/llvm@17/bin/llvm-cov:*)",
+      "Bash(xxd:*)",
+      "Bash(LLVM_PROFILE_FILE=/tmp/test_coverage.profraw swift test:*)",
+      "Bash(LLVM_PROFILE_FILE=/tmp/noinline.profraw swift test:*)",
+      "Bash(/opt/homebrew/opt/llvm@18/bin/llvm-profdata show:*)"
     ],
     "deny": [],
     "ask": []
