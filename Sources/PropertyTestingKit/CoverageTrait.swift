@@ -82,13 +82,6 @@ private let _defaultCoverageOutputDirectory: String = {
 /// - Note: Per-test profraw files contain cumulative coverage (not isolated).
 ///   Use `measureSourceCoverage` for isolated, difference-based measurement.
 public struct CoverageTrait: TestTrait, SuiteTrait {
-    /// This parameter is deprecated and has no effect.
-    ///
-    /// Resetting counters interferes with Xcode and other coverage tools.
-    /// Use `measureSourceCoverage` for isolated coverage measurement instead.
-    @available(*, deprecated, message: "This parameter no longer has any effect. Use measureSourceCoverage for isolated coverage.")
-    public var isolatesTests: Bool
-
     /// The directory where coverage files are written.
     ///
     /// Defaults to `COVERAGE_OUTPUT_DIR` environment variable or current
@@ -98,13 +91,10 @@ public struct CoverageTrait: TestTrait, SuiteTrait {
     /// Create a coverage trait.
     ///
     /// - Parameters:
-    ///   - isolatesTests: Deprecated, no longer has any effect.
     ///   - outputDirectory: Directory for coverage files.
     public init(
-        isolatesTests: Bool = true,
         outputDirectory: String? = nil
     ) {
-        self.isolatesTests = isolatesTests
         self.outputDirectory = outputDirectory ?? _defaultCoverageOutputDirectory
     }
 
@@ -124,10 +114,6 @@ extension CoverageTrait: TestScoping {
             try await function()
             return
         }
-
-        // Note: We no longer reset counters as it interferes with Xcode coverage.
-        // The `isolatesTests` parameter is now deprecated and has no effect.
-        // Per-test profraw files will contain cumulative coverage up to that point.
 
         // Run the test
         do {
@@ -190,13 +176,11 @@ extension Trait where Self == CoverageTrait {
     /// A trait that collects per-test code coverage with custom options.
     ///
     /// - Parameters:
-    ///   - isolatesTests: Whether to reset counters between tests.
     ///   - outputDirectory: Directory for coverage files.
     public static func coverage(
-        isolatesTests: Bool = true,
         outputDirectory: String? = nil
     ) -> Self {
-        Self(isolatesTests: isolatesTests, outputDirectory: outputDirectory)
+        Self(outputDirectory: outputDirectory)
     }
 }
 
