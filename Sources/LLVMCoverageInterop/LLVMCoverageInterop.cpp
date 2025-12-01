@@ -19,6 +19,7 @@
 #include <set>
 #include <cstdlib>
 #include <dlfcn.h>
+#include <mutex>
 
 // Swift runtime demangling function (via dlsym)
 // Returns a malloc'd string that must be freed, or nullptr if demangling fails
@@ -328,8 +329,10 @@ static std::string getCurrentExecutablePath() {
 
 /// Find a loaded image that has coverage mapping data.
 /// This is needed for Swift Testing which runs tests via a helper process.
+/// Returns images sorted by likelihood of containing coverage data (test bundles first).
 static std::vector<std::string> findLoadedImagesWithCoverage() {
-    std::vector<std::string> images;
+    std::vector<std::string> highPriority;  // Test bundles
+    std::vector<std::string> lowPriority;   // Other candidates
 #if defined(__APPLE__)
     uint32_t count = _dyld_image_count();
     for (uint32_t i = 0; i < count; i++) {
@@ -337,18 +340,31 @@ static std::vector<std::string> findLoadedImagesWithCoverage() {
         if (!name) continue;
 
         std::string path(name);
+
         // Skip system libraries and frameworks
         if (path.find("/usr/lib/") == 0 ||
             path.find("/System/") == 0 ||
             path.find("/Library/Developer/") == 0 ||
-            path.find("/Applications/Xcode") == 0) {
+            path.find("/Applications/Xcode") == 0 ||
+            path.find(".framework/") != std::string::npos ||
+            path.find("/SourcePackages/") != std::string::npos ||
+            path.find("/.build/checkouts/") != std::string::npos) {
             continue;
         }
 
-        images.push_back(path);
+        // Prioritize test bundles - these are most likely to have coverage
+        if (path.find("Tests") != std::string::npos ||
+            path.find(".xctest") != std::string::npos ||
+            path.find("PackageTests") != std::string::npos) {
+            highPriority.push_back(path);
+        } else {
+            lowPriority.push_back(path);
+        }
     }
 #endif
-    return images;
+    // Return high priority first, then low priority
+    highPriority.insert(highPriority.end(), lowPriority.begin(), lowPriority.end());
+    return highPriority;
 }
 
 /// Parsed coverage mapping record stored for later resolution.
@@ -364,6 +380,11 @@ struct ParsedFunctionRecord {
 struct InMemoryCoverageReader::Impl {
     std::vector<ParsedFunctionRecord> functions;
     std::vector<std::string> sourceFiles;
+
+    // Cached function counter offset map (built once, reused)
+    // Uses std::once_flag for thread-safe lazy initialization
+    mutable std::unordered_map<uint64_t, std::pair<size_t, uint32_t>> cachedOffsetMap;
+    mutable std::once_flag offsetMapOnce;
 
     /// Parse coverage mapping from a binary file.
     static std::unique_ptr<Impl> loadFromFile(
@@ -525,6 +546,15 @@ struct InMemoryCoverageReader::Impl {
         return map;
     }
 
+    /// Get or build the function counter offset map (cached, thread-safe).
+    const std::unordered_map<uint64_t, std::pair<size_t, uint32_t>>&
+    getFunctionCounterOffsetMap() const {
+        std::call_once(offsetMapOnce, [this]() {
+            cachedOffsetMap = buildFunctionCounterOffsetMap();
+        });
+        return cachedOffsetMap;
+    }
+
     /// Resolve coverage using the provided counter array.
     /// The counter array should match the layout of the global counter array
     /// (e.g., a snapshot or delta from CoverageCounters.snapshot()).
@@ -535,8 +565,8 @@ struct InMemoryCoverageReader::Impl {
         InMemoryCoverageData result;
         result.sourceFiles = sourceFiles;
 
-        // Build a map from function nameRef to offset and count in the counter array
-        auto funcOffsetMap = buildFunctionCounterOffsetMap();
+        // Get cached map from function nameRef to offset and count in the counter array
+        const auto& funcOffsetMap = getFunctionCounterOffsetMap();
 
         for (const auto& func : functions) {
             FunctionCoverage funcCov;

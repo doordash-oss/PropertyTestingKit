@@ -43,7 +43,19 @@
       "Bash(source ~/.bash_profile)",
       "Bash(export LLVM_PROFILE_FILE=\"$HOME/temp/%m.profraw\")",
       "Bash(~/.zshrc)",
-      "Bash(zsh:*)"
+      "Bash(zsh:*)",
+      "Bash(chmod:*)",
+      "Bash(./Scripts/build-xcframework.sh:*)",
+      "Bash(lipo -create:*)",
+      "Bash(xargs:*)",
+      "SlashCommand(/cost-history)",
+      "Bash(size -m:*)",
+      "Bash(zip:*)",
+      "Bash(shasum:*)",
+      "Bash(git rev-parse:*)",
+      "Bash(gh api:*)",
+      "Bash(/bin/echo:*)",
+      "Bash(curl:*)"
     ],
     "deny": [],
     "ask": []

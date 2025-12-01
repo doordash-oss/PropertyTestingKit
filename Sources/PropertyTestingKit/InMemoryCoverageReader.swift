@@ -408,6 +408,35 @@ private func filterToProjectOnly(_ coverage: ResolvedCoverage) -> ResolvedCovera
     return ResolvedCoverage(functions: filteredFunctions, sourceFiles: filteredFiles)
 }
 
+// MARK: - Cached Reader
+
+/// Thread-safe cache for the coverage reader.
+/// The coverage mapping doesn't change during test execution, so we load it once.
+private final class CachedReaderStorage: @unchecked Sendable {
+    private let lock = NSLock()
+    private var reader: InMemoryCoverageReader?
+
+    static let shared = CachedReaderStorage()
+
+    func getReader() throws -> InMemoryCoverageReader {
+        lock.lock()
+        defer { lock.unlock() }
+
+        if let reader = reader {
+            return reader
+        }
+
+        let newReader = try InMemoryCoverageReader.loadFromCurrentProcess()
+        reader = newReader
+        return newReader
+    }
+}
+
+/// Get the cached coverage reader, loading it if necessary.
+private func getCachedReader() throws -> InMemoryCoverageReader {
+    try CachedReaderStorage.shared.getReader()
+}
+
 /// Measure coverage of a code block with source-level detail.
 ///
 /// This is the most complete coverage API, providing source locations
@@ -438,7 +467,7 @@ public func measureSourceCoverage<T>(
     includeAllFiles: Bool = false,
     _ body: () throws -> T
 ) throws -> (result: T, coverage: ResolvedCoverage) {
-    let reader = try InMemoryCoverageReader.loadFromCurrentProcess()
+    let reader = try getCachedReader()
 
     // Snapshot before running code
     guard let before = CoverageCounters.snapshot() else {

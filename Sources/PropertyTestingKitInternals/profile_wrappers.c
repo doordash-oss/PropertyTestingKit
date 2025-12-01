@@ -3,67 +3,91 @@
 //  PropertyTestingKit
 //
 //  Exported wrappers for LLVM profile runtime functions.
-//  These wrappers directly call the profile runtime functions and export
-//  them as global symbols that can be found via dlsym.
+//  Uses weak_import to link against the profile runtime when available.
+//  When coverage is not enabled, these symbols resolve to NULL at runtime.
 //
 
 #include <stdint.h>
 #include <stdbool.h>
+#include <stddef.h>
 
-// Forward declarations for the profile runtime functions
-// These are resolved from Swift's profile runtime when coverage is enabled
-extern void __llvm_profile_reset_counters_impl(void) __asm__("___llvm_profile_reset_counters");
-extern int __llvm_profile_write_file_impl(void) __asm__("___llvm_profile_write_file");
-extern void __llvm_profile_set_filename_impl(const char *) __asm__("___llvm_profile_set_filename");
-extern int __llvm_profile_dump_impl(void) __asm__("___llvm_profile_dump");
-extern uint64_t *__llvm_profile_begin_counters_impl(void) __asm__("___llvm_profile_begin_counters");
-extern uint64_t *__llvm_profile_end_counters_impl(void) __asm__("___llvm_profile_end_counters");
-extern const void *__llvm_profile_begin_data_impl(void) __asm__("___llvm_profile_begin_data");
-extern const void *__llvm_profile_end_data_impl(void) __asm__("___llvm_profile_end_data");
-
-// Exported wrapper functions with predictable names
-__attribute__((visibility("default")))
-void ptk_profile_reset_counters(void) {
-    __llvm_profile_reset_counters_impl();
-}
-
-__attribute__((visibility("default")))
-int ptk_profile_write_file(void) {
-    return __llvm_profile_write_file_impl();
-}
-
-__attribute__((visibility("default")))
-void ptk_profile_set_filename(const char *filename) {
-    __llvm_profile_set_filename_impl(filename);
-}
-
-__attribute__((visibility("default")))
-int ptk_profile_dump(void) {
-    return __llvm_profile_dump_impl();
-}
-
-__attribute__((visibility("default")))
-uint64_t *ptk_profile_begin_counters(void) {
-    return __llvm_profile_begin_counters_impl();
-}
-
-__attribute__((visibility("default")))
-uint64_t *ptk_profile_end_counters(void) {
-    return __llvm_profile_end_counters_impl();
-}
-
-__attribute__((visibility("default")))
-const void *ptk_profile_begin_data(void) {
-    return __llvm_profile_begin_data_impl();
-}
-
-__attribute__((visibility("default")))
-const void *ptk_profile_end_data(void) {
-    return __llvm_profile_end_data_impl();
-}
+// Declare LLVM profile runtime functions with weak_import.
+// These will be NULL if coverage instrumentation is not linked.
+extern void __llvm_profile_reset_counters(void) __attribute__((weak_import));
+extern int __llvm_profile_write_file(void) __attribute__((weak_import));
+extern void __llvm_profile_set_filename(const char *) __attribute__((weak_import));
+extern int __llvm_profile_dump(void) __attribute__((weak_import));
+extern uint64_t *__llvm_profile_begin_counters(void) __attribute__((weak_import));
+extern uint64_t *__llvm_profile_end_counters(void) __attribute__((weak_import));
+extern const void *__llvm_profile_begin_data(void) __attribute__((weak_import));
+extern const void *__llvm_profile_end_data(void) __attribute__((weak_import));
 
 // Availability check - returns 1 if profile runtime is linked
 __attribute__((visibility("default")))
 int ptk_profile_runtime_available(void) {
-    return 1;
+    // Check if the weak symbol was resolved
+    return &__llvm_profile_reset_counters != NULL;
+}
+
+// Exported wrapper functions with predictable names
+__attribute__((visibility("default")))
+void ptk_profile_reset_counters(void) {
+    if (&__llvm_profile_reset_counters != NULL) {
+        __llvm_profile_reset_counters();
+    }
+}
+
+__attribute__((visibility("default")))
+int ptk_profile_write_file(void) {
+    if (&__llvm_profile_write_file != NULL) {
+        return __llvm_profile_write_file();
+    }
+    return -1;
+}
+
+__attribute__((visibility("default")))
+void ptk_profile_set_filename(const char *filename) {
+    if (&__llvm_profile_set_filename != NULL) {
+        __llvm_profile_set_filename(filename);
+    }
+}
+
+__attribute__((visibility("default")))
+int ptk_profile_dump(void) {
+    if (&__llvm_profile_dump != NULL) {
+        return __llvm_profile_dump();
+    }
+    return -1;
+}
+
+__attribute__((visibility("default")))
+uint64_t *ptk_profile_begin_counters(void) {
+    if (&__llvm_profile_begin_counters != NULL) {
+        return __llvm_profile_begin_counters();
+    }
+    return NULL;
+}
+
+__attribute__((visibility("default")))
+uint64_t *ptk_profile_end_counters(void) {
+    if (&__llvm_profile_end_counters != NULL) {
+        return __llvm_profile_end_counters();
+    }
+    return NULL;
+}
+
+__attribute__((visibility("default")))
+const void *ptk_profile_begin_data(void) {
+    if (&__llvm_profile_begin_data != NULL) {
+        return __llvm_profile_begin_data();
+    }
+    return NULL;
+}
+
+__attribute__((visibility("default")))
+const void *ptk_profile_end_data(void) {
+    if (&__llvm_profile_end_data != NULL) {
+        return __llvm_profile_end_data();
+    }
+    return NULL;
 }

@@ -1,6 +1,15 @@
 {
-  "originHash" : "9ac59b8628836b1a6f0438da5693c65c089d203a46a4709ad012584b89916a45",
+  "originHash" : "4533eaa965bc861f5b9005143db3f4476bc1eede3f43349b9a18636768f616d5",
   "pins" : [
+    {
+      "identity" : "llvmcoveragekit",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/alex-reilly-dd/LLVMCoverageKit.git",
+      "state" : {
+        "revision" : "852ad79a7540fdd13d06a831b49b2a1474967f9b",
+        "version" : "18.1.8"
+      }
+    },
     {
       "identity" : "swift-syntax",
       "kind" : "remoteSourceControl",
