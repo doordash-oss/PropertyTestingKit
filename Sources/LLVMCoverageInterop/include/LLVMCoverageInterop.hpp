@@ -142,10 +142,11 @@ struct RegionCoverage {
 
 /// Function coverage record with resolved execution counts.
 struct FunctionCoverage {
-    std::string name;
+    std::string name;           // Mangled name
+    std::string demangledName;  // Human-readable demangled name
     uint64_t hash;
     std::vector<RegionCoverage> regions;
-    uint64_t executionCount;  // Entry count
+    uint64_t executionCount;    // Entry count
 };
 
 /// Coverage data resolved from in-memory counters.

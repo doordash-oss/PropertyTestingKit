@@ -36,7 +36,11 @@
       "Bash(xxd:*)",
       "Bash(LLVM_PROFILE_FILE=/tmp/test_coverage.profraw swift test:*)",
       "Bash(LLVM_PROFILE_FILE=/tmp/noinline.profraw swift test:*)",
-      "Bash(/opt/homebrew/opt/llvm@18/bin/llvm-profdata show:*)"
+      "Bash(/opt/homebrew/opt/llvm@18/bin/llvm-profdata show:*)",
+      "Bash(swift demangle:*)",
+      "Bash(swift -e:*)",
+      "Bash(echo:*)",
+      "Bash(source ~/.bash_profile)"
     ],
     "deny": [],
     "ask": []

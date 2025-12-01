@@ -14,8 +14,79 @@
 #include <llvm/Support/VirtualFileSystem.h>
 #include <llvm/Support/MemoryBuffer.h>
 #include <llvm/Object/ObjectFile.h>
+#include <llvm/Demangle/Demangle.h>
 
 #include <set>
+#include <cstdlib>
+#include <dlfcn.h>
+
+// Swift runtime demangling function (via dlsym)
+// Returns a malloc'd string that must be freed, or nullptr if demangling fails
+using SwiftDemangleFunc = char* (*)(const char* mangledName, size_t mangledNameLength,
+                                     char* outputBuffer, size_t* outputBufferSize,
+                                     uint32_t flags);
+
+static std::string demangleSwiftSymbol(const std::string& mangledName) {
+    static SwiftDemangleFunc swiftDemangle = []() -> SwiftDemangleFunc {
+        return reinterpret_cast<SwiftDemangleFunc>(
+            dlsym(RTLD_DEFAULT, "swift_demangle")
+        );
+    }();
+
+    if (!swiftDemangle) {
+        return mangledName;
+    }
+
+    size_t outputSize = 0;
+    char* demangled = swiftDemangle(mangledName.c_str(), mangledName.size(), nullptr, &outputSize, 0);
+    if (demangled) {
+        std::string demangledStr(demangled);
+        free(demangled);
+        return demangledStr;
+    }
+    return mangledName;
+}
+
+static std::string demangleSwiftOrCpp(const std::string& name) {
+    // Handle names with filename prefix (e.g., "path/file.swift:$s..." or "file.cpp:_Z...")
+    // These are typically closures, lambdas, or nested functions
+    size_t colonPos = name.rfind(':');
+    if (colonPos != std::string::npos && colonPos > 0 && colonPos < name.size() - 1) {
+        std::string afterColon = name.substr(colonPos + 1);
+
+        // Check if the part after colon is a Swift symbol ($s or _$s)
+        if (!afterColon.empty() && (afterColon[0] == '$' ||
+            (afterColon.size() > 1 && afterColon[0] == '_' && afterColon[1] == '$'))) {
+            std::string demangled = demangleSwiftSymbol(afterColon);
+            if (demangled != afterColon) {
+                return demangled;
+            }
+        }
+
+        // Check if the part after colon is a C++ symbol (_Z for Itanium ABI)
+        if (afterColon.size() > 2 && afterColon[0] == '_' && afterColon[1] == 'Z') {
+            std::string demangled = llvm::demangle(afterColon);
+            if (demangled != afterColon) {
+                return demangled;
+            }
+        }
+    }
+
+    // First try LLVM's demangler (handles C++, Rust, etc.)
+    std::string result = llvm::demangle(name);
+    if (result != name) {
+        return result;  // Successfully demangled
+    }
+
+    // For Swift symbols, try the Swift runtime demangler
+    // Swift symbols start with $s or _$s
+    if (name.empty() || (name[0] != '$' && !(name.size() > 1 && name[0] == '_' && name[1] == '$'))) {
+        return name;  // Not a Swift symbol
+    }
+
+    return demangleSwiftSymbol(name);
+}
+
 #include <unordered_map>
 
 #if defined(__APPLE__)
@@ -23,7 +94,6 @@
 #endif
 
 // Use dlsym to dynamically get profile runtime symbols (only present when coverage enabled)
-#include <dlfcn.h>
 
 using ProfileDataFunc = const void* (*)();
 using ProfileCountersFunc = uint64_t* (*)();
@@ -471,6 +541,8 @@ struct InMemoryCoverageReader::Impl {
         for (const auto& func : functions) {
             FunctionCoverage funcCov;
             funcCov.name = func.functionName;
+            // Demangle Swift/C++ names for human readability
+            funcCov.demangledName = demangleSwiftOrCpp(func.functionName);
             funcCov.hash = func.functionHash;
             funcCov.executionCount = 0;
 

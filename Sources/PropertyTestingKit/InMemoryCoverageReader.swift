@@ -184,11 +184,75 @@ public struct ResolvedCoverage: Sendable {
     public var unexecutedRegions: [ResolvedRegionCoverage] {
         functions.flatMap { $0.regions.filter { $0.executionCount == 0 } }
     }
+
+    /// Filter coverage to only include functions from specific paths.
+    ///
+    /// Use this to focus on your project's code and exclude external libraries.
+    ///
+    /// ```swift
+    /// // Only show coverage for files in your project
+    /// let projectCoverage = coverage.filtered(
+    ///     byPathPrefix: "/Users/me/MyProject/Sources"
+    /// )
+    ///
+    /// // Or exclude system/library paths
+    /// let appCoverage = coverage.filtered(
+    ///     excludingPathPrefixes: ["/usr", "/System", "/Library"]
+    /// )
+    /// ```
+    ///
+    /// - Parameter pathPrefix: Only include functions whose regions are in files
+    ///   starting with this path prefix.
+    /// - Returns: Filtered coverage data.
+    public func filtered(byPathPrefix pathPrefix: String) -> ResolvedCoverage {
+        let filteredFunctions = functions.compactMap { func_ -> ResolvedFunctionCoverage? in
+            let filteredRegions = func_.regions.filter { region in
+                region.filename.hasPrefix(pathPrefix)
+            }
+            guard !filteredRegions.isEmpty else { return nil }
+            return ResolvedFunctionCoverage(
+                name: func_.name,
+                hash: func_.hash,
+                regions: filteredRegions,
+                executionCount: func_.executionCount
+            )
+        }
+
+        let filteredFiles = sourceFiles.filter { $0.hasPrefix(pathPrefix) }
+
+        return ResolvedCoverage(functions: filteredFunctions, sourceFiles: filteredFiles)
+    }
+
+    /// Filter coverage to exclude functions from specific paths.
+    ///
+    /// - Parameter pathPrefixes: Exclude functions whose regions are in files
+    ///   starting with any of these prefixes.
+    /// - Returns: Filtered coverage data.
+    public func filtered(excludingPathPrefixes pathPrefixes: [String]) -> ResolvedCoverage {
+        let filteredFunctions = functions.compactMap { func_ -> ResolvedFunctionCoverage? in
+            let filteredRegions = func_.regions.filter { region in
+                !pathPrefixes.contains { region.filename.hasPrefix($0) }
+            }
+            guard !filteredRegions.isEmpty else { return nil }
+            return ResolvedFunctionCoverage(
+                name: func_.name,
+                hash: func_.hash,
+                regions: filteredRegions,
+                executionCount: func_.executionCount
+            )
+        }
+
+        let filteredFiles = sourceFiles.filter { file in
+            !pathPrefixes.contains { file.hasPrefix($0) }
+        }
+
+        return ResolvedCoverage(functions: filteredFunctions, sourceFiles: filteredFiles)
+    }
 }
 
 /// Coverage information for a single function.
 public struct ResolvedFunctionCoverage: Sendable {
-    /// The function name (may be mangled).
+    /// The function name
     public let name: String
 
     /// The function's hash (for matching with profile data).
@@ -201,10 +265,22 @@ public struct ResolvedFunctionCoverage: Sendable {
     public let executionCount: UInt64
 
     init(_ func_: ptk.FunctionCoverage) {
-        self.name = String(func_.name)
+        self.name = String(func_.demangledName)
         self.hash = func_.hash
         self.regions = func_.regions.map { ResolvedRegionCoverage($0) }
         self.executionCount = func_.executionCount
+    }
+
+    init(
+        name: String,
+        hash: UInt64,
+        regions: [ResolvedRegionCoverage],
+        executionCount: UInt64
+    ) {
+        self.name = name
+        self.hash = hash
+        self.regions = regions
+        self.executionCount = executionCount
     }
 }
 
@@ -264,11 +340,67 @@ public enum InMemoryCoverageError: Error, CustomStringConvertible {
 
 // MARK: - Convenience API
 
+/// Default path prefixes to exclude from coverage (system libraries and dependencies).
+private let defaultExcludedPathPrefixes = [
+    "/usr",
+    "/System",
+    "/Library",
+    "/Applications/Xcode",
+    "/opt/homebrew",
+]
+
+/// Check if a path looks like a SwiftPM dependency (contains .build/checkouts/).
+private func isSwiftPMDependency(_ path: String) -> Bool {
+    path.contains("/.build/checkouts/")
+}
+
+/// Filter coverage to exclude dependencies and system libraries.
+private func filterToProjectOnly(_ coverage: ResolvedCoverage) -> ResolvedCoverage {
+    let filteredFunctions = coverage.functions.compactMap { func_ -> ResolvedFunctionCoverage? in
+        let filteredRegions = func_.regions.filter { region in
+            let path = region.filename
+            // Exclude system paths
+            for prefix in defaultExcludedPathPrefixes {
+                if path.hasPrefix(prefix) {
+                    return false
+                }
+            }
+            // Exclude SwiftPM dependencies
+            if isSwiftPMDependency(path) {
+                return false
+            }
+            return true
+        }
+        guard !filteredRegions.isEmpty else { return nil }
+        return ResolvedFunctionCoverage(
+            name: func_.name,
+            hash: func_.hash,
+            regions: filteredRegions,
+            executionCount: func_.executionCount
+        )
+    }
+
+    let filteredFiles = coverage.sourceFiles.filter { file in
+        for prefix in defaultExcludedPathPrefixes {
+            if file.hasPrefix(prefix) {
+                return false
+            }
+        }
+        return !isSwiftPMDependency(file)
+    }
+
+    return ResolvedCoverage(functions: filteredFunctions, sourceFiles: filteredFiles)
+}
+
 /// Measure coverage of a code block with source-level detail.
 ///
 /// This is the most complete coverage API, providing source locations
 /// for all executed code. It uses difference-based measurement to avoid
 /// interfering with Xcode and other coverage tooling.
+///
+/// By default, coverage is filtered to exclude system libraries and
+/// package dependencies (files in `.build/checkouts/`, `/usr`, `/System`, etc.).
+/// Set `includeAllFiles` to `true` to include coverage for all files.
 ///
 /// ```swift
 /// let coverage = try measureSourceCoverage {
@@ -280,10 +412,14 @@ public enum InMemoryCoverageError: Error, CustomStringConvertible {
 /// }
 /// ```
 ///
-/// - Parameter body: The code to measure.
+/// - Parameters:
+///   - includeAllFiles: If `true`, include coverage for all files including
+///     dependencies and system libraries. Defaults to `false`.
+///   - body: The code to measure.
 /// - Returns: Source-level coverage data.
 /// - Throws: ``InMemoryCoverageError`` if coverage mapping can't be loaded.
 public func measureSourceCoverage<T>(
+    includeAllFiles: Bool = false,
     _ body: () throws -> T
 ) throws -> (result: T, coverage: ResolvedCoverage) {
     let reader = try InMemoryCoverageReader.loadFromCurrentProcess()
@@ -308,20 +444,32 @@ public func measureSourceCoverage<T>(
     }
 
     // Resolve coverage from delta
-    let coverage = reader.resolveCoverage(counters: deltaCounters)
+    var coverage = reader.resolveCoverage(counters: deltaCounters)
+
+    // Filter to project files only by default
+    if !includeAllFiles {
+        coverage = filterToProjectOnly(coverage)
+    }
 
     return (result, coverage)
 }
 
 /// Measure coverage of a code block with source-level detail (throwing version).
 ///
-/// - Parameter body: The code to measure.
+/// By default, coverage is filtered to exclude system libraries and
+/// package dependencies. Set `includeAllFiles` to `true` to include all files.
+///
+/// - Parameters:
+///   - includeAllFiles: If `true`, include coverage for all files including
+///     dependencies and system libraries. Defaults to `false`.
+///   - body: The code to measure.
 /// - Returns: Source-level coverage data.
 /// - Throws: ``InMemoryCoverageError`` if coverage mapping can't be loaded.
 public func measureSourceCoverage(
+    includeAllFiles: Bool = false,
     _ body: () throws -> Void
 ) throws -> ResolvedCoverage {
-    let (_, coverage) = try measureSourceCoverage {
+    let (_, coverage) = try measureSourceCoverage(includeAllFiles: includeAllFiles) {
         try body()
         return ()
     }

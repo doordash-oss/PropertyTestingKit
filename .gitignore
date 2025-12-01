@@ -8,3 +8,5 @@ DerivedData/
 .netrc
 *.profraw
 *.profdata
+# Ignore literal ~ directory (created when LLVM_PROFILE_FILE contains unexpanded ~)
+/~

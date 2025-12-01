@@ -91,16 +91,171 @@ struct UserServiceCoverageDiagnostics {
         }
 
         for fn in userServiceFns {
-            print("\nFunction: \(fn.name)")
-            print("  Hash: \(fn.hash)")
+            print("\nFunction: \(fn.name)")  // Use demangled name!
             print("  Execution count: \(fn.executionCount)")
             print("  Regions: \(fn.regions.count)")
             for region in fn.regions {
-                print("    \(region.lineStart):\(region.columnStart)-\(region.lineEnd):\(region.columnEnd) = \(region.executionCount) (\(region.filename.split(separator: "/").last ?? ""))")
+                print("    \(region.lineStart):\(region.columnStart)-\(region.lineEnd):\(region.columnEnd) = \(region.executionCount)")
             }
         }
 
         #expect(userServiceFns.count > 0, "Should have UserService functions")
+    }
+
+    @Test("Filter coverage to project files only")
+    func filterCoverageToProject() throws {
+        let reader = try InMemoryCoverageReader.loadFromCurrentProcess()
+        let fullCoverage = reader.resolveCoverage()
+
+        // Filter to only files in this project
+        let projectPath = "/Users/alex.reilly/Documents/Swift/PropertyTestingKit"
+        let projectCoverage = fullCoverage.filtered(byPathPrefix: projectPath)
+
+        print("\n=== Coverage Filtering ===")
+        print("Full coverage: \(fullCoverage.functions.count) functions, \(fullCoverage.sourceFiles.count) files")
+        print("Project coverage: \(projectCoverage.functions.count) functions, \(projectCoverage.sourceFiles.count) files")
+
+        // Project coverage should be smaller (excludes system libraries)
+        #expect(projectCoverage.functions.count <= fullCoverage.functions.count)
+        #expect(projectCoverage.functions.count > 0, "Should have project functions")
+
+        // Show some demangled function names
+        print("\n=== Sample Demangled Names ===")
+        for fn in projectCoverage.functions.prefix(5) {
+            print("  \(fn.name)")
+        }
+    }
+
+    @Test("measureSourceCoverage filters dependencies by default")
+    func measureSourceCoverageFiltersDefault() throws {
+        let db = MockDatabase()
+        let service = UserService(db: db)
+
+        // Default behavior: excludes dependencies
+        let (_, filteredCoverage) = try measureSourceCoverage {
+            return service.createUser(id: "filter1", name: "Test")
+        }
+
+        // With includeAllFiles: includes everything
+        let (_, fullCoverage) = try measureSourceCoverage(includeAllFiles: true) {
+            return service.createUser(id: "filter2", name: "Test2")
+        }
+
+        print("\n=== measureSourceCoverage Default Filtering ===")
+        print("Default (filtered): \(filteredCoverage.functions.count) functions, \(filteredCoverage.sourceFiles.count) files")
+        print("includeAllFiles=true: \(fullCoverage.functions.count) functions, \(fullCoverage.sourceFiles.count) files")
+
+        // Filtered coverage should only contain project files
+        for file in filteredCoverage.sourceFiles {
+            #expect(!file.hasPrefix("/usr"), "Should not include /usr: \(file)")
+            #expect(!file.hasPrefix("/System"), "Should not include /System: \(file)")
+            #expect(!file.contains("/.build/checkouts/"), "Should not include dependencies: \(file)")
+        }
+
+        // Both should have some coverage
+        #expect(filteredCoverage.functions.count > 0, "Should have filtered functions")
+    }
+
+    @Test("All function names should be demangled")
+    func allNamesShouldBeDemangled() throws {
+        let reader = try InMemoryCoverageReader.loadFromCurrentProcess()
+        let coverage = reader.resolveCoverage()
+
+        var mangledCount = 0
+        var demangledCount = 0
+        var mangledExamples: [String] = []
+
+        for fn in coverage.functions {
+            let name = fn.name
+
+            // Check if name still looks mangled
+            // Swift mangled: starts with $s or contains :$s
+            // C++ mangled: starts with _Z or contains :_Z
+            let looksMangled = name.hasPrefix("$s") ||
+                               name.hasPrefix("_$s") ||
+                               name.hasPrefix("_Z") ||
+                               name.contains(":$s") ||
+                               name.contains(":_$s") ||
+                               name.contains(":_Z")
+
+            if looksMangled {
+                mangledCount += 1
+                if mangledExamples.count < 5 {
+                    mangledExamples.append(name)
+                }
+            } else {
+                demangledCount += 1
+            }
+        }
+
+        print("\n=== Demangling Statistics ===")
+        print("Total functions: \(coverage.functions.count)")
+        print("Demangled: \(demangledCount)")
+        print("Still mangled: \(mangledCount)")
+
+        if !mangledExamples.isEmpty {
+            print("\nMangled examples that need attention:")
+            for example in mangledExamples {
+                print("  \(example)")
+            }
+        }
+
+        // All names should be demangled
+        #expect(mangledCount == 0, "Found \(mangledCount) functions with mangled names")
+    }
+
+    @Test("Demangling handles various symbol types")
+    func demanglingHandlesVariousTypes() throws {
+        let reader = try InMemoryCoverageReader.loadFromCurrentProcess()
+        let coverage = reader.resolveCoverage()
+
+        // Categorize demangled names
+        var swiftMethods: [String] = []
+        var swiftClosures: [String] = []
+        var swiftGetters: [String] = []
+        var cppFunctions: [String] = []
+        var other: [String] = []
+
+        for fn in coverage.functions {
+            let name = fn.name
+
+            if name.contains("closure #") || name.contains("implicit closure") {
+                swiftClosures.append(name)
+            } else if name.contains(".getter :") || name.contains(".setter :") {
+                swiftGetters.append(name)
+            } else if name.contains("::") {
+                // C++ uses :: for namespaces/classes
+                cppFunctions.append(name)
+            } else if name.contains(".") && (name.contains("(") || name.contains(" -> ")) {
+                swiftMethods.append(name)
+            } else {
+                other.append(name)
+            }
+        }
+
+        print("\n=== Demangled Name Categories ===")
+        print("Swift methods: \(swiftMethods.count)")
+        print("Swift closures: \(swiftClosures.count)")
+        print("Swift getters/setters: \(swiftGetters.count)")
+        print("C++ functions: \(cppFunctions.count)")
+        print("Other: \(other.count)")
+
+        // Show examples of each
+        if !swiftMethods.isEmpty {
+            print("\nSwift method examples:")
+            for m in swiftMethods.prefix(3) { print("  \(m)") }
+        }
+        if !swiftClosures.isEmpty {
+            print("\nSwift closure examples:")
+            for c in swiftClosures.prefix(3) { print("  \(c)") }
+        }
+        if !cppFunctions.isEmpty {
+            print("\nC++ function examples:")
+            for c in cppFunctions.prefix(3) { print("  \(c)") }
+        }
+
+        // We should have at least some Swift methods
+        #expect(swiftMethods.count > 0, "Should have Swift methods")
     }
 
     @Test("Direct counter inspection for UserService methods")
