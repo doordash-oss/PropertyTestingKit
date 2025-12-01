@@ -18,7 +18,7 @@ let package = Package(
     ],
     dependencies: [
         .package(url: "https://github.com/swiftlang/swift-syntax.git", from: "600.0.1"),
-        .package(url: "https://github.com/alex-reilly-dd/LLVMCoverageKit.git", from: "18.1.8"),
+        .package(url: "git@github.com:alex-reilly-dd/LLVMCoverageKit.git", from: "18.1.9"),
     ],
     targets: [
         // C module for LLVM profile runtime interface
