@@ -40,7 +40,10 @@
       "Bash(swift demangle:*)",
       "Bash(swift -e:*)",
       "Bash(echo:*)",
-      "Bash(source ~/.bash_profile)"
+      "Bash(source ~/.bash_profile)",
+      "Bash(export LLVM_PROFILE_FILE=\"$HOME/temp/%m.profraw\")",
+      "Bash(~/.zshrc)",
+      "Bash(zsh:*)"
     ],
     "deny": [],
     "ask": []

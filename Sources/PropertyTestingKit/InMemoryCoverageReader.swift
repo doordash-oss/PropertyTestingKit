@@ -340,36 +340,57 @@ public enum InMemoryCoverageError: Error, CustomStringConvertible {
 
 // MARK: - Convenience API
 
-/// Default path prefixes to exclude from coverage (system libraries and dependencies).
-private let defaultExcludedPathPrefixes = [
-    "/usr",
-    "/System",
-    "/Library",
-    "/Applications/Xcode",
-    "/opt/homebrew",
-]
+/// Check if a path should be excluded from coverage (system libraries and dependencies).
+private func shouldExcludePath(_ path: String) -> Bool {
+    // Exclude common system and dependency paths
+    let excludedPrefixes = [
+        "/usr",
+        "/System",
+        "/Library",
+        "/Applications",
+        "/opt/homebrew",
+        "/private",
+        "/AppleInternal",
+        "/var",
+    ]
 
-/// Check if a path looks like a SwiftPM dependency (contains .build/checkouts/).
-private func isSwiftPMDependency(_ path: String) -> Bool {
-    path.contains("/.build/checkouts/")
+    for prefix in excludedPrefixes {
+        if path.hasPrefix(prefix) {
+            return true
+        }
+    }
+
+    // Exclude paths containing these patterns (Xcode, toolchains, dependencies)
+    let excludedPatterns = [
+        "/.build/checkouts/",      // SwiftPM dependencies
+        "/Xcode.app/",             // Xcode frameworks
+        "/Xcode-beta.app/",        // Xcode beta
+        "/SourcePackages/",        // Xcode package cache
+        "/__xcode_",               // Xcode generated
+        "/DerivedData/",           // Build artifacts
+        ".sdk/",                   // SDK files
+    ]
+
+    for pattern in excludedPatterns {
+        if path.contains(pattern) {
+            return true
+        }
+    }
+
+    // Include only paths that look like user source files
+    // Must start with /Users/ or /home/ or be a relative path
+    let looksLikeUserPath = path.hasPrefix("/Users/") ||
+                            path.hasPrefix("/home/") ||
+                            !path.hasPrefix("/")
+
+    return !looksLikeUserPath
 }
 
 /// Filter coverage to exclude dependencies and system libraries.
 private func filterToProjectOnly(_ coverage: ResolvedCoverage) -> ResolvedCoverage {
     let filteredFunctions = coverage.functions.compactMap { func_ -> ResolvedFunctionCoverage? in
         let filteredRegions = func_.regions.filter { region in
-            let path = region.filename
-            // Exclude system paths
-            for prefix in defaultExcludedPathPrefixes {
-                if path.hasPrefix(prefix) {
-                    return false
-                }
-            }
-            // Exclude SwiftPM dependencies
-            if isSwiftPMDependency(path) {
-                return false
-            }
-            return true
+            !shouldExcludePath(region.filename)
         }
         guard !filteredRegions.isEmpty else { return nil }
         return ResolvedFunctionCoverage(
@@ -381,12 +402,7 @@ private func filterToProjectOnly(_ coverage: ResolvedCoverage) -> ResolvedCovera
     }
 
     let filteredFiles = coverage.sourceFiles.filter { file in
-        for prefix in defaultExcludedPathPrefixes {
-            if file.hasPrefix(prefix) {
-                return false
-            }
-        }
-        return !isSwiftPMDependency(file)
+        !shouldExcludePath(file)
     }
 
     return ResolvedCoverage(functions: filteredFunctions, sourceFiles: filteredFiles)
