@@ -19,6 +19,8 @@ let package = Package(
     dependencies: [
         .package(url: "https://github.com/swiftlang/swift-syntax.git", from: "600.0.1"),
         .package(url: "git@github.com:alex-reilly-dd/LLVMCoverageKit.git", from: "18.1.9"),
+        .package(url: "https://github.com/pointfreeco/swift-dependencies.git", from: "1.6.0"),
+        .package(url: "https://github.com/twof/FunctionSpy.git", from: "1.2.0"),
     ],
     targets: [
         // C module for LLVM profile runtime interface
@@ -49,7 +51,8 @@ let package = Package(
             dependencies: [
                 "PropertyTestingKitMacros",
                 "PropertyTestingKitInternals",
-                "LLVMCoverageInterop"
+                "LLVMCoverageInterop",
+                .product(name: "Dependencies", package: "swift-dependencies"),
             ],
             swiftSettings: [
                 .interoperabilityMode(.Cxx)
@@ -57,7 +60,11 @@ let package = Package(
         ),
         .testTarget(
             name: "PropertyTestingKitTests",
-            dependencies: ["PropertyTestingKit"],
+            dependencies: [
+                "PropertyTestingKit",
+                .product(name: "Dependencies", package: "swift-dependencies"),
+                .product(name: "FunctionSpy", package: "FunctionSpy"),
+            ],
             swiftSettings: [
                 .interoperabilityMode(.Cxx)
             ]

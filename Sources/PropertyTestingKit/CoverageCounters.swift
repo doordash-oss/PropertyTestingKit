@@ -66,10 +66,23 @@ public struct CoverageCounters: Sendable {
     /// - Returns: A snapshot of current counter values, or `nil` if
     ///   coverage instrumentation is not available.
     public static func snapshot() -> CoverageCounters? {
-        guard CoverageTrait.isAvailable else { return nil }
+        snapshot(
+            isAvailable: CoverageTrait.isAvailable,
+            beginCounters: __llvm_profile_begin_counters,
+            endCounters: __llvm_profile_end_counters
+        )
+    }
 
-        let begin = __llvm_profile_begin_counters()
-        let end = __llvm_profile_end_counters()
+    /// Internal version for testing that accepts dependencies.
+    static func snapshot(
+        isAvailable: Bool,
+        beginCounters: () -> UnsafeMutablePointer<UInt64>?,
+        endCounters: () -> UnsafeMutablePointer<UInt64>?
+    ) -> CoverageCounters? {
+        guard isAvailable else { return nil }
+
+        let begin = beginCounters()
+        let end = endCounters()
 
         guard let begin = begin, let end = end else { return nil }
 
@@ -172,17 +185,37 @@ public struct CounterDiff: Sendable {
 /// - Returns: The counter diff, or `nil` if coverage unavailable.
 @discardableResult
 public func measureCoverage(_ body: () throws -> Void) rethrows -> CounterDiff? {
-    guard let before = CoverageCounters.snapshot() else { return nil }
-    try body()
-    guard let after = CoverageCounters.snapshot() else { return nil }
-    return after.difference(from: before)
+    try measureCoverage(snapshotProvider: CoverageCounters.snapshot, body)
 }
 
 /// Execute a closure and capture the coverage counters that changed (async).
 @discardableResult
 public func measureCoverage(_ body: () async throws -> Void) async rethrows -> CounterDiff? {
-    guard let before = CoverageCounters.snapshot() else { return nil }
+    try await measureCoverage(snapshotProvider: CoverageCounters.snapshot, body)
+}
+
+// MARK: - Internal API for Testing
+
+/// Internal version of measureCoverage that accepts a snapshot provider for testing.
+@discardableResult
+func measureCoverage(
+    snapshotProvider: () -> CoverageCounters?,
+    _ body: () throws -> Void
+) rethrows -> CounterDiff? {
+    guard let before = snapshotProvider() else { return nil }
+    try body()
+    guard let after = snapshotProvider() else { return nil }
+    return after.difference(from: before)
+}
+
+/// Internal async version of measureCoverage that accepts a snapshot provider for testing.
+@discardableResult
+func measureCoverage(
+    snapshotProvider: () -> CoverageCounters?,
+    _ body: () async throws -> Void
+) async rethrows -> CounterDiff? {
+    guard let before = snapshotProvider() else { return nil }
     try await body()
-    guard let after = CoverageCounters.snapshot() else { return nil }
+    guard let after = snapshotProvider() else { return nil }
     return after.difference(from: before)
 }

@@ -7,6 +7,7 @@
 
 import Testing
 import Foundation
+import Dependencies
 import PropertyTestingKitInternals
 
 // MARK: - Coverage Detection
@@ -18,12 +19,14 @@ private let _coverageEnabled: Bool = {
 }()
 
 /// Get the output directory for coverage files.
-private let _defaultCoverageOutputDirectory: String = {
-    if let dir = ProcessInfo.processInfo.environment["COVERAGE_OUTPUT_DIR"] {
+private func defaultCoverageOutputDirectory() -> String {
+    @Dependency(\.environment) var environment
+    @Dependency(\.fileManager) var fileManager
+    if let dir = environment.environment()["COVERAGE_OUTPUT_DIR"] {
         return dir
     }
-    return FileManager.default.currentDirectoryPath
-}()
+    return fileManager.currentDirectoryPath()
+}
 
 // MARK: - CoverageTrait
 
@@ -95,7 +98,7 @@ public struct CoverageTrait: TestTrait, SuiteTrait {
     public init(
         outputDirectory: String? = nil
     ) {
-        self.outputDirectory = outputDirectory ?? _defaultCoverageOutputDirectory
+        self.outputDirectory = outputDirectory ?? defaultCoverageOutputDirectory()
     }
 
     public var isRecursive: Bool { true }

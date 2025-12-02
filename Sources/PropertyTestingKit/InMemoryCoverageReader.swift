@@ -321,6 +321,24 @@ public struct ResolvedRegionCoverage: Sendable {
         self.executionCount = region.executionCount
         self.isBranch = region.isBranch
     }
+
+    init(
+        filename: String,
+        lineStart: UInt32,
+        columnStart: UInt32,
+        lineEnd: UInt32,
+        columnEnd: UInt32,
+        executionCount: UInt64,
+        isBranch: Bool
+    ) {
+        self.filename = filename
+        self.lineStart = lineStart
+        self.columnStart = columnStart
+        self.lineEnd = lineEnd
+        self.columnEnd = columnEnd
+        self.executionCount = executionCount
+        self.isBranch = isBranch
+    }
 }
 
 // MARK: - Errors
