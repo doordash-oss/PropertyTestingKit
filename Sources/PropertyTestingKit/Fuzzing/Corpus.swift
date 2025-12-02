@@ -19,9 +19,12 @@ public struct InputContainer<each Input: Codable & Sendable>: Sendable, Codable 
 
     public init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CorpusEntryCodingKeys.self)
-        var contentsContainer = try container.nestedUnkeyedContainer(forKey: .input)
+        let dataList = try container.decode([Data].self, forKey: .input)
+        var dataIterator = dataList.makeIterator()
 
-        self.input = try (repeat contentsContainer.decode((each Input).self))
+        let jsonDecoder = JSONDecoder()
+
+        self.input = try (repeat jsonDecoder.decode((each Input).self, from: dataIterator.next()!))
     }
 
     public func encode(to encoder: any Encoder) throws {
@@ -41,8 +44,11 @@ public enum InputContainerCodingKeys: String, CodingKey {
 
 /// A single entry in the corpus: an input and its coverage signature.
 public struct CorpusEntry<each Input: Codable & Sendable>: Sendable, Codable {
+    public var input: (repeat each Input) {
+        _input.input
+    }
     /// The test input.
-    public let input: InputContainer<repeat each Input>
+    private let _input: InputContainer<repeat each Input>
 
     /// The coverage signature produced by this input.
     public let signature: CoverageSignature
@@ -59,7 +65,7 @@ public struct CorpusEntry<each Input: Codable & Sendable>: Sendable, Codable {
         discoveredAt: Date = Date(),
         parentIndex: Int? = nil
     ) {
-        self.input = input
+        self._input = input
         self.signature = signature
         self.discoveredAt = discoveredAt
         self.parentIndex = parentIndex
@@ -68,7 +74,7 @@ public struct CorpusEntry<each Input: Codable & Sendable>: Sendable, Codable {
     public func encode(to encoder: any Encoder) throws {
         var container = encoder.container(keyedBy: CorpusEntryCodingKeys.self)
 
-        try container.encode(input, forKey: .input)
+        try container.encode(_input, forKey: .input)
         try container.encode(signature, forKey: .signature)
         try container.encode(discoveredAt, forKey: .discoveredAt)
         try container.encodeIfPresent(parentIndex, forKey: .parentIndex)
@@ -77,7 +83,7 @@ public struct CorpusEntry<each Input: Codable & Sendable>: Sendable, Codable {
     public init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CorpusEntryCodingKeys.self)
 
-        self.input = try container.decode(InputContainer<repeat each Input>.self, forKey: .input)
+        self._input = try container.decode(InputContainer<repeat each Input>.self, forKey: .input)
         self.signature = try container.decode(CoverageSignature.self, forKey: .signature)
         self.discoveredAt = try container.decode(Date.self, forKey: .discoveredAt)
         self.parentIndex = try container.decodeIfPresent(Int.self, forKey: .parentIndex)
@@ -128,7 +134,7 @@ public struct Corpus<Input: Codable & Sendable>: Sendable, Codable {
     public var isEmpty: Bool { entries.isEmpty }
 
     /// All inputs in the corpus.
-    public var inputs: [InputContainer<Input>] {
+    public var inputs: [Input] {
         entries.map(\.input)
     }
 
@@ -216,7 +222,7 @@ public struct Corpus<Input: Codable & Sendable>: Sendable, Codable {
             // Add the best entry
             let (_, bestEntry) = remaining.remove(at: bestIndex)
             minimized.add(
-                input: bestEntry.input.input,
+                input: bestEntry.input,
                 signature: bestEntry.signature,
                 parentIndex: bestEntry.parentIndex
             )

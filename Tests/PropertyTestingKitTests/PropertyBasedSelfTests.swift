@@ -545,7 +545,7 @@ struct CorpusEntryPropertyTests {
     @Test("CorpusEntry preserves all fields through Codable")
     func testCorpusEntryCodable() throws {
         let entry = CorpusEntry(
-            input: "test input",
+            input: .init(input: "test input") ,
             signature: CoverageSignature(buckets: [0: .one, 5: .fourToSeven]),
             discoveredAt: Date(),
             parentIndex: 42
