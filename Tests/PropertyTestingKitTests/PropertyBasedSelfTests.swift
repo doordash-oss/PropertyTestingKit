@@ -713,50 +713,6 @@ struct FuzzErrorTests {
     }
 }
 
-// MARK: - Product Function Tests
-
-@Suite("Product Function", .serialized)
-struct ProductFunctionTests {
-
-    @Test("product function with collections")
-    func testProductFunction() throws {
-        let a = [1, 2]
-        let b = ["x", "y"]
-        var count = 0
-        for _ in product(a, b) {
-            count += 1
-        }
-        #expect(count == 4)
-    }
-
-    @Test("product with empty collection")
-    func testProductEmpty() throws {
-        let a = [Int]()
-        let b = ["x", "y"]
-        var count = 0
-        for _ in product(a, b) {
-            count += 1
-        }
-        #expect(count == 0)
-    }
-
-    @Test("product generates correct combinations")
-    func testProductCombinations() throws {
-        let a = [1, 2]
-        let b = ["a", "b"]
-        var results: [(Int, String)] = []
-        for pair in product(a, b) {
-            results.append(pair)
-        }
-        #expect(results.count == 4)
-        // Check all combinations exist
-        #expect(results.contains { $0.0 == 1 && $0.1 == "a" })
-        #expect(results.contains { $0.0 == 1 && $0.1 == "b" })
-        #expect(results.contains { $0.0 == 2 && $0.1 == "a" })
-        #expect(results.contains { $0.0 == 2 && $0.1 == "b" })
-    }
-}
-
 // MARK: - Regression Mode Tests
 
 @Suite("Regression Mode", .serialized)
@@ -764,24 +720,38 @@ struct RegressionModeTests {
 
     @Test("CorpusSchema detects version changes")
     func testSchemaVersioning() throws {
-        // Use the live value explicitly to test actual coverage path
-        let liveClient = CoverageCountersClient.liveValue
-        let version1 = CorpusSchema.currentVersion(using: liveClient)
+        // Create a mock client with known counter count
+        let (snapshotSpy, snapshotFn) = spy { () -> CoverageCounters? in
+            CoverageCounters(counters: [UInt64](repeating: 0, count: 100))
+        }
+        let mockClient = CoverageCountersClient(snapshot: snapshotFn)
+        let version1 = CorpusSchema.currentVersion(using: mockClient)
 
         // Version should be in expected format
-        #expect(version1.hasPrefix("v1-"), "Version should start with 'v1-'")
+        #expect(version1 == "v1-100", "Version should be 'v1-100' for 100 counters")
 
         // Should be compatible with itself
         let isCompatible = withDependencies {
-            $0.coverageCounters = liveClient
+            $0.coverageCounters = mockClient
         } operation: {
             CorpusSchema.isCompatible(version1)
         }
         #expect(isCompatible, "Schema should be compatible with itself")
 
         // Should not be compatible with different version
-        #expect(!CorpusSchema.isCompatible("v1-0"), "Different schema should not be compatible")
-        #expect(!CorpusSchema.isCompatible("v2-999"), "Different schema should not be compatible")
+        let notCompatible1 = withDependencies {
+            $0.coverageCounters = mockClient
+        } operation: {
+            CorpusSchema.isCompatible("v1-0")
+        }
+        let notCompatible2 = withDependencies {
+            $0.coverageCounters = mockClient
+        } operation: {
+            CorpusSchema.isCompatible("v2-999")
+        }
+        #expect(!notCompatible1, "Different schema should not be compatible")
+        #expect(!notCompatible2, "Different schema should not be compatible")
+        #expect(snapshotSpy.callCount > 0, "Should have called snapshot")
     }
 
     @Test("CorpusSchema returns unknown when coverage unavailable")
@@ -1046,9 +1016,12 @@ struct CoverageTraitTests {
 
     @Test("CoverageTrait.coverage static property creates trait")
     func testCoverageTraitCreation() throws {
+        let (currentDirSpy, currentDirFn) = spy { () -> String in "/test" }
+
         let trait = withDependencies {
+            $0.environment = EnvironmentClient(environment: { [:] })
             $0.fileManager = FileManagerClient(
-                currentDirectoryPath: { "/test" },
+                currentDirectoryPath: currentDirFn,
                 fileExists: { _ in false },
                 createDirectory: { _, _ in },
                 removeItem: { _ in },
@@ -1059,6 +1032,7 @@ struct CoverageTraitTests {
             CoverageTrait.coverage
         }
         #expect(trait.isRecursive == true)
+        #expect(currentDirSpy.callCount == 1, "Should have called currentDirectoryPath")
     }
 
     @Test("CoverageTrait.coverage with custom output directory")
@@ -1076,8 +1050,17 @@ struct FuzzAPIPropertyTests {
 
     @Test("fuzz function runs with default configuration")
     func testFuzzDefaultConfig() throws {
+        nonisolated(unsafe) var callCount = 0
+        let (snapshotSpy, snapshotFn) = spy { () -> CoverageCounters? in
+            callCount += 1
+            var counters = [UInt64](repeating: 0, count: 100)
+            counters[callCount % 100] = UInt64(callCount + 1)
+            return CoverageCounters(counters: counters)
+        }
+
         // Use a simple test that won't fail
         let result = try withDependencies {
+            $0.coverageCounters = CoverageCountersClient(snapshot: snapshotFn)
             $0.fileManager = FileManagerClient(
                 currentDirectoryPath: { "/test" },
                 fileExists: { _ in false },
@@ -1086,6 +1069,7 @@ struct FuzzAPIPropertyTests {
                 writeData: { _, _ in },
                 readData: { _ in Data() }
             )
+            $0.environment = EnvironmentClient(environment: { [:] })
         } operation: {
             try fuzz(iterations: 20, duration: 5) { (input: Int) in
                 _ = input > 0 ? "positive" : "non-positive"
@@ -1094,21 +1078,24 @@ struct FuzzAPIPropertyTests {
 
         #expect(result.stats.totalInputs > 0)
         #expect(result.failures.isEmpty)
+        #expect(snapshotSpy.callCount > 0, "Should have called snapshot")
     }
 
     @Test("fuzz function accepts custom seeds")
     func testFuzzWithCustomSeeds() throws {
         var seenInputs: [String] = []
 
+        nonisolated(unsafe) var callCount = 0
+        let (snapshotSpy, snapshotFn) = spy { () -> CoverageCounters? in
+            callCount += 1
+            var counters = [UInt64](repeating: 0, count: 100)
+            counters[callCount % 100] = UInt64(callCount + 1)
+            return CoverageCounters(counters: counters)
+        }
+
         let result = try withDependencies {
-            $0.fileManager = FileManagerClient(
-                currentDirectoryPath: { "/test" },
-                fileExists: { _ in false },
-                createDirectory: { _, _ in },
-                removeItem: { _ in },
-                writeData: { _, _ in },
-                readData: { _ in Data() }
-            )
+            $0.coverageCounters = CoverageCountersClient(snapshot: snapshotFn)
+            $0.environment = EnvironmentClient(environment: { [:] })
         } operation: {
             try fuzz(seeds: ["custom1", "custom2", "custom3"], iterations: 30, duration: 5) { (input: String) in
                 seenInputs.append(input)
@@ -1118,6 +1105,7 @@ struct FuzzAPIPropertyTests {
 
         // Custom seeds should be tested
         #expect(seenInputs.contains("custom1") || result.stats.totalInputs > 0)
+        #expect(snapshotSpy.callCount > 0, "Should have called snapshot")
     }
 
 }

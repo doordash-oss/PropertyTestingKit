@@ -117,6 +117,15 @@ let numberParserSeeds: [String] = [
 @Suite("Fuzz API", .serialized)
 struct FuzzAPITests {
 
+    // MARK: - Helpers
+
+    /// Creates a CoverageCounters with a specific signature pattern.
+    static func makeCounters(_ seed: Int) -> CoverageCounters {
+        var counters = [UInt64](repeating: 0, count: 100)
+        counters[seed % 100] = UInt64(seed + 1)
+        return CoverageCounters(counters: counters)
+    }
+
     @Test("Coverage-guided fuzzing finds all code paths in NumberParser")
     func testNumberParserCoverage() throws {
         let corpusDir = URL(fileURLWithPath: "/test/fuzz-numberparser")
@@ -131,7 +140,14 @@ struct FuzzAPITests {
         var sawPositiveInvalid = false
         var roundTripFailures: [String] = []
 
+        nonisolated(unsafe) var callCount = 0
+        let (snapshotSpy, snapshotFn) = spy { () -> CoverageCounters? in
+            callCount += 1
+            return FuzzAPITests.makeCounters(callCount % 10)
+        }
+
         let result = withDependencies {
+            $0.coverageCounters = CoverageCountersClient(snapshot: snapshotFn)
             $0.fileManager = FileManagerClient(
                 currentDirectoryPath: { "/test" },
                 fileExists: { _ in false },
@@ -216,16 +232,24 @@ struct FuzzAPITests {
         #expect(result.failures.isEmpty, "No test errors should occur")
         #expect(roundTripFailures.isEmpty, "Round-trip property should hold for all inputs: \(roundTripFailures)")
 
-        // Verify corpus was saved
+        // Verify corpus was saved and snapshot was called
         #expect(writeDataSpy.callCount == 1, "Corpus should be saved")
+        #expect(snapshotSpy.callCount > 0, "Should have called snapshot")
     }
 
     @Test("Fuzzing verifies negation property")
     func testNegationProperty() throws {
         let corpusDir = URL(fileURLWithPath: "/test/fuzz-negation")
 
+        nonisolated(unsafe) var callCount = 0
+        let (snapshotSpy, snapshotFn) = spy { () -> CoverageCounters? in
+            callCount += 1
+            return FuzzAPITests.makeCounters(callCount % 10)
+        }
+
         var negationFailures: [String] = []
         let result = withDependencies {
+            $0.coverageCounters = CoverageCountersClient(snapshot: snapshotFn)
             $0.fileManager = FileManagerClient(
                 currentDirectoryPath: { "/test" },
                 fileExists: { _ in false },
@@ -253,6 +277,7 @@ struct FuzzAPITests {
         print("Negation property: \(result.stats.totalInputs) inputs, \(result.corpus.count) paths")
         #expect(result.failures.isEmpty)
         #expect(negationFailures.isEmpty, "Negation property failures: \(negationFailures)")
+        #expect(snapshotSpy.callCount > 0, "Should have called snapshot")
     }
 
     @Test("FuzzEngine saves corpus after run")
@@ -260,7 +285,14 @@ struct FuzzAPITests {
         let corpusDir = URL(fileURLWithPath: "/test/fuzz-persist")
         let (writeDataSpy, writeDataFn) = spy { (_: Data, _: URL) in }
 
+        nonisolated(unsafe) var callCount = 0
+        let (snapshotSpy, snapshotFn) = spy { () -> CoverageCounters? in
+            callCount += 1
+            return FuzzAPITests.makeCounters(callCount % 10)
+        }
+
         withDependencies {
+            $0.coverageCounters = CoverageCountersClient(snapshot: snapshotFn)
             $0.fileManager = FileManagerClient(
                 currentDirectoryPath: { "/test" },
                 fileExists: { _ in false },
@@ -290,6 +322,7 @@ struct FuzzAPITests {
         // Verify corpus was saved
         #expect(writeDataSpy.callCount == 1, "Corpus should be saved")
         #expect(writeDataSpy.callParams[0].1.lastPathComponent == "corpus.json")
+        #expect(snapshotSpy.callCount > 0, "Should have called snapshot")
     }
 
     @Test("Public fuzz API with custom seeds")
@@ -297,15 +330,15 @@ struct FuzzAPITests {
         // Demonstrates the simplified public API with custom seeds
         var inputCount = 0
 
+        nonisolated(unsafe) var callCount = 0
+        let (snapshotSpy, snapshotFn) = spy { () -> CoverageCounters? in
+            callCount += 1
+            return FuzzAPITests.makeCounters(callCount % 10)
+        }
+
         try withDependencies {
-            $0.fileManager = FileManagerClient(
-                currentDirectoryPath: { "/test" },
-                fileExists: { _ in false },
-                createDirectory: { _, _ in },
-                removeItem: { _ in },
-                writeData: { _, _ in },
-                readData: { _ in Data() }
-            )
+            $0.coverageCounters = CoverageCountersClient(snapshot: snapshotFn)
+            $0.environment = EnvironmentClient(environment: { [:] })
         } operation: {
             try fuzz(
                 seeds: ["0", "-0", "-1", "abc", String(Int.max)],
@@ -325,6 +358,7 @@ struct FuzzAPITests {
 
         print("Public API tested \(inputCount) inputs")
         #expect(inputCount > 0)
+        #expect(snapshotSpy.callCount > 0, "Should have called snapshot")
     }
 
     @Test("FuzzError errorDescription covers all cases")
@@ -385,21 +419,32 @@ struct FuzzAPITests {
         // Create an error to throw
         struct TestFailure: Error {}
 
-        // Test FuzzEngine directly to verify failure capture without Issue.record noise
-        let config = FuzzEngine<Bool>.Config(
-            maxIterations: 10,
-            maxDuration: 5,
-            verbose: false
-        )
+        nonisolated(unsafe) var callCount = 0
+        let (snapshotSpy, snapshotFn) = spy { () -> CoverageCounters? in
+            callCount += 1
+            return FuzzAPITests.makeCounters(callCount)
+        }
 
-        let engine = FuzzEngine<Bool>(config: config)
-        let result = engine.run { input in
-            // Throw for any input to guarantee a failure
-            throw TestFailure()
+        // Test FuzzEngine directly to verify failure capture without Issue.record noise
+        let result = withDependencies {
+            $0.coverageCounters = CoverageCountersClient(snapshot: snapshotFn)
+        } operation: {
+            let config = FuzzEngine<Bool>.Config(
+                maxIterations: 10,
+                maxDuration: 5,
+                verbose: false
+            )
+
+            let engine = FuzzEngine<Bool>(config: config)
+            return engine.run { input in
+                // Throw for any input to guarantee a failure
+                throw TestFailure()
+            }
         }
 
         // Verify failures were captured
         #expect(!result.failures.isEmpty, "Should have captured failures")
+        #expect(snapshotSpy.callCount > 0, "Should have called snapshot")
 
         // Verify the error type
         if let (_, error) = result.failures.first {
@@ -411,9 +456,16 @@ struct FuzzAPITests {
     func testFuzzRecordsIssuesOnFailure() throws {
         struct TestFailure: Error {}
 
+        nonisolated(unsafe) var callCount = 0
+        let (_, snapshotFn) = spy { () -> CoverageCounters? in
+            callCount += 1
+            return FuzzAPITests.makeCounters(callCount)
+        }
+
         // Use withKnownIssue to expect the recorded issues from fuzz()
         withKnownIssue {
             try withDependencies {
+                $0.coverageCounters = CoverageCountersClient(snapshot: snapshotFn)
                 $0.fileManager = FileManagerClient(
                     currentDirectoryPath: { "/test" },
                     fileExists: { _ in false },
@@ -429,5 +481,86 @@ struct FuzzAPITests {
                 }
             }
         }
+    }
+
+    @Test("fuzz writes corpus to filesystem")
+    func testFuzzWritesCorpus() throws {
+        nonisolated(unsafe) var callCount = 0
+        let (snapshotSpy, snapshotFn) = spy { () -> CoverageCounters? in
+            callCount += 1
+            return FuzzAPITests.makeCounters(callCount % 10)
+        }
+
+        let (writeDataSpy, writeDataFn) = spy { (_: Data, _: URL) in }
+
+        try withDependencies {
+            $0.coverageCounters = CoverageCountersClient(snapshot: snapshotFn)
+            $0.environment = EnvironmentClient(environment: { [:] })
+            $0.fileManager = FileManagerClient(
+                currentDirectoryPath: { "/test" },
+                fileExists: { _ in false },
+                createDirectory: { _, _ in },
+                removeItem: { _ in },
+                writeData: writeDataFn,
+                readData: { _ in Data() }
+            )
+        } operation: {
+            try fuzz(iterations: 20, duration: 5) { (input: String) in
+                _ = input.count
+            }
+        }
+
+        #expect(snapshotSpy.callCount > 0, "Should have called snapshot")
+        #expect(writeDataSpy.callCount > 0, "Should have written corpus to filesystem")
+
+        // Verify corpus was written to correct location
+        if let (_, url) = writeDataSpy.callParams.first {
+            #expect(url.lastPathComponent == "corpus.json", "Corpus file should be named corpus.json")
+        }
+    }
+
+    @Test("fuzz reads existing corpus from filesystem")
+    func testFuzzReadsCorpus() throws {
+        nonisolated(unsafe) var callCount = 0
+        let (snapshotSpy, snapshotFn) = spy { () -> CoverageCounters? in
+            callCount += 1
+            return FuzzAPITests.makeCounters(callCount % 10)
+        }
+
+        // Create a mock corpus with known entries
+        var existingCorpus = Corpus<String>(schemaVersion: CorpusSchema.currentVersion())
+        existingCorpus.add(
+            input: "from_corpus",
+            signature: CoverageSignature(buckets: [1: .one])
+        )
+        let corpusData = try JSONEncoder().encode(existingCorpus)
+
+        let (readDataSpy, readDataFn) = spy { (_: URL) -> Data in
+            return corpusData
+        }
+
+        var seenInputs: [String] = []
+
+        try withDependencies {
+            $0.coverageCounters = CoverageCountersClient(snapshot: snapshotFn)
+            $0.environment = EnvironmentClient(environment: { [:] })
+            $0.fileManager = FileManagerClient(
+                currentDirectoryPath: { "/test" },
+                fileExists: { _ in true },  // Corpus exists
+                createDirectory: { _, _ in },
+                removeItem: { _ in },
+                writeData: { _, _ in },
+                readData: readDataFn
+            )
+        } operation: {
+            // Use seeds that include the corpus entry so it gets tested
+            try fuzz(seeds: ["from_corpus"], iterations: 20, duration: 5) { (input: String) in
+                seenInputs.append(input)
+            }
+        }
+
+        #expect(snapshotSpy.callCount > 0, "Should have called snapshot")
+        #expect(readDataSpy.callCount > 0, "Should have read corpus from filesystem")
+        #expect(seenInputs.contains("from_corpus"), "Should have tested input from seeds/corpus")
     }
 }

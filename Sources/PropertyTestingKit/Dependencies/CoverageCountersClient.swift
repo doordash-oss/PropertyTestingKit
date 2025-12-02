@@ -13,13 +13,13 @@ public struct CoverageCountersClient: Sendable {
     /// Get a snapshot of current coverage counters.
     public var snapshot: @Sendable () -> CoverageCounters?
 
-    public init(snapshot: @escaping @Sendable () -> CoverageCounters?) {
+    public init(
+        snapshot: @escaping @Sendable () -> CoverageCounters? = unimplemented(
+            "snapshot",
+            placeholder: nil
+        )
+    ) {
         self.snapshot = snapshot
-    }
-
-    /// Convenience init with all methods defaulting to unimplemented.
-    public init() {
-        self.snapshot = unimplemented("CoverageCountersClient.snapshot", placeholder: nil)
     }
 }
 

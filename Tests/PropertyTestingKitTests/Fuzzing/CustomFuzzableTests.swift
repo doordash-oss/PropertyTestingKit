@@ -1,6 +1,8 @@
 import Testing
 import Foundation
-import PropertyTestingKit
+import Dependencies
+import FunctionSpy
+@testable import PropertyTestingKit
 
 @Suite("Custom Fuzzable Types", .serialized)
 struct CustomFuzzableTests {
@@ -23,25 +25,38 @@ struct CustomFuzzableTests {
 
     @Test("FuzzEngine works with custom types")
     func testFuzzEngineWithCustomType() {
-        let config = FuzzEngine<TestConfig>.Config(
-            maxIterations: 30,
-            maxDuration: 5,
-            verbose: false
-        )
-
-        let engine = FuzzEngine<TestConfig>(config: config, corpusDirectory: nil)
+        nonisolated(unsafe) var callCount = 0
+        let (snapshotSpy, snapshotFn) = spy { () -> CoverageCounters? in
+            callCount += 1
+            var counters = [UInt64](repeating: 0, count: 100)
+            counters[callCount % 100] = UInt64(callCount + 1)
+            return CoverageCounters(counters: counters)
+        }
 
         var seenTimeouts: Set<Int> = []
         var seenRetries: Set<Int> = []
 
-        let result = engine.run { input in
-            seenTimeouts.insert(input.timeout)
-            seenRetries.insert(input.retries)
+        let result = withDependencies {
+            $0.coverageCounters = CoverageCountersClient(snapshot: snapshotFn)
+        } operation: {
+            let config = FuzzEngine<TestConfig>.Config(
+                maxIterations: 30,
+                maxDuration: 5,
+                verbose: false
+            )
+
+            let engine = FuzzEngine<TestConfig>(config: config, corpusDirectory: nil)
+
+            return engine.run { input in
+                seenTimeouts.insert(input.timeout)
+                seenRetries.insert(input.retries)
+            }
         }
 
         #expect(!seenTimeouts.isEmpty)
         #expect(!seenRetries.isEmpty)
         #expect(result.failures.isEmpty)
+        #expect(snapshotSpy.callCount > 0, "Should have called snapshot")
 
         print("Saw \(seenTimeouts.count) unique timeouts, \(seenRetries.count) unique retries")
     }

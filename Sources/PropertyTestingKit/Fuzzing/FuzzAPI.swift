@@ -106,8 +106,13 @@ public func fuzz<Input: Fuzzable & Codable & Sendable>(
     return result
 }
 
-// Note: Async fuzz support will be added in a future version.
-// For now, use synchronous test closures.
+// MARK: - Multi-Input Fuzz (Variadic)
+// NOTE: Variadic generics support is blocked by a Swift 6.2.1 compiler bug (signal 11 crash).
+// The compiler crashes when iterating over arrays of variadic tuples and using pack expansion.
+// See: https://github.com/apple/swift/issues/XXXXX (file a bug report)
+//
+// Once the compiler is fixed, the variadic fuzz function can be re-implemented to support:
+// try fuzz { (a: Int, b: String) in ... }
 
 // MARK: - Corpus Directory Resolution
 

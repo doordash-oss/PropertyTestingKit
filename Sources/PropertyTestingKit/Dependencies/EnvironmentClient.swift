@@ -13,9 +13,13 @@ public struct EnvironmentClient: Sendable {
     /// Get all environment variables.
     public var environment: @Sendable () -> [String: String]
 
-    public init(environment: @escaping @Sendable () -> [String: String]) {
+    public init(environment: @escaping @Sendable () -> [String: String] = unimplemented(placeholder: [:])) {
         self.environment = environment
     }
+}
+
+extension EnvironmentClient {
+    public static let empty: EnvironmentClient = .init { [:] }
 }
 
 // MARK: - Dependency Key
@@ -25,9 +29,7 @@ extension EnvironmentClient: DependencyKey {
         environment: { ProcessInfo.processInfo.environment }
     )
 
-    public static let testValue = EnvironmentClient(
-        environment: { [:] }
-    )
+    public static let testValue = liveValue
 }
 
 extension DependencyValues {

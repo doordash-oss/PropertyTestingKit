@@ -130,8 +130,7 @@ public final class FuzzEngine<Input: Fuzzable & Codable & Sendable>: @unchecked 
         test: (Input) throws -> Void
     ) -> FuzzResult<Input> {
         // Check for existing corpus
-        if let directory = corpusDirectory,
-           Corpus<Input>.exists(at: directory) {
+        if let directory = corpusDirectory, Corpus<Input>.exists(at: directory) {
             do {
                 let savedCorpus = try Corpus<Input>.load(from: directory)
 
@@ -225,7 +224,7 @@ public final class FuzzEngine<Input: Fuzzable & Codable & Sendable>: @unchecked 
                 // Safe: we only enter this branch when !corpus.isEmpty
                 let selectedIndex = corpus.selectForMutation()!
                 let parent = corpus.entries[selectedIndex].input
-                guard let mutated = parent.mutate().randomElement() else {
+                guard let mutated = parent.input.mutate().randomElement() else {
                     continue
                 }
                 input = mutated
@@ -309,16 +308,16 @@ public final class FuzzEngine<Input: Fuzzable & Codable & Sendable>: @unchecked 
         }
 
         for entry in corpus.entries {
-            let result = testWithCoverage(input: entry.input, test: test)
+            let result = testWithCoverage(input: entry.input.input, test: test)
 
             if let error = result.error {
-                failures.append((entry.input, error))
+                failures.append((entry.input.input, error))
             }
 
             if let actualSignature = result.signature {
                 if actualSignature != entry.signature {
                     coverageChanges.append((
-                        input: entry.input,
+                        input: entry.input.input,
                         expected: entry.signature,
                         actual: actualSignature
                     ))

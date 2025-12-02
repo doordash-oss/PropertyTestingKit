@@ -30,12 +30,27 @@ public struct FileManagerClient: Sendable {
     public var readData: @Sendable (URL) throws -> Data
 
     public init(
-        currentDirectoryPath: @escaping @Sendable () -> String,
-        fileExists: @escaping @Sendable (String) -> Bool,
-        createDirectory: @escaping @Sendable (URL, Bool) throws -> Void,
-        removeItem: @escaping @Sendable (URL) throws -> Void,
-        writeData: @escaping @Sendable (Data, URL) throws -> Void,
-        readData: @escaping @Sendable (URL) throws -> Data
+        currentDirectoryPath: @escaping @Sendable () -> String = unimplemented(
+            "currentDirectoryPath",
+            placeholder: "/test"
+        ),
+        fileExists: @escaping @Sendable (String) -> Bool = unimplemented(
+            "fileExists",
+            placeholder: false
+        ),
+        createDirectory: @escaping @Sendable (URL, Bool) throws -> Void = unimplemented(
+            "createDirectory"
+        ),
+        removeItem: @escaping @Sendable (URL) throws -> Void = unimplemented(
+            "removeItem"
+        ),
+        writeData: @escaping @Sendable (Data, URL) throws -> Void = unimplemented(
+            "writeData"
+        ),
+        readData: @escaping @Sendable (URL) throws -> Data = unimplemented(
+            "readData",
+            placeholder: Data()
+        )
     ) {
         self.currentDirectoryPath = currentDirectoryPath
         self.fileExists = fileExists
@@ -63,14 +78,7 @@ extension FileManagerClient: DependencyKey {
         readData: { url in try Data(contentsOf: url) }
     )
 
-    public static let testValue = FileManagerClient(
-        currentDirectoryPath: unimplemented("FileManagerClient.currentDirectoryPath", placeholder: ""),
-        fileExists: unimplemented("FileManagerClient.fileExists", placeholder: false),
-        createDirectory: unimplemented("FileManagerClient.createDirectory", placeholder: ()),
-        removeItem: unimplemented("FileManagerClient.removeItem", placeholder: ()),
-        writeData: unimplemented("FileManagerClient.writeData", placeholder: ()),
-        readData: unimplemented("FileManagerClient.readData", placeholder: Data())
-    )
+    public static let testValue = liveValue
 }
 
 extension DependencyValues {
