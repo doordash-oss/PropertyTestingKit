@@ -318,12 +318,13 @@ struct FuzzEngineTests {
         print("DEBUG: Test signature buckets=\(sigTest.buckets)")
 
         // Create corpus with matching signature
+        // Note: InputContainer encodes Int 42 as base64 of "42" = "NDI="
         let corpusJSON = """
         {
             "schemaVersion": "v1-100",
             "entries": [
                 {
-                    "input": 42,
+                    "input": {"input": ["NDI="]},
                     "signature": {"buckets": {"1": 1}},
                     "discoveredAt": "2025-01-01T00:00:00Z",
                     "parentIndex": null
@@ -702,12 +703,13 @@ struct FuzzEngineTests {
 
         // Corpus has signature {5: 1} (bucket index 5, bucket value 1=one)
         // Mock returns {1: 1} which is different, triggering coverage change
+        // Note: InputContainer encodes Int 42 as base64 of "42" = "NDI="
         let corpusJSON = """
         {
             "schemaVersion": "v1-100",
             "entries": [
                 {
-                    "input": 42,
+                    "input": {"input": ["NDI="]},
                     "signature": {"buckets": {"5": 1}},
                     "discoveredAt": "2025-01-01T00:00:00Z",
                     "parentIndex": null
@@ -808,12 +810,13 @@ struct FuzzEngineTests {
         }
 
         // Corpus with signature {1: 1}
+        // Note: InputContainer encodes Int 42 as base64 of "42" = "NDI="
         let corpusJSON = """
         {
             "schemaVersion": "v1-100",
             "entries": [
                 {
-                    "input": 42,
+                    "input": {"input": ["NDI="]},
                     "signature": {"buckets": {"1": 1}},
                     "discoveredAt": "2025-01-01T00:00:00Z",
                     "parentIndex": null

@@ -106,13 +106,206 @@ public func fuzz<Input: Fuzzable & Codable & Sendable>(
     return result
 }
 
-// MARK: - Multi-Input Fuzz (Variadic)
-// NOTE: Variadic generics support is blocked by a Swift 6.2.1 compiler bug (signal 11 crash).
-// The compiler crashes when iterating over arrays of variadic tuples and using pack expansion.
-// See: https://github.com/apple/swift/issues/XXXXX (file a bug report)
-//
-// Once the compiler is fixed, the variadic fuzz function can be re-implemented to support:
-// try fuzz { (a: Int, b: String) in ... }
+// MARK: - Variadic Fuzz Input Pack
+
+/// A wrapper that packs multiple fuzzable inputs into a single `Fuzzable` type.
+///
+/// This enables the fuzz engine to work with multiple input types while maintaining
+/// a single-type-parameter internal architecture.
+public struct FuzzInputPack<each T: Fuzzable & Codable & Sendable>: Fuzzable, Codable, Sendable {
+    /// The packed inputs.
+    public let values: (repeat each T)
+
+    public init(_ values: repeat each T) {
+        self.values = (repeat each values)
+    }
+
+    /// Generate fuzz values from the cartesian product of each type's fuzz values.
+    public static var fuzz: [FuzzInputPack<repeat each T>] {
+        cartesianProductFuzz()
+    }
+
+    /// Mutate by randomly selecting one component to mutate.
+    public func mutate() -> [FuzzInputPack<repeat each T>] {
+        // Collect all possible mutations
+        var results: [FuzzInputPack<repeat each T>] = []
+
+        // For each component, try mutating it while keeping others the same
+        var componentIndex = 0
+        func tryMutate<U: Fuzzable>(_ value: U, atIndex index: Int) {
+            let mutations = value.mutate()
+            for mutated in mutations {
+                // Create a new pack with this component mutated
+                // We need to reconstruct the tuple with the mutated value
+                if let newPack = createMutatedPack(mutating: index, with: mutated) {
+                    results.append(newPack)
+                }
+            }
+            componentIndex += 1
+        }
+
+        componentIndex = 0
+        (repeat tryMutate(each values, atIndex: componentIndex))
+
+        return results
+    }
+
+    // Helper to create a mutated pack at a specific index
+    private func createMutatedPack<U>(mutating targetIndex: Int, with newValue: U) -> FuzzInputPack<repeat each T>? {
+        var currentIndex = 0
+
+        func substituteIfNeeded<V: Fuzzable & Codable & Sendable>(_ value: V) -> V {
+            defer { currentIndex += 1 }
+            if currentIndex == targetIndex, let casted = newValue as? V {
+                return casted
+            }
+            return value
+        }
+
+        let newValues: (repeat each T) = (repeat substituteIfNeeded(each values))
+        return FuzzInputPack(repeat each newValues)
+    }
+
+    // MARK: - Codable
+
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        let dataList = try container.decode([Data].self)
+        var iterator = dataList.makeIterator()
+        let jsonDecoder = JSONDecoder()
+        self.values = try (repeat jsonDecoder.decode((each T).self, from: iterator.next()!))
+    }
+
+    public func encode(to encoder: any Encoder) throws {
+        var container = encoder.singleValueContainer()
+        var dataList: [Data] = []
+        let jsonEncoder = JSONEncoder()
+        (repeat try dataList.append(jsonEncoder.encode(each values)))
+        try container.encode(dataList)
+    }
+}
+
+/// Generate the cartesian product of fuzz values for variadic types.
+private func cartesianProductFuzz<each T: Fuzzable & Codable & Sendable>() -> [FuzzInputPack<repeat each T>] {
+    // Get fuzz arrays for each type
+    var counts: [Int] = []
+    (repeat counts.append((each T).fuzz.count))
+
+    // If any array is empty, return empty result
+    guard !counts.contains(0) else { return [] }
+
+    // Calculate total combinations
+    let total = counts.reduce(1, *)
+    var results: [FuzzInputPack<repeat each T>] = []
+
+    for i in 0..<total {
+        // Calculate indices for this combination
+        var indices: [Int] = []
+        var remaining = i
+        for count in counts.reversed() {
+            indices.insert(remaining % count, at: 0)
+            remaining /= count
+        }
+
+        // Build the pack for this combination
+        var indexIterator = indices.makeIterator()
+        func getValue<U: Fuzzable>(_: U.Type) -> U {
+            U.fuzz[indexIterator.next()!]
+        }
+
+        let pack = FuzzInputPack<repeat each T>(repeat getValue((each T).self))
+        results.append(pack)
+    }
+
+    return results
+}
+
+// MARK: - Variadic Fuzz API
+
+/// Run a coverage-guided fuzz test with multiple input types.
+///
+/// This variadic version allows testing functions that take multiple parameters:
+///
+/// ```swift
+/// @Test func testMultiInput() throws {
+///     try fuzz { (count: Int, name: String) in
+///         let result = process(count: count, name: name)
+///         #expect(result.isValid)
+///     }
+/// }
+///
+/// @Test func testWithSeeds() throws {
+///     try fuzz(seeds: [(0, ""), (1, "test"), (-1, "edge")]) { (count: Int, name: String) in
+///         // ...
+///     }
+/// }
+/// ```
+///
+/// Seeds are generated from the cartesian product of each type's `fuzz` values if not provided.
+///
+/// - Parameters:
+///   - seeds: Domain-specific seed values as tuples.
+///   - iterations: Maximum fuzzing iterations (default: 10,000).
+///   - duration: Maximum fuzzing time in seconds (default: 60).
+///   - file: Source file (auto-filled).
+///   - function: Test function name (auto-filled).
+///   - test: The test closure receiving fuzzed inputs.
+///
+/// - Throws: Re-throws test failures, or throws if fuzzing finds failures.
+@discardableResult
+public func fuzz<each Input: Fuzzable & Codable & Sendable>(
+    seeds: [(repeat each Input)] = [],
+    iterations: Int = 10_000,
+    duration: TimeInterval = 60,
+    file: StaticString = #file,
+    function: StaticString = #function,
+    test: (repeat each Input) throws -> Void
+) throws -> FuzzResult<FuzzInputPack<repeat each Input>> {
+    @Dependency(\.environment) var environment
+    let corpusDir = corpusDirectory(file: file, function: function)
+
+    let config = FuzzEngine<FuzzInputPack<repeat each Input>>.Config(
+        maxIterations: iterations,
+        maxDuration: duration,
+        verbose: environment.environment()["FUZZ_VERBOSE"] != nil
+    )
+
+    // Convert seeds to FuzzInputPack
+    let packSeeds = seeds.map { seed in
+        FuzzInputPack<repeat each Input>(repeat each seed)
+    }
+
+    let engine = FuzzEngine<FuzzInputPack<repeat each Input>>(config: config, corpusDirectory: corpusDir)
+
+    // Wrap the test to unpack inputs
+    let result = engine.run(additionalSeeds: packSeeds) { pack in
+        try test(repeat each pack.values)
+    }
+
+    // Report failures using Swift Testing
+    for (input, error) in result.failures {
+        Issue.record(
+            Comment(rawValue: "Fuzz failure with input: \(input.values)"),
+            sourceLocation: SourceLocation(
+                fileID: String(describing: file),
+                filePath: String(describing: file),
+                line: 1,
+                column: 1
+            )
+        )
+        Issue.record(error)
+    }
+
+    // Throw if there were any failures
+    if let firstFailure = result.failures.first {
+        throw FuzzError.testFailed(
+            input: "\(firstFailure.input.values)",
+            underlyingError: firstFailure.error
+        )
+    }
+
+    return result
+}
 
 // MARK: - Corpus Directory Resolution
 

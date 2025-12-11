@@ -58,6 +58,10 @@
       "Bash(curl:*)"
     ],
     "deny": [],
-    "ask": []
+    "ask": [],
+    "additionalDirectories": [
+      "/Users/alex.reilly/Documents/OpenSource/",
+      "/Users/alex.reilly/Documents/Swift/ScratchPad/"
+    ]
   }
 }

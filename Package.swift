@@ -39,7 +39,8 @@ let package = Package(
                 .define("__STDC_CONSTANT_MACROS"),
                 .define("__STDC_FORMAT_MACROS"),
                 .define("__STDC_LIMIT_MACROS"),
-                .unsafeFlags(["-std=c++17", "-fno-exceptions", "-fno-rtti"])
+                // Disable Clang modules - LLVM headers aren't properly modularized
+                .unsafeFlags(["-std=c++17", "-fno-exceptions", "-fno-rtti", "-fno-modules"])
             ],
             linkerSettings: [
                 .linkedLibrary("z")

@@ -8,47 +8,12 @@
 import Dependencies
 import Foundation
 
-public struct InputContainer<each Input: Codable & Sendable>: Sendable, Codable {
-    public let input: (repeat each Input)
-
-    public init(
-        input: (repeat each Input)
-    ) {
-        self.input = input
-    }
-
-    public init(from decoder: any Decoder) throws {
-        let container = try decoder.container(keyedBy: CorpusEntryCodingKeys.self)
-        let dataList = try container.decode([Data].self, forKey: .input)
-        var dataIterator = dataList.makeIterator()
-
-        let jsonDecoder = JSONDecoder()
-
-        self.input = try (repeat jsonDecoder.decode((each Input).self, from: dataIterator.next()!))
-    }
-
-    public func encode(to encoder: any Encoder) throws {
-        var container = encoder.container(keyedBy: InputContainerCodingKeys.self)
-        var dataList = [Data]()
-        (repeat try dataList.append(JSONEncoder().encode(each input)))
-
-        try container.encode(dataList, forKey: .input)
-    }
-}
-
-public enum InputContainerCodingKeys: String, CodingKey {
-    case input
-}
-
 // MARK: - CorpusEntry
 
 /// A single entry in the corpus: an input and its coverage signature.
 public struct CorpusEntry<each Input: Codable & Sendable>: Sendable, Codable {
-    public var input: (repeat each Input) {
-        _input.input
-    }
     /// The test input.
-    private let _input: InputContainer<repeat each Input>
+    public let input: (repeat each Input)
 
     /// The coverage signature produced by this input.
     public let signature: CoverageSignature
@@ -60,12 +25,12 @@ public struct CorpusEntry<each Input: Codable & Sendable>: Sendable, Codable {
     public let parentIndex: Int?
 
     public init(
-        input: InputContainer<repeat each Input>,
+        input: repeat each Input,
         signature: CoverageSignature,
         discoveredAt: Date = Date(),
         parentIndex: Int? = nil
     ) {
-        self._input = input
+        self.input = (repeat each input)
         self.signature = signature
         self.discoveredAt = discoveredAt
         self.parentIndex = parentIndex
@@ -73,8 +38,11 @@ public struct CorpusEntry<each Input: Codable & Sendable>: Sendable, Codable {
 
     public func encode(to encoder: any Encoder) throws {
         var container = encoder.container(keyedBy: CorpusEntryCodingKeys.self)
+        var dataList = [Data]()
+        (repeat try dataList.append(JSONEncoder().encode(each input)))
 
-        try container.encode(_input, forKey: .input)
+        try container.encode(dataList, forKey: .input)
+
         try container.encode(signature, forKey: .signature)
         try container.encode(discoveredAt, forKey: .discoveredAt)
         try container.encodeIfPresent(parentIndex, forKey: .parentIndex)
@@ -82,8 +50,13 @@ public struct CorpusEntry<each Input: Codable & Sendable>: Sendable, Codable {
 
     public init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CorpusEntryCodingKeys.self)
+        let dataList = try container.decode([Data].self, forKey: .input)
+        var dataIterator = dataList.makeIterator()
 
-        self._input = try container.decode(InputContainer<repeat each Input>.self, forKey: .input)
+        let jsonDecoder = JSONDecoder()
+
+        self.input = try (repeat jsonDecoder.decode((each Input).self, from: dataIterator.next()!))
+
         self.signature = try container.decode(CoverageSignature.self, forKey: .signature)
         self.discoveredAt = try container.decode(Date.self, forKey: .discoveredAt)
         self.parentIndex = try container.decodeIfPresent(Int.self, forKey: .parentIndex)
@@ -160,7 +133,7 @@ public struct Corpus<Input: Codable & Sendable>: Sendable, Codable {
         }
 
         let entry = CorpusEntry(
-            input: .init(input: input),
+            input: input,
             signature: signature,
             parentIndex: parentIndex
         )
@@ -177,7 +150,7 @@ public struct Corpus<Input: Codable & Sendable>: Sendable, Codable {
         parentIndex: Int? = nil
     ) {
         let entry = CorpusEntry(
-            input: .init(input: input),
+            input: input,
             signature: signature,
             parentIndex: parentIndex
         )
