@@ -70,6 +70,10 @@ public struct FuzzStats: Sendable {
 /// 6. Stop when: iteration limit, time limit, or coverage plateau
 /// 7. Minimize corpus, save to disk
 public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unchecked Sendable {
+    /// Type-erased mutator functions for each input component.
+    /// When nil, uses the type's Fuzzable conformance.
+    public typealias MutatorSeeds = () -> [(repeat each Input)]
+    public typealias MutatorMutate = ((repeat each Input)) -> [(repeat each Input)]
     /// Configuration for the fuzzing run.
     public struct Config: Sendable {
         /// Maximum iterations (inputs to test).
@@ -110,10 +114,161 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
 
     private let config: Config
     private let corpusDirectory: URL?
+    private let mutatorSeeds: MutatorSeeds?
+    private let mutatorMutate: MutatorMutate?
 
     public init(config: Config = Config(), corpusDirectory: URL? = nil) {
         self.config = config
         self.corpusDirectory = corpusDirectory
+        self.mutatorSeeds = nil
+        self.mutatorMutate = nil
+    }
+
+    /// Initialize with custom mutators.
+    ///
+    /// - Parameters:
+    ///   - mutators: A tuple of mutators, one for each input type.
+    ///   - config: Fuzzing configuration.
+    ///   - corpusDirectory: Where to save/load the corpus.
+    public init<each M: Mutator>(
+        mutators: (repeat each M),
+        config: Config = Config(),
+        corpusDirectory: URL? = nil
+    ) where (repeat (each M).Value) == (repeat each Input) {
+        self.config = config
+        self.corpusDirectory = corpusDirectory
+
+        // Extract seeds from mutators
+        self.mutatorSeeds = {
+            Self.extractMutatorSeeds(mutators: mutators)
+        }
+
+        // Extract mutation function from mutators
+        self.mutatorMutate = { input in
+            Self.mutateWithMutators(input: input, mutators: mutators)
+        }
+    }
+
+    // MARK: - Mutator Helpers
+
+    /// Extract seeds from a tuple of mutators and compute cartesian product.
+    private static func extractMutatorSeeds<each M: Mutator>(
+        mutators: (repeat each M)
+    ) -> [(repeat each Input)] where (repeat (each M).Value) == (repeat each Input) {
+        // Get seed arrays for each mutator
+        var counts: [Int] = []
+        (repeat counts.append((each mutators).seeds.count))
+
+        // If any array is empty, return empty result
+        guard !counts.contains(0) else { return [] }
+
+        // Calculate total combinations
+        let total = counts.reduce(1, *)
+        var results: [(repeat each Input)] = []
+
+        // Collect all seed arrays
+        var allSeeds: [Any] = []
+        (repeat allSeeds.append((each mutators).seeds))
+
+        for i in 0..<total {
+            // Calculate indices for this combination
+            var indices: [Int] = []
+            var remaining = i
+            for count in counts.reversed() {
+                indices.insert(remaining % count, at: 0)
+                remaining /= count
+            }
+
+            // Build the tuple for this combination
+            var indexIterator = indices.makeIterator()
+            var seedArrayIterator = allSeeds.makeIterator()
+
+            func getValue<U>(_: U.Type) -> U {
+                let idx = indexIterator.next()!
+                let seedArray = seedArrayIterator.next()! as! [U]
+                return seedArray[idx]
+            }
+
+            let tuple: (repeat each Input) = (repeat getValue((each Input).self))
+            results.append(tuple)
+        }
+
+        return results
+    }
+
+    /// Mutate an input using the provided mutators.
+    private static func mutateWithMutators<each M: Mutator>(
+        input: (repeat each Input),
+        mutators: (repeat each M)
+    ) -> [(repeat each Input)] where (repeat (each M).Value) == (repeat each Input) {
+        var results: [(repeat each Input)] = []
+
+        // Collect mutators into array for indexed access
+        var mutatorArray: [Any] = []
+        (repeat mutatorArray.append(each mutators))
+
+        // For each component, try mutating it while keeping others the same
+        var componentIndex = 0
+
+        func tryMutateComponent<V: Sendable>(_ value: V, index: Int) {
+            // Get the mutator for this component
+            guard index < mutatorArray.count else { return }
+
+            // We need to find the mutator that matches this type
+            let mutator = mutatorArray[index]
+
+            // Use type casting to call mutate
+            if let typedMutator = mutator as? AnyMutator<V> {
+                let mutations = typedMutator.mutate(value)
+                for mutated in mutations {
+                    if let newTuple = createMutatedTupleStatic(input, mutating: index, with: mutated) {
+                        results.append(newTuple)
+                    }
+                }
+            } else {
+                // Try to extract mutations dynamically
+                // This handles cases where the mutator type doesn't exactly match AnyMutator
+                for mutatorCandidate in mutatorArray {
+                    if let singleMutator = mutatorCandidate as? SingleMutator<V> {
+                        if mutatorArray.firstIndex(where: { ($0 as AnyObject) === (singleMutator as AnyObject) }) == index {
+                            let mutations = singleMutator.mutate(value)
+                            for mutated in mutations {
+                                if let newTuple = createMutatedTupleStatic(input, mutating: index, with: mutated) {
+                                    results.append(newTuple)
+                                }
+                            }
+                            break
+                        }
+                    }
+                }
+            }
+        }
+
+        // Iterate through each component
+        componentIndex = 0
+        (repeat { tryMutateComponent(each input, index: componentIndex); componentIndex += 1 }())
+
+        return results
+    }
+
+    /// Create a mutated tuple at a specific index (static version for mutators).
+    private static func createMutatedTupleStatic<U>(
+        _ input: (repeat each Input),
+        mutating targetIndex: Int,
+        with newValue: U
+    ) -> (repeat each Input)? {
+        var currentIndex = 0
+
+        func substituteIfNeeded<V: Fuzzable & Codable & Sendable>(_ value: V) -> V {
+            defer { currentIndex += 1 }
+            if currentIndex == targetIndex, let casted = newValue as? V {
+                return casted
+            }
+            return value
+        }
+
+        let newTuple: (repeat each Input) = (repeat substituteIfNeeded(each input))
+        return newTuple
     }
 
     // MARK: - Fuzzing
@@ -171,7 +326,9 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
         var totalGenerations = 0
 
         // Phase 1: Seed with boundary values (defaults + user-provided)
-        let seedInputs = cartesianProductFuzz() + additionalSeeds
+        // Use mutator seeds if provided, otherwise use Fuzzable defaults
+        let defaultSeeds = mutatorSeeds?() ?? cartesianProductFuzz()
+        let seedInputs = defaultSeeds + additionalSeeds
         for input in seedInputs {
             // Inline coverage testing
             let before = coverageCounters.snapshot()
@@ -225,7 +382,9 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
 
             if corpus.isEmpty || Double.random(in: 0..<1) < config.generationRatio {
                 // Generate fresh input
-                guard let fuzzValue = cartesianProductFuzz().randomElement() else {
+                // Use mutator seeds if provided, otherwise use Fuzzable defaults
+                let fuzzValues = mutatorSeeds?() ?? cartesianProductFuzz()
+                guard let fuzzValue = fuzzValues.randomElement() else {
                     continue
                 }
                 input = fuzzValue
@@ -236,7 +395,9 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
                 // Safe: we only enter this branch when !corpus.isEmpty
                 let selectedIndex = corpus.selectForMutation()!
                 let parent = corpus.entries[selectedIndex].input
-                guard let mutated = mutateInput(parent).randomElement() else {
+                // Use mutator mutate if provided, otherwise use Fuzzable mutate
+                let mutations = mutatorMutate?(parent) ?? mutateInput(parent)
+                guard let mutated = mutations.randomElement() else {
                     continue
                 }
                 input = mutated

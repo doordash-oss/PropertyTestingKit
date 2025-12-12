@@ -21,7 +21,7 @@ import Dependencies
 ///
 /// ```swift
 /// @Test func testParser() throws {
-///     // Basic usage with default seeds
+///     // Basic usage with default seeds (uses Fuzzable conformance)
 ///     try fuzz { (input: String) in
 ///         let result = parse(input)
 ///         #expect(result.isValid || result.hasError)
@@ -35,6 +35,20 @@ import Dependencies
 ///         if let n = parsed {
 ///             #expect(String(n) == input || input.hasPrefix("0"))
 ///         }
+///     }
+/// }
+///
+/// @Test func testWithMutators() throws {
+///     // Use custom mutators for domain-specific fuzzing
+///     try fuzz(using: String.mutators(.phoneNumbers, .emails)) { (input: String) in
+///         validateInput(input)
+///     }
+/// }
+///
+/// @Test func testMultipleInputs() throws {
+///     // Multiple inputs with custom mutators for each
+///     try fuzz(using: String.mutators(.sql), Int.mutators(.boundaries)) { (query: String, limit: Int) in
+///         executeQuery(query, limit: limit)
 ///     }
 /// }
 /// ```
@@ -51,8 +65,71 @@ import Dependencies
 /// - Tests must run serially (coverage counters are global state)
 ///
 /// - Parameters:
+///   - mutators: Custom mutators for each input type. Pass one mutator per input.
+///     Use `String.mutators(...)`, `Int.mutators(...)`, etc. for domain-specific fuzzing.
 ///   - seeds: Domain-specific seed values to guide the fuzzer. These are added
-///     to the type's default `fuzz` values. Use this to target specific edge cases.
+///     to the mutator's seed values. Use this to target specific edge cases.
+///   - iterations: Maximum fuzzing iterations (default: 10,000).
+///   - duration: Maximum fuzzing time in seconds (default: 60).
+///   - filePath: Source file path (auto-filled).
+///   - function: Test function name (auto-filled).
+///   - test: The test closure receiving fuzzed inputs.
+///
+/// - Throws: Re-throws test failures, or throws if fuzzing finds failures.
+@discardableResult
+public func fuzz<each Input: Fuzzable & Codable & Sendable, each M: Mutator>(
+    using mutators: repeat each M,
+    seeds: [(repeat each Input)] = [],
+    iterations: Int = 10_000,
+    duration: TimeInterval = 60,
+    filePath: StaticString = #filePath,
+    function: StaticString = #function,
+    test: ((repeat each Input)) throws -> Void
+) throws -> FuzzResult<repeat each Input> where (repeat (each M).Value) == (repeat each Input) {
+    @Dependency(\.environment) var environment
+    let corpusDir = corpusDirectory(filePath: filePath, function: function)
+
+    let config = FuzzEngine<repeat each Input>.Config(
+        maxIterations: iterations,
+        maxDuration: duration,
+        verbose: environment.environment()["FUZZ_VERBOSE"] != nil
+    )
+
+    let engine = FuzzEngine<repeat each Input>(mutators: (repeat each mutators), config: config, corpusDirectory: corpusDir)
+    let result = engine.run(additionalSeeds: seeds, test: test)
+
+    // Report failures using Swift Testing
+    for (input, error) in result.failures {
+        Issue.record(
+            Comment(rawValue: "Fuzz failure with input: \(input)"),
+            sourceLocation: SourceLocation(
+                fileID: String(describing: filePath),
+                filePath: String(describing: filePath),
+                line: 1,
+                column: 1
+            )
+        )
+        Issue.record(error)
+    }
+
+    // Throw if there were any failures
+    if let firstFailure = result.failures.first {
+        throw FuzzError.testFailed(
+            input: "\(firstFailure.input)",
+            underlyingError: firstFailure.error
+        )
+    }
+
+    return result
+}
+
+/// Run a coverage-guided fuzz test using the type's `Fuzzable` conformance.
+///
+/// This version uses the default `Fuzzable.fuzz` seeds and `mutate()` method for each input type.
+/// For custom mutation strategies, use `fuzz(using:seeds:...)` with explicit mutators.
+///
+/// - Parameters:
+///   - seeds: Domain-specific seed values to guide the fuzzer.
 ///   - iterations: Maximum fuzzing iterations (default: 10,000).
 ///   - duration: Maximum fuzzing time in seconds (default: 60).
 ///   - filePath: Source file path (auto-filled).
