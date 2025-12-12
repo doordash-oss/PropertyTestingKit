@@ -45,11 +45,20 @@ The `fuzz` function automatically generates inputs that maximize code coverage:
 import Testing
 import PropertyTestingKit
 
-@Test func testParser() throws {
-    try fuzz(seeds: ["", "0", "-1", "abc"]) { input in
-        let result = parse(input)
+@Test func testDatabaseQuery() throws {
+    try fuzz(seeds: [
+        ("users", 0),
+        ("users", 100),
+        ("orders", -1),
+    ]) { table, limit in
+        let query = buildQuery(table: table, limit: limit)
+        let result = database.execute(query)
+
         // Properties that should hold for all inputs
         #expect(result.isValid || result.hasError)
+        if limit < 0 {
+            #expect(result.hasError, "Negative limit should error")
+        }
     }
 }
 ```
@@ -84,7 +93,7 @@ Commit the `Corpus/` directory to version control for deterministic CI runs.
 
 ### Custom Seeds
 
-Provide domain-specific seeds to guide the fuzzer toward interesting inputs:
+Provide domain-specific seeds to guide the fuzzer toward edge cases:
 
 ```swift
 @Test func testNumberParser() throws {
