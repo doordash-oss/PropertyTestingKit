@@ -41,7 +41,7 @@ import Dependencies
 ///
 /// ## Corpus Storage
 ///
-/// The corpus is saved alongside tests in a `.corpus` directory.
+/// The corpus is saved alongside tests in a `Corpus` directory.
 /// You can commit this to version control for deterministic CI runs.
 ///
 /// ## Requirements
@@ -55,30 +55,30 @@ import Dependencies
 ///     to the type's default `fuzz` values. Use this to target specific edge cases.
 ///   - iterations: Maximum fuzzing iterations (default: 10,000).
 ///   - duration: Maximum fuzzing time in seconds (default: 60).
-///   - file: Source file (auto-filled).
+///   - filePath: Source file path (auto-filled).
 ///   - function: Test function name (auto-filled).
 ///   - test: The test closure receiving fuzzed inputs.
 ///
 /// - Throws: Re-throws test failures, or throws if fuzzing finds failures.
 @discardableResult
-public func fuzz<Input: Fuzzable & Codable & Sendable>(
-    seeds: [Input] = [],
+public func fuzz<each Input: Fuzzable & Codable & Sendable>(
+    seeds: [(repeat each Input)] = [],
     iterations: Int = 10_000,
     duration: TimeInterval = 60,
-    file: StaticString = #file,
+    filePath: StaticString = #filePath,
     function: StaticString = #function,
-    test: (Input) throws -> Void
-) throws -> FuzzResult<Input> {
+    test: ((repeat each Input)) throws -> Void
+) throws -> FuzzResult<repeat each Input> {
     @Dependency(\.environment) var environment
-    let corpusDir = corpusDirectory(file: file, function: function)
+    let corpusDir = corpusDirectory(filePath: filePath, function: function)
 
-    let config = FuzzEngine<Input>.Config(
+    let config = FuzzEngine<repeat each Input>.Config(
         maxIterations: iterations,
         maxDuration: duration,
         verbose: environment.environment()["FUZZ_VERBOSE"] != nil
     )
 
-    let engine = FuzzEngine<Input>(config: config, corpusDirectory: corpusDir)
+    let engine = FuzzEngine<repeat each Input>(config: config, corpusDirectory: corpusDir)
     let result = engine.run(additionalSeeds: seeds, test: test)
 
     // Report failures using Swift Testing
@@ -86,8 +86,8 @@ public func fuzz<Input: Fuzzable & Codable & Sendable>(
         Issue.record(
             Comment(rawValue: "Fuzz failure with input: \(input)"),
             sourceLocation: SourceLocation(
-                fileID: String(describing: file),
-                filePath: String(describing: file),
+                fileID: String(describing: filePath),
+                filePath: String(describing: filePath),
                 line: 1,
                 column: 1
             )
@@ -106,222 +106,22 @@ public func fuzz<Input: Fuzzable & Codable & Sendable>(
     return result
 }
 
-// MARK: - Variadic Fuzz Input Pack
-
-/// A wrapper that packs multiple fuzzable inputs into a single `Fuzzable` type.
-///
-/// This enables the fuzz engine to work with multiple input types while maintaining
-/// a single-type-parameter internal architecture.
-public struct FuzzInputPack<each T: Fuzzable & Codable & Sendable>: Fuzzable, Codable, Sendable {
-    /// The packed inputs.
-    public let values: (repeat each T)
-
-    public init(_ values: repeat each T) {
-        self.values = (repeat each values)
-    }
-
-    /// Generate fuzz values from the cartesian product of each type's fuzz values.
-    public static var fuzz: [FuzzInputPack<repeat each T>] {
-        cartesianProductFuzz()
-    }
-
-    /// Mutate by randomly selecting one component to mutate.
-    public func mutate() -> [FuzzInputPack<repeat each T>] {
-        // Collect all possible mutations
-        var results: [FuzzInputPack<repeat each T>] = []
-
-        // For each component, try mutating it while keeping others the same
-        var componentIndex = 0
-        func tryMutate<U: Fuzzable>(_ value: U, atIndex index: Int) {
-            let mutations = value.mutate()
-            for mutated in mutations {
-                // Create a new pack with this component mutated
-                // We need to reconstruct the tuple with the mutated value
-                if let newPack = createMutatedPack(mutating: index, with: mutated) {
-                    results.append(newPack)
-                }
-            }
-            componentIndex += 1
-        }
-
-        componentIndex = 0
-        (repeat tryMutate(each values, atIndex: componentIndex))
-
-        return results
-    }
-
-    // Helper to create a mutated pack at a specific index
-    private func createMutatedPack<U>(mutating targetIndex: Int, with newValue: U) -> FuzzInputPack<repeat each T>? {
-        var currentIndex = 0
-
-        func substituteIfNeeded<V: Fuzzable & Codable & Sendable>(_ value: V) -> V {
-            defer { currentIndex += 1 }
-            if currentIndex == targetIndex, let casted = newValue as? V {
-                return casted
-            }
-            return value
-        }
-
-        let newValues: (repeat each T) = (repeat substituteIfNeeded(each values))
-        return FuzzInputPack(repeat each newValues)
-    }
-
-    // MARK: - Codable
-
-    public init(from decoder: any Decoder) throws {
-        let container = try decoder.singleValueContainer()
-        let dataList = try container.decode([Data].self)
-        var iterator = dataList.makeIterator()
-        let jsonDecoder = JSONDecoder()
-        self.values = try (repeat jsonDecoder.decode((each T).self, from: iterator.next()!))
-    }
-
-    public func encode(to encoder: any Encoder) throws {
-        var container = encoder.singleValueContainer()
-        var dataList: [Data] = []
-        let jsonEncoder = JSONEncoder()
-        (repeat try dataList.append(jsonEncoder.encode(each values)))
-        try container.encode(dataList)
-    }
-}
-
-/// Generate the cartesian product of fuzz values for variadic types.
-private func cartesianProductFuzz<each T: Fuzzable & Codable & Sendable>() -> [FuzzInputPack<repeat each T>] {
-    // Get fuzz arrays for each type
-    var counts: [Int] = []
-    (repeat counts.append((each T).fuzz.count))
-
-    // If any array is empty, return empty result
-    guard !counts.contains(0) else { return [] }
-
-    // Calculate total combinations
-    let total = counts.reduce(1, *)
-    var results: [FuzzInputPack<repeat each T>] = []
-
-    for i in 0..<total {
-        // Calculate indices for this combination
-        var indices: [Int] = []
-        var remaining = i
-        for count in counts.reversed() {
-            indices.insert(remaining % count, at: 0)
-            remaining /= count
-        }
-
-        // Build the pack for this combination
-        var indexIterator = indices.makeIterator()
-        func getValue<U: Fuzzable>(_: U.Type) -> U {
-            U.fuzz[indexIterator.next()!]
-        }
-
-        let pack = FuzzInputPack<repeat each T>(repeat getValue((each T).self))
-        results.append(pack)
-    }
-
-    return results
-}
-
-// MARK: - Variadic Fuzz API
-
-/// Run a coverage-guided fuzz test with multiple input types.
-///
-/// This variadic version allows testing functions that take multiple parameters:
-///
-/// ```swift
-/// @Test func testMultiInput() throws {
-///     try fuzz { (count: Int, name: String) in
-///         let result = process(count: count, name: name)
-///         #expect(result.isValid)
-///     }
-/// }
-///
-/// @Test func testWithSeeds() throws {
-///     try fuzz(seeds: [(0, ""), (1, "test"), (-1, "edge")]) { (count: Int, name: String) in
-///         // ...
-///     }
-/// }
-/// ```
-///
-/// Seeds are generated from the cartesian product of each type's `fuzz` values if not provided.
-///
-/// - Parameters:
-///   - seeds: Domain-specific seed values as tuples.
-///   - iterations: Maximum fuzzing iterations (default: 10,000).
-///   - duration: Maximum fuzzing time in seconds (default: 60).
-///   - file: Source file (auto-filled).
-///   - function: Test function name (auto-filled).
-///   - test: The test closure receiving fuzzed inputs.
-///
-/// - Throws: Re-throws test failures, or throws if fuzzing finds failures.
-@discardableResult
-public func fuzz<each Input: Fuzzable & Codable & Sendable>(
-    seeds: [(repeat each Input)] = [],
-    iterations: Int = 10_000,
-    duration: TimeInterval = 60,
-    file: StaticString = #file,
-    function: StaticString = #function,
-    test: (repeat each Input) throws -> Void
-) throws -> FuzzResult<FuzzInputPack<repeat each Input>> {
-    @Dependency(\.environment) var environment
-    let corpusDir = corpusDirectory(file: file, function: function)
-
-    let config = FuzzEngine<FuzzInputPack<repeat each Input>>.Config(
-        maxIterations: iterations,
-        maxDuration: duration,
-        verbose: environment.environment()["FUZZ_VERBOSE"] != nil
-    )
-
-    // Convert seeds to FuzzInputPack
-    let packSeeds = seeds.map { seed in
-        FuzzInputPack<repeat each Input>(repeat each seed)
-    }
-
-    let engine = FuzzEngine<FuzzInputPack<repeat each Input>>(config: config, corpusDirectory: corpusDir)
-
-    // Wrap the test to unpack inputs
-    let result = engine.run(additionalSeeds: packSeeds) { pack in
-        try test(repeat each pack.values)
-    }
-
-    // Report failures using Swift Testing
-    for (input, error) in result.failures {
-        Issue.record(
-            Comment(rawValue: "Fuzz failure with input: \(input.values)"),
-            sourceLocation: SourceLocation(
-                fileID: String(describing: file),
-                filePath: String(describing: file),
-                line: 1,
-                column: 1
-            )
-        )
-        Issue.record(error)
-    }
-
-    // Throw if there were any failures
-    if let firstFailure = result.failures.first {
-        throw FuzzError.testFailed(
-            input: "\(firstFailure.input.values)",
-            underlyingError: firstFailure.error
-        )
-    }
-
-    return result
-}
-
 // MARK: - Corpus Directory Resolution
 
 /// Determine the corpus directory for a test.
 ///
-/// Structure: `<TestTarget>/.corpus/<TestFunction>/`
-private func corpusDirectory(file: StaticString, function: StaticString) -> URL {
-    let filePath = String(describing: file)
+/// Structure: `<TestFileDirectory>/Corpus/<TestFunction>/`
+private func corpusDirectory(filePath: StaticString, function: StaticString) -> URL {
+    let path = String(describing: filePath)
     let functionName = sanitizeFunctionName(String(describing: function))
 
-    // Find the test target directory (parent of the source file)
-    let fileURL = URL(fileURLWithPath: filePath)
-    let testDir = fileURL.deletingLastPathComponent()
+    // Get the directory containing the test source file
+    // #filePath provides the full filesystem path
+    let fileURL = URL(fileURLWithPath: path)
+    let testFileDir = fileURL.deletingLastPathComponent()
 
-    return testDir
-        .appendingPathComponent(".corpus", isDirectory: true)
+    return testFileDir
+        .appendingPathComponent("Corpus", isDirectory: true)
         .appendingPathComponent(functionName, isDirectory: true)
 }
 
@@ -371,11 +171,11 @@ public enum FuzzError: Error, LocalizedError {
 
 extension FuzzEngine.Config {
     /// Create config from environment variables.
-    public static func fromEnvironment() -> FuzzEngine<Input>.Config {
+    public static func fromEnvironment() -> FuzzEngine<repeat each Input>.Config {
         @Dependency(\.environment) var environment
         let env = environment.environment()
 
-        var config = FuzzEngine<Input>.Config()
+        var config = FuzzEngine<repeat each Input>.Config()
 
         if let iterations = env["FUZZ_ITERATIONS"].flatMap(Int.init) {
             config.maxIterations = iterations

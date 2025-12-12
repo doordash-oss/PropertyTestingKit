@@ -188,6 +188,6 @@ struct CorpusTests {
         #expect(readDataSpy.callParams[0].lastPathComponent == "corpus.json")
         #expect(loaded.schemaVersion == "test-v1")
         #expect(loaded.count == 1)
-        #expect(loaded.inputs.contains("hello"))
+        #expect(loaded.inputs.contains { $0 == "hello" })
     }
 }

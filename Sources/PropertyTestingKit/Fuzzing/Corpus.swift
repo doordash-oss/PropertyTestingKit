@@ -76,9 +76,9 @@ public enum CorpusEntryCodingKeys: String, CodingKey {
 ///
 /// The corpus tracks which inputs produce unique coverage and provides
 /// minimization to keep only the essential inputs.
-public struct Corpus<Input: Codable & Sendable>: Sendable, Codable {
+public struct Corpus<each Input: Codable & Sendable>: Sendable, Codable {
     /// All entries in the corpus.
-    public private(set) var entries: [CorpusEntry<Input>]
+    public private(set) var entries: [CorpusEntry<repeat each Input>]
 
     /// Schema version to detect when code changes invalidate the corpus.
     public let schemaVersion: String
@@ -107,13 +107,23 @@ public struct Corpus<Input: Codable & Sendable>: Sendable, Codable {
     public var isEmpty: Bool { entries.isEmpty }
 
     /// All inputs in the corpus.
-    public var inputs: [Input] {
-        entries.map(\.input)
+    public var inputs: [(repeat each Input)] {
+        // Note: Can't use map(\.input) due to keypath limitations with parameter packs
+        var result: [(repeat each Input)] = []
+        for entry in entries {
+            result.append(entry.input)
+        }
+        return result
     }
 
     /// All signatures in the corpus.
     public var signatures: [CoverageSignature] {
-        entries.map(\.signature)
+        // Note: Can't use map(\.signature) consistently, using explicit loop
+        var result: [CoverageSignature] = []
+        for entry in entries {
+            result.append(entry.signature)
+        }
+        return result
     }
 
     // MARK: - Adding Entries
@@ -123,7 +133,7 @@ public struct Corpus<Input: Codable & Sendable>: Sendable, Codable {
     /// - Returns: `true` if the entry was added, `false` if it was redundant.
     @discardableResult
     public mutating func addIfInteresting(
-        input: Input,
+        input: repeat each Input,
         signature: CoverageSignature,
         parentIndex: Int? = nil
     ) -> Bool {
@@ -133,7 +143,7 @@ public struct Corpus<Input: Codable & Sendable>: Sendable, Codable {
         }
 
         let entry = CorpusEntry(
-            input: input,
+            input: repeat each input,
             signature: signature,
             parentIndex: parentIndex
         )
@@ -145,12 +155,12 @@ public struct Corpus<Input: Codable & Sendable>: Sendable, Codable {
 
     /// Add an entry unconditionally.
     public mutating func add(
-        input: Input,
+        input: repeat each Input,
         signature: CoverageSignature,
         parentIndex: Int? = nil
     ) {
         let entry = CorpusEntry(
-            input: input,
+            input: repeat each input,
             signature: signature,
             parentIndex: parentIndex
         )
@@ -167,10 +177,10 @@ public struct Corpus<Input: Codable & Sendable>: Sendable, Codable {
     /// most uncovered indices until all indices are covered.
     ///
     /// - Returns: A new minimized corpus.
-    public func minimized() -> Corpus<Input> {
+    public func minimized() -> Corpus<repeat each Input> {
         guard !entries.isEmpty else { return self }
 
-        var minimized = Corpus<Input>(schemaVersion: schemaVersion)
+        var minimized = Corpus<repeat each Input>(schemaVersion: schemaVersion)
         var uncovered = totalCoverage.executedIndices
 
         // Sort entries by coverage count (descending) for greedy selection
@@ -194,17 +204,20 @@ public struct Corpus<Input: Codable & Sendable>: Sendable, Codable {
 
             // Add the best entry
             let (_, bestEntry) = remaining.remove(at: bestIndex)
-            minimized.add(
-                input: bestEntry.input,
-                signature: bestEntry.signature,
-                parentIndex: bestEntry.parentIndex
-            )
+            minimized.addEntry(bestEntry)
 
             // Remove covered indices
             uncovered.subtract(bestEntry.signature.executedIndices)
         }
 
         return minimized
+    }
+
+    /// Add an existing entry to the corpus.
+    private mutating func addEntry(_ entry: CorpusEntry<repeat each Input>) {
+        entries.append(entry)
+        totalCoverage = totalCoverage.union(with: entry.signature)
+        updatedAt = Date()
     }
 
     // MARK: - Selection for Mutation
@@ -275,7 +288,7 @@ extension Corpus {
     }
 
     /// Load a corpus from a directory.
-    public static func load(from directory: URL) throws -> Corpus<Input> {
+    public static func load(from directory: URL) throws -> Corpus<repeat each Input> {
         @Dependency(\.fileManager) var fileManager
         let fileURL = directory.appendingPathComponent(filename)
         let data = try fileManager.readData(fileURL)
@@ -283,7 +296,7 @@ extension Corpus {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
 
-        return try decoder.decode(Corpus<Input>.self, from: data)
+        return try decoder.decode(Corpus<repeat each Input>.self, from: data)
     }
 
     /// Check if a corpus exists at the given directory.

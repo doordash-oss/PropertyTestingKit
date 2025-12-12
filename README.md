@@ -1,15 +1,15 @@
 # PropertyTestingKit
 
-Per-test code coverage and property-based testing utilities for Swift Testing.
+Coverage-guided fuzz testing for Swift.
 
 ## Overview
 
-PropertyTestingKit provides tools for understanding exactly what code your tests exercise:
+PropertyTestingKit brings coverage-guided fuzzing to Swift Testing:
 
-- **Per-test coverage** - Measure which code paths each individual test executes
-- **In-memory coverage** - Zero-overhead coverage tracking without file I/O
-- **Source-level detail** - Get file names, line numbers, and execution counts
-- **`@Fuzzable` macro** - Generate test inputs via cartesian product
+- **Coverage-guided fuzzing** - Automatically discover inputs that exercise new code paths
+- **Corpus persistence** - Save and replay interesting inputs across test runs
+- **Regression detection** - Automatically re-fuzz when code changes affect coverage
+- **Variadic inputs** - Fuzz functions with multiple parameters
 
 ## Requirements
 
@@ -37,7 +37,138 @@ targets: [
 
 ## Usage
 
-### Quick Start: Measure Coverage
+### Coverage-Guided Fuzzing
+
+The `fuzz` function automatically generates inputs that maximize code coverage:
+
+```swift
+import Testing
+import PropertyTestingKit
+
+@Test func testParser() throws {
+    try fuzz(seeds: ["", "0", "-1", "abc"]) { input in
+        let result = parse(input)
+        // Properties that should hold for all inputs
+        #expect(result.isValid || result.hasError)
+    }
+}
+```
+
+**How it works:**
+1. Starts with seed values (yours + type defaults from `Fuzzable.fuzz`)
+2. Runs each input and captures coverage
+3. Inputs that hit new code paths are saved to the corpus
+4. Mutates interesting inputs to discover more paths
+5. Stops when coverage plateaus or limits are reached
+6. Saves minimal corpus to disk for future runs
+
+**On subsequent runs:**
+- Replays saved corpus to verify coverage unchanged
+- If coverage differs (code changed), automatically re-fuzzes
+
+### Corpus Storage
+
+The corpus is saved alongside your test files:
+
+```
+Tests/
+  MyTests/
+    Fuzzing/
+      ParserTests.swift
+      Corpus/                    # Created automatically
+        testParser/
+          corpus.json            # Saved inputs + coverage signatures
+```
+
+Commit the `Corpus/` directory to version control for deterministic CI runs.
+
+### Custom Seeds
+
+Provide domain-specific seeds to guide the fuzzer toward interesting inputs:
+
+```swift
+@Test func testNumberParser() throws {
+    try fuzz(seeds: [
+        "0", "-0", "+0",           // Zero variants
+        String(Int.max),           // Boundary
+        String(Int.min),           // Boundary
+        "1.5", "1e10",             // Invalid formats
+        "   42   ",                // Whitespace
+    ]) { input in
+        if let n = NumberParser.parse(input) {
+            // Round-trip property
+            #expect(NumberParser.parse(String(n)) == n)
+        }
+    }
+}
+```
+
+### Fuzzable Protocol
+
+Types conforming to `Fuzzable` provide default seed values and mutation strategies:
+
+```swift
+extension String: Fuzzable {
+    public static var fuzz: [String] {
+        ["", "a", "hello", "hello world", String(repeating: "x", count: 1000)]
+    }
+
+    public func mutate() -> [String] {
+        // Return variations of self
+    }
+}
+```
+
+Built-in `Fuzzable` conformances: `Bool`, `Int`, `String`, `Optional`, `Array`
+
+### @Fuzzable Macro
+
+Generate fuzz values for custom types via cartesian product:
+
+```swift
+@Fuzzable
+struct Config {
+    let retries: Int      // Uses Int.fuzz
+    let timeout: Double   // Uses Double.fuzz
+    let enabled: Bool     // Uses Bool.fuzz
+}
+
+// Config.fuzz generates all combinations automatically
+@Test func testAllConfigs() throws {
+    try fuzz { (config: Config) in
+        MyService(config: config).validate()
+    }
+}
+```
+
+### Configuration
+
+```swift
+try fuzz(
+    seeds: [...],           // Domain-specific seed values
+    iterations: 10_000,     // Max fuzzing iterations (default: 10,000)
+    duration: 60            // Max time in seconds (default: 60)
+) { input in
+    // test
+}
+```
+
+Environment variables:
+- `FUZZ_VERBOSE=1` - Enable detailed logging
+- `FUZZ_ITERATIONS=N` - Override max iterations
+- `FUZZ_DURATION=N` - Override max duration
+
+### Building with Coverage
+
+Coverage instrumentation must be enabled:
+
+```bash
+swift test --enable-code-coverage
+```
+
+## Additional Features
+
+### Measure Coverage
 
 The simplest way to see what code a test exercises:
 
@@ -133,44 +264,21 @@ let (_, fullCoverage) = try measureSourceCoverage(includeAllFiles: true) {
 }
 ```
 
-### @Fuzzable Macro
-
-Generate all combinations of test inputs:
-
-```swift
-import PropertyTestingKit
-
-@Fuzzable
-struct TestInput {
-    let enabled: Bool
-    let mode: Mode
-}
-
-enum Mode: CaseIterable {
-    case fast, slow
-}
-
-extension Bool {
-    static var fuzz: [Bool] { [true, false] }
-}
-
-extension Mode {
-    static var fuzz: [Mode] { Mode.allCases }
-}
-
-// TestInput.fuzz generates:
-// [TestInput(enabled: true, mode: .fast),
-//  TestInput(enabled: true, mode: .slow),
-//  TestInput(enabled: false, mode: .fast),
-//  TestInput(enabled: false, mode: .slow)]
-
-@Test(arguments: TestInput.fuzz)
-func testAllCombinations(input: TestInput) {
-    // Test each combination
-}
-```
-
 ## API Reference
+
+### Fuzzing
+
+| Function | Description |
+|----------|-------------|
+| `fuzz(seeds:iterations:duration:test:)` | Coverage-guided fuzz testing |
+
+### Fuzzing Types
+
+| Type | Description |
+|------|-------------|
+| `Fuzzable` | Protocol for types that can be fuzzed |
+| `FuzzResult` | Result of a fuzz run with corpus and stats |
+| `Corpus` | Collection of interesting inputs with coverage signatures |
 
 ### Coverage Measurement
 
@@ -178,22 +286,6 @@ func testAllCombinations(input: TestInput) {
 |----------|-------------|
 | `measureCoverage(_:)` | Lightweight counter-level diff |
 | `measureSourceCoverage(_:)` | Full source-level coverage with file/line info |
-| `CoverageCounters.snapshot()` | Capture raw counter state |
-
-### Coverage Data Types
-
-| Type | Description |
-|------|-------------|
-| `ResolvedCoverage` | Source-level coverage for all functions |
-| `ResolvedFunctionCoverage` | Coverage for a single function |
-| `ResolvedRegionCoverage` | Coverage for a source region (line range) |
-| `CounterDiff` | Difference between two counter snapshots |
-
-### Traits
-
-| Trait | Description |
-|-------|-------------|
-| `.coverage` | Generate per-test profraw files |
 
 ### Macros
 
@@ -208,32 +300,14 @@ PropertyTestingKit uses LLVM's coverage instrumentation directly:
 1. **Counter Access**: Reads LLVM's in-memory coverage counters via `__llvm_profile_*` runtime functions
 2. **Coverage Mapping**: Parses `__llvm_covmap` sections from the binary to map counters to source locations
 3. **Difference-Based**: Snapshots counters before/after code execution to isolate what each test exercises
-4. **No File I/O**: Operates entirely in-memory for minimal overhead
+4. **Corpus Management**: Saves inputs that discover new coverage, replays them on subsequent runs
 
-This approach:
-- Doesn't interfere with Xcode's coverage tooling
-- Works with Swift Testing's parallel execution (when using `.serialized`)
-- Provides instant results without profdata merging
-
-## Building with Coverage
-
-Coverage instrumentation must be enabled at build time:
-
-```bash
-# Command line
-swift test --enable-code-coverage
-
-# Or in Xcode
-# Edit Scheme → Test → Options → Code Coverage ✓
-```
-
-Check if coverage is available at runtime:
-
-```swift
-if CoverageTrait.isAvailable {
-    print("Coverage instrumentation is enabled")
-}
-```
+The fuzzer follows an AFL-inspired approach:
+- Seeds with boundary values from `Fuzzable.fuzz`
+- Captures coverage signature for each input
+- Adds inputs with new signatures to the corpus
+- Mutates corpus entries to discover more paths
+- Minimizes corpus to smallest set covering all paths
 
 ## License
 

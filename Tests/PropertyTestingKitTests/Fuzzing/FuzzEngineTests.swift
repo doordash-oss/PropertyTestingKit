@@ -99,7 +99,7 @@ struct FuzzEngineTests {
             )
 
             let engine = FuzzEngine<Int>(config: config, corpusDirectory: nil)
-            return engine.run { input in
+            return engine.run { (input: Int) in
                 if input == 42 {
                     throw TestError()
                 }
@@ -227,7 +227,7 @@ struct FuzzEngineTests {
             )
 
             let engine = FuzzEngine<Int>(config: config, corpusDirectory: nil)
-            return engine.run { input in
+            return engine.run { (input: Int) in
                 if input % 10 == 0 {
                     throw FuzzError()
                 }
@@ -324,7 +324,7 @@ struct FuzzEngineTests {
             "schemaVersion": "v1-100",
             "entries": [
                 {
-                    "input": {"input": ["NDI="]},
+                    "input": ["NDI="],
                     "signature": {"buckets": {"1": 1}},
                     "discoveredAt": "2025-01-01T00:00:00Z",
                     "parentIndex": null
@@ -709,7 +709,7 @@ struct FuzzEngineTests {
             "schemaVersion": "v1-100",
             "entries": [
                 {
-                    "input": {"input": ["NDI="]},
+                    "input": ["NDI="],
                     "signature": {"buckets": {"5": 1}},
                     "discoveredAt": "2025-01-01T00:00:00Z",
                     "parentIndex": null
@@ -816,7 +816,7 @@ struct FuzzEngineTests {
             "schemaVersion": "v1-100",
             "entries": [
                 {
-                    "input": {"input": ["NDI="]},
+                    "input": ["NDI="],
                     "signature": {"buckets": {"1": 1}},
                     "discoveredAt": "2025-01-01T00:00:00Z",
                     "parentIndex": null
@@ -854,7 +854,7 @@ struct FuzzEngineTests {
             )
 
             let engine = FuzzEngine<Int>(config: config, corpusDirectory: corpusDir)
-            return engine.run { input in
+            return engine.run { (input: Int) in
                 if input == 42 {
                     throw RegressionError()
                 }

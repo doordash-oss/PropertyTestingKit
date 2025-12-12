@@ -344,7 +344,7 @@ struct FuzzAPITests {
                 seeds: ["0", "-0", "-1", "abc", String(Int.max)],
                 iterations: 50,
                 duration: 5
-            ) { (input: String) in
+            ) { input in
                 inputCount += 1
                 let parsed = NumberParser.parse(input)
 
@@ -436,7 +436,7 @@ struct FuzzAPITests {
             )
 
             let engine = FuzzEngine<Bool>(config: config)
-            return engine.run { input in
+            return engine.run { _ in
                 // Throw for any input to guarantee a failure
                 throw TestFailure()
             }
@@ -476,7 +476,8 @@ struct FuzzAPITests {
                 )
             } operation: {
                 // This will throw because the test always fails
-                _ = try fuzz(iterations: 10, duration: 5) { (input: Bool) in
+                // Note: Seeds are required to provide type context for the variadic generic
+                _ = try fuzz(seeds: [true, false], iterations: 10, duration: 5) { _ in
                     throw TestFailure()
                 }
             }
@@ -505,7 +506,7 @@ struct FuzzAPITests {
                 readData: { _ in Data() }
             )
         } operation: {
-            try fuzz(iterations: 20, duration: 5) { (input: String) in
+            try fuzz(seeds: ["a", "ab", "abc"], iterations: 20, duration: 5) { input in
                 _ = input.count
             }
         }
@@ -554,7 +555,7 @@ struct FuzzAPITests {
             )
         } operation: {
             // Use seeds that include the corpus entry so it gets tested
-            try fuzz(seeds: ["from_corpus"], iterations: 20, duration: 5) { (input: String) in
+            try fuzz(seeds: ["from_corpus"], iterations: 20, duration: 5) { input in
                 seenInputs.append(input)
             }
         }
@@ -562,5 +563,26 @@ struct FuzzAPITests {
         #expect(snapshotSpy.callCount > 0, "Should have called snapshot")
         #expect(readDataSpy.callCount > 0, "Should have read corpus from filesystem")
         #expect(seenInputs.contains("from_corpus"), "Should have tested input from seeds/corpus")
+    }
+
+    @Test("Corpus directory path is computed correctly")
+    func testCorpusDirectoryPath() throws {
+        // Verify that #filePath returns the correct path for corpus placement
+        let filePath = #filePath
+        let fileURL = URL(fileURLWithPath: String(describing: filePath))
+        let testFileDir = fileURL.deletingLastPathComponent()
+
+        // The test file should be in Tests/PropertyTestingKitTests/Fuzzing/
+        #expect(testFileDir.lastPathComponent == "Fuzzing", "Test file should be in Fuzzing directory")
+        #expect(testFileDir.deletingLastPathComponent().lastPathComponent == "PropertyTestingKitTests")
+
+        // The corpus directory should be placed alongside the test file
+        let expectedCorpusBase = testFileDir.appendingPathComponent("Corpus")
+        print("Expected corpus base: \(expectedCorpusBase.path)")
+
+        #expect(
+            expectedCorpusBase.path.contains("Tests/PropertyTestingKitTests/Fuzzing/Corpus"),
+            "Corpus should be in Tests/PropertyTestingKitTests/Fuzzing/Corpus"
+        )
     }
 }

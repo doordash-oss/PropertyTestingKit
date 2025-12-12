@@ -11,12 +11,12 @@ import Foundation
 // MARK: - FuzzResult
 
 /// The result of a fuzz test run.
-public struct FuzzResult<Input: Codable & Sendable>: Sendable {
+public struct FuzzResult<each Input: Codable & Sendable>: Sendable {
     /// The final corpus after fuzzing/regression.
-    public let corpus: Corpus<Input>
+    public let corpus: Corpus<repeat each Input>
 
     /// Inputs that caused test failures.
-    public let failures: [(input: Input, error: Error)]
+    public let failures: [(input: (repeat each Input), error: Error)]
 
     /// Statistics about the fuzz run.
     public let stats: FuzzStats
@@ -25,7 +25,7 @@ public struct FuzzResult<Input: Codable & Sendable>: Sendable {
     public let wasRegression: Bool
 
     /// Inputs that had different coverage than expected (regression only).
-    public let coverageChanges: [(input: Input, expected: CoverageSignature, actual: CoverageSignature)]
+    public let coverageChanges: [(input: (repeat each Input), expected: CoverageSignature, actual: CoverageSignature)]
 }
 
 /// Statistics about a fuzz run.
@@ -69,7 +69,7 @@ public struct FuzzStats: Sendable {
 /// 5. Mutate inputs, repeat
 /// 6. Stop when: iteration limit, time limit, or coverage plateau
 /// 7. Minimize corpus, save to disk
-public final class FuzzEngine<Input: Fuzzable & Codable & Sendable>: @unchecked Sendable {
+public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unchecked Sendable {
     /// Configuration for the fuzzing run.
     public struct Config: Sendable {
         /// Maximum iterations (inputs to test).
@@ -126,13 +126,13 @@ public final class FuzzEngine<Input: Fuzzable & Codable & Sendable>: @unchecked 
     ///   - test: The test closure to fuzz.
     /// - Returns: The fuzz result with corpus and any failures.
     public func run(
-        additionalSeeds: [Input] = [],
-        test: (Input) throws -> Void
-    ) -> FuzzResult<Input> {
+        additionalSeeds: [(repeat each Input)] = [],
+        test: ((repeat each Input)) throws -> Void
+    ) -> FuzzResult<repeat each Input> {
         // Check for existing corpus
-        if let directory = corpusDirectory, Corpus<Input>.exists(at: directory) {
+        if let directory = corpusDirectory, Corpus<repeat each Input>.exists(at: directory) {
             do {
-                let savedCorpus = try Corpus<Input>.load(from: directory)
+                let savedCorpus = try Corpus<repeat each Input>.load(from: directory)
 
                 // Check schema compatibility
                 if CorpusSchema.isCompatible(savedCorpus.schemaVersion) {
@@ -158,27 +158,39 @@ public final class FuzzEngine<Input: Fuzzable & Codable & Sendable>: @unchecked 
     // MARK: - Fuzz Mode
 
     private func runFuzzing(
-        additionalSeeds: [Input] = [],
-        test: (Input) throws -> Void
-    ) -> FuzzResult<Input> {
+        additionalSeeds: [(repeat each Input)] = [],
+        test: ((repeat each Input)) throws -> Void
+    ) -> FuzzResult<repeat each Input> {
+        @Dependency(\.coverageCounters) var coverageCounters
+
         let startTime = Date()
-        var corpus = Corpus<Input>(schemaVersion: CorpusSchema.currentVersion())
-        var failures: [(input: Input, error: Error)] = []
+        var corpus = Corpus<repeat each Input>(schemaVersion: CorpusSchema.currentVersion())
+        var failures: [(input: (repeat each Input), error: Error)] = []
         var iterationsSinceNewCoverage = 0
         var totalMutations = 0
         var totalGenerations = 0
 
         // Phase 1: Seed with boundary values (defaults + user-provided)
-        let seedInputs = Input.fuzz + additionalSeeds
+        let seedInputs = cartesianProductFuzz() + additionalSeeds
         for input in seedInputs {
-            let result = testWithCoverage(input: input, test: test)
+            // Inline coverage testing
+            let before = coverageCounters.snapshot()
 
-            if let error = result.error {
+            var testError: Error?
+            do {
+                try test(input)
+            } catch {
+                testError = error
+            }
+
+            if let error = testError {
                 failures.append((input, error))
             }
 
-            if let signature = result.signature {
-                if corpus.addIfInteresting(input: input, signature: signature) {
+            if let beforeSnapshot = before, let afterSnapshot = coverageCounters.snapshot() {
+                let diff = afterSnapshot.difference(from: beforeSnapshot)
+                let signature = CoverageSignature(diff: diff)
+                if corpus.addIfInteresting(input: repeat each input, signature: signature) {
                     iterationsSinceNewCoverage = 0
                     if config.verbose {
                         print("[Fuzz] New coverage from seed: \(corpus.count) entries")
@@ -208,12 +220,12 @@ public final class FuzzEngine<Input: Fuzzable & Codable & Sendable>: @unchecked 
             }
 
             // Decide: generate fresh or mutate?
-            let input: Input
+            let input: (repeat each Input)
             let parentIndex: Int?
 
             if corpus.isEmpty || Double.random(in: 0..<1) < config.generationRatio {
                 // Generate fresh input
-                guard let fuzzValue = Input.fuzz.randomElement() else {
+                guard let fuzzValue = cartesianProductFuzz().randomElement() else {
                     continue
                 }
                 input = fuzzValue
@@ -224,7 +236,7 @@ public final class FuzzEngine<Input: Fuzzable & Codable & Sendable>: @unchecked 
                 // Safe: we only enter this branch when !corpus.isEmpty
                 let selectedIndex = corpus.selectForMutation()!
                 let parent = corpus.entries[selectedIndex].input
-                guard let mutated = parent.mutate().randomElement() else {
+                guard let mutated = mutateInput(parent).randomElement() else {
                     continue
                 }
                 input = mutated
@@ -232,17 +244,27 @@ public final class FuzzEngine<Input: Fuzzable & Codable & Sendable>: @unchecked 
                 totalMutations += 1
             }
 
-            // Run test
-            let result = testWithCoverage(input: input, test: test)
+            // Run test with inline coverage tracking
+            let before = coverageCounters.snapshot()
+
+            var testError: Error?
+            do {
+                try test(input)
+            } catch {
+                testError = error
+            }
+
             iteration += 1
             iterationsSinceNewCoverage += 1
 
-            if let error = result.error {
+            if let error = testError {
                 failures.append((input, error))
             }
 
-            if let signature = result.signature {
-                if corpus.addIfInteresting(input: input, signature: signature, parentIndex: parentIndex) {
+            if let beforeSnapshot = before, let afterSnapshot = coverageCounters.snapshot() {
+                let diff = afterSnapshot.difference(from: beforeSnapshot)
+                let signature = CoverageSignature(diff: diff)
+                if corpus.addIfInteresting(input: repeat each input, signature: signature, parentIndex: parentIndex) {
                     iterationsSinceNewCoverage = 0
                     if config.verbose {
                         print("[Fuzz] New coverage! \(corpus.count) entries, iteration \(iteration)")
@@ -295,12 +317,14 @@ public final class FuzzEngine<Input: Fuzzable & Codable & Sendable>: @unchecked 
     // MARK: - Regression Mode
 
     private func runRegression(
-        corpus: Corpus<Input>,
-        test: (Input) throws -> Void
-    ) -> FuzzResult<Input> {
+        corpus: Corpus<repeat each Input>,
+        test: ((repeat each Input)) throws -> Void
+    ) -> FuzzResult<repeat each Input> {
+        @Dependency(\.coverageCounters) var coverageCounters
+
         let startTime = Date()
-        var failures: [(input: Input, error: Error)] = []
-        var coverageChanges: [(input: Input, expected: CoverageSignature, actual: CoverageSignature)] = []
+        var failures: [(input: (repeat each Input), error: Error)] = []
+        var coverageChanges: [(input: (repeat each Input), expected: CoverageSignature, actual: CoverageSignature)] = []
         var needsRefuzz = false
 
         if config.verbose {
@@ -308,13 +332,23 @@ public final class FuzzEngine<Input: Fuzzable & Codable & Sendable>: @unchecked 
         }
 
         for entry in corpus.entries {
-            let result = testWithCoverage(input: entry.input, test: test)
+            // Inline coverage testing
+            let before = coverageCounters.snapshot()
 
-            if let error = result.error {
+            var testError: Error?
+            do {
+                try test(entry.input)
+            } catch {
+                testError = error
+            }
+
+            if let error = testError {
                 failures.append((entry.input, error))
             }
 
-            if let actualSignature = result.signature {
+            if let beforeSnapshot = before, let afterSnapshot = coverageCounters.snapshot() {
+                let diff = afterSnapshot.difference(from: beforeSnapshot)
+                let actualSignature = CoverageSignature(diff: diff)
                 if actualSignature != entry.signature {
                     coverageChanges.append((
                         input: entry.input,
@@ -333,7 +367,7 @@ public final class FuzzEngine<Input: Fuzzable & Codable & Sendable>: @unchecked 
             }
             // Delete old corpus and re-fuzz
             if let directory = corpusDirectory {
-                try? Corpus<Input>.delete(from: directory)
+                try? Corpus<repeat each Input>.delete(from: directory)
             }
             return runFuzzing(test: test)
         }
@@ -356,43 +390,84 @@ public final class FuzzEngine<Input: Fuzzable & Codable & Sendable>: @unchecked 
         )
     }
 
-    // MARK: - Test Execution
+    // MARK: - Variadic Helpers
 
-    private struct TestResult {
-        let signature: CoverageSignature?
-        let error: Error?
+    /// Generate the cartesian product of fuzz values for all input types.
+    private func cartesianProductFuzz() -> [(repeat each Input)] {
+        // Get fuzz arrays for each type
+        var counts: [Int] = []
+        (repeat counts.append((each Input).fuzz.count))
+
+        // If any array is empty, return empty result
+        guard !counts.contains(0) else { return [] }
+
+        // Calculate total combinations
+        let total = counts.reduce(1, *)
+        var results: [(repeat each Input)] = []
+
+        for i in 0..<total {
+            // Calculate indices for this combination
+            var indices: [Int] = []
+            var remaining = i
+            for count in counts.reversed() {
+                indices.insert(remaining % count, at: 0)
+                remaining /= count
+            }
+
+            // Build the tuple for this combination
+            var indexIterator = indices.makeIterator()
+            func getValue<U: Fuzzable>(_: U.Type) -> U {
+                U.fuzz[indexIterator.next()!]
+            }
+
+            let tuple: (repeat each Input) = (repeat getValue((each Input).self))
+            results.append(tuple)
+        }
+
+        return results
     }
 
-    private func testWithCoverage(
-        input: Input,
-        test: (Input) throws -> Void
-    ) -> TestResult {
-        @Dependency(\.coverageCounters) var coverageCounters
+    /// Mutate a variadic input by randomly selecting one component to mutate.
+    private func mutateInput(_ input: (repeat each Input)) -> [(repeat each Input)] {
+        // Collect all possible mutations
+        var results: [(repeat each Input)] = []
 
-        guard let before = coverageCounters.snapshot() else {
-            // Coverage not available, run test without tracking
-            do {
-                try test(input)
-                return TestResult(signature: nil, error: nil)
-            } catch {
-                return TestResult(signature: nil, error: error)
+        // For each component, try mutating it while keeping others the same
+        var componentIndex = 0
+        func tryMutate<U: Fuzzable>(_ value: U, atIndex index: Int) {
+            let mutations = value.mutate()
+            for mutated in mutations {
+                // Create a new tuple with this component mutated
+                if let newTuple = createMutatedTuple(input, mutating: index, with: mutated) {
+                    results.append(newTuple)
+                }
             }
+            componentIndex += 1
         }
 
-        var testError: Error?
-        do {
-            try test(input)
-        } catch {
-            testError = error
+        componentIndex = 0
+        (repeat tryMutate(each input, atIndex: componentIndex))
+
+        return results
+    }
+
+    /// Create a mutated tuple at a specific index.
+    private func createMutatedTuple<U>(
+        _ input: (repeat each Input),
+        mutating targetIndex: Int,
+        with newValue: U
+    ) -> (repeat each Input)? {
+        var currentIndex = 0
+
+        func substituteIfNeeded<V: Fuzzable & Codable & Sendable>(_ value: V) -> V {
+            defer { currentIndex += 1 }
+            if currentIndex == targetIndex, let casted = newValue as? V {
+                return casted
+            }
+            return value
         }
 
-        guard let after = coverageCounters.snapshot() else {
-            return TestResult(signature: nil, error: testError)
-        }
-
-        let diff = after.difference(from: before)
-        let signature = CoverageSignature(diff: diff)
-
-        return TestResult(signature: signature, error: testError)
+        let newTuple: (repeat each Input) = (repeat substituteIfNeeded(each input))
+        return newTuple
     }
 }

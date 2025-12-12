@@ -1,0 +1,71 @@
+{
+  "createdAt" : "2025-12-12T19:59:23Z",
+  "entries" : [
+    {
+      "discoveredAt" : "2025-12-12T19:59:23Z",
+      "input" : [
+        "IiI="
+      ],
+      "signature" : {
+        "buckets" : {
+          "3" : 4
+        }
+      }
+    },
+    {
+      "discoveredAt" : "2025-12-12T19:59:23Z",
+      "input" : [
+        "ImEi"
+      ],
+      "signature" : {
+        "buckets" : {
+          "5" : 4
+        }
+      }
+    },
+    {
+      "discoveredAt" : "2025-12-12T19:59:23Z",
+      "input" : [
+        "ImFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWEi"
+      ],
+      "signature" : {
+        "buckets" : {
+          "7" : 5
+        }
+      }
+    },
+    {
+      "discoveredAt" : "2025-12-12T19:59:23Z",
+      "input" : [
+        "IvCfmIQi"
+      ],
+      "signature" : {
+        "buckets" : {
+          "9" : 5
+        }
+      }
+    },
+    {
+      "discoveredAt" : "2025-12-12T19:59:23Z",
+      "input" : [
+        "IkhlbGxvIFdvcmxkIg=="
+      ],
+      "signature" : {
+        "buckets" : {
+          "1" : 2
+        }
+      }
+    }
+  ],
+  "schemaVersion" : "v1-100",
+  "totalCoverage" : {
+    "buckets" : {
+      "1" : 2,
+      "3" : 4,
+      "5" : 4,
+      "7" : 5,
+      "9" : 5
+    }
+  },
+  "updatedAt" : "2025-12-12T19:59:23Z"
+}
