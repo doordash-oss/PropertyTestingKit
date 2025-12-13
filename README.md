@@ -112,6 +112,61 @@ Provide domain-specific seeds to guide the fuzzer toward edge cases:
 }
 ```
 
+### Custom Mutators
+
+Use domain-specific mutation strategies instead of the default `Fuzzable` conformance:
+
+```swift
+@Test func testInputValidation() throws {
+    // Single mutator with multiple strategies
+    try fuzz(using: String.mutators(.sql, .xss)) { input in
+        let sanitized = sanitize(input)
+        #expect(!sanitized.contains("DROP TABLE"))
+        #expect(!sanitized.contains("<script>"))
+    }
+}
+
+@Test func testAPIEndpoint() throws {
+    // Multiple mutators for multiple inputs
+    try fuzz(
+        using: String.mutators(.urls), Int.mutators(.ports)
+    ) { (url: String, port: Int) in
+        let result = connect(to: url, port: port)
+        #expect(result.isValid || result.hasError)
+    }
+}
+```
+
+**Built-in String strategies:**
+- `.phoneNumbers` - Phone number formats (+1-800-555-1234, etc.)
+- `.emails` - Email addresses and edge cases
+- `.urls` - URLs including protocol-relative and javascript:
+- `.sql` - SQL injection payloads (DROP TABLE, OR 1=1, etc.)
+- `.xss` - XSS payloads (script tags, event handlers, etc.)
+- `.unicode` - Unicode edge cases (emoji, RTL, zero-width, etc.)
+- `.whitespace` - Various whitespace characters
+- `.empty` - Empty and near-empty strings
+- `.boundaries` - Length boundaries (0, 1, 255, 256, 65535)
+
+**Built-in Int strategies:**
+- `.boundaries` - Integer boundaries (0, ±1, Int.max, Int.min, etc.)
+- `.ports` - Common port numbers (22, 80, 443, 8080, 65535, etc.)
+- `.httpStatusCodes` - HTTP status codes (200, 404, 500, etc.)
+- `.negative` - Negative values
+- `.powers` - Powers of two
+
+**Built-in Double strategies:**
+- `.boundaries` - Floating point boundaries
+- `.special` - NaN, infinity, ulp
+- `.percentages` - Values in 0-1 range with edge cases
+
+**Bool:**
+```swift
+try fuzz(using: Bool.mutator()) { flag in ... }
+```
+
+Strategies can be composed - mutations from all strategies are applied to seeds from all strategies, enabling cross-strategy fuzzing (e.g., SQL mutations applied to XSS seeds).
+
 ### Fuzzable Protocol
 
 Types conforming to `Fuzzable` provide default seed values and mutation strategies:
@@ -129,6 +184,8 @@ extension String: Fuzzable {
 ```
 
 Built-in `Fuzzable` conformances: `Bool`, `Int`, `String`, `Optional`, `Array`
+
+When no custom mutators are provided to `fuzz()`, it uses the type's `Fuzzable` conformance.
 
 ### @Fuzzable Macro
 
