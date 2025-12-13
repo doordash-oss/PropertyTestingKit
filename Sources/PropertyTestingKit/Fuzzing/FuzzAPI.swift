@@ -87,7 +87,6 @@ public func fuzz<each Input: Fuzzable & Codable & Sendable, each M: Mutator>(
     test: ((repeat each Input)) throws -> Void
 ) throws -> FuzzResult<repeat each Input> where (repeat (each M).Value) == (repeat each Input) {
     @Dependency(\.environment) var environment
-    let corpusDir = corpusDirectory(filePath: filePath, function: function)
 
     let config = FuzzEngine<repeat each Input>.Config(
         maxIterations: iterations,
@@ -98,32 +97,13 @@ public func fuzz<each Input: Fuzzable & Codable & Sendable, each M: Mutator>(
     // WORKAROUND: Create engine inline to avoid parameter pack forwarding issues.
     // Capture mutators tuple to a local before passing to init.
     let capturedMutators: (repeat each M) = (repeat each mutators)
-    let engine = FuzzEngine<repeat each Input>(mutators: capturedMutators, config: config, corpusDirectory: corpusDir)
-    let result = engine.run(additionalSeeds: seeds, test: test)
+    let engine = FuzzEngine<repeat each Input>(
+        mutators: capturedMutators,
+        config: config,
+        corpusDirectory: corpusDirectory(filePath: filePath, function: function)
+    )
 
-    // Report failures using Swift Testing
-    for (input, error) in result.failures {
-        Issue.record(
-            Comment(rawValue: "Fuzz failure with input: \(input)"),
-            sourceLocation: SourceLocation(
-                fileID: String(describing: filePath),
-                filePath: String(describing: filePath),
-                line: 1,
-                column: 1
-            )
-        )
-        Issue.record(error)
-    }
-
-    // Throw if there were any failures
-    if let firstFailure = result.failures.first {
-        throw FuzzError.testFailed(
-            input: "\(firstFailure.input)",
-            underlyingError: firstFailure.error
-        )
-    }
-
-    return result
+    return try reportFuzzResult(engine.run(additionalSeeds: seeds, test: test), filePath: filePath)
 }
 
 /// Run a coverage-guided fuzz test using the type's `Fuzzable` conformance.
@@ -150,7 +130,6 @@ public func fuzz<each Input: Fuzzable & Codable & Sendable>(
     test: ((repeat each Input)) throws -> Void
 ) throws -> FuzzResult<repeat each Input> {
     @Dependency(\.environment) var environment
-    let corpusDir = corpusDirectory(filePath: filePath, function: function)
 
     let config = FuzzEngine<repeat each Input>.Config(
         maxIterations: iterations,
@@ -158,10 +137,21 @@ public func fuzz<each Input: Fuzzable & Codable & Sendable>(
         verbose: environment.environment()["FUZZ_VERBOSE"] != nil
     )
 
-    let engine = FuzzEngine<repeat each Input>(config: config, corpusDirectory: corpusDir)
-    let result = engine.run(additionalSeeds: seeds, test: test)
+    let engine = FuzzEngine<repeat each Input>(
+        config: config,
+        corpusDirectory: corpusDirectory(filePath: filePath, function: function)
+    )
 
-    // Report failures using Swift Testing
+    return try reportFuzzResult(engine.run(additionalSeeds: seeds, test: test), filePath: filePath)
+}
+
+// MARK: - Fuzz Helpers
+
+/// Report fuzz result failures and throw if any occurred.
+private func reportFuzzResult<each Input: Codable & Sendable>(
+    _ result: FuzzResult<repeat each Input>,
+    filePath: StaticString
+) throws -> FuzzResult<repeat each Input> {
     for (input, error) in result.failures {
         Issue.record(
             Comment(rawValue: "Fuzz failure with input: \(input)"),
@@ -175,7 +165,6 @@ public func fuzz<each Input: Fuzzable & Codable & Sendable>(
         Issue.record(error)
     }
 
-    // Throw if there were any failures
     if let firstFailure = result.failures.first {
         throw FuzzError.testFailed(
             input: "\(firstFailure.input)",

@@ -499,4 +499,168 @@ struct MutatorPublicAPITests {
         #expect(snapshotSpy.callCount > 0)
         #expect(testedInputs.contains(""))
     }
+
+    @Test("fuzz(using:) accepts multiple mutators for multiple inputs")
+    func fuzzWithMultipleMutators() throws {
+        nonisolated(unsafe) var testedInputs: [(String, Int)] = []
+        nonisolated(unsafe) var callCount = 0
+
+        let (snapshotSpy, snapshotFn) = spy { () -> CoverageCounters? in
+            callCount += 1
+            return Self.makeCounters(callCount)
+        }
+
+        try withDependencies {
+            $0.coverageCounters = CoverageCountersClient(snapshot: snapshotFn)
+            $0.fileManager = FileManagerClient(
+                currentDirectoryPath: { "/test" },
+                fileExists: { _ in false },
+                createDirectory: { _, _ in },
+                removeItem: { _ in },
+                writeData: { _, _ in },
+                readData: { _ in Data() }
+            )
+        } operation: {
+            let stringMutator = SingleMutator<String>(
+                seeds: ["hello", "world"],
+                mutate: { [$0.uppercased()] }
+            )
+            let intMutator = SingleMutator<Int>(
+                seeds: [1, 2, 3],
+                mutate: { [$0 + 1] }
+            )
+
+            try fuzz(
+                using: stringMutator, intMutator,
+                iterations: 20,
+                duration: 2
+            ) { (str: String, num: Int) in
+                testedInputs.append((str, num))
+            }
+        }
+
+        #expect(snapshotSpy.callCount > 0)
+
+        // Should have cartesian product of seeds: hello/world × 1/2/3
+        let strings = Set(testedInputs.map(\.0))
+        let ints = Set(testedInputs.map(\.1))
+
+        #expect(strings.contains("hello"))
+        #expect(strings.contains("world"))
+        #expect(ints.contains(1))
+        #expect(ints.contains(2))
+        #expect(ints.contains(3))
+    }
+
+    @Test("fuzz(using:) with built-in mutators for multiple inputs")
+    func fuzzWithMultipleBuiltInMutators() throws {
+        nonisolated(unsafe) var testedInputs: [(String, Int)] = []
+        nonisolated(unsafe) var callCount = 0
+
+        let (snapshotSpy, snapshotFn) = spy { () -> CoverageCounters? in
+            callCount += 1
+            return Self.makeCounters(callCount)
+        }
+
+        try withDependencies {
+            $0.coverageCounters = CoverageCountersClient(snapshot: snapshotFn)
+            $0.fileManager = FileManagerClient(
+                currentDirectoryPath: { "/test" },
+                fileExists: { _ in false },
+                createDirectory: { _, _ in },
+                removeItem: { _ in },
+                writeData: { _, _ in },
+                readData: { _ in Data() }
+            )
+        } operation: {
+            try fuzz(
+                using: String.mutators(.empty), Int.mutators(.boundaries),
+                iterations: 50,
+                duration: 3
+            ) { (str: String, num: Int) in
+                testedInputs.append((str, num))
+            }
+        }
+
+        #expect(snapshotSpy.callCount > 0)
+
+        let strings = Set(testedInputs.map(\.0))
+        let ints = Set(testedInputs.map(\.1))
+
+        // Empty mutator should include empty string
+        #expect(strings.contains(""))
+
+        // Boundaries mutator should include 0, 1, -1
+        #expect(ints.contains(0))
+        #expect(ints.contains(1))
+        #expect(ints.contains(-1))
+    }
+
+    @Test("fuzz(using:) with composed mutator strategies for single input")
+    func fuzzWithComposedStrategies() throws {
+        nonisolated(unsafe) var testedInputs: [String] = []
+        nonisolated(unsafe) var callCount = 0
+
+        let (snapshotSpy, snapshotFn) = spy { () -> CoverageCounters? in
+            callCount += 1
+            return Self.makeCounters(callCount)
+        }
+
+        try withDependencies {
+            $0.coverageCounters = CoverageCountersClient(snapshot: snapshotFn)
+            $0.fileManager = FileManagerClient(
+                currentDirectoryPath: { "/test" },
+                fileExists: { _ in false },
+                createDirectory: { _, _ in },
+                removeItem: { _ in },
+                writeData: { _, _ in },
+                readData: { _ in Data() }
+            )
+        } operation: {
+            // Compose multiple strategies for a single String input
+            try fuzz(
+                using: String.mutators(.empty, .sql, .xss),
+                iterations: 500,
+                duration: 5
+            ) { (input: String) in
+                testedInputs.append(input)
+            }
+        }
+
+        #expect(snapshotSpy.callCount > 0)
+
+        // Should have seeds from all three strategies
+        // Empty strategy
+        #expect(testedInputs.contains(""))
+
+        // SQL strategy seeds - look for SQL injection patterns
+        #expect(testedInputs.contains(where: { $0.contains("DROP TABLE") || $0.contains("OR") }))
+
+        // XSS strategy seeds - look for script tags
+        #expect(testedInputs.contains(where: { $0.contains("<script>") || $0.contains("onerror") }))
+
+        // Cross-strategy mutations: SQL mutations applied to XSS seeds
+        // SQL mutator adds "'" prefix/suffix and "; DROP TABLE" suffix
+        // Applied to XSS seed like "<script>alert('XSS')</script>"
+        #expect(
+            testedInputs.contains(where: {
+                // XSS seed with SQL quote prefix
+                ($0.hasPrefix("'") && $0.contains("<script>")) ||
+                // XSS seed with SQL suffix
+                ($0.contains("<script>") && $0.contains("DROP TABLE"))
+            }),
+            "SQL mutations should be applied to XSS seeds"
+        )
+
+        // Cross-strategy mutations: XSS mutations applied to SQL seeds
+        // XSS mutator wraps in <script> tags
+        // Applied to SQL seed like "'; DROP TABLE users; --"
+        #expect(
+            testedInputs.contains(where: {
+                // SQL seed wrapped in script tags
+                $0.contains("<script>") && $0.contains("DROP TABLE")
+            }),
+            "XSS mutations should be applied to SQL seeds"
+        )
+    }
 }
