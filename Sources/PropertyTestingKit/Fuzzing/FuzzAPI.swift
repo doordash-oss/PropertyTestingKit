@@ -95,7 +95,10 @@ public func fuzz<each Input: Fuzzable & Codable & Sendable, each M: Mutator>(
         verbose: environment.environment()["FUZZ_VERBOSE"] != nil
     )
 
-    let engine = FuzzEngine<repeat each Input>(mutators: (repeat each mutators), config: config, corpusDirectory: corpusDir)
+    // WORKAROUND: Create engine inline to avoid parameter pack forwarding issues.
+    // Capture mutators tuple to a local before passing to init.
+    let capturedMutators: (repeat each M) = (repeat each mutators)
+    let engine = FuzzEngine<repeat each Input>(mutators: capturedMutators, config: config, corpusDirectory: corpusDir)
     let result = engine.run(additionalSeeds: seeds, test: test)
 
     // Report failures using Swift Testing

@@ -138,14 +138,22 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
         self.config = config
         self.corpusDirectory = corpusDirectory
 
-        // Extract seeds from mutators
+        // IMPORTANT: Eagerly extract seeds and type-erased mutator array during init
+        // to avoid capturing the parameter pack in escaping closures (which causes crashes
+        // due to a Swift compiler bug with parameter pack capture in closures).
+        let eagerlyCapturedSeeds = Self.extractMutatorSeeds(mutators: mutators)
+
+        // Type-erase mutators into an array that can be safely stored
+        var typeErasedMutators: [Any] = []
+        (repeat typeErasedMutators.append(each mutators))
+        let capturedMutators = typeErasedMutators
+
         self.mutatorSeeds = {
-            Self.extractMutatorSeeds(mutators: mutators)
+            eagerlyCapturedSeeds
         }
 
-        // Extract mutation function from mutators
         self.mutatorMutate = { input in
-            Self.mutateWithMutators(input: input, mutators: mutators)
+            Self.mutateWithTypeErasedMutators(input: input, mutators: capturedMutators)
         }
     }
 
@@ -206,6 +214,58 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
         // Collect mutators into array for indexed access
         var mutatorArray: [Any] = []
         (repeat mutatorArray.append(each mutators))
+
+        // For each component, try mutating it while keeping others the same
+        var componentIndex = 0
+
+        func tryMutateComponent<V: Sendable>(_ value: V, index: Int) {
+            // Get the mutator for this component
+            guard index < mutatorArray.count else { return }
+
+            // We need to find the mutator that matches this type
+            let mutator = mutatorArray[index]
+
+            // Use type casting to call mutate
+            if let typedMutator = mutator as? AnyMutator<V> {
+                let mutations = typedMutator.mutate(value)
+                for mutated in mutations {
+                    if let newTuple = createMutatedTupleStatic(input, mutating: index, with: mutated) {
+                        results.append(newTuple)
+                    }
+                }
+            } else {
+                // Try to extract mutations dynamically
+                // This handles cases where the mutator type doesn't exactly match AnyMutator
+                for mutatorCandidate in mutatorArray {
+                    if let singleMutator = mutatorCandidate as? SingleMutator<V> {
+                        if mutatorArray.firstIndex(where: { ($0 as AnyObject) === (singleMutator as AnyObject) }) == index {
+                            let mutations = singleMutator.mutate(value)
+                            for mutated in mutations {
+                                if let newTuple = createMutatedTupleStatic(input, mutating: index, with: mutated) {
+                                    results.append(newTuple)
+                                }
+                            }
+                            break
+                        }
+                    }
+                }
+            }
+        }
+
+        // Iterate through each component
+        componentIndex = 0
+        (repeat { tryMutateComponent(each input, index: componentIndex); componentIndex += 1 }())
+
+        return results
+    }
+
+    /// Mutate an input using pre-captured type-erased mutators.
+    /// This version takes an already-extracted [Any] array to avoid parameter pack capture issues.
+    private static func mutateWithTypeErasedMutators(
+        input: (repeat each Input),
+        mutators mutatorArray: [Any]
+    ) -> [(repeat each Input)] {
+        var results: [(repeat each Input)] = []
 
         // For each component, try mutating it while keeping others the same
         var componentIndex = 0

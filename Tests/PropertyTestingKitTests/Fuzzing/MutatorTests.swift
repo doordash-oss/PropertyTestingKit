@@ -331,7 +331,7 @@ struct DoubleMutatorTests {
 
 // MARK: - FuzzEngine Integration Tests
 
-@Suite("Mutator FuzzEngine Integration")
+@Suite("Mutator FuzzEngine Integration", .serialized)
 struct MutatorFuzzEngineTests {
     static func makeCounters(_ callNumber: Int) -> CoverageCounters {
         var counters = [UInt64](repeating: 0, count: 100)
@@ -416,7 +416,7 @@ struct MutatorFuzzEngineTests {
 
 // MARK: - Public API Tests
 
-@Suite("Mutator Public API")
+@Suite("Mutator Public API", .serialized)
 struct MutatorPublicAPITests {
     static func makeCounters(_ callNumber: Int) -> CoverageCounters {
         var counters = [UInt64](repeating: 0, count: 100)
