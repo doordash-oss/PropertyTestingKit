@@ -179,6 +179,21 @@ public func veryHardHashMatch(_ str: String) -> String {
     }
 }
 
+/// Very Hard: Modulo constraint with two integers
+/// Requires finding (a, b) where (a + b) % 1000 == 777
+/// This is solvable with modulo-aware pair mutations
+public func veryHardModuloSum(_ a: Int, _ b: Int) -> String {
+    let sum = a &+ b  // Wrapping add to avoid overflow traps
+    let remainder = sum % 1000
+    // Handle negative remainders
+    let normalizedRemainder = remainder < 0 ? remainder + 1000 : remainder
+    if normalizedRemainder == 777 {
+        return "modulo-match"
+    } else {
+        return "modulo-mismatch"
+    }
+}
+
 // MARK: - Difficulty Level: Extreme
 // Practically impossible without value profile guidance or custom mutators
 

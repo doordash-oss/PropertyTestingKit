@@ -133,6 +133,14 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
     /// Tracks comparison operand distances for value profile guidance.
     private let valueProfileTracker = ValueProfileTracker()
 
+    /// Index of corpus entry that most recently made value profile progress.
+    /// We prioritize mutating this entry to continue the chain of progress.
+    private var priorityMutationIndex: Int?
+
+    /// Saved targets from the test that made value profile progress.
+    /// Used to continue the chain when mutating the priority entry.
+    private var savedTargets: [ValueProfileTracker.ComparisonTarget] = []
+
     public init(config: Config = Config(), corpusDirectory: URL? = nil) {
         self.config = config
         self.corpusDirectory = corpusDirectory
@@ -445,21 +453,21 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
                         print("[Fuzz] New coverage from seed: \(corpus.count) entries")
                     }
                 } else if !vpImprovements.isEmpty {
-                    // Input made progress on comparisons but didn't find new edges
-                    // Add it anyway if it significantly improved comparison distances
-                    let bonus = valueProfileTracker.scoreBonus(for: vpImprovements)
-                    if bonus >= 5.0 {
-                        corpus.add(input: repeat each input, signature: signature)
-                        iterationsSinceNewCoverage = 0
-                        if config.verbose {
-                            print("[Fuzz] Value profile progress from seed (bonus: \(String(format: "%.1f", bonus)))")
-                        }
+                    // Input made progress on comparisons (new comparison or closer distance)
+                    // Always add to corpus to preserve incremental progress
+                    corpus.add(input: repeat each input, signature: signature)
+                    priorityMutationIndex = corpus.count - 1  // Prioritize this entry next
+                    savedTargets = valueProfileTracker.extractTargets()  // Save targets for follow-up
+                    iterationsSinceNewCoverage = 0
+                    if config.verbose {
+                        print("[Fuzz] Value profile progress from seed: \(vpImprovements.count) comparison(s), \(savedTargets.count) target(s)")
                     }
                 }
             }
         }
 
         totalGenerations = seedInputs.count
+        // Note: don't clear priorityMutationIndex - seeds may have set a priority to follow up on
 
         // Phase 2: Coverage-guided fuzzing
         var iteration = seedInputs.count
@@ -496,20 +504,48 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
             } else {
                 // Mutate existing corpus entry
                 // Safe: we only enter this branch when !corpus.isEmpty
-                let selectedIndex = corpus.selectForMutation()!
+                // Prioritize entries that made recent value profile progress
+                let selectedIndex: Int
+                let usingPriority: Bool
+                if let priorityIdx = priorityMutationIndex, priorityIdx < corpus.count {
+                    selectedIndex = priorityIdx
+                    usingPriority = true
+                } else {
+                    selectedIndex = corpus.selectForMutation()!
+                    usingPriority = false
+                }
                 let parent = corpus.entries[selectedIndex].input
                 // Use mutator mutate if provided, otherwise use Fuzzable mutate
                 var mutations = mutatorMutate?(parent) ?? mutateInput(parent)
 
                 // Add target-directed mutations from value profile
+                var targetMutations: [(repeat each Input)] = []
                 if config.enableValueProfile {
-                    let targets = valueProfileTracker.extractTargets()
-                    let targetMutations = generateTargetDirectedMutations(from: parent, targets: targets)
+                    // Use saved targets for priority entries, otherwise extract from last test
+                    let targets = usingPriority && !savedTargets.isEmpty
+                        ? savedTargets
+                        : valueProfileTracker.extractTargets()
+                    targetMutations = generateTargetDirectedMutations(from: parent, targets: targets)
                     mutations.append(contentsOf: targetMutations)
                 }
 
-                guard let mutated = mutations.randomElement() else {
-                    continue
+                // When following a priority chain, prefer target-directed mutations
+                let mutated: (repeat each Input)
+                if usingPriority && !targetMutations.isEmpty {
+                    // Try target mutations first when following value profile chain
+                    mutated = targetMutations.randomElement()!
+                    // Keep priority if we have more targets to try
+                    if targetMutations.count <= 1 {
+                        priorityMutationIndex = nil
+                        savedTargets = []
+                    }
+                } else {
+                    guard let m = mutations.randomElement() else {
+                        continue
+                    }
+                    mutated = m
+                    priorityMutationIndex = nil  // Clear priority when not using it
+                    savedTargets = []
                 }
                 input = mutated
                 parentIndex = selectedIndex
@@ -552,14 +588,14 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
                         print("[Fuzz] New coverage! \(corpus.count) entries, iteration \(iteration)")
                     }
                 } else if !vpImprovements.isEmpty {
-                    // Input made progress on comparisons but didn't find new edges
-                    let bonus = valueProfileTracker.scoreBonus(for: vpImprovements)
-                    if bonus >= 5.0 {
-                        corpus.add(input: repeat each input, signature: signature, parentIndex: parentIndex)
-                        iterationsSinceNewCoverage = 0
-                        if config.verbose {
-                            print("[Fuzz] Value profile progress (bonus: \(String(format: "%.1f", bonus))), iteration \(iteration)")
-                        }
+                    // Input made progress on comparisons (new comparison or closer distance)
+                    // Always add to corpus to preserve incremental progress
+                    corpus.add(input: repeat each input, signature: signature, parentIndex: parentIndex)
+                    priorityMutationIndex = corpus.count - 1  // Prioritize this entry next
+                    savedTargets = valueProfileTracker.extractTargets()  // Save targets for follow-up
+                    iterationsSinceNewCoverage = 0
+                    if config.verbose {
+                        print("[Fuzz] Value profile progress: \(vpImprovements.count) comparison(s), \(savedTargets.count) target(s), iteration \(iteration)")
                     }
                 }
             }
@@ -870,9 +906,10 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
 
     /// Generate mutations that target specific comparison values discovered by value profiling.
     ///
-    /// This implements a binary-search style approach: when we know the code compares
-    /// against a specific value (e.g., `x == 12324`), we generate mutations that
-    /// include the target directly and binary-search midpoints.
+    /// This implements multiple strategies:
+    /// 1. **Binary search**: Try the target directly and midpoints toward it
+    /// 2. **Modulo-aware**: For small targets, try target + k*modulus
+    /// 3. **Pair mutations**: For multi-input cases, solve a + b == target
     private func generateTargetDirectedMutations(
         from input: (repeat each Input),
         targets: [ValueProfileTracker.ComparisonTarget]
@@ -881,28 +918,72 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
 
         var results: [(repeat each Input)] = []
 
-        // Find Int components in the input
-        var intIndices: [Int] = []
+        // Find Int components and their values
+        var intComponents: [(index: Int, value: Int)] = []
         var componentIdx = 0
 
         func findInts<V>(_ value: V) {
-            if value is Int {
-                intIndices.append(componentIdx)
+            if let intVal = value as? Int {
+                intComponents.append((componentIdx, intVal))
             }
             componentIdx += 1
         }
         (repeat findInts(each input))
 
-        guard !intIndices.isEmpty else { return [] }
+        guard !intComponents.isEmpty else { return [] }
 
         // For each target, generate mutations at each Int position
         for target in targets {
-            let mutations = target.binarySearchMutations()
+            // Strategy 1: Binary search mutations (try target directly)
+            let binaryMutations = target.binarySearchMutations()
 
-            for intIndex in intIndices {
-                for mutation in mutations {
+            // Strategy 2: Modulo-aware mutations
+            let moduloMutations = target.moduloAwareMutations()
+
+            let allSingleMutations = binaryMutations + moduloMutations
+
+            for (intIndex, _) in intComponents {
+                for mutation in allSingleMutations {
                     if let newTuple = createMutatedTuple(input, mutating: intIndex, with: mutation) {
                         results.append(newTuple)
+                    }
+                }
+            }
+
+            // Strategy 3: Pair mutations for multi-input constraints like a + b == target
+            // Mutate BOTH values together to satisfy a + b = target + k*modulus
+            if intComponents.count >= 2 {
+                guard let targetInt = Int(exactly: target.target) else { continue }
+
+                // Try specific (a, b) pairs that satisfy a + b ≡ target (mod common_moduli)
+                let commonModuli = [1000, 100, 256, 1024, 10000]
+                let baseValues = [0, 1, 10, 100, 500, 777]  // Common "a" values to try
+
+                for modulus in commonModuli {
+                    guard targetInt < modulus else { continue }
+
+                    for k in 0...3 {
+                        let targetSum = targetInt + k * modulus
+
+                        for a in baseValues {
+                            let b = targetSum - a
+                            // Skip if b is negative or too large
+                            guard b >= 0 && b < 1_000_000 else { continue }
+
+                            // Create tuple with both values set
+                            for i in 0..<intComponents.count {
+                                for j in 0..<intComponents.count where i != j {
+                                    let (indexI, _) = intComponents[i]
+                                    let (indexJ, _) = intComponents[j]
+
+                                    // Set a at indexI, b at indexJ (two-step mutation)
+                                    if let intermediate = createMutatedTuple(input, mutating: indexI, with: a),
+                                       let finalTuple = createMutatedTuple(intermediate, mutating: indexJ, with: b) {
+                                        results.append(finalTuple)
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }

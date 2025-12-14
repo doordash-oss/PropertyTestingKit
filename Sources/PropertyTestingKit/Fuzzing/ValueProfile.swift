@@ -238,6 +238,81 @@ extension ValueProfileTracker {
 
             return Array(Set(mutations)) // Deduplicate
         }
+
+        /// Generate mutations assuming the target might be a modulo result.
+        ///
+        /// For constraints like `(a + b) % 1000 == 777`, the comparison captures
+        /// `result == 777`. This generates values that could satisfy such constraints.
+        public func moduloAwareMutations() -> [Int] {
+            guard let targetInt = Int(exactly: target) else { return [] }
+
+            // Only apply to small targets that look like modulo results
+            guard targetInt >= 0 && targetInt < 100_000 else { return [] }
+
+            var mutations: [Int] = []
+
+            // Common moduli in real code
+            let commonModuli = [10, 100, 256, 1000, 1024, 10000, 65536, 100000]
+
+            for modulus in commonModuli {
+                // Skip if target >= modulus (can't be result of % modulus)
+                guard targetInt < modulus else { continue }
+
+                // Generate target + k * modulus for small k values
+                for k in 0...10 {
+                    let (value, overflow) = targetInt.addingReportingOverflow(k * modulus)
+                    if !overflow {
+                        mutations.append(value)
+                    }
+
+                    // Also try negative direction
+                    if k > 0 {
+                        let (negValue, negOverflow) = targetInt.subtractingReportingOverflow(k * modulus)
+                        if !negOverflow {
+                            mutations.append(negValue)
+                        }
+                    }
+                }
+            }
+
+            return Array(Set(mutations))
+        }
+
+        /// Generate pair mutations for constraints like `a + b == target`.
+        ///
+        /// Given a current value for one input, generates values for the other
+        /// input that would satisfy additive relationships.
+        public func pairMutations(otherValue: Int) -> [Int] {
+            guard let targetInt = Int(exactly: target) else { return [] }
+
+            var mutations: [Int] = []
+
+            // For a + b == target: b = target - a
+            let (diff, overflow1) = targetInt.subtractingReportingOverflow(otherValue)
+            if !overflow1 {
+                mutations.append(diff)
+            }
+
+            // For modulo constraints: a + b ≡ target (mod m)
+            // So b = target - a + k*m
+            let commonModuli = [100, 256, 1000, 1024, 10000]
+            for modulus in commonModuli {
+                guard targetInt < modulus else { continue }
+
+                for k in -5...5 {
+                    let (base, o1) = targetInt.subtractingReportingOverflow(otherValue)
+                    guard !o1 else { continue }
+                    let (adjustment, o2) = (k * modulus).addingReportingOverflow(0) // Just to check k*modulus
+                    guard !o2 else { continue }
+                    let (value, o3) = base.addingReportingOverflow(k * modulus)
+                    if !o3 {
+                        mutations.append(value)
+                    }
+                }
+            }
+
+            return Array(Set(mutations))
+        }
     }
 
     /// Extract comparison targets from the most recent test execution.

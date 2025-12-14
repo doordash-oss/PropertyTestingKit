@@ -5,7 +5,7 @@
 //  Stress tests that measure the fuzzer's ability to achieve full coverage
 //  on functions with varying difficulty levels.
 //
-//  ## Results Summary (with dictionary seeds + relationship mutations)
+//  ## Results Summary (with value profile guidance)
 //
 //  Easy (boundary conditions): 100% coverage ✅
 //  - Greater-than, negative check, empty string - all covered by seeds
@@ -15,39 +15,49 @@
 //  - Length == 5: ✅ ("abcde" in String.fuzz seeds)
 //  - Two conditions (a>50 && b<10): ✅ (seeds overlap)
 //
-//  Hard (magic numbers/strings): Partial coverage
-//  - Magic number 12324: ❌ (test-specific, not in dictionary)
-//  - Magic number 98765432: ❌ (test-specific, not in dictionary)
+//  Hard (magic numbers/strings): Full coverage with value profile! ✅
+//  - Magic number 12324: ✅ (value profile guidance)
+//  - Magic number 98765432: ✅ (value profile guidance)
 //  - Magic string 'xyzzy': ✅ (in String.fuzz dictionary)
 //  - Magic prefix 'SECRET_': ✅ (in String.fuzz dictionary)
 //
-//  Very Hard (multiple conditions): High coverage ✅
+//  Very Hard (multiple conditions): Full coverage ✅
 //  - Two magic (42, 1337): ✅ 4/4 branches (both in Int.fuzz)
 //  - Checksum (b == a*7+3): ✅ (3 in seeds, 0*7+3=3 works)
 //  - Nested conditions: ✅ 5/5 branches (1155 in seeds, div by 77)
-//  - Hash match: ❌ (needs value profile guidance)
+//  - Modulo sum ((a+b) % 1000 == 777): ✅ (modulo-aware pair mutations)
+//  - Hash match (String): ❌ (String comparisons not instrumented)
 //
-//  Extreme: As expected, impossible ❌
-//  - 64-bit magic, 3-value sequence, password - need specialized techniques
+//  Extreme: Solved with value profile! ✅
+//  - 64-bit magic: ✅ (value profile guidance with binary search)
+//  - 3-value sequence: ✅ (incremental constraint solving with priority chaining)
+//  - Password string: ❌ (String comparisons not instrumented)
 //
 //  ## Techniques Applied
 //
-//  1. Dictionary-based seeds: Added common magic values (1337, xyzzy, SECRET_),
+//  1. Dictionary-based seeds: Common magic values (1337, xyzzy, SECRET_),
 //     range boundaries (100, 200), length variants (abcde), and arithmetic
 //     relationship values (3, 7, 77, 1155)
 //
-//  2. Arithmetic relationship mutations: For (Int, Int) pairs, try b = a*k + c
-//     for common multipliers and offsets
+//  2. Value profile guidance: Uses -sanitize-coverage=trace-cmp to capture
+//     comparison operands. Directly tries constant values from comparisons.
 //
-//  3. Multi-component mutations: Swap same-type components
+//  3. Priority chaining: When an input makes value profile progress, it's
+//     prioritized for mutation next. Saved targets from that test are used
+//     to generate follow-up mutations, enabling incremental constraint solving.
 //
-//  4. Divisibility-aware mutations: Try nearby multiples of 7, 11, 13, 77
+//  4. Modulo-aware mutations: For small targets, try target + k*modulus
+//     for common moduli (10, 100, 256, 1000, etc.)
 //
-//  ## Still Needs Improvement
+//  5. Coordinated pair mutations: For (Int, Int) constraints like a+b==target,
+//     set both values together to satisfy the constraint.
 //
-//  - Value profile guidance for arbitrary magic numbers
-//  - Hash constraint solving
-//  - Password/sequence brute forcing (infeasible without hints)
+//  6. Divisibility-aware mutations: Try nearby multiples of 7, 11, 13, 77
+//
+//  ## Limitations
+//
+//  - String comparisons: Swift String.== is a function call, not instrumented
+//  - Password/sequence strings: Cannot reverse-engineer string comparisons
 //
 
 import Foundation
@@ -363,6 +373,32 @@ struct FuzzerStressTests {
         }
     }
 
+    @Test("Very Hard: Modulo sum ((a + b) % 1000 == 777)")
+    func veryHardModuloSumCoverage() throws {
+        var seenMatch = false
+        var seenMismatch = false
+
+        let result = try fuzz(
+            iterations: 1000,
+            duration: 10
+        ) { (a: Int, b: Int) in
+            let output = veryHardModuloSum(a, b)
+            if output == "modulo-match" { seenMatch = true }
+            if output == "modulo-mismatch" { seenMismatch = true }
+        }
+
+        #expect(seenMismatch, "Should have covered 'modulo-mismatch' branch")
+        print("Very hard modulo sum: match=\(seenMatch), mismatch=\(seenMismatch), \(result.stats.totalInputs) inputs")
+
+        // This should be solvable with modulo-aware pair mutations
+        // since (a + b) % 1000 == 777 can be solved by setting a=0, b=777 or similar
+        if seenMatch {
+            print("  ✅ Successfully discovered modulo constraint with value profile guidance!")
+        } else {
+            print("  ⚠️ Failed to discover modulo match - check pair mutations")
+        }
+    }
+
     // MARK: - Extreme Tests (practically impossible without special techniques)
 
     @Test("Extreme: 64-bit magic number")
@@ -389,9 +425,10 @@ struct FuzzerStressTests {
         var seenMatch = false
         var seenMismatch = false
 
+        // With 3 Int inputs, seeds = 21^3 = 9261, so we need extra iterations for mutations
         let result = try fuzz(
-            iterations: 1000,
-            duration: 10
+            iterations: 15000,
+            duration: 30
         ) { (a: Int, b: Int, c: Int) in
             let output = extremeSequence(a, b, c)
             if output == "sequence-match" { seenMatch = true }
@@ -400,7 +437,12 @@ struct FuzzerStressTests {
 
         #expect(seenMismatch, "Should have covered 'sequence-mismatch' branch")
         print("Extreme sequence: match=\(seenMatch), mismatch=\(seenMismatch), \(result.stats.totalInputs) inputs")
-        print("  ⚠️ Three magic numbers simultaneously is essentially impossible to discover randomly")
+
+        if seenMatch {
+            print("  ✅ Successfully discovered three-value sequence with value profile guidance!")
+        } else {
+            print("  ⚠️ Failed to discover sequence - check value profile incremental solving")
+        }
     }
 
     @Test("Extreme: Password string")
