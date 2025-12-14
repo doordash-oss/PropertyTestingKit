@@ -69,6 +69,13 @@ public struct FuzzStats: Sendable {
 /// 5. Mutate inputs, repeat
 /// 6. Stop when: iteration limit, time limit, or coverage plateau
 /// 7. Minimize corpus, save to disk
+///
+/// ## Value Profile Guidance
+///
+/// When enabled and the test code is compiled with `-sanitize-coverage=trace-cmp`,
+/// the engine also tracks comparison operand distances. Inputs that get "closer"
+/// to satisfying comparisons (e.g., `x == 12345`) are prioritized for mutation,
+/// even if they don't discover new edge coverage.
 public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unchecked Sendable {
     /// Type-erased mutator functions for each input component.
     /// When nil, uses the type's Fuzzable conformance.
@@ -95,13 +102,18 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
         /// Verbose logging.
         public var verbose: Bool
 
+        /// Enable value profile guidance for comparison tracking.
+        /// Requires test code to be compiled with `-sanitize-coverage=trace-cmp`.
+        public var enableValueProfile: Bool
+
         public init(
             maxIterations: Int = 10_000,
             maxDuration: TimeInterval = 60,
             plateauThreshold: Int = 1000,
             generationRatio: Double = 0.3,
             minimizeCorpus: Bool = true,
-            verbose: Bool = false
+            verbose: Bool = false,
+            enableValueProfile: Bool = true
         ) {
             self.maxIterations = maxIterations
             self.maxDuration = maxDuration
@@ -109,6 +121,7 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
             self.generationRatio = generationRatio
             self.minimizeCorpus = minimizeCorpus
             self.verbose = verbose
+            self.enableValueProfile = enableValueProfile
         }
     }
 
@@ -116,6 +129,9 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
     private let corpusDirectory: URL?
     private let mutatorSeeds: MutatorSeeds?
     private let mutatorMutate: MutatorMutate?
+
+    /// Tracks comparison operand distances for value profile guidance.
+    private let valueProfileTracker = ValueProfileTracker()
 
     public init(config: Config = Config(), corpusDirectory: URL? = nil) {
         self.config = config
@@ -385,11 +401,22 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
         var totalMutations = 0
         var totalGenerations = 0
 
+        // Enable value profile tracking if configured
+        if config.enableValueProfile {
+            valueProfileTracker.enable()
+            valueProfileTracker.clearState()
+        }
+
         // Phase 1: Seed with boundary values (defaults + user-provided)
         // Use mutator seeds if provided, otherwise use Fuzzable defaults
         let defaultSeeds = mutatorSeeds?() ?? cartesianProductFuzz()
         let seedInputs = defaultSeeds + additionalSeeds
         for input in seedInputs {
+            // Reset value profile for this test
+            if config.enableValueProfile {
+                valueProfileTracker.reset()
+            }
+
             // Inline coverage testing
             let before = coverageCounters.snapshot()
 
@@ -404,13 +431,29 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
                 failures.append((input, error))
             }
 
+            // Process value profile improvements
+            let vpImprovements = config.enableValueProfile ? valueProfileTracker.processComparisons() : []
+
             if let beforeSnapshot = before, let afterSnapshot = coverageCounters.snapshot() {
                 let diff = afterSnapshot.difference(from: beforeSnapshot)
                 let signature = CoverageSignature(diff: diff)
-                if corpus.addIfInteresting(input: repeat each input, signature: signature) {
+                let addedForCoverage = corpus.addIfInteresting(input: repeat each input, signature: signature)
+
+                if addedForCoverage {
                     iterationsSinceNewCoverage = 0
                     if config.verbose {
                         print("[Fuzz] New coverage from seed: \(corpus.count) entries")
+                    }
+                } else if !vpImprovements.isEmpty {
+                    // Input made progress on comparisons but didn't find new edges
+                    // Add it anyway if it significantly improved comparison distances
+                    let bonus = valueProfileTracker.scoreBonus(for: vpImprovements)
+                    if bonus >= 5.0 {
+                        corpus.add(input: repeat each input, signature: signature)
+                        iterationsSinceNewCoverage = 0
+                        if config.verbose {
+                            print("[Fuzz] Value profile progress from seed (bonus: \(String(format: "%.1f", bonus)))")
+                        }
                     }
                 }
             }
@@ -456,13 +499,26 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
                 let selectedIndex = corpus.selectForMutation()!
                 let parent = corpus.entries[selectedIndex].input
                 // Use mutator mutate if provided, otherwise use Fuzzable mutate
-                let mutations = mutatorMutate?(parent) ?? mutateInput(parent)
+                var mutations = mutatorMutate?(parent) ?? mutateInput(parent)
+
+                // Add target-directed mutations from value profile
+                if config.enableValueProfile {
+                    let targets = valueProfileTracker.extractTargets()
+                    let targetMutations = generateTargetDirectedMutations(from: parent, targets: targets)
+                    mutations.append(contentsOf: targetMutations)
+                }
+
                 guard let mutated = mutations.randomElement() else {
                     continue
                 }
                 input = mutated
                 parentIndex = selectedIndex
                 totalMutations += 1
+            }
+
+            // Reset value profile for this test
+            if config.enableValueProfile {
+                valueProfileTracker.reset()
             }
 
             // Run test with inline coverage tracking
@@ -482,15 +538,39 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
                 failures.append((input, error))
             }
 
+            // Process value profile improvements
+            let vpImprovements = config.enableValueProfile ? valueProfileTracker.processComparisons() : []
+
             if let beforeSnapshot = before, let afterSnapshot = coverageCounters.snapshot() {
                 let diff = afterSnapshot.difference(from: beforeSnapshot)
                 let signature = CoverageSignature(diff: diff)
-                if corpus.addIfInteresting(input: repeat each input, signature: signature, parentIndex: parentIndex) {
+                let addedForCoverage = corpus.addIfInteresting(input: repeat each input, signature: signature, parentIndex: parentIndex)
+
+                if addedForCoverage {
                     iterationsSinceNewCoverage = 0
                     if config.verbose {
                         print("[Fuzz] New coverage! \(corpus.count) entries, iteration \(iteration)")
                     }
+                } else if !vpImprovements.isEmpty {
+                    // Input made progress on comparisons but didn't find new edges
+                    let bonus = valueProfileTracker.scoreBonus(for: vpImprovements)
+                    if bonus >= 5.0 {
+                        corpus.add(input: repeat each input, signature: signature, parentIndex: parentIndex)
+                        iterationsSinceNewCoverage = 0
+                        if config.verbose {
+                            print("[Fuzz] Value profile progress (bonus: \(String(format: "%.1f", bonus))), iteration \(iteration)")
+                        }
+                    }
                 }
+            }
+        }
+
+        // Disable value profile tracking
+        if config.enableValueProfile {
+            valueProfileTracker.disable()
+            if config.verbose {
+                let (tracked, solved) = valueProfileTracker.stats()
+                print("[Fuzz] Value profile: \(tracked) comparisons tracked, \(solved) solved")
             }
         }
 
@@ -653,7 +733,7 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
         // Collect all possible mutations
         var results: [(repeat each Input)] = []
 
-        // For each component, try mutating it while keeping others the same
+        // Strategy 1: Single-component mutations (original behavior)
         var componentIndex = 0
         func tryMutate<U: Fuzzable>(_ value: U, atIndex index: Int) {
             let mutations = value.mutate()
@@ -669,7 +749,192 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
         componentIndex = 0
         (repeat tryMutate(each input, atIndex: componentIndex))
 
+        // Strategy 2: Multi-component mutations (mutate 2 components together)
+        results.append(contentsOf: multiComponentMutations(input))
+
+        // Strategy 3: Arithmetic relationship mutations for (Int, Int) pairs
+        results.append(contentsOf: arithmeticRelationshipMutations(input))
+
         return results
+    }
+
+    /// Generate mutations where multiple components change together.
+    /// This helps find correlated input combinations.
+    private func multiComponentMutations(_ input: (repeat each Input)) -> [(repeat each Input)] {
+        var results: [(repeat each Input)] = []
+
+        // Extract values into arrays for manipulation
+        var values: [Any] = []
+        (repeat values.append(each input))
+
+        guard values.count >= 2 else { return [] }
+
+        // For each pair of components, try mutating both
+        for i in 0..<values.count {
+            for j in (i + 1)..<values.count {
+                // Try swapping values if they're the same type
+                if type(of: values[i]) == type(of: values[j]) {
+                    if let newTuple = createSwappedTuple(input, swapping: i, with: j) {
+                        results.append(newTuple)
+                    }
+                }
+            }
+        }
+
+        return results
+    }
+
+    /// Generate arithmetic relationship mutations for Int pairs.
+    /// Tries relationships like b = a*k + c that help crack checksum-style conditions.
+    private func arithmeticRelationshipMutations(_ input: (repeat each Input)) -> [(repeat each Input)] {
+        var results: [(repeat each Input)] = []
+
+        // Extract values to find Int pairs
+        var values: [Any] = []
+        var indices: [Int] = []
+        var componentIdx = 0
+
+        func collectValue<V>(_ value: V) {
+            values.append(value)
+            indices.append(componentIdx)
+            componentIdx += 1
+        }
+        (repeat collectValue(each input))
+
+        // Find all Int values and their indices
+        var intPairs: [(index: Int, value: Int)] = []
+        for (idx, value) in zip(indices, values) {
+            if let intVal = value as? Int {
+                intPairs.append((idx, intVal))
+            }
+        }
+
+        // For each pair of Ints, generate relationship-based mutations
+        guard intPairs.count >= 2 else { return [] }
+
+        for i in 0..<intPairs.count {
+            for j in (i + 1)..<intPairs.count {
+                let (idxA, a) = intPairs[i]
+                let (idxB, _) = intPairs[j]
+
+                // Generate b values based on relationships with a
+                let derivedBValues = arithmeticDerivations(from: a)
+
+                for newB in derivedBValues {
+                    if let newTuple = createMutatedTuple(input, mutating: idxB, with: newB) {
+                        results.append(newTuple)
+                    }
+                }
+
+                // Also try the reverse: derive a from current b
+                let (_, b) = intPairs[j]
+                let derivedAValues = arithmeticDerivations(from: b)
+                for newA in derivedAValues {
+                    if let newTuple = createMutatedTuple(input, mutating: idxA, with: newA) {
+                        results.append(newTuple)
+                    }
+                }
+            }
+        }
+
+        return results
+    }
+
+    /// Generate derived values based on common arithmetic relationships.
+    private func arithmeticDerivations(from value: Int) -> [Int] {
+        var derived: [Int] = []
+
+        // Linear relationships: b = a * k + c
+        let multipliers = [1, 2, 3, 5, 7, 10]
+        let offsets = [-3, -1, 0, 1, 3]
+
+        for k in multipliers {
+            for c in offsets {
+                // b = a * k + c (with overflow protection)
+                let (product, overflow1) = value.multipliedReportingOverflow(by: k)
+                guard !overflow1 else { continue }
+                let (result, overflow2) = product.addingReportingOverflow(c)
+                guard !overflow2 else { continue }
+                derived.append(result)
+            }
+        }
+
+        // Also include the value itself, negation, and simple offsets
+        derived.append(value)
+        if value != Int.min { derived.append(-value) }
+        if value != Int.max { derived.append(value + 1) }
+        if value != Int.min { derived.append(value - 1) }
+
+        return Array(Set(derived)) // Deduplicate
+    }
+
+    /// Generate mutations that target specific comparison values discovered by value profiling.
+    ///
+    /// This implements a binary-search style approach: when we know the code compares
+    /// against a specific value (e.g., `x == 12324`), we generate mutations that
+    /// include the target directly and binary-search midpoints.
+    private func generateTargetDirectedMutations(
+        from input: (repeat each Input),
+        targets: [ValueProfileTracker.ComparisonTarget]
+    ) -> [(repeat each Input)] {
+        guard !targets.isEmpty else { return [] }
+
+        var results: [(repeat each Input)] = []
+
+        // Find Int components in the input
+        var intIndices: [Int] = []
+        var componentIdx = 0
+
+        func findInts<V>(_ value: V) {
+            if value is Int {
+                intIndices.append(componentIdx)
+            }
+            componentIdx += 1
+        }
+        (repeat findInts(each input))
+
+        guard !intIndices.isEmpty else { return [] }
+
+        // For each target, generate mutations at each Int position
+        for target in targets {
+            let mutations = target.binarySearchMutations()
+
+            for intIndex in intIndices {
+                for mutation in mutations {
+                    if let newTuple = createMutatedTuple(input, mutating: intIndex, with: mutation) {
+                        results.append(newTuple)
+                    }
+                }
+            }
+        }
+
+        return results
+    }
+
+    /// Create a tuple with two components swapped.
+    private func createSwappedTuple(
+        _ input: (repeat each Input),
+        swapping indexA: Int,
+        with indexB: Int
+    ) -> (repeat each Input)? {
+        var values: [Any] = []
+        (repeat values.append(each input))
+
+        guard indexA < values.count, indexB < values.count else { return nil }
+
+        // Swap the values
+        let temp = values[indexA]
+        values[indexA] = values[indexB]
+        values[indexB] = temp
+
+        // Rebuild tuple
+        var valueIterator = values.makeIterator()
+        func nextValue<V>(_: V.Type) -> V {
+            valueIterator.next()! as! V
+        }
+
+        let newTuple: (repeat each Input) = (repeat nextValue((each Input).self))
+        return newTuple
     }
 
     /// Create a mutated tuple at a specific index.

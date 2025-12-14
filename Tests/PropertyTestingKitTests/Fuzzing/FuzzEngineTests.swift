@@ -121,10 +121,11 @@ struct FuzzEngineTests {
             $0.coverageCounters = CoverageCountersClient(snapshot: snapshotFn)
         } operation: {
             let config = FuzzEngine<Int>.Config(
-                maxIterations: 20,
+                maxIterations: 50,  // Higher than Int.fuzz count (21) to allow some fuzzing
                 maxDuration: 60,
                 plateauThreshold: 1000,
-                verbose: false
+                verbose: false,
+                enableValueProfile: false  // Disable to test iteration limit precisely
             )
 
             let engine = FuzzEngine<Int>(config: config, corpusDirectory: nil)
@@ -132,7 +133,7 @@ struct FuzzEngineTests {
         }
 
         #expect(snapshotSpy.callCount > 0)
-        #expect(result.stats.totalInputs <= 20)
+        #expect(result.stats.totalInputs <= 50)
     }
 
     @Test("FuzzStats.inputsPerSecond computes correctly")

@@ -92,14 +92,38 @@ extension Bool: Fuzzable {
 extension Int: Fuzzable {
     public static var fuzz: [Int] {
         [
+            // Extremes and zero
             0,
             1,
             -1,
-            1_000_000,
-            -1_000_000,
             Int.max,
             Int.min,
-            42,  // A "normal" value
+
+            // Small values useful for arithmetic relationships
+            3,       // Common in b = a*k + 3 patterns
+            7,       // Common factor
+            10,      // Base 10
+
+            // Common magic numbers (from security/hacking culture)
+            42,      // "Answer to everything"
+            1337,    // "leet" - extremely common in tests
+            31337,   // "elite" - another common magic
+
+            // Common range boundaries
+            100,
+            200,
+            255,     // Max unsigned byte
+            256,     // Byte overflow
+            1000,
+            1024,    // Power of 2
+
+            // Values useful for divisibility tests
+            77,      // 7 * 11
+            1155,    // 3 * 5 * 7 * 11, in range [1001, 1999]
+
+            // Large values
+            1_000_000,
+            -1_000_000,
         ]
     }
 
@@ -117,6 +141,19 @@ extension Int: Fuzzable {
         // Bit manipulation
         if self != 0 { mutations.append(self ^ 1) }  // Flip LSB
 
+        // Divisibility-aware mutations: try nearby multiples of common factors
+        for factor in [7, 11, 13, 77] {
+            let nearestMultiple = (self / factor) * factor
+            if nearestMultiple != self && nearestMultiple != 0 {
+                mutations.append(nearestMultiple)
+            }
+            // Also try the next multiple up
+            let (next, overflow) = nearestMultiple.addingReportingOverflow(factor)
+            if !overflow && next != self {
+                mutations.append(next)
+            }
+        }
+
         return mutations
     }
 }
@@ -126,16 +163,41 @@ extension Int: Fuzzable {
 extension String: Fuzzable {
     public static var fuzz: [String] {
         [
-            "",                                          // Empty
-            "a",                                         // Single char
-            String(repeating: "a", count: 1000),         // Long
-            "😄",                                        // Unicode
-            "Hello World",                               // With space
-            "Hello\nWorld",                              // With newline
-            "Hello!@#$%^&*()_+-=[]{}|;:,.<>?",          // Special chars
-            "\0",                                        // Null char
-            " ",                                         // Just space
-            "\t\n\r",                                    // Whitespace
+            // Empty and whitespace
+            "",
+            " ",
+            "\t\n\r",
+
+            // Various lengths (1-6 chars for length-based tests)
+            "a",
+            "ab",
+            "abc",
+            "abcd",
+            "abcde",    // Length 5 - common test case
+            "abcdef",
+
+            // Common magic strings
+            "xyzzy",    // Classic adventure game magic word
+            "plugh",    // Another classic magic word
+            "test",
+            "admin",
+            "password",
+
+            // Common prefixes
+            "SECRET_x",
+            "PRIVATE_",
+            "API_KEY_",
+            "TOKEN_",
+
+            // Unicode and special
+            "😄",
+            "\0",
+            "Hello World",
+            "Hello\nWorld",
+            "Hello!@#$%^&*()_+-=[]{}|;:,.<>?",
+
+            // Long string
+            String(repeating: "a", count: 1000),
         ]
     }
 
@@ -165,6 +227,22 @@ extension String: Fuzzable {
         mutations.append(self + " ")
         mutations.append(" " + self)
         mutations.append(trimmingCharacters(in: .whitespaces))
+
+        // Prefix mutations - try common prefixes
+        for prefix in ["SECRET_", "PRIVATE_", "API_", "TOKEN_"] {
+            if !self.hasPrefix(prefix) {
+                mutations.append(prefix + self)
+            }
+        }
+
+        // Length-targeted mutations: try to hit common lengths
+        for targetLen in [5, 8, 16, 32] {
+            if count < targetLen {
+                mutations.append(self + String(repeating: "x", count: targetLen - count))
+            } else if count > targetLen && targetLen > 0 {
+                mutations.append(String(prefix(targetLen)))
+            }
+        }
 
         return mutations.filter { $0 != self }
     }

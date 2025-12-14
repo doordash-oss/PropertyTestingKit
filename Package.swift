@@ -29,6 +29,13 @@ let package = Package(
             path: "Sources/PropertyTestingKitInternals"
         ),
 
+        // C module for value profile hooks (sanitizer coverage)
+        .target(
+            name: "ValueProfileHooks",
+            path: "Sources/ValueProfileHooks",
+            publicHeadersPath: "include"
+        ),
+
         // C++ wrapper for LLVM coverage APIs
         .target(
             name: "LLVMCoverageInterop",
@@ -53,6 +60,7 @@ let package = Package(
                 "PropertyTestingKitMacros",
                 "PropertyTestingKitInternals",
                 "LLVMCoverageInterop",
+                "ValueProfileHooks",
                 .product(name: "Dependencies", package: "swift-dependencies"),
             ],
             swiftSettings: [
@@ -68,6 +76,21 @@ let package = Package(
             ],
             swiftSettings: [
                 .interoperabilityMode(.Cxx)
+            ]
+        ),
+        .testTarget(
+            name: "StressTests",
+            dependencies: [
+                "PropertyTestingKit",
+                .product(name: "Dependencies", package: "swift-dependencies"),
+            ],
+            swiftSettings: [
+                .interoperabilityMode(.Cxx),
+                // Enable value profile guidance for stress tests
+                .unsafeFlags([
+                    "-sanitize=undefined",
+                    "-sanitize-coverage=edge,trace-cmp"
+                ])
             ]
         ),
         .macro(
