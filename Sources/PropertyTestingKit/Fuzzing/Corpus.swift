@@ -105,15 +105,39 @@ public struct CorpusEntry<each Input: Codable & Sendable>: Sendable, Codable {
     public func encode(to encoder: any Encoder) throws {
         var container = encoder.container(keyedBy: CorpusEntryCodingKeys.self)
         var dataList = [Data]()
-        (repeat try dataList.append(JSONEncoder().encode(each input)))
+        var readableList = [String]()
+        let jsonEncoder = JSONEncoder()
+        jsonEncoder.outputFormatting = [.sortedKeys]
+
+        (repeat try dataList.append(jsonEncoder.encode(each input)))
+        (repeat readableList.append(toReadableString(each input)))
 
         try container.encode(dataList, forKey: .input)
+        try container.encode(readableList, forKey: .inputReadable)
 
         try container.encode(signature, forKey: .signature)
         try container.encode(discoveredAt, forKey: .discoveredAt)
         try container.encodeIfPresent(parentIndex, forKey: .parentIndex)
         try container.encode(entryType, forKey: .entryType)
         try container.encodeIfPresent(failure, forKey: .failure)
+    }
+
+    /// Convert a value to a human-readable string representation.
+    private func toReadableString<T>(_ value: T) -> String {
+        if let string = value as? String {
+            return string
+        } else if let data = value as? Data {
+            // Try to decode as UTF-8 string, fall back to hex representation
+            if let str = String(data: data, encoding: .utf8) {
+                return str
+            } else {
+                return data.map { String(format: "%02x", $0) }.joined(separator: " ")
+            }
+        } else if let array = value as? [Any] {
+            return "[\(array.map { "\($0)" }.joined(separator: ", "))]"
+        } else {
+            return "\(value)"
+        }
     }
 
     public init(from decoder: any Decoder) throws {
@@ -136,6 +160,7 @@ public struct CorpusEntry<each Input: Codable & Sendable>: Sendable, Codable {
 
 public enum CorpusEntryCodingKeys: String, CodingKey {
     case input
+    case inputReadable
     case signature
     case discoveredAt
     case parentIndex
