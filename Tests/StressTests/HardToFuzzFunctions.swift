@@ -224,6 +224,35 @@ public func extremePassword(_ str: String) -> String {
     }
 }
 
+/// Extreme: Dynamic string matching
+/// The magic string is constructed at runtime, making it invisible to static analysis
+public func extremeDynamicPassword(_ str: String) -> String {
+    let year = "2024"
+    let secret = "token_" + year + "_secret"  // "token_2024_secret"
+    if str == secret {
+        return "dynamic-match"
+    } else {
+        return "dynamic-mismatch"
+    }
+}
+
+/// Extreme: Multiple dynamic string checks
+public func extremeMultipleDynamicStrings(_ str: String) -> String {
+    let prefix = "admin"
+    let suffix = "_root"
+    let expected = prefix + suffix  // "admin_root"
+
+    if str == expected {
+        return "full-match"
+    } else if str.hasPrefix(prefix) {
+        return "prefix-match"
+    } else if str.hasSuffix(suffix) {
+        return "suffix-match"
+    } else {
+        return "no-match"
+    }
+}
+
 // MARK: - Coverage Tracking Helpers
 
 /// Tracks which branches have been covered in a test run

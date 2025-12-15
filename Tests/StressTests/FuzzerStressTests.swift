@@ -463,4 +463,69 @@ struct FuzzerStressTests {
         print("Extreme password: granted=\(seenGranted), denied=\(seenDenied), \(result.stats.totalInputs) inputs")
         print("  ⚠️ Exact password strings are essentially impossible to discover randomly")
     }
+
+    // MARK: - String Dictionary Tests (dynamic string capture)
+
+    @Test("Extreme: Dynamic password with string dictionary")
+    func extremeDynamicPasswordCoverage() throws {
+        var seenMatch = false
+        var seenMismatch = false
+
+        // The string dictionary should capture "token_2024_secret" at runtime
+        // and use it for mutations
+        let result = try fuzz(
+            iterations: 2000,
+            duration: 20
+        ) { (str: String) in
+            let output = extremeDynamicPassword(str)
+            if output == "dynamic-match" { seenMatch = true }
+            if output == "dynamic-mismatch" { seenMismatch = true }
+        }
+
+        #expect(seenMismatch, "Should have covered 'dynamic-mismatch' branch")
+        print("Extreme dynamic password: match=\(seenMatch), mismatch=\(seenMismatch), \(result.stats.totalInputs) inputs")
+
+        if seenMatch {
+            print("  ✅ Successfully discovered dynamic string with string dictionary capture!")
+        } else {
+            print("  ⚠️ Failed to discover dynamic string - check string dictionary integration")
+        }
+    }
+
+    @Test("Extreme: Multiple dynamic strings with string dictionary")
+    func extremeMultipleDynamicStringsCoverage() throws {
+        var seenFullMatch = false
+        var seenPrefixMatch = false
+        var seenSuffixMatch = false
+        var seenNoMatch = false
+
+        // The string dictionary should capture "admin", "_root", and "admin_root"
+        let result = try fuzz(
+            iterations: 2000,
+            duration: 20
+        ) { (str: String) in
+            let output = extremeMultipleDynamicStrings(str)
+            if output == "full-match" { seenFullMatch = true }
+            if output == "prefix-match" { seenPrefixMatch = true }
+            if output == "suffix-match" { seenSuffixMatch = true }
+            if output == "no-match" { seenNoMatch = true }
+        }
+
+        #expect(seenNoMatch, "Should have covered 'no-match' branch")
+        print("Extreme multiple dynamic: full=\(seenFullMatch), prefix=\(seenPrefixMatch), suffix=\(seenSuffixMatch), no=\(seenNoMatch)")
+        print("  Inputs: \(result.stats.totalInputs)")
+
+        let coveredCount = [seenFullMatch, seenPrefixMatch, seenSuffixMatch, seenNoMatch].filter { $0 }.count
+        print("  Coverage: \(coveredCount)/4 branches")
+
+        if seenFullMatch {
+            print("  ✅ Successfully discovered dynamically constructed string!")
+        }
+        if seenPrefixMatch {
+            print("  ✅ Successfully discovered prefix string!")
+        }
+        if seenSuffixMatch {
+            print("  ✅ Successfully discovered suffix string!")
+        }
+    }
 }

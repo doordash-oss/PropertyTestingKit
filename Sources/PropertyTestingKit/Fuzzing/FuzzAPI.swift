@@ -71,6 +71,12 @@ import Dependencies
 ///     to the mutator's seed values. Use this to target specific edge cases.
 ///   - iterations: Maximum fuzzing iterations (default: 10,000).
 ///   - duration: Maximum fuzzing time in seconds (default: 60).
+///   - perInputTimeout: Timeout per test execution in seconds. When set, inputs
+///     exceeding this duration are marked as "hangs" (potential infinite loops).
+///     Default: nil (no per-input timeout).
+///   - corpusMode: Controls corpus behavior. Use `.refuzzReplace` to start fresh,
+///     `.refuzzExtend` to add to existing corpus, or `.auto` for default behavior.
+///     Can also be set via `FUZZ_CORPUS_MODE` environment variable.
 ///   - filePath: Source file path (auto-filled).
 ///   - function: Test function name (auto-filled).
 ///   - test: The test closure receiving fuzzed inputs.
@@ -82,16 +88,20 @@ public func fuzz<each Input: Fuzzable & Codable & Sendable, each M: Mutator>(
     seeds: [(repeat each Input)] = [],
     iterations: Int = 10_000,
     duration: TimeInterval = 60,
+    perInputTimeout: TimeInterval? = nil,
+    corpusMode: CorpusMode? = nil,
     filePath: StaticString = #filePath,
     function: StaticString = #function,
-    test: ((repeat each Input)) throws -> Void
+    test: @escaping ((repeat each Input)) throws -> Void
 ) throws -> FuzzResult<repeat each Input> where (repeat (each M).Value) == (repeat each Input) {
     @Dependency(\.environment) var environment
 
     let config = FuzzEngine<repeat each Input>.Config(
         maxIterations: iterations,
         maxDuration: duration,
-        verbose: environment.environment()["FUZZ_VERBOSE"] != nil
+        verbose: environment.environment()["FUZZ_VERBOSE"] != nil,
+        corpusMode: corpusMode,
+        perInputTimeout: perInputTimeout
     )
 
     // WORKAROUND: Create engine inline to avoid parameter pack forwarding issues.
@@ -115,6 +125,12 @@ public func fuzz<each Input: Fuzzable & Codable & Sendable, each M: Mutator>(
 ///   - seeds: Domain-specific seed values to guide the fuzzer.
 ///   - iterations: Maximum fuzzing iterations (default: 10,000).
 ///   - duration: Maximum fuzzing time in seconds (default: 60).
+///   - perInputTimeout: Timeout per test execution in seconds. When set, inputs
+///     exceeding this duration are marked as "hangs" (potential infinite loops).
+///     Default: nil (no per-input timeout).
+///   - corpusMode: Controls corpus behavior. Use `.refuzzReplace` to start fresh,
+///     `.refuzzExtend` to add to existing corpus, or `.auto` for default behavior.
+///     Can also be set via `FUZZ_CORPUS_MODE` environment variable.
 ///   - filePath: Source file path (auto-filled).
 ///   - function: Test function name (auto-filled).
 ///   - test: The test closure receiving fuzzed inputs.
@@ -125,16 +141,20 @@ public func fuzz<each Input: Fuzzable & Codable & Sendable>(
     seeds: [(repeat each Input)] = [],
     iterations: Int = 10_000,
     duration: TimeInterval = 60,
+    perInputTimeout: TimeInterval? = nil,
+    corpusMode: CorpusMode? = nil,
     filePath: StaticString = #filePath,
     function: StaticString = #function,
-    test: ((repeat each Input)) throws -> Void
+    test: @escaping ((repeat each Input)) throws -> Void
 ) throws -> FuzzResult<repeat each Input> {
     @Dependency(\.environment) var environment
 
     let config = FuzzEngine<repeat each Input>.Config(
         maxIterations: iterations,
         maxDuration: duration,
-        verbose: environment.environment()["FUZZ_VERBOSE"] != nil
+        verbose: environment.environment()["FUZZ_VERBOSE"] != nil,
+        corpusMode: corpusMode,
+        perInputTimeout: perInputTimeout
     )
 
     let engine = FuzzEngine<repeat each Input>(
@@ -233,10 +253,27 @@ public enum FuzzError: Error, LocalizedError {
 // MARK: - Configuration via Environment
 
 /// Environment variables for configuring fuzz behavior:
+///
 /// - `FUZZ_VERBOSE=1`: Enable verbose logging
 /// - `FUZZ_ITERATIONS=N`: Override max iterations
 /// - `FUZZ_DURATION=N`: Override max duration (seconds)
-/// - `FUZZ_FORCE_REFUZZ=1`: Ignore saved corpus, always fuzz fresh
+/// - `FUZZ_CORPUS_MODE=<mode>`: Control corpus behavior for all tests:
+///   - `auto`: Run regression if corpus exists, otherwise fuzz (default)
+///   - `refuzzreplace`: Always fuzz fresh, replace existing corpus
+///   - `refuzzextend`: Load corpus as seeds, continue fuzzing to find more
+///   - `regressiononly`: Only run regression, skip tests with no corpus
+///
+/// Example usage:
+/// ```bash
+/// # Re-fuzz all tests, replacing existing corpora
+/// FUZZ_CORPUS_MODE=refuzzreplace swift test
+///
+/// # Extend existing corpora with more fuzzing
+/// FUZZ_CORPUS_MODE=refuzzextend FUZZ_ITERATIONS=50000 swift test
+///
+/// # Only run regression (CI mode)
+/// FUZZ_CORPUS_MODE=regressiononly swift test
+/// ```
 
 extension FuzzEngine.Config {
     /// Create config from environment variables.
@@ -257,6 +294,8 @@ extension FuzzEngine.Config {
         if env["FUZZ_VERBOSE"] != nil {
             config.verbose = true
         }
+
+        // corpusMode is already handled by CorpusMode.fromEnvironment() in Config.init
 
         return config
     }

@@ -49,6 +49,95 @@ public struct FuzzStats: Sendable {
     public var inputsPerSecond: Double {
         duration > 0 ? Double(totalInputs) / duration : 0
     }
+
+    /// Why fuzzing stopped.
+    public let stopReason: StopReason
+
+    /// Plateau detection statistics (if available).
+    public let plateauStats: PlateauStats?
+
+    /// Number of inputs that caused test failures.
+    public let failures: Int
+
+    /// Number of inputs that timed out (potential hangs).
+    public let hangs: Int
+
+    /// Reason for stopping the fuzz run.
+    public enum StopReason: String, Sendable {
+        case iterationLimit = "iteration_limit"
+        case timeLimit = "time_limit"
+        case coveragePlateau = "coverage_plateau"
+        case legacyPlateau = "legacy_plateau"
+        case regression = "regression"
+    }
+
+    public init(
+        totalInputs: Int,
+        newPaths: Int,
+        mutations: Int,
+        generations: Int,
+        duration: TimeInterval,
+        stopReason: StopReason = .iterationLimit,
+        plateauStats: PlateauStats? = nil,
+        failures: Int = 0,
+        hangs: Int = 0
+    ) {
+        self.totalInputs = totalInputs
+        self.newPaths = newPaths
+        self.mutations = mutations
+        self.generations = generations
+        self.duration = duration
+        self.stopReason = stopReason
+        self.plateauStats = plateauStats
+        self.failures = failures
+        self.hangs = hangs
+    }
+}
+
+/// Error indicating that a test execution timed out (potential infinite loop or deadlock).
+///
+/// Based on Miller 1990 "Fuzz" paper which introduced timeout-based hang detection.
+public struct HangDetectedError: Error, LocalizedError, Sendable {
+    /// The timeout duration that was exceeded.
+    public let timeout: TimeInterval
+
+    public var errorDescription: String? {
+        "Test execution timed out after \(String(format: "%.2f", timeout)) seconds (potential hang)"
+    }
+}
+
+// MARK: - Corpus Mode
+
+/// Controls how the fuzzer handles existing corpus files.
+public enum CorpusMode: String, Sendable {
+    /// Auto-detect: Run regression if corpus exists, otherwise fuzz fresh.
+    /// This is the default behavior.
+    case auto
+
+    /// Always fuzz fresh, replacing any existing corpus.
+    /// Use when you want to start over with a clean slate.
+    case refuzzReplace
+
+    /// Load existing corpus as additional seeds, then continue fuzzing.
+    /// New discoveries are added to the corpus.
+    /// Use when you want to expand coverage beyond the current corpus.
+    case refuzzExtend
+
+    /// Only run regression mode. Fails if no corpus exists.
+    /// Use when you only want to verify existing coverage.
+    case regressionOnly
+
+    /// Environment variable name for suite-level control.
+    public static let environmentVariable = "FUZZ_CORPUS_MODE"
+
+    /// Get mode from environment variable, or return default.
+    public static func fromEnvironment(default defaultMode: CorpusMode = .auto) -> CorpusMode {
+        @Dependency(\.environment) var environment
+        guard let value = environment.environment()[environmentVariable] else {
+            return defaultMode
+        }
+        return CorpusMode(rawValue: value.lowercased()) ?? defaultMode
+    }
 }
 
 // MARK: - FuzzEngine
@@ -58,6 +147,16 @@ public struct FuzzStats: Sendable {
 /// The engine runs in two modes:
 /// 1. **Fuzz mode**: Generate inputs, track coverage, build corpus
 /// 2. **Regression mode**: Replay saved corpus, verify coverage unchanged
+///
+/// ## Corpus Modes
+///
+/// Control behavior with `Config.corpusMode`:
+/// - `.auto`: Run regression if corpus exists, otherwise fuzz (default)
+/// - `.refuzzReplace`: Always fuzz fresh, replacing existing corpus
+/// - `.refuzzExtend`: Load corpus as seeds, continue fuzzing to find more
+/// - `.regressionOnly`: Only run regression, fail if no corpus
+///
+/// Set `FUZZ_CORPUS_MODE` environment variable for suite-level control.
 ///
 /// ## Algorithm
 ///
@@ -89,7 +188,13 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
         /// Maximum time to spend fuzzing.
         public var maxDuration: TimeInterval
 
-        /// Stop after this many iterations without new coverage.
+        /// Configuration for adaptive early stopping based on coverage plateau detection.
+        /// When nil, uses a simple iteration count-based approach.
+        public var plateauConfig: CoveragePlateauDetector.Config
+
+        /// Legacy: Stop after this many iterations without new coverage.
+        /// Only used when plateauConfig is disabled.
+        /// Deprecated: Use plateauConfig instead for more accurate plateau detection.
         public var plateauThreshold: Int
 
         /// Probability of generating fresh vs mutating (0.0-1.0).
@@ -106,22 +211,94 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
         /// Requires test code to be compiled with `-sanitize-coverage=trace-cmp`.
         public var enableValueProfile: Bool
 
+        /// Enable string dictionary capture to discover magic strings at runtime.
+        /// Captured strings are added to the mutation dictionary for String inputs.
+        public var enableStringCapture: Bool
+
+        /// Controls how the fuzzer handles existing corpus files.
+        /// Defaults to checking the `FUZZ_CORPUS_MODE` environment variable,
+        /// then falling back to `.auto`.
+        public var corpusMode: CorpusMode
+
+        /// Per-input execution timeout in seconds.
+        /// When set, each test execution will be terminated if it exceeds this duration.
+        /// This catches infinite loops and deadlocks.
+        /// Default: nil (no per-input timeout, only overall duration limit applies).
+        ///
+        /// Based on Miller 1990 "Fuzz" paper which used 5-minute timeouts to detect hangs.
+        public var perInputTimeout: TimeInterval?
+
+        /// Enable FairFuzz-style rare branch targeting.
+        /// When enabled, preferentially selects and mutates inputs that hit
+        /// rarely-covered branches, improving coverage uniformity.
+        ///
+        /// Based on Lemieux & Sen 2018 "FairFuzz" - achieved 10.6% more branch coverage.
+        public var enableRareBranchTargeting: Bool
+
+        /// Probability of selecting rare-branch-hitting inputs (0.0-1.0).
+        /// Higher values focus more on rare branches; lower values maintain diversity.
+        /// Default: 0.8 (80% chance of rare branch selection when available).
+        public var rareBranchSelectionProbability: Double
+
+        /// Number of mutations to test when targeting rare branches.
+        /// Higher values explore more from rare-branch seeds.
+        /// Default: 3 (test 3 mutations vs 1 normally).
+        public var rareBranchMutationAmplification: Int
+
+        /// Swarm testing configuration for mutator subset selection.
+        /// When enabled, randomly enables/disables mutation strategies per time window.
+        ///
+        /// Based on Groce et al. 2012 "Swarm Testing" - found 42% more bugs.
+        public var swarmConfig: SwarmConfig
+
+        /// Adaptive mutation scheduling configuration (MOPT-style).
+        /// When enabled, tracks which mutation strategies discover new coverage
+        /// and dynamically adjusts selection probabilities.
+        ///
+        /// Based on Lyu et al. 2019 "MOPT" - found 170% more unique crashes than AFL.
+        public var adaptiveMutationConfig: AdaptiveMutationConfig
+
         public init(
             maxIterations: Int = 10_000,
             maxDuration: TimeInterval = 60,
             plateauThreshold: Int = 1000,
+            plateauConfig: CoveragePlateauDetector.Config? = nil,
             generationRatio: Double = 0.3,
             minimizeCorpus: Bool = true,
             verbose: Bool = false,
-            enableValueProfile: Bool = true
+            enableValueProfile: Bool = true,
+            enableStringCapture: Bool = true,
+            corpusMode: CorpusMode? = nil,
+            perInputTimeout: TimeInterval? = nil,
+            enableRareBranchTargeting: Bool = false,
+            rareBranchSelectionProbability: Double = 0.8,
+            rareBranchMutationAmplification: Int = 3,
+            swarmConfig: SwarmConfig = SwarmConfig(),
+            adaptiveMutationConfig: AdaptiveMutationConfig = AdaptiveMutationConfig()
         ) {
             self.maxIterations = maxIterations
             self.maxDuration = maxDuration
             self.plateauThreshold = plateauThreshold
+            // Default plateau config based on iterations
+            self.plateauConfig = plateauConfig ?? CoveragePlateauDetector.Config(
+                windowSize: min(500, maxIterations / 10),
+                minDiscoveryRate: 0.001,
+                confirmationWindows: 3,
+                enabled: true
+            )
             self.generationRatio = generationRatio
             self.minimizeCorpus = minimizeCorpus
             self.verbose = verbose
             self.enableValueProfile = enableValueProfile
+            self.enableStringCapture = enableStringCapture
+            // Use provided mode, or check environment, or default to auto
+            self.corpusMode = corpusMode ?? CorpusMode.fromEnvironment()
+            self.perInputTimeout = perInputTimeout
+            self.enableRareBranchTargeting = enableRareBranchTargeting
+            self.rareBranchSelectionProbability = rareBranchSelectionProbability
+            self.rareBranchMutationAmplification = rareBranchMutationAmplification
+            self.swarmConfig = swarmConfig
+            self.adaptiveMutationConfig = adaptiveMutationConfig
         }
     }
 
@@ -132,6 +309,9 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
 
     /// Tracks comparison operand distances for value profile guidance.
     private let valueProfileTracker = ValueProfileTracker()
+
+    /// Captures magic strings at runtime for dictionary-based mutation.
+    private let stringDictionary = StringDictionary.shared
 
     /// Index of corpus entry that most recently made value profile progress.
     /// We prioritize mutating this entry to continue the chain of progress.
@@ -366,19 +546,78 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
     /// - Returns: The fuzz result with corpus and any failures.
     public func run(
         additionalSeeds: [(repeat each Input)] = [],
-        test: ((repeat each Input)) throws -> Void
+        test: @escaping ((repeat each Input)) throws -> Void
     ) -> FuzzResult<repeat each Input> {
-        // Check for existing corpus
-        if let directory = corpusDirectory, Corpus<repeat each Input>.exists(at: directory) {
+        // Dispatch to mode-specific handlers
+        return runWithMode(additionalSeeds: additionalSeeds, test: test)
+    }
+
+    /// Internal dispatch based on corpus mode.
+    private func runWithMode(
+        additionalSeeds: [(repeat each Input)],
+        test: @escaping ((repeat each Input)) throws -> Void
+    ) -> FuzzResult<repeat each Input> {
+        let corpusExists = corpusDirectory.map { Corpus<repeat each Input>.exists(at: $0) } ?? false
+
+        // Handle refuzzReplace: delete corpus and fuzz fresh
+        if config.corpusMode == .refuzzReplace {
+            if corpusExists, let directory = corpusDirectory {
+                if config.verbose {
+                    print("[Fuzz] Mode: refuzzReplace - deleting existing corpus")
+                }
+                try? Corpus<repeat each Input>.delete(from: directory)
+            }
+            return runFuzzing(additionalSeeds: additionalSeeds, test: test)
+        }
+
+        // Handle refuzzExtend: load corpus as seeds and continue fuzzing
+        if config.corpusMode == .refuzzExtend {
+            var allSeeds = additionalSeeds
+            if corpusExists, let directory = corpusDirectory {
+                do {
+                    let savedCorpus = try Corpus<repeat each Input>.load(from: directory)
+                    if config.verbose {
+                        print("[Fuzz] Mode: refuzzExtend - loaded \(savedCorpus.count) existing corpus entries as seeds")
+                    }
+                    // Add existing corpus entries as seeds (avoid keypath due to compiler bug)
+                    for entry in savedCorpus.entries {
+                        allSeeds.append(entry.input)
+                    }
+                } catch {
+                    if config.verbose {
+                        print("[Fuzz] Failed to load corpus for extension: \(error)")
+                    }
+                }
+            }
+            return runFuzzing(additionalSeeds: allSeeds, test: test)
+        }
+
+        // Handle regressionOnly: only run regression, return empty if no corpus
+        if config.corpusMode == .regressionOnly {
+            guard corpusExists, let directory = corpusDirectory else {
+                if config.verbose {
+                    print("[Fuzz] Mode: regressionOnly - no corpus found, nothing to regress")
+                }
+                return makeEmptyRegressionResult()
+            }
             do {
                 let savedCorpus = try Corpus<repeat each Input>.load(from: directory)
+                return runRegression(corpus: savedCorpus, test: test)
+            } catch {
+                if config.verbose {
+                    print("[Fuzz] Mode: regressionOnly - failed to load corpus: \(error)")
+                }
+                return makeEmptyRegressionResult()
+            }
+        }
 
-                // Check schema compatibility
+        // Default (auto): regression if corpus exists
+        if corpusExists, let directory = corpusDirectory {
+            do {
+                let savedCorpus = try Corpus<repeat each Input>.load(from: directory)
                 if CorpusSchema.isCompatible(savedCorpus.schemaVersion) {
-                    // Run regression mode
                     return runRegression(corpus: savedCorpus, test: test)
                 } else {
-                    // Schema changed, need to re-fuzz
                     if config.verbose {
                         print("[Fuzz] Schema changed, re-fuzzing...")
                     }
@@ -390,29 +629,76 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
             }
         }
 
-        // Run fuzz mode
         return runFuzzing(additionalSeeds: additionalSeeds, test: test)
+    }
+
+    /// Create an empty result for regression-only mode when no corpus exists.
+    private func makeEmptyRegressionResult() -> FuzzResult<repeat each Input> {
+        let emptyCorpus = Corpus<repeat each Input>(schemaVersion: CorpusSchema.currentVersion())
+        let emptyStats = FuzzStats(
+            totalInputs: 0,
+            newPaths: 0,
+            mutations: 0,
+            generations: 0,
+            duration: 0,
+            stopReason: .regression,
+            plateauStats: nil
+        )
+        return FuzzResult(
+            corpus: emptyCorpus,
+            failures: [],
+            stats: emptyStats,
+            wasRegression: true,
+            coverageChanges: []
+        )
     }
 
     // MARK: - Fuzz Mode
 
     private func runFuzzing(
         additionalSeeds: [(repeat each Input)] = [],
-        test: ((repeat each Input)) throws -> Void
+        test: @escaping ((repeat each Input)) throws -> Void
     ) -> FuzzResult<repeat each Input> {
         @Dependency(\.coverageCounters) var coverageCounters
 
         let startTime = Date()
         var corpus = Corpus<repeat each Input>(schemaVersion: CorpusSchema.currentVersion())
         var failures: [(input: (repeat each Input), error: Error)] = []
+        var hangs: [(input: (repeat each Input), timeout: TimeInterval)] = []
         var iterationsSinceNewCoverage = 0
         var totalMutations = 0
         var totalGenerations = 0
+
+        // Initialize plateau detector for adaptive early stopping
+        var plateauDetector = CoveragePlateauDetector(config: config.plateauConfig)
+
+        // Initialize rare branch tracker for FairFuzz-style targeting
+        var rareBranchTracker = config.enableRareBranchTargeting
+            ? RareBranchTracker(config: .init(enabled: true))
+            : nil
+
+        // Initialize swarm scheduler for mutator subset selection
+        var swarmScheduler = config.swarmConfig.enabled
+            ? SwarmScheduler(config: config.swarmConfig)
+            : nil
+
+        // Initialize adaptive mutation scheduler (MOPT-style)
+        var adaptiveMutationScheduler = config.adaptiveMutationConfig.enabled
+            ? AdaptiveMutationScheduler(config: config.adaptiveMutationConfig)
+            : nil
 
         // Enable value profile tracking if configured
         if config.enableValueProfile {
             valueProfileTracker.enable()
             valueProfileTracker.clearState()
+        }
+
+        // Enable string capture if configured
+        if config.enableStringCapture && stringDictionary.isAvailable {
+            stringDictionary.clear()
+            if config.verbose {
+                print("[Fuzz] String capture enabled")
+            }
         }
 
         // Phase 1: Seed with boundary values (defaults + user-provided)
@@ -428,14 +714,62 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
             // Inline coverage testing
             let before = coverageCounters.snapshot()
 
-            var testError: Error?
-            do {
-                try test(input)
-            } catch {
-                testError = error
+            // Start string capture for this test
+            if config.enableStringCapture && stringDictionary.isAvailable {
+                stringDictionary.startCapture()
             }
 
-            if let error = testError {
+            // Run test - with optional timeout if configured
+            var testError: Error?
+            var timedOut = false
+
+            if let perTimeout = config.perInputTimeout {
+                // With timeout - use DispatchSemaphore for synchronization
+                let semaphore = DispatchSemaphore(value: 0)
+                let lock = NSLock()
+                nonisolated(unsafe) var capturedError: Error?
+
+                DispatchQueue.global(qos: .userInitiated).async {
+                    do {
+                        try test(input)
+                    } catch {
+                        lock.lock()
+                        capturedError = error
+                        lock.unlock()
+                    }
+                    semaphore.signal()
+                }
+
+                let waitResult = semaphore.wait(timeout: .now() + perTimeout)
+                if waitResult == .timedOut {
+                    timedOut = true
+                } else {
+                    lock.lock()
+                    testError = capturedError
+                    lock.unlock()
+                }
+            } else {
+                // No timeout - run directly
+                do {
+                    try test(input)
+                } catch {
+                    testError = error
+                }
+            }
+
+            // Stop string capture and accumulate
+            if config.enableStringCapture && stringDictionary.isAvailable {
+                stringDictionary.stopCapture()
+            }
+
+            // Handle test result
+            if timedOut {
+                let timeout = config.perInputTimeout ?? 0
+                hangs.append((input, timeout))
+                if config.verbose {
+                    print("[Fuzz] Hang detected in seed: input timed out after \(timeout)s")
+                }
+            } else if let error = testError {
                 failures.append((input, error))
             }
 
@@ -451,6 +785,17 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
                     iterationsSinceNewCoverage = 0
                     if config.verbose {
                         print("[Fuzz] New coverage from seed: \(corpus.count) entries")
+                    }
+                    // CRITICAL: Even when we found new coverage, check for VP targets to continue the chain.
+                    if config.enableValueProfile && !vpImprovements.isEmpty {
+                        let newTargets = valueProfileTracker.extractTargets()
+                        if !newTargets.isEmpty {
+                            priorityMutationIndex = corpus.count - 1
+                            savedTargets = newTargets
+                            if config.verbose {
+                                print("[Fuzz] Coverage + VP chain from seed: \(newTargets.count) target(s)")
+                            }
+                        }
                     }
                 } else if !vpImprovements.isEmpty {
                     // Input made progress on comparisons (new comparison or closer distance)
@@ -471,25 +816,51 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
 
         // Phase 2: Coverage-guided fuzzing
         var iteration = seedInputs.count
+        var stopReason: FuzzStats.StopReason = .iterationLimit
+
         while iteration < config.maxIterations {
             // Check stopping conditions
             if Date().timeIntervalSince(startTime) >= config.maxDuration {
                 if config.verbose {
-                    print("[Fuzz] Time limit reached")
+                    print("[Fuzz] Time limit reached after \(iteration) iterations")
                 }
+                stopReason = .timeLimit
                 break
             }
 
-            if iterationsSinceNewCoverage >= config.plateauThreshold {
+            // Adaptive plateau detection (primary)
+            if plateauDetector.hasPlateaued {
                 if config.verbose {
-                    print("[Fuzz] Coverage plateau reached")
+                    print("[Fuzz] Coverage plateau detected: \(plateauDetector.summary(includeDetails: true))")
+                    print("[Fuzz] Stopping early at iteration \(iteration) (saved \(config.maxIterations - iteration) iterations)")
                 }
+                stopReason = .coveragePlateau
                 break
+            }
+
+            // Legacy plateau threshold (fallback when detector disabled)
+            if !config.plateauConfig.enabled && iterationsSinceNewCoverage >= config.plateauThreshold {
+                if config.verbose {
+                    print("[Fuzz] Coverage plateau reached (legacy threshold)")
+                }
+                stopReason = .legacyPlateau
+                break
+            }
+
+            // Update swarm configuration if window elapsed
+            if let scheduler = swarmScheduler {
+                var mutableScheduler = scheduler
+                let changed = mutableScheduler.updateConfiguration()
+                swarmScheduler = mutableScheduler
+                if changed && config.verbose {
+                    print("[Fuzz] Swarm: new configuration \(mutableScheduler.summary())")
+                }
             }
 
             // Decide: generate fresh or mutate?
             let input: (repeat each Input)
             let parentIndex: Int?
+            var usedStrategy: MutationStrategy?
 
             if corpus.isEmpty || Double.random(in: 0..<1) < config.generationRatio {
                 // Generate fresh input
@@ -501,15 +872,27 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
                 input = fuzzValue
                 parentIndex = nil
                 totalGenerations += 1
+                usedStrategy = .freshGeneration  // Track as fresh generation for adaptive scheduler
             } else {
                 // Mutate existing corpus entry
                 // Safe: we only enter this branch when !corpus.isEmpty
                 // Prioritize entries that made recent value profile progress
                 let selectedIndex: Int
                 let usingPriority: Bool
+
                 if let priorityIdx = priorityMutationIndex, priorityIdx < corpus.count {
                     selectedIndex = priorityIdx
                     usingPriority = true
+                } else if let tracker = rareBranchTracker,
+                          config.enableRareBranchTargeting,
+                          !tracker.rareIndices.isEmpty {
+                    // FairFuzz mode: prefer rare-branch-hitting entries
+                    let rareIndices = tracker.rareIndices
+                    selectedIndex = corpus.selectForMutation(
+                        preferring: rareIndices,
+                        probability: config.rareBranchSelectionProbability
+                    )!
+                    usingPriority = false
                 } else {
                     selectedIndex = corpus.selectForMutation()!
                     usingPriority = false
@@ -560,17 +943,65 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
             // Run test with inline coverage tracking
             let before = coverageCounters.snapshot()
 
+            // Start string capture for this test
+            if config.enableStringCapture && stringDictionary.isAvailable {
+                stringDictionary.startCapture()
+            }
+
+            // Run test - with optional timeout if configured
             var testError: Error?
-            do {
-                try test(input)
-            } catch {
-                testError = error
+            var timedOut = false
+
+            if let perTimeout = config.perInputTimeout {
+                // With timeout - use DispatchSemaphore for synchronization
+                let semaphore = DispatchSemaphore(value: 0)
+                let lock = NSLock()
+                nonisolated(unsafe) var capturedError: Error?
+
+                DispatchQueue.global(qos: .userInitiated).async {
+                    do {
+                        try test(input)
+                    } catch {
+                        lock.lock()
+                        capturedError = error
+                        lock.unlock()
+                    }
+                    semaphore.signal()
+                }
+
+                let waitResult = semaphore.wait(timeout: .now() + perTimeout)
+                if waitResult == .timedOut {
+                    timedOut = true
+                } else {
+                    lock.lock()
+                    testError = capturedError
+                    lock.unlock()
+                }
+            } else {
+                // No timeout - run directly
+                do {
+                    try test(input)
+                } catch {
+                    testError = error
+                }
+            }
+
+            // Stop string capture and accumulate
+            if config.enableStringCapture && stringDictionary.isAvailable {
+                stringDictionary.stopCapture()
             }
 
             iteration += 1
             iterationsSinceNewCoverage += 1
 
-            if let error = testError {
+            // Handle test result
+            if timedOut {
+                let timeout = config.perInputTimeout ?? 0
+                hangs.append((input, timeout))
+                if config.verbose {
+                    print("[Fuzz] Hang detected: input timed out after \(timeout)s, iteration \(iteration)")
+                }
+            } else if let error = testError {
                 failures.append((input, error))
             }
 
@@ -582,15 +1013,54 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
                 let signature = CoverageSignature(diff: diff)
                 let addedForCoverage = corpus.addIfInteresting(input: repeat each input, signature: signature, parentIndex: parentIndex)
 
+                // Record discovery status for plateau detection
+                let discoveredNew = addedForCoverage || !vpImprovements.isEmpty
+                plateauDetector.record(discoveredNewCoverage: discoveredNew)
+
+                // Record strategy effectiveness for adaptive mutation scheduler
+                if let strategy = usedStrategy, var scheduler = adaptiveMutationScheduler {
+                    scheduler.recordAttempt(strategy, discoveredNewCoverage: discoveredNew)
+                    adaptiveMutationScheduler = scheduler
+                }
+
+                // Update rare branch tracker when new entry is added
+                if addedForCoverage {
+                    rareBranchTracker?.recordEntry(signature)
+                    // Periodically recompute threshold (every 50 new entries)
+                    if corpus.count % 50 == 0 {
+                        rareBranchTracker?.recomputeThreshold()
+                    }
+
+                    // Track swarm coverage hit
+                    swarmScheduler?.recordCoverageHit()
+                }
+
                 if addedForCoverage {
                     iterationsSinceNewCoverage = 0
                     if config.verbose {
-                        print("[Fuzz] New coverage! \(corpus.count) entries, iteration \(iteration)")
+                        let rareInfo = rareBranchTracker.map { " (\($0.summary()))" } ?? ""
+                        let swarmInfo = swarmScheduler.map { " \($0.summary())" } ?? ""
+                        print("[Fuzz] New coverage! \(corpus.count) entries, iteration \(iteration)\(rareInfo)\(swarmInfo)")
+                    }
+                    // CRITICAL: Even when we found new coverage, check for VP targets to continue the chain.
+                    // This handles cases like: a==111 passes (new branch!) revealing b==222 (new comparison).
+                    // We need to follow up on b==222 even though we already added for coverage.
+                    if config.enableValueProfile && !vpImprovements.isEmpty {
+                        let newTargets = valueProfileTracker.extractTargets()
+                        if !newTargets.isEmpty {
+                            // The corpus entry was just added at addIfInteresting, point to it
+                            priorityMutationIndex = corpus.count - 1
+                            savedTargets = newTargets
+                            if config.verbose {
+                                print("[Fuzz] Coverage + VP chain: \(newTargets.count) target(s) to follow")
+                            }
+                        }
                     }
                 } else if !vpImprovements.isEmpty {
                     // Input made progress on comparisons (new comparison or closer distance)
                     // Always add to corpus to preserve incremental progress
                     corpus.add(input: repeat each input, signature: signature, parentIndex: parentIndex)
+                    rareBranchTracker?.recordEntry(signature)
                     priorityMutationIndex = corpus.count - 1  // Prioritize this entry next
                     savedTargets = valueProfileTracker.extractTargets()  // Save targets for follow-up
                     iterationsSinceNewCoverage = 0
@@ -598,6 +1068,9 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
                         print("[Fuzz] Value profile progress: \(vpImprovements.count) comparison(s), \(savedTargets.count) target(s), iteration \(iteration)")
                     }
                 }
+            } else {
+                // No coverage counters available - still record for plateau detection
+                plateauDetector.record(discoveredNewCoverage: false)
             }
         }
 
@@ -607,6 +1080,36 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
             if config.verbose {
                 let (tracked, solved) = valueProfileTracker.stats()
                 print("[Fuzz] Value profile: \(tracked) comparisons tracked, \(solved) solved")
+            }
+        }
+
+        // Report string dictionary stats
+        if config.enableStringCapture && stringDictionary.isAvailable && config.verbose {
+            print("[Fuzz] String dictionary: \(stringDictionary.count) unique strings captured")
+        }
+
+        // Report rare branch stats
+        if config.enableRareBranchTargeting, let tracker = rareBranchTracker {
+            // Final recomputation for accurate stats
+            var finalTracker = tracker
+            finalTracker.update(from: corpus.signatures)
+            if config.verbose {
+                let stats = finalTracker.stats
+                print("[Fuzz] Rare branch targeting: \(stats.rareBranches)/\(stats.totalBranches) rare (threshold: \(stats.threshold))")
+            }
+        }
+
+        // Report swarm testing stats
+        if config.swarmConfig.enabled, let scheduler = swarmScheduler {
+            if config.verbose {
+                print("[Fuzz] \(scheduler.stats.report())")
+            }
+        }
+
+        // Report adaptive mutation scheduler stats
+        if config.adaptiveMutationConfig.enabled, let scheduler = adaptiveMutationScheduler {
+            if config.verbose {
+                print("[Fuzz] \(scheduler.stats.report())")
             }
         }
 
@@ -634,12 +1137,29 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
         }
 
         let duration = Date().timeIntervalSince(startTime)
+
+        // Report plateau detector statistics if verbose
+        if config.verbose && config.plateauConfig.enabled {
+            let pStats = plateauDetector.stats
+            print("[Fuzz] Plateau detector: \(pStats.totalDiscoveries) discoveries in \(pStats.totalIterations) iterations")
+            print("[Fuzz] Discovery rate: \(String(format: "%.4f", pStats.overallRate)) overall, \(String(format: "%.4f", pStats.windowRate)) recent")
+        }
+
+        // Report hang statistics if any were detected
+        if !hangs.isEmpty && config.verbose {
+            print("[Fuzz] Hang statistics: \(hangs.count) inputs caused timeouts")
+        }
+
         let stats = FuzzStats(
             totalInputs: iteration,
             newPaths: finalCorpus.count,
             mutations: totalMutations,
             generations: totalGenerations,
-            duration: duration
+            duration: duration,
+            stopReason: stopReason,
+            plateauStats: config.plateauConfig.enabled ? plateauDetector.stats : nil,
+            failures: failures.count,
+            hangs: hangs.count
         )
 
         return FuzzResult(
@@ -655,7 +1175,7 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
 
     private func runRegression(
         corpus: Corpus<repeat each Input>,
-        test: ((repeat each Input)) throws -> Void
+        test: @escaping ((repeat each Input)) throws -> Void
     ) -> FuzzResult<repeat each Input> {
         @Dependency(\.coverageCounters) var coverageCounters
 
@@ -715,7 +1235,9 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
             newPaths: 0,
             mutations: 0,
             generations: 0,
-            duration: duration
+            duration: duration,
+            stopReason: .regression,
+            plateauStats: nil
         )
 
         return FuzzResult(
@@ -790,6 +1312,11 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
 
         // Strategy 3: Arithmetic relationship mutations for (Int, Int) pairs
         results.append(contentsOf: arithmeticRelationshipMutations(input))
+
+        // Strategy 4: Dictionary-based string mutations
+        if config.enableStringCapture && stringDictionary.count > 0 {
+            results.append(contentsOf: stringDictionaryMutations(input))
+        }
 
         return results
     }
@@ -876,6 +1403,56 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
         return results
     }
 
+    /// Mutate using a specific strategy selected by the adaptive mutation scheduler.
+    ///
+    /// - Parameters:
+    ///   - input: The input to mutate.
+    ///   - strategy: The strategy to use for mutation.
+    /// - Returns: Array of mutated inputs.
+    private func mutateWithStrategy(_ input: (repeat each Input), strategy: MutationStrategy) -> [(repeat each Input)] {
+        switch strategy {
+        case .singleComponent:
+            return singleComponentMutations(input)
+        case .multiComponent:
+            return multiComponentMutations(input)
+        case .arithmetic:
+            return arithmeticRelationshipMutations(input)
+        case .stringDictionary:
+            return stringDictionaryMutations(input)
+        case .valueProfileDirected:
+            // Value profile mutations need targets, so return empty if not available
+            return []
+        case .customMutator:
+            // Use custom mutator if provided
+            return mutatorMutate?(input) ?? []
+        case .freshGeneration:
+            // Generate fresh values
+            let fuzzValues = mutatorSeeds?() ?? cartesianProductFuzz()
+            return fuzzValues
+        }
+    }
+
+    /// Generate single-component mutations (mutate one input field at a time).
+    private func singleComponentMutations(_ input: (repeat each Input)) -> [(repeat each Input)] {
+        var results: [(repeat each Input)] = []
+        var componentIndex = 0
+
+        func tryMutate<U: Fuzzable>(_ value: U, atIndex index: Int) {
+            let mutations = value.mutate()
+            for mutated in mutations {
+                if let newTuple = createMutatedTuple(input, mutating: index, with: mutated) {
+                    results.append(newTuple)
+                }
+            }
+            componentIndex += 1
+        }
+
+        componentIndex = 0
+        (repeat tryMutate(each input, atIndex: componentIndex))
+
+        return results
+    }
+
     /// Generate derived values based on common arithmetic relationships.
     private func arithmeticDerivations(from value: Int) -> [Int] {
         var derived: [Int] = []
@@ -902,6 +1479,66 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
         if value != Int.min { derived.append(value - 1) }
 
         return Array(Set(derived)) // Deduplicate
+    }
+
+    /// Generate mutations using strings captured from the string dictionary.
+    /// This helps crack magic string comparisons by using actual strings seen at runtime.
+    private func stringDictionaryMutations(_ input: (repeat each Input)) -> [(repeat each Input)] {
+        var results: [(repeat each Input)] = []
+
+        // Find String components and their indices
+        var stringComponents: [(index: Int, value: String)] = []
+        var componentIdx = 0
+
+        func findStrings<V>(_ value: V) {
+            if let strVal = value as? String {
+                stringComponents.append((componentIdx, strVal))
+            }
+            componentIdx += 1
+        }
+        (repeat findStrings(each input))
+
+        guard !stringComponents.isEmpty else { return [] }
+
+        // Get candidate strings from the dictionary
+        let candidates = stringDictionary.mutationCandidates
+
+        // For each String component, try substituting dictionary strings
+        for (stringIndex, currentValue) in stringComponents {
+            // Try direct substitutions
+            for candidate in candidates.prefix(20) { // Limit to avoid explosion
+                if candidate != currentValue {
+                    if let newTuple = createMutatedTuple(input, mutating: stringIndex, with: candidate) {
+                        results.append(newTuple)
+                    }
+                }
+            }
+
+            // Try related strings (similar prefix)
+            let related = stringDictionary.relatedStrings(to: currentValue)
+            for relatedStr in related.prefix(10) {
+                if let newTuple = createMutatedTuple(input, mutating: stringIndex, with: relatedStr) {
+                    results.append(newTuple)
+                }
+            }
+
+            // Try combining current value with dictionary strings
+            for candidate in candidates.prefix(5) {
+                // Prefix combination
+                let prefixed = candidate + currentValue
+                if let newTuple = createMutatedTuple(input, mutating: stringIndex, with: prefixed) {
+                    results.append(newTuple)
+                }
+
+                // Suffix combination
+                let suffixed = currentValue + candidate
+                if let newTuple = createMutatedTuple(input, mutating: stringIndex, with: suffixed) {
+                    results.append(newTuple)
+                }
+            }
+        }
+
+        return results
     }
 
     /// Generate mutations that target specific comparison values discovered by value profiling.
@@ -932,7 +1569,9 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
 
         guard !intComponents.isEmpty else { return [] }
 
-        // For each target, generate mutations at each Int position
+        // For each target, generate mutations only at positions matching the observed input value.
+        // This preserves positions that have already been solved (e.g., if a==111 is solved,
+        // don't mutate position 0 when trying to solve b==222).
         for target in targets {
             // Strategy 1: Binary search mutations (try target directly)
             let binaryMutations = target.binarySearchMutations()
@@ -942,7 +1581,15 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
 
             let allSingleMutations = binaryMutations + moduloMutations
 
-            for (intIndex, _) in intComponents {
+            // Only mutate positions where current value matches target.current
+            // This ensures we don't clobber already-solved constraints
+            let currentInt = Int(exactly: target.current) ?? Int(bitPattern: UInt(truncatingIfNeeded: target.current))
+            let candidatePositions = intComponents.filter { $0.value == currentInt }
+
+            // If no exact match, fall back to all positions (for initial exploration)
+            let positionsToMutate = candidatePositions.isEmpty ? intComponents : candidatePositions
+
+            for (intIndex, _) in positionsToMutate {
                 for mutation in allSingleMutations {
                     if let newTuple = createMutatedTuple(input, mutating: intIndex, with: mutation) {
                         results.append(newTuple)

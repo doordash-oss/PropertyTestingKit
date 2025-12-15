@@ -91,6 +91,48 @@ Tests/
 
 Commit the `Corpus/` directory to version control for deterministic CI runs.
 
+### Corpus Modes
+
+Control how the fuzzer interacts with saved corpora:
+
+| Mode | Behavior |
+|------|----------|
+| `.auto` | Run regression if corpus exists, otherwise fuzz (default) |
+| `.refuzzReplace` | Always fuzz fresh, replacing existing corpus |
+| `.refuzzExtend` | Load corpus as seeds, continue fuzzing to find more |
+| `.regressionOnly` | Only run regression, skip tests with no corpus |
+
+**Per-test control:**
+
+```swift
+@Test func testParser() throws {
+    // Force re-fuzzing even if corpus exists
+    try fuzz(corpusMode: .refuzzReplace) { (input: String) in
+        parse(input)
+    }
+}
+
+@Test func testExtendCorpus() throws {
+    // Build on existing corpus
+    try fuzz(corpusMode: .refuzzExtend, iterations: 50_000) { (input: String) in
+        parse(input)
+    }
+}
+```
+
+**Suite-level control via environment:**
+
+```bash
+# Re-fuzz all tests, replacing existing corpora
+FUZZ_CORPUS_MODE=refuzzreplace swift test
+
+# Extend existing corpora with more fuzzing
+FUZZ_CORPUS_MODE=refuzzextend FUZZ_ITERATIONS=50000 swift test
+
+# CI mode: only run regression tests (fast, deterministic)
+FUZZ_CORPUS_MODE=regressiononly swift test
+```
+
 ### Custom Seeds
 
 Provide domain-specific seeds to guide the fuzzer toward edge cases:
@@ -223,6 +265,7 @@ Environment variables:
 - `FUZZ_VERBOSE=1` - Enable detailed logging
 - `FUZZ_ITERATIONS=N` - Override max iterations
 - `FUZZ_DURATION=N` - Override max duration
+- `FUZZ_CORPUS_MODE=<mode>` - Control corpus behavior (see [Corpus Modes](#corpus-modes))
 
 ### Building with Coverage
 
@@ -336,7 +379,8 @@ let (_, fullCoverage) = try measureSourceCoverage(includeAllFiles: true) {
 
 | Function | Description |
 |----------|-------------|
-| `fuzz(seeds:iterations:duration:test:)` | Coverage-guided fuzz testing |
+| `fuzz(seeds:iterations:duration:corpusMode:test:)` | Coverage-guided fuzz testing |
+| `fuzz(using:seeds:iterations:duration:corpusMode:test:)` | Fuzz testing with custom mutators |
 
 ### Fuzzing Types
 
@@ -345,6 +389,7 @@ let (_, fullCoverage) = try measureSourceCoverage(includeAllFiles: true) {
 | `Fuzzable` | Protocol for types that can be fuzzed |
 | `FuzzResult` | Result of a fuzz run with corpus and stats |
 | `Corpus` | Collection of interesting inputs with coverage signatures |
+| `CorpusMode` | Controls corpus behavior (`.auto`, `.refuzzReplace`, `.refuzzExtend`, `.regressionOnly`) |
 
 ### Coverage Measurement
 

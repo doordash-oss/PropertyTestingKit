@@ -36,6 +36,13 @@ let package = Package(
             publicHeadersPath: "include"
         ),
 
+        // C module for string allocation hooks (fishhook-based)
+        .target(
+            name: "StringAllocationHooks",
+            path: "Sources/StringAllocationHooks",
+            publicHeadersPath: "include"
+        ),
+
         // C++ wrapper for LLVM coverage APIs
         .target(
             name: "LLVMCoverageInterop",
@@ -61,6 +68,7 @@ let package = Package(
                 "PropertyTestingKitInternals",
                 "LLVMCoverageInterop",
                 "ValueProfileHooks",
+                "StringAllocationHooks",
                 .product(name: "Dependencies", package: "swift-dependencies"),
             ],
             swiftSettings: [

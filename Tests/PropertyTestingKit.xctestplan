@@ -1,0 +1,31 @@
+{
+  "configurations" : [
+    {
+      "id" : "F0A527AD-33BC-4947-AC10-550C5B6C8DE1",
+      "name" : "Test Scheme Action",
+      "options" : {
+
+      }
+    }
+  ],
+  "defaultOptions" : {
+    "performanceAntipatternCheckerEnabled" : true
+  },
+  "testTargets" : [
+    {
+      "target" : {
+        "containerPath" : "container:",
+        "identifier" : "StressTests",
+        "name" : "StressTests"
+      }
+    },
+    {
+      "target" : {
+        "containerPath" : "container:",
+        "identifier" : "PropertyTestingKitTests",
+        "name" : "PropertyTestingKitTests"
+      }
+    }
+  ],
+  "version" : 1
+}
