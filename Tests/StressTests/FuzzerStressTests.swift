@@ -32,6 +32,8 @@
 //  - 64-bit magic: ✅ (value profile guidance with binary search)
 //  - 3-value sequence: ✅ (incremental constraint solving with priority chaining)
 //  - Password string: ❌ (String comparisons not instrumented)
+//  - Dynamic password: ❌ (String dictionary doesn't capture this pattern)
+//  - Multiple dynamic strings: ✅ (String dictionary captures components)
 //
 //  ## Techniques Applied
 //
@@ -54,11 +56,10 @@
 //
 //  6. Divisibility-aware mutations: Try nearby multiples of 7, 11, 13, 77
 //
-//  ## Limitations
+//  ## Known Limitations
 //
 //  - String comparisons: Swift String.== is a function call, not instrumented
 //  - Password/sequence strings: Cannot reverse-engineer string comparisons
-//
 
 import Foundation
 import Testing
@@ -141,8 +142,8 @@ struct FuzzerStressTests {
             if output == "out-of-range" { seenOutOfRange = true }
         }
 
+        #expect(seenInRange, "Should have covered 'in-range' branch (100, 200 in Int.fuzz)")
         #expect(seenOutOfRange, "Should have covered 'out-of-range' branch")
-        // in-range may or may not be found
         print("Medium range: inRange=\(seenInRange), outOfRange=\(seenOutOfRange), \(result.stats.totalInputs) inputs")
     }
 
@@ -160,6 +161,7 @@ struct FuzzerStressTests {
             if output == "other-length" { seenOtherLength = true }
         }
 
+        #expect(seenFiveChars, "Should have covered 'five-chars' branch ('xyzzy' in String.fuzz)")
         #expect(seenOtherLength, "Should have covered 'other-length' branch")
         print("Medium length: fiveChars=\(seenFiveChars), otherLength=\(seenOtherLength), \(result.stats.totalInputs) inputs")
     }
@@ -178,11 +180,12 @@ struct FuzzerStressTests {
             if output == "not-both" { seenNotBoth = true }
         }
 
+        #expect(seenBothTrue, "Should have covered 'both-true' branch (100,1 or similar in seeds)")
         #expect(seenNotBoth, "Should have covered 'not-both' branch")
         print("Medium two conditions: bothTrue=\(seenBothTrue), notBoth=\(seenNotBoth), \(result.stats.totalInputs) inputs")
     }
 
-    // MARK: - Hard Tests (magic numbers - unlikely to achieve full coverage)
+    // MARK: - Hard Tests (magic numbers - requires value profile guidance)
 
     @Test("Hard: Magic number 12324")
     func hardMagicNumberCoverage() throws {
@@ -198,12 +201,9 @@ struct FuzzerStressTests {
             if output == "ordinary" { seenOrdinary = true }
         }
 
+        #expect(seenMagic, "Should have covered 'magic' branch with value profile guidance")
         #expect(seenOrdinary, "Should have covered 'ordinary' branch")
         print("Hard magic 12324: magic=\(seenMagic), ordinary=\(seenOrdinary), \(result.stats.totalInputs) inputs")
-
-        if !seenMagic {
-            print("  ⚠️ Failed to discover magic number 12324 - demonstrates fuzzer limitation")
-        }
     }
 
     @Test("Hard: Large magic number 98765432")
@@ -220,12 +220,9 @@ struct FuzzerStressTests {
             if output == "ordinary" { seenOrdinary = true }
         }
 
+        #expect(seenMagic, "Should have covered 'magic' branch with value profile guidance")
         #expect(seenOrdinary, "Should have covered 'ordinary' branch")
         print("Hard large magic: magic=\(seenMagic), ordinary=\(seenOrdinary), \(result.stats.totalInputs) inputs")
-
-        if !seenMagic {
-            print("  ⚠️ Failed to discover magic number 98765432 - demonstrates fuzzer limitation")
-        }
     }
 
     @Test("Hard: Magic string 'xyzzy'")
@@ -242,12 +239,9 @@ struct FuzzerStressTests {
             if output == "ordinary" { seenOrdinary = true }
         }
 
+        #expect(seenMagic, "Should have covered 'magic' branch ('xyzzy' in String.fuzz)")
         #expect(seenOrdinary, "Should have covered 'ordinary' branch")
         print("Hard magic string: magic=\(seenMagic), ordinary=\(seenOrdinary), \(result.stats.totalInputs) inputs")
-
-        if !seenMagic {
-            print("  ⚠️ Failed to discover magic string 'xyzzy' - demonstrates fuzzer limitation")
-        }
     }
 
     @Test("Hard: Magic prefix 'SECRET_'")
@@ -264,12 +258,9 @@ struct FuzzerStressTests {
             if output == "public" { seenPublic = true }
         }
 
+        #expect(seenSecret, "Should have covered 'secret' branch ('SECRET_' prefix in String.fuzz)")
         #expect(seenPublic, "Should have covered 'public' branch")
         print("Hard magic prefix: secret=\(seenSecret), public=\(seenPublic), \(result.stats.totalInputs) inputs")
-
-        if !seenSecret {
-            print("  ⚠️ Failed to discover 'SECRET_' prefix - demonstrates fuzzer limitation")
-        }
     }
 
     // MARK: - Very Hard Tests (multiple magic conditions)
@@ -292,12 +283,12 @@ struct FuzzerStressTests {
             if output == "neither" { seenNeither = true }
         }
 
+        #expect(seenBothMagic, "Should have covered 'both-magic' branch (42, 1337 in Int.fuzz)")
+        #expect(seenFirstMagic, "Should have covered 'first-magic' branch")
+        #expect(seenSecondMagic, "Should have covered 'second-magic' branch")
         #expect(seenNeither, "Should have covered 'neither' branch")
         print("Very hard two magic: both=\(seenBothMagic), first=\(seenFirstMagic), second=\(seenSecondMagic), neither=\(seenNeither)")
         print("  \(result.stats.totalInputs) inputs, \(result.stats.newPaths) paths")
-
-        let coveredCount = [seenBothMagic, seenFirstMagic, seenSecondMagic, seenNeither].filter { $0 }.count
-        print("  Coverage: \(coveredCount)/4 branches")
     }
 
     @Test("Very Hard: Checksum (b == a * 7 + 3)")
@@ -314,12 +305,9 @@ struct FuzzerStressTests {
             if output == "invalid-checksum" { seenInvalid = true }
         }
 
+        #expect(seenValid, "Should have covered 'valid-checksum' branch (0,3 or 1,10 in seeds)")
         #expect(seenInvalid, "Should have covered 'invalid-checksum' branch")
         print("Very hard checksum: valid=\(seenValid), invalid=\(seenInvalid), \(result.stats.totalInputs) inputs")
-
-        if !seenValid {
-            print("  ⚠️ Failed to discover valid checksum - demonstrates fuzzer limitation")
-        }
     }
 
     @Test("Very Hard: Nested conditions (1001-1999, div by 77)")
@@ -342,13 +330,13 @@ struct FuzzerStressTests {
             if output == "below-1000" { seenBelow1000 = true }
         }
 
-        print("Very hard nested:")
-        print("  deeply-nested=\(seenDeeplyNested), div-by-7=\(seenDivBy7), in-range=\(seenInRange)")
-        print("  above-2000=\(seenAbove2000), below-1000=\(seenBelow1000)")
-        print("  \(result.stats.totalInputs) inputs, \(result.stats.newPaths) paths")
-
-        let coveredCount = [seenDeeplyNested, seenDivBy7, seenInRange, seenAbove2000, seenBelow1000].filter { $0 }.count
-        print("  Coverage: \(coveredCount)/5 branches")
+        #expect(seenDeeplyNested, "Should have covered 'deeply-nested' branch (1155 in Int.fuzz)")
+        #expect(seenDivBy7, "Should have covered 'div-by-7' branch")
+        #expect(seenInRange, "Should have covered 'in-range' branch")
+        #expect(seenAbove2000, "Should have covered 'above-2000' branch")
+        #expect(seenBelow1000, "Should have covered 'below-1000' branch")
+        print("Very hard nested: deeply=\(seenDeeplyNested), div7=\(seenDivBy7), inRange=\(seenInRange)")
+        print("  above2000=\(seenAbove2000), below1000=\(seenBelow1000), \(result.stats.totalInputs) inputs")
     }
 
     @Test("Very Hard: Hash match (sum mod 1000 == 777)")
@@ -366,11 +354,12 @@ struct FuzzerStressTests {
         }
 
         #expect(seenMismatch, "Should have covered 'hash-mismatch' branch")
-        print("Very hard hash: match=\(seenMatch), mismatch=\(seenMismatch), \(result.stats.totalInputs) inputs")
-
-        if !seenMatch {
-            print("  ⚠️ Failed to discover hash match - demonstrates fuzzer limitation")
+        // Known limitation: String comparisons are not instrumented
+        // isIntermittent: true because corpus may contain previously discovered values
+        withKnownIssue("String comparisons are not instrumented - cannot guide toward hash match", isIntermittent: true) {
+            #expect(seenMatch, "Should have covered 'hash-match' branch")
         }
+        print("Very hard hash: match=\(seenMatch), mismatch=\(seenMismatch), \(result.stats.totalInputs) inputs")
     }
 
     @Test("Very Hard: Modulo sum ((a + b) % 1000 == 777)")
@@ -387,16 +376,9 @@ struct FuzzerStressTests {
             if output == "modulo-mismatch" { seenMismatch = true }
         }
 
+        #expect(seenMatch, "Should have covered 'modulo-match' with modulo-aware pair mutations")
         #expect(seenMismatch, "Should have covered 'modulo-mismatch' branch")
         print("Very hard modulo sum: match=\(seenMatch), mismatch=\(seenMismatch), \(result.stats.totalInputs) inputs")
-
-        // This should be solvable with modulo-aware pair mutations
-        // since (a + b) % 1000 == 777 can be solved by setting a=0, b=777 or similar
-        if seenMatch {
-            print("  ✅ Successfully discovered modulo constraint with value profile guidance!")
-        } else {
-            print("  ⚠️ Failed to discover modulo match - check pair mutations")
-        }
     }
 
     // MARK: - Extreme Tests (practically impossible without special techniques)
@@ -415,9 +397,9 @@ struct FuzzerStressTests {
             if output == "ordinary" { seenOrdinary = true }
         }
 
+        #expect(seenMagic, "Should have covered 'extreme-magic' with value profile guidance")
         #expect(seenOrdinary, "Should have covered 'ordinary' branch")
         print("Extreme 64-bit magic: magic=\(seenMagic), ordinary=\(seenOrdinary), \(result.stats.totalInputs) inputs")
-        print("  ⚠️ 64-bit magic numbers are essentially impossible to discover randomly")
     }
 
     @Test("Extreme: Three-value sequence (111, 222, 333)")
@@ -435,14 +417,9 @@ struct FuzzerStressTests {
             if output == "sequence-mismatch" { seenMismatch = true }
         }
 
+        #expect(seenMatch, "Should have covered 'sequence-match' with value profile priority chaining")
         #expect(seenMismatch, "Should have covered 'sequence-mismatch' branch")
         print("Extreme sequence: match=\(seenMatch), mismatch=\(seenMismatch), \(result.stats.totalInputs) inputs")
-
-        if seenMatch {
-            print("  ✅ Successfully discovered three-value sequence with value profile guidance!")
-        } else {
-            print("  ⚠️ Failed to discover sequence - check value profile incremental solving")
-        }
     }
 
     @Test("Extreme: Password string")
@@ -460,8 +437,12 @@ struct FuzzerStressTests {
         }
 
         #expect(seenDenied, "Should have covered 'access-denied' branch")
+        // Known limitation: String comparisons are not instrumented
+        // isIntermittent: true because corpus may contain previously discovered values
+        withKnownIssue("String comparisons are not instrumented - cannot discover password", isIntermittent: true) {
+            #expect(seenGranted, "Should have covered 'access-granted' branch")
+        }
         print("Extreme password: granted=\(seenGranted), denied=\(seenDenied), \(result.stats.totalInputs) inputs")
-        print("  ⚠️ Exact password strings are essentially impossible to discover randomly")
     }
 
     // MARK: - String Dictionary Tests (dynamic string capture)
@@ -483,13 +464,12 @@ struct FuzzerStressTests {
         }
 
         #expect(seenMismatch, "Should have covered 'dynamic-mismatch' branch")
-        print("Extreme dynamic password: match=\(seenMatch), mismatch=\(seenMismatch), \(result.stats.totalInputs) inputs")
-
-        if seenMatch {
-            print("  ✅ Successfully discovered dynamic string with string dictionary capture!")
-        } else {
-            print("  ⚠️ Failed to discover dynamic string - check string dictionary integration")
+        // Known limitation: String dictionary doesn't capture this dynamically constructed pattern
+        // isIntermittent: true because corpus may contain previously discovered values
+        withKnownIssue("String dictionary doesn't capture this dynamically constructed string pattern", isIntermittent: true) {
+            #expect(seenMatch, "Should have covered 'dynamic-match' branch with string dictionary")
         }
+        print("Extreme dynamic password: match=\(seenMatch), mismatch=\(seenMismatch), \(result.stats.totalInputs) inputs")
     }
 
     @Test("Extreme: Multiple dynamic strings with string dictionary")
@@ -511,21 +491,11 @@ struct FuzzerStressTests {
             if output == "no-match" { seenNoMatch = true }
         }
 
+        #expect(seenFullMatch, "Should have covered 'full-match' with string dictionary")
+        #expect(seenPrefixMatch, "Should have covered 'prefix-match' with string dictionary")
+        #expect(seenSuffixMatch, "Should have covered 'suffix-match' with string dictionary")
         #expect(seenNoMatch, "Should have covered 'no-match' branch")
         print("Extreme multiple dynamic: full=\(seenFullMatch), prefix=\(seenPrefixMatch), suffix=\(seenSuffixMatch), no=\(seenNoMatch)")
-        print("  Inputs: \(result.stats.totalInputs)")
-
-        let coveredCount = [seenFullMatch, seenPrefixMatch, seenSuffixMatch, seenNoMatch].filter { $0 }.count
-        print("  Coverage: \(coveredCount)/4 branches")
-
-        if seenFullMatch {
-            print("  ✅ Successfully discovered dynamically constructed string!")
-        }
-        if seenPrefixMatch {
-            print("  ✅ Successfully discovered prefix string!")
-        }
-        if seenSuffixMatch {
-            print("  ✅ Successfully discovered suffix string!")
-        }
+        print("  \(result.stats.totalInputs) inputs, \(result.stats.newPaths) paths")
     }
 }

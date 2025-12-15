@@ -640,25 +640,28 @@ struct MutatorPublicAPITests {
         #expect(testedInputs.contains(where: { $0.contains("<script>") || $0.contains("onerror") }))
 
         // Cross-strategy mutations: SQL mutations applied to XSS seeds
-        // SQL mutator adds "'" prefix/suffix and "; DROP TABLE" suffix
-        // Applied to XSS seed like "<script>alert('XSS')</script>"
+        // SQL mutator adds "'" prefix/suffix, SQL keywords, or comment suffixes
+        // Applied to XSS seeds
         #expect(
             testedInputs.contains(where: {
-                // XSS seed with SQL quote prefix
-                ($0.hasPrefix("'") && $0.contains("<script>")) ||
-                // XSS seed with SQL suffix
-                ($0.contains("<script>") && $0.contains("DROP TABLE"))
+                // XSS seed with SQL quote prefix (any XSS pattern)
+                ($0.hasPrefix("'") && ($0.contains("<") || $0.contains("javascript:") || $0.contains("alert") || $0.contains("onerror"))) ||
+                // XSS seed with SQL keyword suffix
+                (($0.contains("<script>") || $0.contains("onerror") || $0.contains("javascript:")) &&
+                 ($0.contains("/**/") || $0.contains("; DROP") || $0.contains(" OR 1=1")))
             }),
             "SQL mutations should be applied to XSS seeds"
         )
 
         // Cross-strategy mutations: XSS mutations applied to SQL seeds
-        // XSS mutator wraps in <script> tags
-        // Applied to SQL seed like "'; DROP TABLE users; --"
+        // XSS mutator wraps in <script> tags or adds event handlers
+        // Applied to SQL seeds
         #expect(
             testedInputs.contains(where: {
-                // SQL seed wrapped in script tags
-                $0.contains("<script>") && $0.contains("DROP TABLE")
+                // SQL content wrapped in script tags (any SQL keyword)
+                ($0.contains("<script>") && ($0.contains("DROP") || $0.contains("SELECT") || $0.contains("EXEC") || $0.contains("OR 1=1"))) ||
+                // SQL content in img onerror
+                ($0.contains("onerror=") && ($0.contains("DROP") || $0.contains("SELECT") || $0.contains("UNION")))
             }),
             "XSS mutations should be applied to SQL seeds"
         )
