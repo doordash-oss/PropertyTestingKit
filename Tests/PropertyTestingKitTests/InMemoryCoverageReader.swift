@@ -56,44 +56,40 @@ struct InMemoryCoverageReaderTests {
         print("Found \(thisFileCoverage.count) regions in this file")
     }
 
-    @Test("InMemoryCoverageReader shows different code paths")
-    func testDifferentCodePaths() throws {
-        _ = try InMemoryCoverageReader.loadFromCurrentProcess()
+    @Test("SanCov shows different code paths")
+    func testDifferentCodePaths() async {
         let db = MockDatabase()
 
-        // Check if counters are available
-        guard let snapshot = CoverageCounters.snapshot() else {
-            print("Coverage counters not available - skipping test")
+        // Check if SanCov is available
+        guard SanCovCounters.isAvailable else {
+            print("SanCov counters not available - skipping test")
             return
         }
-        print("Counter count: \(snapshot.count)")
-        print("Non-zero counters before: \(snapshot.nonZeroCount)")
+        print("Total edges: \(SanCovCounters.totalEdgeCount)")
 
-        // First measurement - write only (using difference-based approach)
-        let (_, writeCoverage) = try measureSourceCoverage {
+        // First measurement - write only (task-isolated)
+        let writeCoverage = measureSanCovSourceCoverage {
             db.write(key: "a", value: "1")
         }
 
-        if let afterWrite = CoverageCounters.snapshot() {
-            print("Non-zero counters after write: \(afterWrite.nonZeroCount)")
-        }
-
-        // Second measurement - read only (using difference-based approach)
-        let (_, readCoverage) = try measureSourceCoverage {
+        // Second measurement - read only (task-isolated)
+        let readCoverage = measureSanCovSourceCoverage {
             _ = db.read(key: "a")
         }
 
-        // Print some debug info
-        print("Write path executed \(writeCoverage.executedRegions.count) regions")
-        print("Read path executed \(readCoverage.executedRegions.count) regions")
-        print("Total functions in coverage: \(writeCoverage.functions.count)")
-
-        // The test may fail if counter indices don't match coverage mapping
-        // This can happen when multiple modules are involved
-        if writeCoverage.executedRegions.count == 0 {
-            print("Warning: Counter values may not match coverage mapping indices")
-            print("This is expected when test binary and coverage mapping are from different modules")
+        guard let writeCoverage = writeCoverage, let readCoverage = readCoverage else {
+            Issue.record("SanCov coverage measurement failed")
+            return
         }
+
+        // Print some debug info
+        print("Write path covered \(writeCoverage.coveredCount) edges")
+        print("Read path covered \(readCoverage.coveredCount) edges")
+        print("Write path functions: \(writeCoverage.coveredFunctions.count)")
+        print("Read path functions: \(readCoverage.coveredFunctions.count)")
+
+        // Both should have coverage
+        #expect(writeCoverage.coveredCount > 0, "Write path should have coverage")
+        #expect(readCoverage.coveredCount > 0, "Read path should have coverage")
     }
 }
-

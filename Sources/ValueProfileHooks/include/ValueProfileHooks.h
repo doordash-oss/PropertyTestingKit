@@ -109,6 +109,22 @@ bool sancov_get_source_location(size_t edge_index, SanCovSourceLocation* locatio
 /// If locations is NULL, returns the number of covered edges.
 size_t sancov_get_covered_locations(SanCovSourceLocation* locations, size_t max_locations);
 
+// MARK: - Measurement Context API
+// Provides isolation for synchronous code measurements.
+// When a measurement context is active, coverage is keyed by the context
+// rather than the Swift task or thread, providing true per-measurement isolation.
+
+/// Begin a measurement context for synchronous coverage isolation.
+/// Returns an opaque context pointer that must be passed to sancov_end_measurement.
+/// Coverage recorded while a context is active will be isolated to that context.
+/// The context takes priority over Swift task and thread-local coverage maps.
+void* sancov_begin_measurement(void);
+
+/// End a measurement context and clean up its resources.
+/// This frees the context and removes its coverage map from the registry.
+/// Must be called with the same context pointer returned by sancov_begin_measurement.
+void sancov_end_measurement(void* context);
+
 #ifdef __cplusplus
 }
 #endif

@@ -569,16 +569,16 @@ struct CorpusEntryPropertyTests {
     }
 }
 
-// MARK: - CounterDiff Property Tests (via measureCoverage)
+// MARK: - SanCovDiff Property Tests (via measureSanCoverage)
 
-@Suite("CounterDiff Properties")
-struct CounterDiffPropertyTests {
+@Suite("SanCovDiff Properties")
+struct SanCovDiffPropertyTests {
 
-    @Test("measureCoverage captures code execution")
-    func testMeasureCoverageCaptures() throws {
+    @Test("measureSanCoverage captures code execution")
+    func testMeasureSanCoverageCaptures() async throws {
         var executed = false
 
-        let diff = measureCoverage {
+        let diff = measureSanCoverage {
             executed = true
             _ = [1, 2, 3].map { $0 * 2 }  // Some code to execute
         }
@@ -589,13 +589,13 @@ struct CounterDiffPropertyTests {
         }
     }
 
-    @Test("measureCoverage detects different code paths")
-    func testMeasureCoverageDifferentPaths() throws {
-        let diff1 = measureCoverage {
+    @Test("measureSanCoverage detects different code paths")
+    func testMeasureSanCoverageDifferentPaths() async throws {
+        let diff1 = measureSanCoverage {
             _ = "path1".uppercased()
         }
 
-        let diff2 = measureCoverage {
+        let diff2 = measureSanCoverage {
             _ = [1, 2, 3].reduce(0, +)
         }
 
@@ -606,9 +606,9 @@ struct CounterDiffPropertyTests {
         }
     }
 
-    @Test("CounterDiff properties are consistent")
-    func testCounterDiffConsistency() throws {
-        let diff = measureCoverage {
+    @Test("SanCovDiff properties are consistent")
+    func testSanCovDiffConsistency() async throws {
+        let diff = measureSanCoverage {
             // Execute some code with multiple branches
             for i in 0..<10 {
                 if i % 2 == 0 {
@@ -623,8 +623,8 @@ struct CounterDiffPropertyTests {
             // changedCount should match changedIndices.count
             #expect(diff.changedCount == diff.changedIndices.count)
 
-            // executedRegions should match newlyExecutedIndices.count
-            #expect(diff.executedRegions == diff.newlyExecutedIndices.count)
+            // newlyCoveredCount should match newlyCoveredIndices.count
+            #expect(diff.newlyCoveredCount == diff.newlyCoveredIndices.count)
 
             // hasChanges should be consistent with changedIndices
             #expect(diff.hasChanges == !diff.changedIndices.isEmpty)
@@ -1110,41 +1110,46 @@ struct FuzzAPIPropertyTests {
 
 }
 
-// MARK: - measureSourceCoverage API Tests
+// MARK: - SanCov Source Coverage API Tests
 
-@Suite("Source Coverage API")
-struct SourceCoverageAPITests {
+@Suite("SanCov Source Coverage API")
+struct SanCovSourceCoverageAPITests {
 
-    @Test("measureSourceCoverage captures source-level coverage")
-    func testMeasureSourceCoverage() throws {
-        let coverage = try measureSourceCoverage {
+    @Test("measureSanCovSourceCoverage captures source-level coverage")
+    func testMeasureSanCovSourceCoverage() async {
+        let coverage = measureSanCovSourceCoverage {
             // Execute some code
             _ = [1, 2, 3].map { $0 * 2 }
         }
 
-        // Coverage should be captured
-        // Functions and sourceFiles may be empty if filtering excludes everything
-        // but the call should succeed
-        _ = coverage  // Just verify it doesn't throw
+        // Coverage should be captured if SanCov is available
+        if let coverage = coverage {
+            #expect(coverage.coveredCount > 0, "Should have covered edges")
+        }
     }
 
-    @Test("measureSourceCoverage with includeAllFiles")
-    func testMeasureSourceCoverageIncludeAll() throws {
-        let coverage = try measureSourceCoverage(includeAllFiles: true) {
+    @Test("measureSanCovSourceCoverage provides function coverage")
+    func testMeasureSanCovSourceCoverageProvidesFunctions() async {
+        let coverage = measureSanCovSourceCoverage {
             _ = "test".uppercased()
         }
 
-        // With includeAllFiles, we might see more coverage
-        _ = coverage
+        // With SanCov we get function-level source mapping via dladdr
+        if let coverage = coverage, SanCovCounters.pcsAvailable {
+            #expect(!coverage.coveredFunctions.isEmpty, "Should have function names")
+        }
     }
 
-    @Test("measureSourceCoverage returns result value")
-    func testMeasureSourceCoverageReturnsResult() throws {
-        let (result, coverage) = try measureSourceCoverage {
-            return 42
+    @Test("measureSanCovSourceCoverage captures result value")
+    func testMeasureSanCovSourceCoverageWithResult() async {
+        var result: Int = 0
+        let coverage = measureSanCovSourceCoverage {
+            result = 42
         }
 
         #expect(result == 42)
-        _ = coverage
+        if let coverage = coverage {
+            #expect(coverage.coveredCount >= 0, "Coverage should be valid")
+        }
     }
 }

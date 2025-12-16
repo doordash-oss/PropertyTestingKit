@@ -157,6 +157,10 @@ static pthread_mutex_t g_registry_lock = PTHREAD_MUTEX_INITIALIZER;
 static _Thread_local uint8_t *tls_coverage_map = NULL;
 static _Thread_local size_t tls_coverage_map_size = 0;
 
+// Thread-local measurement context for sync isolation
+// When set, this takes priority over swift_task_getCurrent()
+static _Thread_local void* tls_measurement_context = NULL;
+
 // Find or create a coverage map for the given task
 static uint8_t* find_or_create_task_map(void* task_id) {
     pthread_mutex_lock(&g_registry_lock);
@@ -184,6 +188,47 @@ static uint8_t* find_or_create_task_map(void* task_id) {
     return NULL;
 }
 
+// Remove a task map entry and free its memory
+static void cleanup_task_map(void* task_id) {
+    pthread_mutex_lock(&g_registry_lock);
+
+    for (size_t i = 0; i < g_task_registry_count; i++) {
+        if (g_task_registry[i].task_id == task_id) {
+            // Free the coverage map
+            free(g_task_registry[i].coverage_map);
+
+            // Move last entry to this slot (swap-remove)
+            if (i < g_task_registry_count - 1) {
+                g_task_registry[i] = g_task_registry[g_task_registry_count - 1];
+            }
+            g_task_registry_count--;
+            break;
+        }
+    }
+
+    pthread_mutex_unlock(&g_registry_lock);
+}
+
+// MARK: - Measurement Context API
+// These functions provide isolation for synchronous measurements
+
+void* sancov_begin_measurement(void) {
+    // Use a unique address as the context ID
+    // We allocate a small amount to get a unique heap address
+    void* context = malloc(1);
+    tls_measurement_context = context;
+    return context;
+}
+
+void sancov_end_measurement(void* context) {
+    if (tls_measurement_context == context) {
+        tls_measurement_context = NULL;
+    }
+    // Clean up the task registry entry for this context
+    cleanup_task_map(context);
+    free(context);
+}
+
 // Ensure thread-local fallback map is allocated
 static void ensure_tls_coverage_map(void) {
     if (tls_coverage_map == NULL && g_guard_count > 0) {
@@ -193,18 +238,31 @@ static void ensure_tls_coverage_map(void) {
 }
 
 // Get the coverage map for the current execution context
-// Uses task-keyed map if in Swift async context, otherwise thread-local
+// Priority: measurement context > Swift async task > thread-local
 static uint8_t* get_current_coverage_map(void) {
+    // First, check for active measurement context (sync isolation)
+    if (tls_measurement_context != NULL) {
+        uint8_t* map = find_or_create_task_map(tls_measurement_context);
+        if (map != NULL) {
+            return map;
+        }
+        // Registry full - fall through to other options
+    }
+
     // Check if swift_task_getCurrent is available (weak import)
     if (swift_task_getCurrent != NULL) {
         void* task = swift_task_getCurrent();
         if (task != NULL) {
             // We're in a Swift async task - use task-keyed map
-            return find_or_create_task_map(task);
+            uint8_t* map = find_or_create_task_map(task);
+            if (map != NULL) {
+                return map;
+            }
+            // Task registry full - fall through to thread-local fallback
         }
     }
 
-    // Fallback to thread-local storage for non-async contexts
+    // Fallback to thread-local storage for non-async contexts or when registry is full
     ensure_tls_coverage_map();
     return tls_coverage_map;
 }

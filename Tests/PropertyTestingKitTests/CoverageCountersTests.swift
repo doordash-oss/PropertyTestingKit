@@ -1,15 +1,21 @@
 import Testing
 @testable import PropertyTestingKit
 
-// MARK: - CoverageCounters Tests (In-Memory, No File I/O)
+// MARK: - SanCov Coverage Tests (Task-Isolated)
 
-@Suite("CoverageCounters API")
-struct CoverageCountersTests {
+@Suite("SanCov Coverage API")
+struct SanCovCoverageTests {
 
-    @Test("CoverageCounters.snapshot captures counter state")
+    @Test("SanCovCounters.snapshot captures counter state")
     func testSnapshot() {
-        guard let snapshot = CoverageCounters.snapshot() else {
-            Issue.record("Coverage counters not available (expected when not built with coverage)")
+        guard SanCovCounters.isAvailable else {
+            Issue.record("SanCov counters not available (expected when not built with -sanitize-coverage)")
+            return
+        }
+
+        SanCovCounters.reset()
+        guard let snapshot = SanCovCounters.snapshot() else {
+            Issue.record("Failed to get SanCov snapshot")
             return
         }
 
@@ -17,37 +23,37 @@ struct CoverageCountersTests {
         print("Captured \(snapshot.count) counters")
     }
 
-    @Test("measureCoverage detects code execution")
-    func testMeasureCoverage() {
+    @Test("measureSanCoverage detects code execution")
+    func testMeasureSanCoverage() {
         let db = MockDatabase()
 
-        guard let diff = measureCoverage({
+        guard let diff = measureSanCoverage({
             db.write(key: "test", value: "value")
         }) else {
-            Issue.record("Coverage counters not available")
+            Issue.record("SanCov counters not available")
             return
         }
 
         #expect(diff.hasChanges)
-        print("Executed \(diff.executedRegions) new regions, \(diff.changedCount) changed")
+        print("Executed \(diff.newlyCoveredCount) new edges, \(diff.changedCount) changed")
     }
 
-    @Test("measureCoverage shows different code paths")
+    @Test("measureSanCoverage shows different code paths")
     func testDifferentCodePaths() {
         let db = MockDatabase()
 
         // Measure write path
-        let writeDiff = measureCoverage {
+        let writeDiff = measureSanCoverage {
             db.write(key: "a", value: "1")
         }
 
         // Measure read path
-        let readDiff = measureCoverage {
+        let readDiff = measureSanCoverage {
             _ = db.read(key: "a")
         }
 
         guard let w = writeDiff, let r = readDiff else {
-            Issue.record("Coverage counters not available")
+            Issue.record("SanCov counters not available")
             return
         }
 
@@ -55,23 +61,23 @@ struct CoverageCountersTests {
         #expect(w.hasChanges)
         #expect(r.hasChanges)
 
-        // They might hit different regions
-        print("Write path: \(w.executedRegions) regions")
-        print("Read path: \(r.executedRegions) regions")
+        // They might hit different edges
+        print("Write path: \(w.newlyCoveredCount) edges")
+        print("Read path: \(r.newlyCoveredCount) edges")
     }
 
-    @Test("measureCoverage isolates measurements between calls")
+    @Test("measureSanCoverage isolates measurements between calls")
     func testIsolatedCoverage() {
         let db = MockDatabase()
 
         // First call exercises some code
-        _ = measureCoverage {
+        _ = measureSanCoverage {
             db.write(key: "warmup", value: "data")
         }
 
         // Second measurement should only see new executions (difference-based)
         var result: String?
-        let diff = measureCoverage {
+        let diff = measureSanCoverage {
             db.write(key: "test", value: "value")
             result = db.read(key: "test")
         }
@@ -79,55 +85,53 @@ struct CoverageCountersTests {
         #expect(result == "value")
 
         if let diff = diff {
-            // Should see fewer "newly executed" regions since write was already called
-            print("Isolated coverage: \(diff.executedRegions) regions")
+            // Should see coverage from both write and read
+            print("Isolated coverage: \(diff.newlyCoveredCount) new edges")
         }
     }
 
-    @Test("CounterDiff.delta returns correct delta for specific index")
-    func testDeltaAtIndex() {
-        guard let diff = measureCoverage({
-            // Execute some code to create a diff
-            _ = [1, 2, 3].map { $0 * 2 }
-        }) else {
-            Issue.record("Coverage counters not available")
-            return
-        }
-
-        // Test delta for changed indices
-        for index in diff.changedIndices.prefix(3) {
-            let delta = diff.delta(at: index)
-            // Delta should be non-zero for changed indices
-            #expect(delta != 0, "Delta at changed index \(index) should be non-zero")
-        }
-
-        // Test delta for an index that didn't change (if any exist)
-        if diff.changedIndices.count < diff.after.count {
-            // Find an index that didn't change
-            let unchangedIndex = (0..<diff.after.count).first { !diff.changedIndices.contains($0) }
-            if let idx = unchangedIndex {
-                let delta = diff.delta(at: idx)
-                #expect(delta == 0, "Delta at unchanged index should be zero")
-            }
-        }
-    }
-
-    @Test("async measureCoverage captures code execution")
-    func testAsyncMeasureCoverage() async {
-        guard let diff = await measureCoverage({
+    @Test("async measureSanCoverage captures code execution")
+    func testAsyncMeasureSanCoverage() async {
+        guard let diff = await measureSanCoverage({
             // Simulate async work
             try? await Task.sleep(nanoseconds: 1_000)
             _ = [1, 2, 3].reduce(0, +)
         }) else {
-            Issue.record("Coverage counters not available")
+            Issue.record("SanCov counters not available")
             return
         }
 
         #expect(diff.hasChanges, "Async code should produce coverage changes")
-        print("Async coverage: \(diff.executedRegions) regions, \(diff.changedCount) changed")
+        print("Async coverage: \(diff.newlyCoveredCount) new edges, \(diff.changedCount) changed")
     }
 
-    // MARK: - Branch Coverage Tests
+    @Test("measureSanCovSourceCoverage captures function names")
+    func testSourceCoverage() {
+        let db = MockDatabase()
+
+        guard let coverage = measureSanCovSourceCoverage({
+            db.write(key: "test", value: "value")
+            _ = db.read(key: "test")
+        }) else {
+            Issue.record("SanCov counters not available")
+            return
+        }
+
+        #expect(coverage.coveredCount > 0, "Should have covered edges")
+
+        // Check we got function names
+        let hasWriteFunction = coverage.coveredFunctions.contains { $0.contains("write") }
+        let hasReadFunction = coverage.coveredFunctions.contains { $0.contains("read") }
+
+        #expect(hasWriteFunction || hasReadFunction, "Should have covered database functions")
+        print("Covered \(coverage.coveredFunctions.count) functions")
+    }
+}
+
+// MARK: - CoverageCounters Struct Tests (Unit Tests)
+
+@Suite("CoverageCounters Struct")
+struct CoverageCountersStructTests {
 
     @Test("difference handles counters with different sizes - before larger")
     func testDifferenceWithLargerBefore() {
@@ -246,74 +250,39 @@ struct CoverageCountersTests {
         )
         #expect(result == nil)
     }
+}
 
-    // MARK: - Snapshot Provider Tests (for guard-else branches)
+// MARK: - SanCovCounters Struct Tests
 
-    @Test("measureCoverage returns nil when before snapshot is nil")
-    func testMeasureCoverageNilBefore() {
-        // Mock provider that always returns nil
-        let nilProvider: () -> CoverageCounters? = { nil }
+@Suite("SanCovCounters Struct")
+struct SanCovCountersStructTests {
 
-        let result = measureCoverage(snapshotProvider: nilProvider) {
-            // This code should not be executed because before is nil
-        }
+    @Test("SanCovDiff correctly identifies newly covered indices")
+    func testSanCovDiff() {
+        let before = SanCovCounters(counters: [0, 1, 0, 1, 0] as [UInt8])
+        let after = SanCovCounters(counters: [1, 1, 1, 1, 0] as [UInt8])
 
-        #expect(result == nil, "Should return nil when before snapshot is nil")
+        let diff = after.difference(from: before)
+
+        // Indices 0 and 2 went from 0 to 1 (newly covered)
+        #expect(diff.newlyCoveredIndices.contains(0))
+        #expect(diff.newlyCoveredIndices.contains(2))
+        #expect(!diff.newlyCoveredIndices.contains(1), "Index 1 was already covered")
+        #expect(!diff.newlyCoveredIndices.contains(3), "Index 3 was already covered")
+        #expect(!diff.newlyCoveredIndices.contains(4), "Index 4 is still not covered")
     }
 
-    @Test("measureCoverage returns nil when after snapshot is nil")
-    func testMeasureCoverageNilAfter() {
-        var callCount = 0
-        // Mock provider that returns a value on first call, nil on second
-        let provider: () -> CoverageCounters? = {
-            callCount += 1
-            if callCount == 1 {
-                return CoverageCounters(counters: [1, 2, 3])
-            }
-            return nil
-        }
+    @Test("SanCovCounters.coveredIndices returns correct set")
+    func testCoveredIndices() {
+        let counters = SanCovCounters(counters: [0, 1, 0, 1, 1, 0] as [UInt8])
 
-        var bodyExecuted = false
-        let result = measureCoverage(snapshotProvider: provider) {
-            bodyExecuted = true
-        }
-
-        #expect(bodyExecuted, "Body should have executed")
-        #expect(result == nil, "Should return nil when after snapshot is nil")
+        let covered = counters.coveredIndices
+        #expect(covered == Set([1, 3, 4]))
     }
 
-    @Test("async measureCoverage returns nil when before snapshot is nil")
-    func testAsyncMeasureCoverageNilBefore() async {
-        // Mock provider that always returns nil
-        let nilProvider: () -> CoverageCounters? = { nil }
-
-        let body: () async -> Void = {
-            // This code should not be executed because before is nil
-        }
-        let result = await measureCoverage(snapshotProvider: nilProvider, body)
-
-        #expect(result == nil, "Should return nil when before snapshot is nil")
-    }
-
-    @Test("async measureCoverage returns nil when after snapshot is nil")
-    func testAsyncMeasureCoverageNilAfter() async {
-        var callCount = 0
-        // Mock provider that returns a value on first call, nil on second
-        let provider: () -> CoverageCounters? = {
-            callCount += 1
-            if callCount == 1 {
-                return CoverageCounters(counters: [1, 2, 3])
-            }
-            return nil
-        }
-
-        var bodyExecuted = false
-        let body: () async -> Void = {
-            bodyExecuted = true
-        }
-        let result = await measureCoverage(snapshotProvider: provider, body)
-
-        #expect(bodyExecuted, "Body should have executed")
-        #expect(result == nil, "Should return nil when after snapshot is nil")
+    @Test("SanCovCounters.coveredCount returns correct count")
+    func testCoveredCount() {
+        let counters = SanCovCounters(counters: [0, 1, 0, 1, 1, 0] as [UInt8])
+        #expect(counters.coveredCount == 3)
     }
 }

@@ -455,88 +455,20 @@ private func getCachedReader() throws -> InMemoryCoverageReader {
     try CachedReaderStorage.shared.getReader()
 }
 
-/// Measure coverage of a code block with source-level detail.
-///
-/// This is the most complete coverage API, providing source locations
-/// for all executed code. It uses difference-based measurement to avoid
-/// interfering with Xcode and other coverage tooling.
-///
-/// By default, coverage is filtered to exclude system libraries and
-/// package dependencies (files in `.build/checkouts/`, `/usr`, `/System`, etc.).
-/// Set `includeAllFiles` to `true` to include coverage for all files.
-///
-/// ```swift
-/// let coverage = try measureSourceCoverage {
-///     myFunction()
-/// }
-///
-/// for region in coverage.executedRegions {
-///     print("\(region.filename):\(region.lineStart) executed \(region.executionCount)x")
-/// }
-/// ```
-///
-/// - Parameters:
-///   - includeAllFiles: If `true`, include coverage for all files including
-///     dependencies and system libraries. Defaults to `false`.
-///   - body: The code to measure.
-/// - Returns: Source-level coverage data.
-/// - Throws: ``InMemoryCoverageError`` if coverage mapping can't be loaded.
-public func measureSourceCoverage<T>(
-    includeAllFiles: Bool = false,
-    _ body: () throws -> T
-) throws -> (result: T, coverage: ResolvedCoverage) {
-    let reader = try getCachedReader()
+// MARK: - Deprecated measureSourceCoverage
 
-    // Snapshot before running code
-    // Note: This uses global LLVM profile counters which are not isolated
-    // between concurrent tests. Tests using this function should be serialized.
-    guard let before = CoverageCounters.snapshot() else {
-        // Coverage not available, return empty
-        let result = try body()
-        return (result, ResolvedCoverage(functions: [], sourceFiles: []))
-    }
-
-    let result = try body()
-
-    // Snapshot after running code
-    guard let after = CoverageCounters.snapshot() else {
-        return (result, ResolvedCoverage(functions: [], sourceFiles: []))
-    }
-
-    // Compute difference (what executed during body)
-    let deltaCounters = zip(after.counters, before.counters).map { after, before in
-        after >= before ? after - before : 0
-    }
-
-    // Resolve coverage from delta
-    var coverage = reader.resolveCoverage(counters: deltaCounters)
-
-    // Filter to project files only by default
-    if !includeAllFiles {
-        coverage = filterToProjectOnly(coverage)
-    }
-
-    return (result, coverage)
-}
-
-/// Measure coverage of a code block with source-level detail (throwing version).
-///
-/// By default, coverage is filtered to exclude system libraries and
-/// package dependencies. Set `includeAllFiles` to `true` to include all files.
-///
-/// - Parameters:
-///   - includeAllFiles: If `true`, include coverage for all files including
-///     dependencies and system libraries. Defaults to `false`.
-///   - body: The code to measure.
-/// - Returns: Source-level coverage data.
-/// - Throws: ``InMemoryCoverageError`` if coverage mapping can't be loaded.
-public func measureSourceCoverage(
-    includeAllFiles: Bool = false,
-    _ body: () throws -> Void
-) throws -> ResolvedCoverage {
-    let (_, coverage) = try measureSourceCoverage(includeAllFiles: includeAllFiles) {
-        try body()
-        return ()
-    }
-    return coverage
-}
+// The measureSourceCoverage functions have been removed because they used global
+// LLVM profile counters which are not isolated between concurrent tests.
+//
+// Use measureSanCovSourceCoverage instead, which provides true task-level
+// isolation via SanitizerCoverage. Note that SanCov provides function-level
+// source mapping (via dladdr) rather than region-level mapping.
+//
+// Migration:
+//   // Old (unisolated):
+//   let coverage = try measureSourceCoverage { myFunction() }
+//   for fn in coverage.functions { ... }
+//
+//   // New (task-isolated):
+//   let coverage = measureSanCovSourceCoverage { myFunction() }
+//   for fn in coverage?.coveredFunctions ?? [] { ... }

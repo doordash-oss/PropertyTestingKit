@@ -1,8 +1,8 @@
 {
-  "createdAt" : "2025-12-16T06:33:14Z",
+  "createdAt" : "2025-12-16T07:31:06Z",
   "entries" : [
     {
-      "discoveredAt" : "2025-12-16T06:33:14Z",
+      "discoveredAt" : "2025-12-16T07:31:06Z",
       "entryType" : "coverage",
       "input" : [
         "MA=="
@@ -12,20 +12,20 @@
       ],
       "signature" : {
         "buckets" : {
-          "3613" : 1,
-          "3887" : 1,
-          "3888" : 1
+          "26918" : 1,
+          "27192" : 1,
+          "27193" : 1
         }
       }
     }
   ],
-  "schemaVersion" : "v1-4588",
+  "schemaVersion" : "v1-27893",
   "totalCoverage" : {
     "buckets" : {
-      "3613" : 1,
-      "3887" : 1,
-      "3888" : 1
+      "26918" : 1,
+      "27192" : 1,
+      "27193" : 1
     }
   },
-  "updatedAt" : "2025-12-16T06:33:14Z"
+  "updatedAt" : "2025-12-16T07:31:06Z"
 }

@@ -200,10 +200,10 @@ public struct SanCovDiff: Sendable {
 
 // MARK: - Convenience API
 
-/// Execute a closure and capture the coverage that changed (task-isolated).
+/// Execute a closure and capture the coverage that changed (context-isolated).
 ///
-/// This uses SanitizerCoverage with task-keyed maps, providing true
-/// per-task isolation. Multiple tests can run in parallel without
+/// This uses SanitizerCoverage with measurement contexts, providing true
+/// per-call isolation. Multiple sync tests can run in parallel without
 /// coverage contamination.
 ///
 /// ```swift
@@ -218,6 +218,8 @@ public struct SanCovDiff: Sendable {
 @discardableResult
 public func measureSanCoverage(_ body: () throws -> Void) rethrows -> SanCovDiff? {
     guard SanCovCounters.isAvailable else { return nil }
+    guard let context = SanCovCounters.beginMeasurement() else { return nil }
+    defer { SanCovCounters.endMeasurement(context) }
 
     let before = SanCovCounters.snapshot()
     try body()
@@ -227,13 +229,15 @@ public func measureSanCoverage(_ body: () throws -> Void) rethrows -> SanCovDiff
     return after.difference(from: before)
 }
 
-/// Execute an async closure and capture the coverage that changed (task-isolated).
+/// Execute an async closure and capture the coverage that changed (context-isolated).
 ///
-/// - Note: Coverage remains isolated to the current task even across
+/// - Note: Coverage remains isolated to the measurement context even across
 ///   suspension points where the task may hop threads.
 @discardableResult
 public func measureSanCoverage(_ body: () async throws -> Void) async rethrows -> SanCovDiff? {
     guard SanCovCounters.isAvailable else { return nil }
+    guard let context = SanCovCounters.beginMeasurement() else { return nil }
+    defer { SanCovCounters.endMeasurement(context) }
 
     let before = SanCovCounters.snapshot()
     try await body()
@@ -277,6 +281,40 @@ extension SanCovCounters {
     /// Check if PC-to-source mapping is available.
     public static var pcsAvailable: Bool {
         sancov_pcs_available()
+    }
+
+    // MARK: - Measurement Context API
+
+    /// An opaque measurement context for synchronous coverage isolation.
+    ///
+    /// Measurement contexts provide per-call isolation for synchronous code.
+    /// When a context is active, coverage is keyed by the context rather than
+    /// the Swift task or thread, enabling parallel sync tests without contamination.
+    public struct MeasurementContext: @unchecked Sendable {
+        fileprivate let rawContext: UnsafeMutableRawPointer
+
+        fileprivate init(_ raw: UnsafeMutableRawPointer) {
+            self.rawContext = raw
+        }
+    }
+
+    /// Begin a measurement context for synchronous coverage isolation.
+    ///
+    /// Coverage recorded while a context is active will be isolated to that context.
+    /// The context takes priority over Swift task and thread-local coverage maps.
+    ///
+    /// - Important: You must call `endMeasurement(_:)` when done.
+    /// - Returns: A context that must be passed to `endMeasurement(_:)`.
+    public static func beginMeasurement() -> MeasurementContext? {
+        guard let raw = sancov_begin_measurement() else { return nil }
+        return MeasurementContext(raw)
+    }
+
+    /// End a measurement context and clean up its resources.
+    ///
+    /// - Parameter context: The context returned by `beginMeasurement()`.
+    public static func endMeasurement(_ context: MeasurementContext) {
+        sancov_end_measurement(context.rawContext)
     }
 
     /// Get the program counter for a given edge index.
@@ -352,11 +390,11 @@ public struct SanCovSourceCoverage: Sendable {
     }
 }
 
-/// Measure coverage with source location mapping (task-isolated).
+/// Measure coverage with source location mapping (context-isolated).
 ///
-/// This combines task-isolated SanCov coverage with source location mapping.
-/// Coverage is isolated to the current task, allowing parallel test execution
-/// without contamination.
+/// This combines context-isolated SanCov coverage with source location mapping.
+/// Coverage is isolated to a unique measurement context, allowing parallel test execution
+/// without contamination - even for synchronous tests.
 ///
 /// ```swift
 /// let coverage = measureSanCovSourceCoverage {
@@ -372,8 +410,10 @@ public struct SanCovSourceCoverage: Sendable {
 @discardableResult
 public func measureSanCovSourceCoverage(_ body: () throws -> Void) rethrows -> SanCovSourceCoverage? {
     guard SanCovCounters.isAvailable else { return nil }
+    guard let context = SanCovCounters.beginMeasurement() else { return nil }
+    defer { SanCovCounters.endMeasurement(context) }
 
-    // Reset task-isolated counters
+    // Reset context-isolated counters
     SanCovCounters.reset()
 
     // Run the code
@@ -384,12 +424,14 @@ public func measureSanCovSourceCoverage(_ body: () throws -> Void) rethrows -> S
     return SanCovSourceCoverage(coveredLocations: locations)
 }
 
-/// Measure coverage with source location mapping (task-isolated, async).
+/// Measure coverage with source location mapping (context-isolated, async).
 @discardableResult
 public func measureSanCovSourceCoverage(_ body: () async throws -> Void) async rethrows -> SanCovSourceCoverage? {
     guard SanCovCounters.isAvailable else { return nil }
+    guard let context = SanCovCounters.beginMeasurement() else { return nil }
+    defer { SanCovCounters.endMeasurement(context) }
 
-    // Reset task-isolated counters
+    // Reset context-isolated counters
     SanCovCounters.reset()
 
     // Run the code

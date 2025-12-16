@@ -172,62 +172,10 @@ public struct CounterDiff: Sendable {
     }
 }
 
-// MARK: - Convenience API
+// MARK: - Deprecated
 
-/// Execute a closure and capture the coverage counters that changed.
-///
-/// This is the simplest way to see what code executed:
-///
-/// ```swift
-/// let diff = measureCoverage {
-///     myFunction()
-/// }
-/// print("Executed \(diff.executedRegions) new regions")
-/// ```
-///
-/// - Warning: This uses global LLVM profile counters which are not isolated
-///   between concurrent tests. For coverage-guided fuzzing, use `measureSanCoverage`
-///   instead, which provides true task-level isolation.
-///
-/// - Parameter body: The code to measure.
-/// - Returns: The counter diff, or `nil` if coverage unavailable.
-@discardableResult
-public func measureCoverage(_ body: () throws -> Void) rethrows -> CounterDiff? {
-    try measureCoverage(snapshotProvider: CoverageCounters.snapshot, body)
-}
-
-/// Execute a closure and capture the coverage counters that changed (async).
-///
-/// - Warning: This uses global LLVM profile counters which are not isolated
-///   between concurrent tests. For coverage-guided fuzzing, use `measureSanCoverage`
-///   instead, which provides true task-level isolation.
-@discardableResult
-public func measureCoverage(_ body: () async throws -> Void) async rethrows -> CounterDiff? {
-    try await measureCoverage(snapshotProvider: CoverageCounters.snapshot, body)
-}
-
-// MARK: - Internal API for Testing
-
-/// Internal version of measureCoverage that accepts a snapshot provider for testing.
-@discardableResult
-func measureCoverage(
-    snapshotProvider: () -> CoverageCounters?,
-    _ body: () throws -> Void
-) rethrows -> CounterDiff? {
-    guard let before = snapshotProvider() else { return nil }
-    try body()
-    guard let after = snapshotProvider() else { return nil }
-    return after.difference(from: before)
-}
-
-/// Internal async version of measureCoverage that accepts a snapshot provider for testing.
-@discardableResult
-func measureCoverage(
-    snapshotProvider: () -> CoverageCounters?,
-    _ body: () async throws -> Void
-) async rethrows -> CounterDiff? {
-    guard let before = snapshotProvider() else { return nil }
-    try await body()
-    guard let after = snapshotProvider() else { return nil }
-    return after.difference(from: before)
-}
+// The measureCoverage functions have been removed because they used global
+// LLVM profile counters which are not isolated between concurrent tests.
+//
+// Use measureSanCoverage or measureSanCovSourceCoverage instead, which
+// provide true task-level isolation via SanitizerCoverage.

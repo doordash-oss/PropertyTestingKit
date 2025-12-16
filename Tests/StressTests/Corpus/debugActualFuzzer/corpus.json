@@ -1,8 +1,8 @@
 {
-  "createdAt" : "2025-12-16T06:33:14Z",
+  "createdAt" : "2025-12-16T07:31:06Z",
   "entries" : [
     {
-      "discoveredAt" : "2025-12-16T06:33:14Z",
+      "discoveredAt" : "2025-12-16T07:31:06Z",
       "entryType" : "coverage",
       "input" : [
         "WzAsMSwtMSwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDBd"
@@ -10,20 +10,20 @@
       "inputReadable" : [
         "[0, 1, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]"
       ],
-      "parentIndex" : 2,
+      "parentIndex" : 3,
       "signature" : {
         "buckets" : {
-          "4151" : 1,
-          "4152" : 1,
-          "4156" : 1,
-          "4495" : 1,
-          "4496" : 1,
-          "4554" : 1
+          "27456" : 1,
+          "27457" : 1,
+          "27461" : 1,
+          "27800" : 1,
+          "27801" : 1,
+          "27859" : 1
         }
       }
     },
     {
-      "discoveredAt" : "2025-12-16T06:33:14Z",
+      "discoveredAt" : "2025-12-16T07:31:06Z",
       "entryType" : "coverage",
       "input" : [
         "W10="
@@ -33,49 +33,27 @@
       ],
       "signature" : {
         "buckets" : {
-          "4151" : 1,
-          "4154" : 1,
-          "4495" : 1,
-          "4497" : 1,
-          "4554" : 1
-        }
-      }
-    },
-    {
-      "discoveredAt" : "2025-12-16T06:33:14Z",
-      "entryType" : "coverage",
-      "input" : [
-        "WzAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMF0="
-      ],
-      "inputReadable" : [
-        "[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]"
-      ],
-      "parentIndex" : 1,
-      "signature" : {
-        "buckets" : {
-          "4151" : 1,
-          "4153" : 1,
-          "4156" : 1,
-          "4495" : 1,
-          "4496" : 1,
-          "4554" : 1
+          "27456" : 1,
+          "27459" : 1,
+          "27800" : 1,
+          "27802" : 1,
+          "27859" : 1
         }
       }
     }
   ],
-  "schemaVersion" : "v1-4588",
+  "schemaVersion" : "v1-27893",
   "totalCoverage" : {
     "buckets" : {
-      "4151" : 1,
-      "4152" : 1,
-      "4153" : 1,
-      "4154" : 1,
-      "4156" : 1,
-      "4495" : 1,
-      "4496" : 1,
-      "4497" : 1,
-      "4554" : 1
+      "27456" : 1,
+      "27457" : 1,
+      "27459" : 1,
+      "27461" : 1,
+      "27800" : 1,
+      "27801" : 1,
+      "27802" : 1,
+      "27859" : 1
     }
   },
-  "updatedAt" : "2025-12-16T06:33:14Z"
+  "updatedAt" : "2025-12-16T07:31:06Z"
 }

@@ -38,116 +38,6 @@ class SimpleClass {
     }
 }
 
-@Suite("Coverage Counter Tests", .serialized)
-struct AllCoverageTests {
-
-    @Test("SimpleClass methods have coverage counters")
-    func simpleClassCoverage() throws {
-        let (result, coverage) = try measureSourceCoverage {
-            let obj = SimpleClass()
-            obj.increment()
-            obj.decrement()
-            return obj.value
-        }
-
-        #expect(result == 0)
-
-        let simpleClassFns = coverage.functions.filter { $0.name.contains("SimpleClass") }
-        let incrementFn = simpleClassFns.first { $0.name.contains("increment") }
-        let decrementFn = simpleClassFns.first { $0.name.contains("decrement") }
-
-        #expect(incrementFn != nil, "Should have increment function")
-        #expect(decrementFn != nil, "Should have decrement function")
-
-        if let inc = incrementFn {
-            #expect(inc.executionCount == 1, "increment should have been executed")
-        }
-    }
-
-    @Test("struct methods have coverage counters")
-    func structMethods() throws {
-        let (result, coverage) = try measureSourceCoverage {
-            var obj = TestStruct()
-            obj.increment()
-            obj.decrement()
-            return obj.value
-        }
-
-        #expect(result == 0)
-
-        let testStructFunctions = coverage.functions.filter { $0.name.contains("TestStruct") }
-        let incrementFunc = testStructFunctions.first { $0.name.contains("increment") }
-        let decrementFunc = testStructFunctions.first { $0.name.contains("decrement") }
-
-        #expect(incrementFunc != nil, "Should have increment function in coverage")
-
-        if let incrementFunc {
-            #expect(incrementFunc.executionCount == 1, "increment() should have been executed")
-        }
-
-        if let decrementFunc {
-            #expect(decrementFunc.executionCount == 1, "decrement() should have been executed")
-        }
-    }
-
-    @Test
-    func structMethodsMeasuresMultipleCalls() throws {
-        let (result, coverage) = try measureSourceCoverage {
-            var obj = TestStruct()
-            obj.increment()
-            obj.increment()
-            obj.increment()
-            return obj.value
-        }
-
-        #expect(result == 3)
-
-        let testStructFunctions = coverage.functions.filter { $0.name.contains("TestStruct") }
-        let incrementFunc = testStructFunctions.first { $0.name.contains("increment") }
-        let decrementFunc = testStructFunctions.first { $0.name.contains("decrement") }
-
-        #expect(incrementFunc != nil, "Should have increment function in coverage")
-
-        if let incrementFunc {
-            #expect(incrementFunc.executionCount == 3, "increment() should have been executed")
-        }
-
-        if let decrementFunc {
-            #expect(decrementFunc.executionCount == 0, "decrement() should have been executed")
-        }
-    }
-
-    @Test
-    func structMethodsDoNotMeasureExternalCalls() throws {
-        var obj = TestStruct()
-        let (result, coverage) = try measureSourceCoverage {
-            obj.increment()
-            obj.increment()
-            obj.increment()
-            return obj.value
-        }
-
-        obj.increment()
-
-        #expect(result == 3)
-        #expect(obj.value == 4)
-
-        let testStructFunctions = coverage.functions.filter { $0.name.contains("TestStruct") }
-        let incrementFunc = testStructFunctions.first { $0.name.contains("increment") }
-        let decrementFunc = testStructFunctions.first { $0.name.contains("decrement") }
-
-        #expect(incrementFunc != nil, "Should have increment function in coverage")
-
-        if let incrementFunc {
-            #expect(incrementFunc.executionCount == 3, "increment() should have been executed")
-        }
-
-        if let decrementFunc {
-            #expect(decrementFunc.executionCount == 0, "decrement() should have been executed")
-        }
-    }
-}
-
 // MARK: - Task-Isolated SanCov Source Coverage Tests
 
 @Suite("SanCov Source Coverage")
@@ -198,6 +88,52 @@ struct SanCovSourceCoverageTests {
                 Issue.record("PC table not available - source mapping disabled. Add -fsanitize-coverage=pc-table to enable.")
             }
         }
+    }
+
+    @Test("SimpleClass methods have coverage via SanCov")
+    func simpleClassCoverage() {
+        let coverage = measureSanCovSourceCoverage {
+            let obj = SimpleClass()
+            obj.increment()
+            obj.decrement()
+        }
+
+        guard let coverage = coverage else {
+            Issue.record("SanCov not available")
+            return
+        }
+
+        #expect(coverage.coveredCount > 0, "Should have covered edges")
+
+        // Check for SimpleClass function coverage
+        let hasIncrementFunction = coverage.coveredFunctions.contains { $0.contains("increment") }
+        let hasDecrementFunction = coverage.coveredFunctions.contains { $0.contains("decrement") }
+
+        #expect(hasIncrementFunction, "Should have covered increment function")
+        #expect(hasDecrementFunction, "Should have covered decrement function")
+    }
+
+    @Test("struct methods have coverage via SanCov")
+    func structMethods() {
+        let coverage = measureSanCovSourceCoverage {
+            var obj = TestStruct()
+            obj.increment()
+            obj.decrement()
+        }
+
+        guard let coverage = coverage else {
+            Issue.record("SanCov not available")
+            return
+        }
+
+        #expect(coverage.coveredCount > 0, "Should have covered edges")
+
+        // Check for TestStruct function coverage
+        let hasIncrementFunction = coverage.coveredFunctions.contains { $0.contains("increment") }
+        let hasDecrementFunction = coverage.coveredFunctions.contains { $0.contains("decrement") }
+
+        #expect(hasIncrementFunction, "Should have covered increment function")
+        #expect(hasDecrementFunction, "Should have covered decrement function")
     }
 
     @Test("measureSanCovSourceCoverage provides task isolation")
