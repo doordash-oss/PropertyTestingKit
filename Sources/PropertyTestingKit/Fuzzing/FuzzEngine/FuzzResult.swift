@@ -20,6 +20,10 @@ public struct FuzzResult<each Input: Codable & Sendable>: Sendable {
 
     /// Inputs that had different coverage than expected (regression only).
     public let coverageChanges: [(input: (repeat each Input), expected: CoverageSignature, actual: CoverageSignature)]
+
+    /// Coverage gaps detected (only populated if detectCoverageGaps was enabled).
+    /// Contains functions that have partial coverage (some edges hit, some not).
+    public let coverageGapReport: CoverageGapReport?
 }
 
 /// Statistics about a fuzz run.

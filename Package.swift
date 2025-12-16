@@ -36,12 +36,36 @@ let package = Package(
             publicHeadersPath: "include"
         ),
 
+        // LLVM-based symbolizer for DWARF debug info parsing
+        .target(
+            name: "CLLVMSymbolizer",
+            path: "Sources/CLLVMSymbolizer",
+            publicHeadersPath: "include",
+            cxxSettings: [
+                .unsafeFlags([
+                    "-I/opt/homebrew/opt/llvm/include",
+                    "-std=c++17",
+                    "-fno-exceptions",
+                    "-fno-rtti",
+                ]),
+            ],
+            linkerSettings: [
+                .unsafeFlags([
+                    "-L/opt/homebrew/opt/llvm/lib",
+                    "-Xlinker", "-rpath",
+                    "-Xlinker", "/opt/homebrew/opt/llvm/lib",
+                ]),
+                .linkedLibrary("LLVM"),
+            ]
+        ),
+
         .target(
             name: "PropertyTestingKit",
             dependencies: [
                 "PropertyTestingKitMacros",
                 "ValueProfileHooks",
                 "StringAllocationHooks",
+                "CLLVMSymbolizer",
                 .product(name: "Dependencies", package: "swift-dependencies"),
             ]
         ),

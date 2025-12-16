@@ -1,0 +1,4 @@
+module CLLVMSymbolizer {
+    header "CLLVMSymbolizer.h"
+    export *
+}

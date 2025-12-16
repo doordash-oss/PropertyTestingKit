@@ -79,6 +79,9 @@ import Dependencies
 ///   - corpusMode: Controls corpus behavior. Use `.refuzzReplace` to start fresh,
 ///     `.refuzzExtend` to add to existing corpus, or `.auto` for default behavior.
 ///     Can also be set via `FUZZ_CORPUS_MODE` environment variable.
+///   - detectCoverageGaps: Enable coverage gap detection to identify partially-covered
+///     functions. When enabled, the result includes a report of functions that have
+///     some coverage but not complete coverage. Default: false.
 ///   - filePath: Source file path (auto-filled).
 ///   - function: Test function name (auto-filled).
 ///   - test: The test closure receiving fuzzed inputs.
@@ -92,6 +95,7 @@ public func fuzz<each Input: Fuzzable & Codable & Sendable, each M: Mutator>(
     duration: TimeInterval = 60,
     perInputTimeout: TimeInterval? = nil,
     corpusMode: CorpusMode? = nil,
+    detectCoverageGaps: Bool = false,
     filePath: StaticString = #filePath,
     function: StaticString = #function,
     test: @escaping ((repeat each Input)) throws -> Void
@@ -103,7 +107,8 @@ public func fuzz<each Input: Fuzzable & Codable & Sendable, each M: Mutator>(
         maxDuration: duration,
         verbose: environment.environment()["FUZZ_VERBOSE"] != nil,
         corpusMode: corpusMode,
-        perInputTimeout: perInputTimeout
+        perInputTimeout: perInputTimeout,
+        detectCoverageGaps: detectCoverageGaps
     )
 
     // WORKAROUND: Create engine inline to avoid parameter pack forwarding issues.
@@ -133,6 +138,9 @@ public func fuzz<each Input: Fuzzable & Codable & Sendable, each M: Mutator>(
 ///   - corpusMode: Controls corpus behavior. Use `.refuzzReplace` to start fresh,
 ///     `.refuzzExtend` to add to existing corpus, or `.auto` for default behavior.
 ///     Can also be set via `FUZZ_CORPUS_MODE` environment variable.
+///   - detectCoverageGaps: Enable coverage gap detection to identify partially-covered
+///     functions. When enabled, the result includes a report of functions that have
+///     some coverage but not complete coverage. Default: false.
 ///   - filePath: Source file path (auto-filled).
 ///   - function: Test function name (auto-filled).
 ///   - test: The test closure receiving fuzzed inputs.
@@ -145,6 +153,7 @@ public func fuzz<each Input: Fuzzable & Codable & Sendable>(
     duration: TimeInterval = 60,
     perInputTimeout: TimeInterval? = nil,
     corpusMode: CorpusMode? = nil,
+    detectCoverageGaps: Bool = false,
     filePath: StaticString = #filePath,
     function: StaticString = #function,
     test: @escaping ((repeat each Input)) throws -> Void
@@ -156,7 +165,8 @@ public func fuzz<each Input: Fuzzable & Codable & Sendable>(
         maxDuration: duration,
         verbose: environment.environment()["FUZZ_VERBOSE"] != nil,
         corpusMode: corpusMode,
-        perInputTimeout: perInputTimeout
+        perInputTimeout: perInputTimeout,
+        detectCoverageGaps: detectCoverageGaps
     )
 
     let engine = FuzzEngine<repeat each Input>(

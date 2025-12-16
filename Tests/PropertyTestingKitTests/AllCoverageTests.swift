@@ -191,4 +191,54 @@ struct SanCovSourceCoverageTests {
                     "Should have files if we have coverage")
         }
     }
+
+    @Test("DWARF symbolizer provides line numbers when available")
+    func lineNumbersAvailable() {
+        // Check if line numbers are available
+        let lineNumbersAvailable = SanCovCounters.lineNumbersAvailable
+        print("Line numbers available: \(lineNumbersAvailable)")
+
+        let coverage = measureSanCovSourceCoverage {
+            let obj = SimpleClass()
+            obj.increment()
+        }
+
+        guard let coverage = coverage else {
+            Issue.record("Coverage should be available")
+            return
+        }
+
+        print("Coverage has line numbers: \(coverage.hasLineNumbers)")
+        print("Covered count: \(coverage.coveredCount)")
+
+        // Print some locations with line info
+        let locationsWithLines = coverage.coveredLocations.filter { $0.line != nil }
+        print("Locations with line numbers: \(locationsWithLines.count)")
+
+        for loc in locationsWithLines.prefix(5) {
+            print("  \(loc.filename ?? "?"):\(loc.line ?? 0) - \(loc.functionName ?? "?")")
+        }
+
+        // Print line coverage summary
+        let summary = coverage.lineCoverageSummary
+        print("Line coverage summary:")
+        for line in summary.prefix(5) {
+            print("  \(line)")
+        }
+
+        // Test the new line-based APIs
+        if coverage.hasLineNumbers {
+            let byFileLine = coverage.byFileLine
+            #expect(!byFileLine.isEmpty, "Should have file:line groupings")
+
+            let linesByFile = coverage.coveredLinesByFile
+            #expect(!linesByFile.isEmpty, "Should have lines grouped by file")
+
+            // Should find this test file in coverage
+            let thisFile = linesByFile.keys.first { $0.contains("AllCoverageTests.swift") }
+            if let thisFile = thisFile {
+                print("Found this test file with \(linesByFile[thisFile]?.count ?? 0) covered lines")
+            }
+        }
+    }
 }

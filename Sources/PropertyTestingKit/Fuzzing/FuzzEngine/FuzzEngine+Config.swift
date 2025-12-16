@@ -84,6 +84,15 @@ extension FuzzEngine {
         /// Based on Lyu et al. 2019 "MOPT" - found 170% more unique crashes than AFL.
         public var adaptiveMutationConfig: AdaptiveMutationConfig
 
+        /// Enable coverage gap detection to identify partially-covered functions.
+        /// When enabled, the fuzzer will report functions that have some coverage
+        /// but not complete coverage, helping identify missing seeds or mutation strategies.
+        /// Requires test code to be built with coverage instrumentation.
+        public var detectCoverageGaps: Bool
+
+        /// Configuration for coverage gap detection.
+        public var coverageGapConfig: CoverageGapDetector.Config
+
         public init(
             maxIterations: Int = 10_000,
             maxDuration: TimeInterval = 60,
@@ -100,7 +109,9 @@ extension FuzzEngine {
             rareBranchSelectionProbability: Double = 0.8,
             rareBranchMutationAmplification: Int = 3,
             swarmConfig: SwarmConfig = SwarmConfig(),
-            adaptiveMutationConfig: AdaptiveMutationConfig = AdaptiveMutationConfig()
+            adaptiveMutationConfig: AdaptiveMutationConfig = AdaptiveMutationConfig(),
+            detectCoverageGaps: Bool = false,
+            coverageGapConfig: CoverageGapDetector.Config = CoverageGapDetector.Config()
         ) {
             self.maxIterations = maxIterations
             self.maxDuration = maxDuration
@@ -125,6 +136,8 @@ extension FuzzEngine {
             self.rareBranchMutationAmplification = rareBranchMutationAmplification
             self.swarmConfig = swarmConfig
             self.adaptiveMutationConfig = adaptiveMutationConfig
+            self.detectCoverageGaps = detectCoverageGaps
+            self.coverageGapConfig = coverageGapConfig
         }
     }
 }

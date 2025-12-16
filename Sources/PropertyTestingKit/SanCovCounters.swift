@@ -276,7 +276,8 @@ private func demangle(_ mangledName: String) -> String {
 /// Source location information for a covered edge.
 ///
 /// Maps a SanCov edge index to its source location using debug symbol info.
-/// This provides function-level granularity (file + function name).
+/// When DWARF debug info is available, provides line-level granularity.
+/// Otherwise falls back to function-level info from dladdr.
 public struct SanCovSourceLocation: Sendable {
     /// The source file path containing this edge.
     public let filename: String?
@@ -284,16 +285,33 @@ public struct SanCovSourceLocation: Sendable {
     /// The demangled function name containing this edge.
     public let functionName: String?
 
+    /// The line number (1-indexed), or nil if unavailable.
+    public let line: Int?
+
+    /// The column number (1-indexed), or nil if unavailable.
+    public let column: Int?
+
     /// The program counter (instruction address) for this edge.
     public let pc: UInt
 
     /// The SanCov edge index.
     public let edgeIndex: UInt32
 
-    fileprivate init(from cLocation: SanCovSourceLocation_C) {
-        self.filename = cLocation.filename.map { String(cString: $0) }
-        self.functionName = cLocation.function_name.map { mangledName in
-            demangle(String(cString: mangledName))
+    fileprivate init(from cLocation: SanCovSourceLocation_C, dwarfLocation: DWARFSourceLocation? = nil) {
+        // Prefer DWARF info when available
+        if let dwarf = dwarfLocation {
+            self.filename = dwarf.file
+            self.functionName = dwarf.function.map { demangle($0) }
+                ?? cLocation.function_name.map { demangle(String(cString: $0)) }
+            self.line = dwarf.line > 0 ? dwarf.line : nil
+            self.column = dwarf.column > 0 ? dwarf.column : nil
+        } else {
+            self.filename = cLocation.filename.map { String(cString: $0) }
+            self.functionName = cLocation.function_name.map { mangledName in
+                demangle(String(cString: mangledName))
+            }
+            self.line = nil
+            self.column = nil
         }
         self.pc = UInt(cLocation.pc)
         self.edgeIndex = cLocation.edge_index
@@ -302,6 +320,120 @@ public struct SanCovSourceLocation: Sendable {
 
 // Type alias to avoid ambiguity with C struct
 private typealias SanCovSourceLocation_C = ValueProfileHooks.SanCovSourceLocation
+
+// MARK: - DWARF Symbolizer Integration
+
+import MachO
+
+/// Helper for DWARF-based line number resolution.
+/// Lazily initializes the symbolizer on first use.
+private enum DWARFSymbolizerHelper {
+    private static let lock = NSLock()
+    // These are protected by `lock` - safe for concurrent access
+    nonisolated(unsafe) private static var _symbolizer: DWARFSymbolizer?
+    nonisolated(unsafe) private static var _binaryPath: String?
+    nonisolated(unsafe) private static var _slide: Int = 0
+    nonisolated(unsafe) private static var _initialized = false
+
+    /// Get or create the shared symbolizer for the current process.
+    static var shared: DWARFSymbolizer? {
+        lock.lock()
+        defer { lock.unlock() }
+
+        if !_initialized {
+            _initialized = true
+            initializeSymbolizer()
+        }
+        return _symbolizer
+    }
+
+    /// Get the ASLR slide for converting runtime addresses to file offsets.
+    static var slide: Int {
+        lock.lock()
+        defer { lock.unlock() }
+
+        if !_initialized {
+            _initialized = true
+            initializeSymbolizer()
+        }
+        return _slide
+    }
+
+    private static func initializeSymbolizer() {
+        // Find the main executable path
+        guard let path = findMainBinaryPath() else {
+            #if DEBUG
+            print("[DWARFSymbolizer] Could not find main binary path")
+            #endif
+            return
+        }
+        _binaryPath = path
+
+        // Find the slide for this binary
+        _slide = findSlide(for: path)
+
+        #if DEBUG
+        print("[DWARFSymbolizer] Binary: \(path)")
+        print("[DWARFSymbolizer] Slide: 0x\(String(_slide, radix: 16))")
+        #endif
+
+        // Create symbolizer
+        do {
+            _symbolizer = try DWARFSymbolizer(path: path)
+            #if DEBUG
+            print("[DWARFSymbolizer] Initialized successfully")
+            #endif
+        } catch {
+            #if DEBUG
+            print("[DWARFSymbolizer] Failed to initialize: \(error)")
+            #endif
+            // Symbolizer unavailable - that's okay, we fall back to dladdr
+        }
+    }
+
+    private static func findMainBinaryPath() -> String? {
+        // Find the test binary by looking for .xctest bundle
+        // The first image is often swiftpm-testing-helper, not the actual tests
+        for i in 0..<_dyld_image_count() {
+            guard let name = _dyld_get_image_name(i) else { continue }
+            let path = String(cString: name)
+
+            // Look for .xctest bundle (Swift PM test binary)
+            if path.contains(".xctest/") {
+                return path
+            }
+        }
+
+        // Fallback: first image
+        guard _dyld_image_count() > 0,
+              let name = _dyld_get_image_name(0) else {
+            return nil
+        }
+        return String(cString: name)
+    }
+
+    private static func findSlide(for path: String) -> Int {
+        for i in 0..<_dyld_image_count() {
+            guard let name = _dyld_get_image_name(i) else { continue }
+            if String(cString: name) == path {
+                return _dyld_get_image_vmaddr_slide(i)
+            }
+        }
+        return 0
+    }
+
+    /// Convert a runtime PC address to a file offset.
+    static func runtimeToFileOffset(_ pc: UInt) -> UInt64 {
+        UInt64(pc) - UInt64(bitPattern: Int64(slide))
+    }
+
+    /// Look up DWARF info for a PC address.
+    static func lookup(pc: UInt) -> DWARFSourceLocation? {
+        guard let symbolizer = shared else { return nil }
+        let fileOffset = runtimeToFileOffset(pc)
+        return symbolizer.lookup(address: fileOffset)
+    }
+}
 
 extension SanCovCounters {
     /// Check if PC-to-source mapping is available.
@@ -353,6 +485,9 @@ extension SanCovCounters {
 
     /// Get source location info for a given edge index.
     ///
+    /// When DWARF debug info is available, includes line and column numbers.
+    /// Otherwise falls back to function-level info from dladdr.
+    ///
     /// - Parameter edgeIndex: The edge index to look up.
     /// - Returns: Source location info, or nil if unavailable.
     public static func getSourceLocation(for edgeIndex: Int) -> SanCovSourceLocation? {
@@ -360,13 +495,17 @@ extension SanCovCounters {
         guard sancov_get_source_location(edgeIndex, &cLocation) else {
             return nil
         }
-        return SanCovSourceLocation(from: cLocation)
+
+        // Try to get DWARF line info
+        let dwarfLocation = DWARFSymbolizerHelper.lookup(pc: UInt(cLocation.pc))
+        return SanCovSourceLocation(from: cLocation, dwarfLocation: dwarfLocation)
     }
 
     /// Get source locations for all covered edges in the current task.
     ///
     /// This provides task-isolated coverage with source mapping.
-    /// Each location includes the file path and function name where the edge resides.
+    /// When DWARF debug info is available, each location includes line numbers.
+    /// Otherwise falls back to function-level info.
     ///
     /// - Returns: Array of source locations for covered edges.
     public static func getCoveredLocations() -> [SanCovSourceLocation] {
@@ -378,18 +517,37 @@ extension SanCovCounters {
         var cLocations = [SanCovSourceLocation_C](repeating: SanCovSourceLocation_C(), count: count)
         let filled = sancov_get_covered_locations(&cLocations, count)
 
-        // Convert to Swift types
-        return cLocations.prefix(filled).map { SanCovSourceLocation(from: $0) }
+        // Convert to Swift types with DWARF line info when available
+        return cLocations.prefix(filled).map { cLoc in
+            let dwarfLocation = DWARFSymbolizerHelper.lookup(pc: UInt(cLoc.pc))
+            return SanCovSourceLocation(from: cLoc, dwarfLocation: dwarfLocation)
+        }
+    }
+
+    /// Check if DWARF line-level symbolication is available.
+    ///
+    /// When `true`, `getSourceLocation` and `getCoveredLocations` will include
+    /// line and column numbers. When `false`, only function-level info is available.
+    public static var lineNumbersAvailable: Bool {
+        DWARFSymbolizerHelper.shared != nil
     }
 }
 
 /// Coverage result with source-mapped locations (task-isolated).
+///
+/// When DWARF debug info is available, locations include line numbers,
+/// enabling line-level coverage analysis.
 public struct SanCovSourceCoverage: Sendable {
     /// All covered source locations.
     public let coveredLocations: [SanCovSourceLocation]
 
     /// Number of edges covered.
     public var coveredCount: Int { coveredLocations.count }
+
+    /// Whether line numbers are available in the coverage data.
+    public var hasLineNumbers: Bool {
+        coveredLocations.contains { $0.line != nil }
+    }
 
     /// Coverage grouped by file.
     public var byFile: [String: [SanCovSourceLocation]] {
@@ -405,6 +563,15 @@ public struct SanCovSourceCoverage: Sendable {
         }
     }
 
+    /// Coverage grouped by file and line (file:line -> locations).
+    ///
+    /// Only includes locations that have line numbers.
+    public var byFileLine: [String: [SanCovSourceLocation]] {
+        Dictionary(grouping: coveredLocations.filter { $0.filename != nil && $0.line != nil }) {
+            "\($0.filename!):\($0.line!)"
+        }
+    }
+
     /// Get all unique files that were covered.
     public var coveredFiles: Set<String> {
         Set(coveredLocations.compactMap { $0.filename })
@@ -414,6 +581,53 @@ public struct SanCovSourceCoverage: Sendable {
     public var coveredFunctions: Set<String> {
         Set(coveredLocations.compactMap { $0.functionName })
     }
+
+    /// Get all unique lines that were covered, grouped by file.
+    ///
+    /// Returns a dictionary mapping file paths to sets of covered line numbers.
+    public var coveredLinesByFile: [String: Set<Int>] {
+        var result: [String: Set<Int>] = [:]
+        for loc in coveredLocations {
+            guard let file = loc.filename, let line = loc.line else { continue }
+            result[file, default: []].insert(line)
+        }
+        return result
+    }
+
+    /// Get a summary of covered lines per file.
+    ///
+    /// Returns formatted strings like "MyFile.swift: lines 10, 15, 20-25"
+    public var lineCoverageSummary: [String] {
+        coveredLinesByFile.map { (file, lines) in
+            let sortedLines = lines.sorted()
+            let ranges = collapseToRanges(sortedLines)
+            let rangeStr = ranges.map { range in
+                range.count == 1 ? "\(range.lowerBound)" : "\(range.lowerBound)-\(range.upperBound)"
+            }.joined(separator: ", ")
+            return "\(URL(fileURLWithPath: file).lastPathComponent): lines \(rangeStr)"
+        }.sorted()
+    }
+}
+
+/// Collapse consecutive integers into ranges.
+private func collapseToRanges(_ sorted: [Int]) -> [ClosedRange<Int>] {
+    guard !sorted.isEmpty else { return [] }
+
+    var ranges: [ClosedRange<Int>] = []
+    var start = sorted[0]
+    var end = sorted[0]
+
+    for i in 1..<sorted.count {
+        if sorted[i] == end + 1 {
+            end = sorted[i]
+        } else {
+            ranges.append(start...end)
+            start = sorted[i]
+            end = sorted[i]
+        }
+    }
+    ranges.append(start...end)
+    return ranges
 }
 
 /// Measure coverage with source location mapping (context-isolated).
