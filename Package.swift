@@ -18,17 +18,10 @@ let package = Package(
     ],
     dependencies: [
         .package(url: "https://github.com/swiftlang/swift-syntax.git", from: "600.0.1"),
-        .package(url: "git@github.com:alex-reilly-dd/LLVMCoverageKit.git", from: "18.1.9"),
         .package(url: "https://github.com/pointfreeco/swift-dependencies.git", from: "1.6.0"),
         .package(url: "https://github.com/twof/FunctionSpy.git", from: "1.2.0"),
     ],
     targets: [
-        // C module for LLVM profile runtime interface
-        .target(
-            name: "PropertyTestingKitInternals",
-            path: "Sources/PropertyTestingKitInternals"
-        ),
-
         // C module for value profile hooks (sanitizer coverage)
         .target(
             name: "ValueProfileHooks",
@@ -43,36 +36,13 @@ let package = Package(
             publicHeadersPath: "include"
         ),
 
-        // C++ wrapper for LLVM coverage APIs
-        .target(
-            name: "LLVMCoverageInterop",
-            dependencies: ["LLVMCoverageKit"],
-            path: "Sources/LLVMCoverageInterop",
-            publicHeadersPath: "include",
-            cxxSettings: [
-                .define("__STDC_CONSTANT_MACROS"),
-                .define("__STDC_FORMAT_MACROS"),
-                .define("__STDC_LIMIT_MACROS"),
-                // Disable Clang modules - LLVM headers aren't properly modularized
-                .unsafeFlags(["-std=c++17", "-fno-exceptions", "-fno-rtti", "-fno-modules"])
-            ],
-            linkerSettings: [
-                .linkedLibrary("z")
-            ]
-        ),
-
         .target(
             name: "PropertyTestingKit",
             dependencies: [
                 "PropertyTestingKitMacros",
-                "PropertyTestingKitInternals",
-                "LLVMCoverageInterop",
                 "ValueProfileHooks",
                 "StringAllocationHooks",
                 .product(name: "Dependencies", package: "swift-dependencies"),
-            ],
-            swiftSettings: [
-                .interoperabilityMode(.Cxx)
             ]
         ),
         .testTarget(
@@ -83,7 +53,6 @@ let package = Package(
                 .product(name: "FunctionSpy", package: "FunctionSpy"),
             ],
             swiftSettings: [
-                .interoperabilityMode(.Cxx),
                 // Enable sanitizer coverage for SanCov source mapping tests
                 .unsafeFlags([
                     "-sanitize=undefined",
@@ -98,7 +67,6 @@ let package = Package(
                 .product(name: "Dependencies", package: "swift-dependencies"),
             ],
             swiftSettings: [
-                .interoperabilityMode(.Cxx),
                 // Enable value profile guidance for stress tests
                 .unsafeFlags([
                     "-sanitize=undefined",
@@ -126,6 +94,5 @@ let package = Package(
                 .product(name: "SwiftCompilerPlugin", package: "swift-syntax"),
             ]
         )
-    ],
-    cxxLanguageStandard: .cxx17
+    ]
 )

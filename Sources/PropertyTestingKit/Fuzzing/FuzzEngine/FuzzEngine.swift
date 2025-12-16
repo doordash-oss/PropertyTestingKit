@@ -400,8 +400,7 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
             failures: [],
             stats: emptyStats,
             wasRegression: true,
-            coverageChanges: [],
-            coverageGapReport: nil
+            coverageChanges: []
         )
     }
 
@@ -420,9 +419,6 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
         var iterationsSinceNewCoverage = 0
         var totalMutations = 0
         var totalGenerations = 0
-
-        // Capture counter snapshot at start for coverage gap detection
-        let fuzzRunStartSnapshot = config.detectCoverageGaps ? coverageCounters.snapshot() : nil
 
         // Initialize plateau detector for adaptive early stopping
         var plateauDetector = CoveragePlateauDetector(config: config.plateauConfig)
@@ -903,21 +899,6 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
             print("[Fuzz] Hang statistics: \(hangs.count) inputs caused timeouts")
         }
 
-        // Detect coverage gaps if enabled
-        var coverageGapReport: CoverageGapReport? = nil
-        if config.detectCoverageGaps {
-            // Use before/after snapshot to get accurate coverage delta for this fuzz run
-            let fuzzRunEndSnapshot = coverageCounters.snapshot()
-            coverageGapReport = detectCoverageGaps(
-                startSnapshot: fuzzRunStartSnapshot,
-                endSnapshot: fuzzRunEndSnapshot
-            )
-
-            if let report = coverageGapReport, report.hasGaps {
-                recordCoverageGapsAsIssues(report)
-            }
-        }
-
         let stats = FuzzStats(
             totalInputs: iteration,
             newPaths: finalCorpus.count,
@@ -935,8 +916,7 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
             failures: failures,
             stats: stats,
             wasRegression: false,
-            coverageChanges: [],
-            coverageGapReport: coverageGapReport
+            coverageChanges: []
         )
     }
 
@@ -1014,8 +994,7 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
             failures: failures,
             stats: stats,
             wasRegression: true,
-            coverageChanges: coverageChanges,
-            coverageGapReport: nil  // Gap detection not run during regression
+            coverageChanges: coverageChanges
         )
     }
 
@@ -1658,217 +1637,5 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
         results.append(exactTarget)
 
         return results
-    }
-
-    // MARK: - Coverage Gap Detection
-
-    /// Detect coverage gaps using source-level coverage analysis.
-    ///
-    /// Uses before/after counter snapshots from the fuzz run to compute
-    /// the actual coverage delta, then resolves to source-level coverage
-    /// using LLVM's coverage mapping.
-    ///
-    /// - Parameters:
-    ///   - startSnapshot: Counter snapshot taken at the start of the fuzz run.
-    ///   - endSnapshot: Counter snapshot taken at the end of the fuzz run.
-    /// - Returns: Report of coverage gaps, or nil if detection unavailable.
-    private func detectCoverageGaps(
-        startSnapshot: SanCovCounters?,
-        endSnapshot: SanCovCounters?
-    ) -> CoverageGapReport? {
-        // Need both snapshots for accurate delta
-        guard let start = startSnapshot, let end = endSnapshot else {
-            if config.verbose {
-                print("[Fuzz] Coverage gap detection unavailable: coverage counters not available")
-            }
-            return nil
-        }
-
-        // Load the coverage reader (cached)
-        guard let reader = try? InMemoryCoverageReader.loadFromCurrentProcess() else {
-            if config.verbose {
-                print("[Fuzz] Coverage gap detection unavailable: could not load coverage mapping")
-            }
-            return nil
-        }
-
-        // Compute the coverage delta for this fuzz run only.
-        // This excludes coverage from other tests that may have run before.
-        // SanCovCounters use UInt8, convert to UInt64 for the reader.
-        let deltaCounters = zip(end.counters, start.counters).map { endVal, startVal -> UInt64 in
-            endVal >= startVal ? UInt64(endVal - startVal) : 0
-        }
-
-        // Check if any coverage was recorded during this fuzz run
-        guard deltaCounters.contains(where: { $0 > 0 }) else {
-            if config.verbose {
-                print("[Fuzz] Coverage gap detection: no coverage recorded during fuzz run")
-            }
-            return nil
-        }
-
-        // Resolve to source-level coverage using only this fuzz run's coverage delta
-        let resolved = reader.resolveCoverage(counters: deltaCounters)
-
-        // Filter to project files only (exclude dependencies and system libraries)
-        var projectCoverage = filterToProjectFiles(resolved)
-
-        // Further filter to exclude test functions themselves.
-        // When running concurrently, other test functions may show partial coverage.
-        // We only want to report gaps in the code being tested, not in test infrastructure.
-        projectCoverage = filterToNonTestFunctions(projectCoverage)
-
-        // Filter to only functions that were TOUCHED during this fuzz run.
-        // A function is "touched" if at least one of its regions has executionCount > 0 in the delta.
-        // This excludes functions that were partially covered by concurrent tests but not by this fuzz run.
-        projectCoverage = filterToTouchedFunctions(projectCoverage)
-
-        // Detect gaps
-        let detector = CoverageGapDetector()
-        return detector.detect(from: projectCoverage)
-    }
-
-    /// Filter coverage to only include functions that were touched during this fuzz run.
-    ///
-    /// A function is "touched" if at least one of its regions has executionCount > 0.
-    /// Since we're using delta counters, executionCount > 0 means the region was
-    /// executed during this specific fuzz run.
-    private func filterToTouchedFunctions(_ coverage: ResolvedCoverage) -> ResolvedCoverage {
-        let filteredFunctions = coverage.functions.filter { func_ in
-            // Check if ANY region of this function was executed during this fuzz run
-            func_.regions.contains { $0.executionCount > 0 }
-        }
-
-        return ResolvedCoverage(functions: filteredFunctions, sourceFiles: coverage.sourceFiles)
-    }
-
-    /// Filter coverage to exclude test functions from OTHER tests.
-    ///
-    /// This excludes test methods and closures from other test suites that may
-    /// appear partially covered when tests run concurrently. Helper functions
-    /// defined inside test types are kept (they have parameters and/or non-void returns).
-    private func filterToNonTestFunctions(_ coverage: ResolvedCoverage) -> ResolvedCoverage {
-        let filteredFunctions = coverage.functions.filter { func_ in
-            let name = func_.name
-
-            // Exclude test methods themselves
-            // Test method pattern: "<module>.<TestSuite>.<testMethod>() throws -> ()"
-            // - Parameterless (ends with `()` before the arrow)
-            // - Returns void (`-> ()`)
-            // - In a type containing "Tests" or "Test"
-            //
-            // Helper function pattern: "<module>.<TestSuite>.<helper>(arg: Type) -> SomeType"
-            // - Has parameters (contains `:` before `->`)
-            // - May return non-void
-            //
-            // We exclude only parameterless void-returning methods in test types.
-            if !name.contains("closure #") && !name.contains(" in ") {
-                // Check if this is in a test type
-                if name.contains("Tests.") || name.contains("Test.") {
-                    // Check if it's a parameterless void-returning method (test method pattern)
-                    // Pattern: "...methodName() -> ()" or "...methodName() throws -> ()"
-                    // Key: the part before "->" is just "()" with no parameters
-                    if name.hasSuffix("() -> ()") || name.hasSuffix("() throws -> ()") ||
-                       name.hasSuffix("() async -> ()") || name.hasSuffix("() async throws -> ()") {
-                        return false
-                    }
-                }
-            }
-
-            // Exclude closures inside test functions
-            // Pattern: "closure #N ... in <module>.<TestSuite>.<testFunction>(...)"
-            if name.contains("closure #") {
-                if name.contains("Tests.") || name.contains("Test.") {
-                    return false
-                }
-            }
-
-            return true
-        }
-
-        return ResolvedCoverage(functions: filteredFunctions, sourceFiles: coverage.sourceFiles)
-    }
-
-    /// Filter coverage to only include project source files.
-    private func filterToProjectFiles(_ coverage: ResolvedCoverage) -> ResolvedCoverage {
-        // Exclude system and dependency paths
-        let excludedPrefixes = [
-            "/usr",
-            "/System",
-            "/Library",
-            "/Applications",
-            "/opt/homebrew",
-            "/private",
-            "/AppleInternal",
-            "/var",
-        ]
-
-        let excludedPatterns = [
-            "/.build/checkouts/",      // SwiftPM dependencies
-            "/Xcode.app/",             // Xcode frameworks
-            "/Xcode-beta.app/",        // Xcode beta
-            "/SourcePackages/",        // Xcode package cache
-            "/__xcode_",               // Xcode generated
-            "/DerivedData/",           // Build artifacts
-            ".sdk/",                   // SDK files
-            "/PropertyTestingKit/Sources/",  // This library's source code
-            "runner.swift",            // Swift Testing runner infrastructure
-        ]
-
-        func shouldExclude(_ path: String) -> Bool {
-            for prefix in excludedPrefixes {
-                if path.hasPrefix(prefix) { return true }
-            }
-            for pattern in excludedPatterns {
-                if path.contains(pattern) { return true }
-            }
-            // Must look like a user path
-            let looksLikeUserPath = path.hasPrefix("/Users/") ||
-                                    path.hasPrefix("/home/") ||
-                                    !path.hasPrefix("/")
-            return !looksLikeUserPath
-        }
-
-        let filteredFunctions = coverage.functions.compactMap { func_ -> ResolvedFunctionCoverage? in
-            let filteredRegions = func_.regions.filter { region in
-                !shouldExclude(region.filename)
-            }
-            guard !filteredRegions.isEmpty else { return nil }
-            return ResolvedFunctionCoverage(
-                name: func_.name,
-                hash: func_.hash,
-                regions: filteredRegions,
-                executionCount: func_.executionCount
-            )
-        }
-
-        let filteredFiles = coverage.sourceFiles.filter { file in
-            !shouldExclude(file)
-        }
-
-        return ResolvedCoverage(functions: filteredFunctions, sourceFiles: filteredFiles)
-    }
-
-    /// Record coverage gaps as test issues using Swift Testing's Issue.record().
-    ///
-    /// Each issue is recorded at the source location of the uncovered region,
-    /// making gaps visible in the test navigator with clickable locations.
-    private func recordCoverageGapsAsIssues(_ report: CoverageGapReport) {
-        for gap in report.gaps {
-            // Record an issue for each uncovered region at its actual source location
-            for region in gap.uncoveredRegions {
-                let regionType = region.isBranch ? "branch" : "code"
-                let message = "Coverage gap: \(regionType) not covered in \(gap.functionName)"
-
-                let sourceLocation = SourceLocation(
-                    fileID: gap.filename,
-                    filePath: gap.filename,
-                    line: Int(region.lineStart),
-                    column: Int(region.columnStart)
-                )
-
-                Issue.record(Comment(rawValue: message), sourceLocation: sourceLocation)
-            }
-        }
     }
 }

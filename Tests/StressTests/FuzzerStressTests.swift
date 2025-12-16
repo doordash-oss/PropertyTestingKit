@@ -853,23 +853,3 @@ struct FuzzerStressTests {
         #expect(seenVeryLarge, "Should grow array to 200+ via repeated doubling (21->42->84->168->336)")
     }
 }
-
-
-extension FuzzerStressTests {
-    // MARK: - Coverage Gap Detection Tests
-
-    func functionWithImpossibleCoverage(input: Int) -> Bool {
-        if input > Int.max {
-            return true
-        }
-
-        return false
-    }
-
-    @Test("Coverage holes discovered")
-    func coverageHolesDiscovered() throws {
-        try fuzz(detectCoverageGaps: true) { input in
-            functionWithImpossibleCoverage(input: input)
-        }
-    }
-}

@@ -1,31 +1,35 @@
 {
-  "createdAt" : "2025-12-16T07:31:32Z",
+  "createdAt" : "2025-12-16T08:06:43Z",
   "entries" : [
     {
-      "discoveredAt" : "2025-12-16T07:31:20Z",
+      "discoveredAt" : "2025-12-16T08:06:41Z",
       "entryType" : "coverage",
       "input" : [
-        "WzAsMSwtMSwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDBd"
+        "WzAsMSwtMSwwLDEsLTEsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDBd"
       ],
       "inputReadable" : [
-        "[0, 1, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]"
+        "[0, 1, -1, 0, 1, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]"
       ],
       "parentIndex" : 3,
       "signature" : {
         "buckets" : {
-          "26829" : 1,
-          "26830" : 1,
-          "26833" : 1,
-          "26835" : 1,
-          "27178" : 1,
-          "27456" : 1,
-          "27457" : 1,
-          "27461" : 1
+          "1997" : 1,
+          "1998" : 1,
+          "2001" : 1,
+          "2003" : 1,
+          "2126" : 1,
+          "2127" : 1,
+          "2346" : 1,
+          "2536" : 1,
+          "2537" : 1,
+          "2624" : 1,
+          "2625" : 1,
+          "2629" : 1
         }
       }
     },
     {
-      "discoveredAt" : "2025-12-16T07:31:20Z",
+      "discoveredAt" : "2025-12-16T08:06:41Z",
       "entryType" : "coverage",
       "input" : [
         "W10="
@@ -35,57 +39,65 @@
       ],
       "signature" : {
         "buckets" : {
-          "26829" : 1,
-          "26831" : 1,
-          "26833" : 1,
-          "26834" : 1,
-          "27178" : 1,
-          "27456" : 1,
-          "27459" : 1
+          "1997" : 1,
+          "1999" : 1,
+          "2001" : 1,
+          "2002" : 1,
+          "2346" : 1,
+          "2624" : 1,
+          "2627" : 1
         }
       }
     },
     {
-      "discoveredAt" : "2025-12-16T07:31:22Z",
+      "discoveredAt" : "2025-12-16T08:06:42Z",
       "entryType" : "coverage",
       "input" : [
-        "WzAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMF0="
+        "WzAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDBd"
       ],
       "inputReadable" : [
-        "[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]"
+        "[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]"
       ],
-      "parentIndex" : 1,
+      "parentIndex" : 0,
       "signature" : {
         "buckets" : {
-          "26829" : 1,
-          "26831" : 1,
-          "26832" : 1,
-          "26835" : 1,
-          "27178" : 1,
-          "27456" : 1,
-          "27458" : 1,
-          "27461" : 1
+          "1997" : 1,
+          "1999" : 1,
+          "2000" : 1,
+          "2003" : 1,
+          "2126" : 1,
+          "2127" : 1,
+          "2346" : 1,
+          "2536" : 1,
+          "2537" : 1,
+          "2624" : 1,
+          "2626" : 1,
+          "2629" : 1
         }
       }
     }
   ],
-  "schemaVersion" : "v1-27893",
+  "schemaVersion" : "v1-3061",
   "totalCoverage" : {
     "buckets" : {
-      "26829" : 1,
-      "26830" : 1,
-      "26831" : 1,
-      "26832" : 1,
-      "26833" : 1,
-      "26834" : 1,
-      "26835" : 1,
-      "27178" : 1,
-      "27456" : 1,
-      "27457" : 1,
-      "27458" : 1,
-      "27459" : 1,
-      "27461" : 1
+      "1997" : 1,
+      "1998" : 1,
+      "1999" : 1,
+      "2000" : 1,
+      "2001" : 1,
+      "2002" : 1,
+      "2003" : 1,
+      "2126" : 1,
+      "2127" : 1,
+      "2346" : 1,
+      "2536" : 1,
+      "2537" : 1,
+      "2624" : 1,
+      "2625" : 1,
+      "2626" : 1,
+      "2627" : 1,
+      "2629" : 1
     }
   },
-  "updatedAt" : "2025-12-16T07:31:32Z"
+  "updatedAt" : "2025-12-16T08:06:43Z"
 }

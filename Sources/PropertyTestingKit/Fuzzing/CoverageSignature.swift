@@ -63,28 +63,6 @@ public struct CoverageSignature: Hashable, Codable, Sendable {
         self.buckets = buckets
     }
 
-    /// Create a signature from a CounterDiff (delta counters).
-    public init(diff: CounterDiff) {
-        var buckets: [Int: Bucket] = [:]
-
-        // Use the delta values, not absolute values
-        let beforeCounters = diff.before.counters
-        let afterCounters = diff.after.counters
-        let maxCount = max(beforeCounters.count, afterCounters.count)
-
-        for i in 0..<maxCount {
-            let before = i < beforeCounters.count ? beforeCounters[i] : 0
-            let after = i < afterCounters.count ? afterCounters[i] : 0
-            let delta = after >= before ? after - before : 0
-
-            let bucket = Bucket(count: delta)
-            if bucket != .zero {
-                buckets[i] = bucket
-            }
-        }
-        self.buckets = buckets
-    }
-
     /// Create a signature from a SanCovCounters snapshot.
     ///
     /// SanCovCounters use 8-bit counters (0 or 1 for edge coverage),

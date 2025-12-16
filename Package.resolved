@@ -1,5 +1,5 @@
 {
-  "originHash" : "919e4e0af444487b2eb21db4339a02d45231d35f81dbad99a277b3aeed46325b",
+  "originHash" : "4bdcc7a17add9280cb8bb71464f031f0788eab487758fa2eab0aaac6a7cd5015",
   "pins" : [
     {
       "identity" : "combine-schedulers",
@@ -17,15 +17,6 @@
       "state" : {
         "revision" : "dd88f825c8b604aee247b3e2a8e42af81037d0c5",
         "version" : "1.2.0"
-      }
-    },
-    {
-      "identity" : "llvmcoveragekit",
-      "kind" : "remoteSourceControl",
-      "location" : "git@github.com:alex-reilly-dd/LLVMCoverageKit.git",
-      "state" : {
-        "revision" : "e3a1fce84650f406c1665b36d77873500463d7ce",
-        "version" : "18.1.9"
       }
     },
     {

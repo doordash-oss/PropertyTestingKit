@@ -1,5 +1,0 @@
-module LLVMCoverageInterop {
-    header "LLVMCoverageInterop.hpp"
-    requires cplusplus
-    export *
-}

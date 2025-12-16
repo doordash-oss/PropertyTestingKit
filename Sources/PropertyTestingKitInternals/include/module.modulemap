@@ -1,4 +1,0 @@
-module PropertyTestingKitInternals {
-    umbrella "."
-    export *
-}

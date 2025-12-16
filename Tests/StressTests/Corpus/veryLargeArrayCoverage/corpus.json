@@ -1,8 +1,8 @@
 {
-  "createdAt" : "2025-12-16T07:31:26Z",
+  "createdAt" : "2025-12-16T08:06:43Z",
   "entries" : [
     {
-      "discoveredAt" : "2025-12-16T07:31:06Z",
+      "discoveredAt" : "2025-12-16T08:06:41Z",
       "entryType" : "coverage",
       "input" : [
         "W10="
@@ -12,50 +12,50 @@
       ],
       "signature" : {
         "buckets" : {
-          "26889" : 1,
-          "26891" : 1,
-          "26892" : 1,
-          "27182" : 1,
-          "27462" : 1,
-          "27464" : 1
+          "2057" : 1,
+          "2059" : 1,
+          "2060" : 1,
+          "2350" : 1,
+          "2630" : 1,
+          "2632" : 1
         }
       }
     },
     {
-      "discoveredAt" : "2025-12-16T07:31:06Z",
+      "discoveredAt" : "2025-12-16T08:06:41Z",
       "entryType" : "coverage",
       "input" : [
-        "WzAsMSwtMSwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwxLC0xLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMF0="
+        "WzAsMSwtMSwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMF0="
       ],
       "inputReadable" : [
-        "[0, 1, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]"
+        "[0, 1, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]"
       ],
-      "parentIndex" : 3,
+      "parentIndex" : 2,
       "signature" : {
         "buckets" : {
-          "26889" : 1,
-          "26890" : 1,
-          "26893" : 1,
-          "27182" : 1,
-          "27462" : 1,
-          "27463" : 1
+          "2057" : 1,
+          "2058" : 1,
+          "2061" : 1,
+          "2350" : 1,
+          "2630" : 1,
+          "2631" : 1
         }
       }
     }
   ],
-  "schemaVersion" : "v1-27893",
+  "schemaVersion" : "v1-3061",
   "totalCoverage" : {
     "buckets" : {
-      "26889" : 1,
-      "26890" : 1,
-      "26891" : 1,
-      "26892" : 1,
-      "26893" : 1,
-      "27182" : 1,
-      "27462" : 1,
-      "27463" : 1,
-      "27464" : 1
+      "2057" : 1,
+      "2058" : 1,
+      "2059" : 1,
+      "2060" : 1,
+      "2061" : 1,
+      "2350" : 1,
+      "2630" : 1,
+      "2631" : 1,
+      "2632" : 1
     }
   },
-  "updatedAt" : "2025-12-16T07:31:26Z"
+  "updatedAt" : "2025-12-16T08:06:43Z"
 }

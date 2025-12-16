@@ -249,6 +249,30 @@ public func measureSanCoverage(_ body: () async throws -> Void) async rethrows -
 
 // MARK: - Source Location Mapping
 
+// Swift runtime demangling function
+// char *swift_demangle(const char *mangledName, size_t mangledNameLength,
+//                      char *outputBuffer, size_t *outputBufferSize, uint32_t flags);
+@_silgen_name("swift_demangle")
+private func swift_demangle(
+    _ mangledName: UnsafePointer<CChar>?,
+    _ mangledNameLength: Int,
+    _ outputBuffer: UnsafeMutablePointer<CChar>?,
+    _ outputBufferSize: UnsafeMutablePointer<Int>?,
+    _ flags: UInt32
+) -> UnsafeMutablePointer<CChar>?
+
+/// Demangle a Swift symbol name.
+/// Returns the demangled name, or the original if demangling fails.
+private func demangle(_ mangledName: String) -> String {
+    guard let result = mangledName.withCString({ cString in
+        swift_demangle(cString, mangledName.utf8.count, nil, nil, 0)
+    }) else {
+        return mangledName
+    }
+    defer { free(result) }
+    return String(cString: result)
+}
+
 /// Source location information for a covered edge.
 ///
 /// Maps a SanCov edge index to its source location using debug symbol info.
@@ -257,7 +281,7 @@ public struct SanCovSourceLocation: Sendable {
     /// The source file path containing this edge.
     public let filename: String?
 
-    /// The function name containing this edge.
+    /// The demangled function name containing this edge.
     public let functionName: String?
 
     /// The program counter (instruction address) for this edge.
@@ -268,7 +292,9 @@ public struct SanCovSourceLocation: Sendable {
 
     fileprivate init(from cLocation: SanCovSourceLocation_C) {
         self.filename = cLocation.filename.map { String(cString: $0) }
-        self.functionName = cLocation.function_name.map { String(cString: $0) }
+        self.functionName = cLocation.function_name.map { mangledName in
+            demangle(String(cString: mangledName))
+        }
         self.pc = UInt(cLocation.pc)
         self.edgeIndex = cLocation.edge_index
     }

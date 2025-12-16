@@ -71,52 +71,6 @@ struct CoverageSignatureTests {
         #expect(newSig.uniqueIndices(comparedTo: existing) == Set([2]))
     }
 
-    @Test("Signature from CounterDiff")
-    func testSignatureFromDiff() {
-        let before = CoverageCounters(counters: [0, 5, 10])
-        let after = CoverageCounters(counters: [3, 5, 15])
-        let diff = after.difference(from: before)
-        let signature = CoverageSignature(diff: diff)
-
-        // Index 0: 0 -> 3 = delta 3
-        // Index 1: 5 -> 5 = delta 0 (no change)
-        // Index 2: 10 -> 15 = delta 5
-        #expect(signature.buckets[0] == .three)
-        #expect(signature.buckets[1] == nil)
-        #expect(signature.buckets[2] == .fourToSeven)
-    }
-
-    @Test("Signature from CounterDiff with different array sizes")
-    func testSignatureFromDiffDifferentSizes() {
-        // Before has more counters
-        let before = CoverageCounters(counters: [10, 20, 30])
-        let after = CoverageCounters(counters: [15])
-        let diff = after.difference(from: before)
-        let signature = CoverageSignature(diff: diff)
-
-        // Index 0: 10 -> 15 = delta 5
-        // Index 1: 20 -> 0 (missing) = delta would be negative, clamped to 0
-        // Index 2: 30 -> 0 (missing) = delta would be negative, clamped to 0
-        #expect(signature.buckets[0] == .fourToSeven)
-        #expect(signature.buckets[1] == nil)  // No coverage (delta 0)
-        #expect(signature.buckets[2] == nil)  // No coverage (delta 0)
-    }
-
-    @Test("Signature from CounterDiff when after is larger")
-    func testSignatureFromDiffAfterLarger() {
-        let before = CoverageCounters(counters: [5])
-        let after = CoverageCounters(counters: [10, 20, 30])
-        let diff = after.difference(from: before)
-        let signature = CoverageSignature(diff: diff)
-
-        // Index 0: 5 -> 10 = delta 5
-        // Index 1: 0 -> 20 = delta 20
-        // Index 2: 0 -> 30 = delta 30
-        #expect(signature.buckets[0] == .fourToSeven)
-        #expect(signature.buckets[1] == .sixteenToThirtyOne)
-        #expect(signature.buckets[2] == .sixteenToThirtyOne)
-    }
-
     @Test("Signature from SanCovCounters snapshot")
     func testSignatureFromSnapshot() {
         let counters = SanCovCounters(counters: [0, 1, 0, 128] as [UInt64])
