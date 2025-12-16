@@ -114,16 +114,16 @@ let numberParserSeeds: [String] = [
 
 // MARK: - Fuzz API Tests
 
-@Suite("Fuzz API", .serialized)
+@Suite("Fuzz API")
 struct FuzzAPITests {
 
     // MARK: - Helpers
 
-    /// Creates a CoverageCounters with a specific signature pattern.
-    static func makeCounters(_ seed: Int) -> CoverageCounters {
+    /// Creates a SanCovCounters with a specific signature pattern.
+    static func makeCounters(_ seed: Int) -> SanCovCounters {
         var counters = [UInt64](repeating: 0, count: 100)
         counters[seed % 100] = UInt64(seed + 1)
-        return CoverageCounters(counters: counters)
+        return SanCovCounters(counters: counters)
     }
 
     @Test("Coverage-guided fuzzing finds all code paths in NumberParser")
@@ -141,13 +141,13 @@ struct FuzzAPITests {
         var roundTripFailures: [String] = []
 
         nonisolated(unsafe) var callCount = 0
-        let (snapshotSpy, snapshotFn) = spy { () -> CoverageCounters? in
+        let (snapshotSpy, snapshotFn) = spy { () -> SanCovCounters? in
             callCount += 1
             return FuzzAPITests.makeCounters(callCount % 10)
         }
 
         let result = withDependencies {
-            $0.coverageCounters = CoverageCountersClient(snapshot: snapshotFn)
+            $0.coverageCounters = CoverageCountersClient(snapshot: snapshotFn, reset: {}, isAvailable: { true })
             $0.fileManager = FileManagerClient(
                 currentDirectoryPath: { "/test" },
                 fileExists: { _ in false },
@@ -242,14 +242,14 @@ struct FuzzAPITests {
         let corpusDir = URL(fileURLWithPath: "/test/fuzz-negation")
 
         nonisolated(unsafe) var callCount = 0
-        let (snapshotSpy, snapshotFn) = spy { () -> CoverageCounters? in
+        let (snapshotSpy, snapshotFn) = spy { () -> SanCovCounters? in
             callCount += 1
             return FuzzAPITests.makeCounters(callCount % 10)
         }
 
         var negationFailures: [String] = []
         let result = withDependencies {
-            $0.coverageCounters = CoverageCountersClient(snapshot: snapshotFn)
+            $0.coverageCounters = CoverageCountersClient(snapshot: snapshotFn, reset: {}, isAvailable: { true })
             $0.fileManager = FileManagerClient(
                 currentDirectoryPath: { "/test" },
                 fileExists: { _ in false },
@@ -286,13 +286,13 @@ struct FuzzAPITests {
         let (writeDataSpy, writeDataFn) = spy { (_: Data, _: URL) in }
 
         nonisolated(unsafe) var callCount = 0
-        let (snapshotSpy, snapshotFn) = spy { () -> CoverageCounters? in
+        let (snapshotSpy, snapshotFn) = spy { () -> SanCovCounters? in
             callCount += 1
             return FuzzAPITests.makeCounters(callCount % 10)
         }
 
         withDependencies {
-            $0.coverageCounters = CoverageCountersClient(snapshot: snapshotFn)
+            $0.coverageCounters = CoverageCountersClient(snapshot: snapshotFn, reset: {}, isAvailable: { true })
             $0.fileManager = FileManagerClient(
                 currentDirectoryPath: { "/test" },
                 fileExists: { _ in false },
@@ -331,13 +331,13 @@ struct FuzzAPITests {
         var inputCount = 0
 
         nonisolated(unsafe) var callCount = 0
-        let (snapshotSpy, snapshotFn) = spy { () -> CoverageCounters? in
+        let (snapshotSpy, snapshotFn) = spy { () -> SanCovCounters? in
             callCount += 1
             return FuzzAPITests.makeCounters(callCount % 10)
         }
 
         try withDependencies {
-            $0.coverageCounters = CoverageCountersClient(snapshot: snapshotFn)
+            $0.coverageCounters = CoverageCountersClient(snapshot: snapshotFn, reset: {}, isAvailable: { true })
             $0.environment = EnvironmentClient(environment: { [:] })
         } operation: {
             try fuzz(
@@ -420,14 +420,14 @@ struct FuzzAPITests {
         struct TestFailure: Error {}
 
         nonisolated(unsafe) var callCount = 0
-        let (snapshotSpy, snapshotFn) = spy { () -> CoverageCounters? in
+        let (snapshotSpy, snapshotFn) = spy { () -> SanCovCounters? in
             callCount += 1
             return FuzzAPITests.makeCounters(callCount)
         }
 
         // Test FuzzEngine directly to verify failure capture without Issue.record noise
         let result = withDependencies {
-            $0.coverageCounters = CoverageCountersClient(snapshot: snapshotFn)
+            $0.coverageCounters = CoverageCountersClient(snapshot: snapshotFn, reset: {}, isAvailable: { true })
         } operation: {
             let config = FuzzEngine<Bool>.Config(
                 maxIterations: 10,
@@ -457,7 +457,7 @@ struct FuzzAPITests {
         struct TestFailure: Error {}
 
         nonisolated(unsafe) var callCount = 0
-        let (_, snapshotFn) = spy { () -> CoverageCounters? in
+        let (_, snapshotFn) = spy { () -> SanCovCounters? in
             callCount += 1
             return FuzzAPITests.makeCounters(callCount)
         }
@@ -465,7 +465,7 @@ struct FuzzAPITests {
         // Use withKnownIssue to expect the recorded issues from fuzz()
         withKnownIssue {
             try withDependencies {
-                $0.coverageCounters = CoverageCountersClient(snapshot: snapshotFn)
+                $0.coverageCounters = CoverageCountersClient(snapshot: snapshotFn, reset: {}, isAvailable: { true })
                 $0.fileManager = FileManagerClient(
                     currentDirectoryPath: { "/test" },
                     fileExists: { _ in false },
@@ -487,7 +487,7 @@ struct FuzzAPITests {
     @Test("fuzz writes corpus to filesystem")
     func testFuzzWritesCorpus() throws {
         nonisolated(unsafe) var callCount = 0
-        let (snapshotSpy, snapshotFn) = spy { () -> CoverageCounters? in
+        let (snapshotSpy, snapshotFn) = spy { () -> SanCovCounters? in
             callCount += 1
             return FuzzAPITests.makeCounters(callCount % 10)
         }
@@ -495,7 +495,7 @@ struct FuzzAPITests {
         let (writeDataSpy, writeDataFn) = spy { (_: Data, _: URL) in }
 
         try withDependencies {
-            $0.coverageCounters = CoverageCountersClient(snapshot: snapshotFn)
+            $0.coverageCounters = CoverageCountersClient(snapshot: snapshotFn, reset: {}, isAvailable: { true })
             $0.environment = EnvironmentClient(environment: { [:] })
             $0.fileManager = FileManagerClient(
                 currentDirectoryPath: { "/test" },
@@ -523,7 +523,7 @@ struct FuzzAPITests {
     @Test("fuzz reads existing corpus from filesystem")
     func testFuzzReadsCorpus() throws {
         nonisolated(unsafe) var callCount = 0
-        let (snapshotSpy, snapshotFn) = spy { () -> CoverageCounters? in
+        let (snapshotSpy, snapshotFn) = spy { () -> SanCovCounters? in
             callCount += 1
             return FuzzAPITests.makeCounters(callCount % 10)
         }
@@ -543,7 +543,7 @@ struct FuzzAPITests {
         var seenInputs: [String] = []
 
         try withDependencies {
-            $0.coverageCounters = CoverageCountersClient(snapshot: snapshotFn)
+            $0.coverageCounters = CoverageCountersClient(snapshot: snapshotFn, reset: {}, isAvailable: { true })
             $0.environment = EnvironmentClient(environment: { [:] })
             $0.fileManager = FileManagerClient(
                 currentDirectoryPath: { "/test" },

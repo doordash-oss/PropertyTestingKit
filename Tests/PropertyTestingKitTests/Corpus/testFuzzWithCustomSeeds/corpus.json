@@ -1,179 +1,15 @@
 {
-  "createdAt" : "2025-12-12T19:59:23Z",
+  "createdAt" : "2025-12-16T06:39:35Z",
   "entries" : [
     {
-      "discoveredAt" : "2025-12-12T19:59:23Z",
+      "discoveredAt" : "2025-12-16T06:39:35Z",
+      "entryType" : "coverage",
       "input" : [
         "IiI="
       ],
-      "signature" : {
-        "buckets" : {
-          "3" : 4
-        }
-      }
-    },
-    {
-      "discoveredAt" : "2025-12-12T19:59:23Z",
-      "input" : [
-        "ImEi"
+      "inputReadable" : [
+        ""
       ],
-      "signature" : {
-        "buckets" : {
-          "5" : 4
-        }
-      }
-    },
-    {
-      "discoveredAt" : "2025-12-12T19:59:23Z",
-      "input" : [
-        "ImFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWEi"
-      ],
-      "signature" : {
-        "buckets" : {
-          "7" : 5
-        }
-      }
-    },
-    {
-      "discoveredAt" : "2025-12-12T19:59:23Z",
-      "input" : [
-        "IvCfmIQi"
-      ],
-      "signature" : {
-        "buckets" : {
-          "9" : 5
-        }
-      }
-    },
-    {
-      "discoveredAt" : "2025-12-12T19:59:23Z",
-      "input" : [
-        "IkhlbGxvIFdvcmxkIg=="
-      ],
-      "signature" : {
-        "buckets" : {
-          "11" : 5
-        }
-      }
-    },
-    {
-      "discoveredAt" : "2025-12-12T19:59:23Z",
-      "input" : [
-        "IkhlbGxvXG5Xb3JsZCI="
-      ],
-      "signature" : {
-        "buckets" : {
-          "13" : 5
-        }
-      }
-    },
-    {
-      "discoveredAt" : "2025-12-12T19:59:23Z",
-      "input" : [
-        "IkhlbGxvIUAjJCVeJiooKV8rLT1bXXt9fDs6LC48Pj8i"
-      ],
-      "signature" : {
-        "buckets" : {
-          "15" : 6
-        }
-      }
-    },
-    {
-      "discoveredAt" : "2025-12-12T19:59:23Z",
-      "input" : [
-        "Ilx1MDAwMCI="
-      ],
-      "signature" : {
-        "buckets" : {
-          "17" : 6
-        }
-      }
-    },
-    {
-      "discoveredAt" : "2025-12-12T19:59:23Z",
-      "input" : [
-        "IiAi"
-      ],
-      "signature" : {
-        "buckets" : {
-          "19" : 6
-        }
-      }
-    },
-    {
-      "discoveredAt" : "2025-12-12T19:59:23Z",
-      "input" : [
-        "Ilx0XG5cciI="
-      ],
-      "signature" : {
-        "buckets" : {
-          "21" : 6
-        }
-      }
-    },
-    {
-      "discoveredAt" : "2025-12-12T19:59:23Z",
-      "input" : [
-        "ImN1c3RvbTEi"
-      ],
-      "signature" : {
-        "buckets" : {
-          "23" : 6
-        }
-      }
-    },
-    {
-      "discoveredAt" : "2025-12-12T19:59:23Z",
-      "input" : [
-        "ImN1c3RvbTIi"
-      ],
-      "signature" : {
-        "buckets" : {
-          "25" : 6
-        }
-      }
-    },
-    {
-      "discoveredAt" : "2025-12-12T19:59:23Z",
-      "input" : [
-        "ImN1c3RvbTMi"
-      ],
-      "signature" : {
-        "buckets" : {
-          "27" : 6
-        }
-      }
-    },
-    {
-      "discoveredAt" : "2025-12-12T19:59:23Z",
-      "input" : [
-        "ImFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYSI="
-      ],
-      "parentIndex" : 2,
-      "signature" : {
-        "buckets" : {
-          "29" : 6
-        }
-      }
-    },
-    {
-      "discoveredAt" : "2025-12-12T19:59:23Z",
-      "input" : [
-        "IiAi"
-      ],
-      "parentIndex" : 0,
-      "signature" : {
-        "buckets" : {
-          "31" : 7
-        }
-      }
-    },
-    {
-      "discoveredAt" : "2025-12-12T19:59:23Z",
-      "input" : [
-        "ImN1c3RvbTEgIg=="
-      ],
-      "parentIndex" : 10,
       "signature" : {
         "buckets" : {
           "33" : 7
@@ -181,9 +17,28 @@
       }
     },
     {
-      "discoveredAt" : "2025-12-12T19:59:23Z",
+      "discoveredAt" : "2025-12-16T06:39:35Z",
+      "entryType" : "coverage",
       "input" : [
-        "IiI="
+        "IiAi"
+      ],
+      "inputReadable" : [
+        " "
+      ],
+      "signature" : {
+        "buckets" : {
+          "34" : 7
+        }
+      }
+    },
+    {
+      "discoveredAt" : "2025-12-16T06:39:35Z",
+      "entryType" : "coverage",
+      "input" : [
+        "Ilx0XG5cciI="
+      ],
+      "inputReadable" : [
+        "\t\n\r"
       ],
       "signature" : {
         "buckets" : {
@@ -192,11 +47,29 @@
       }
     },
     {
-      "discoveredAt" : "2025-12-12T19:59:23Z",
+      "discoveredAt" : "2025-12-16T06:39:35Z",
+      "entryType" : "coverage",
       "input" : [
-        "InVzdG9tMyI="
+        "ImEi"
       ],
-      "parentIndex" : 12,
+      "inputReadable" : [
+        "a"
+      ],
+      "signature" : {
+        "buckets" : {
+          "36" : 7
+        }
+      }
+    },
+    {
+      "discoveredAt" : "2025-12-16T06:39:35Z",
+      "entryType" : "coverage",
+      "input" : [
+        "ImFiIg=="
+      ],
+      "inputReadable" : [
+        "ab"
+      ],
       "signature" : {
         "buckets" : {
           "37" : 7
@@ -204,9 +77,28 @@
       }
     },
     {
-      "discoveredAt" : "2025-12-12T19:59:23Z",
+      "discoveredAt" : "2025-12-16T06:39:35Z",
+      "entryType" : "coverage",
       "input" : [
-        "Ilx1MDAwMCI="
+        "ImFiYyI="
+      ],
+      "inputReadable" : [
+        "abc"
+      ],
+      "signature" : {
+        "buckets" : {
+          "38" : 7
+        }
+      }
+    },
+    {
+      "discoveredAt" : "2025-12-16T06:39:35Z",
+      "entryType" : "coverage",
+      "input" : [
+        "ImFiY2Qi"
+      ],
+      "inputReadable" : [
+        "abcd"
       ],
       "signature" : {
         "buckets" : {
@@ -215,11 +107,29 @@
       }
     },
     {
-      "discoveredAt" : "2025-12-12T19:59:23Z",
+      "discoveredAt" : "2025-12-16T06:39:35Z",
+      "entryType" : "coverage",
       "input" : [
-        "InhhIg=="
+        "ImFiY2RlIg=="
       ],
-      "parentIndex" : 1,
+      "inputReadable" : [
+        "abcde"
+      ],
+      "signature" : {
+        "buckets" : {
+          "40" : 7
+        }
+      }
+    },
+    {
+      "discoveredAt" : "2025-12-16T06:39:35Z",
+      "entryType" : "coverage",
+      "input" : [
+        "ImFiY2RlZiI="
+      ],
+      "inputReadable" : [
+        "abcdef"
+      ],
       "signature" : {
         "buckets" : {
           "41" : 7
@@ -227,11 +137,29 @@
       }
     },
     {
-      "discoveredAt" : "2025-12-12T19:59:23Z",
+      "discoveredAt" : "2025-12-16T06:39:35Z",
+      "entryType" : "coverage",
       "input" : [
-        "Ilx0XG5cciAi"
+        "Inh5enp5Ig=="
       ],
-      "parentIndex" : 9,
+      "inputReadable" : [
+        "xyzzy"
+      ],
+      "signature" : {
+        "buckets" : {
+          "42" : 7
+        }
+      }
+    },
+    {
+      "discoveredAt" : "2025-12-16T06:39:35Z",
+      "entryType" : "coverage",
+      "input" : [
+        "InBsdWdoIg=="
+      ],
+      "inputReadable" : [
+        "plugh"
+      ],
       "signature" : {
         "buckets" : {
           "43" : 7
@@ -239,11 +167,29 @@
       }
     },
     {
-      "discoveredAt" : "2025-12-12T19:59:23Z",
+      "discoveredAt" : "2025-12-16T06:39:35Z",
+      "entryType" : "coverage",
       "input" : [
-        "IiBIZWxsbyFAIyQlXiYqKClfKy09W117fXw7OiwuPD4\/Ig=="
+        "InRlc3Qi"
       ],
-      "parentIndex" : 6,
+      "inputReadable" : [
+        "test"
+      ],
+      "signature" : {
+        "buckets" : {
+          "44" : 7
+        }
+      }
+    },
+    {
+      "discoveredAt" : "2025-12-16T06:39:35Z",
+      "entryType" : "coverage",
+      "input" : [
+        "ImFkbWluIg=="
+      ],
+      "inputReadable" : [
+        "admin"
+      ],
       "signature" : {
         "buckets" : {
           "45" : 7
@@ -251,11 +197,29 @@
       }
     },
     {
-      "discoveredAt" : "2025-12-12T19:59:23Z",
+      "discoveredAt" : "2025-12-16T06:39:35Z",
+      "entryType" : "coverage",
       "input" : [
-        "IlhlbGxvXG5Xb3JsZCI="
+        "InBhc3N3b3JkIg=="
       ],
-      "parentIndex" : 5,
+      "inputReadable" : [
+        "password"
+      ],
+      "signature" : {
+        "buckets" : {
+          "46" : 7
+        }
+      }
+    },
+    {
+      "discoveredAt" : "2025-12-16T06:39:35Z",
+      "entryType" : "coverage",
+      "input" : [
+        "IlNFQ1JFVF94Ig=="
+      ],
+      "inputReadable" : [
+        "SECRET_x"
+      ],
       "signature" : {
         "buckets" : {
           "47" : 7
@@ -263,11 +227,29 @@
       }
     },
     {
-      "discoveredAt" : "2025-12-12T19:59:23Z",
+      "discoveredAt" : "2025-12-16T06:39:35Z",
+      "entryType" : "coverage",
       "input" : [
-        "IiBhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhIg=="
+        "IlBSSVZBVEVfIg=="
       ],
-      "parentIndex" : 2,
+      "inputReadable" : [
+        "PRIVATE_"
+      ],
+      "signature" : {
+        "buckets" : {
+          "48" : 7
+        }
+      }
+    },
+    {
+      "discoveredAt" : "2025-12-16T06:39:35Z",
+      "entryType" : "coverage",
+      "input" : [
+        "IkFQSV9LRVlfIg=="
+      ],
+      "inputReadable" : [
+        "API_KEY_"
+      ],
       "signature" : {
         "buckets" : {
           "49" : 7
@@ -275,11 +257,29 @@
       }
     },
     {
-      "discoveredAt" : "2025-12-12T19:59:23Z",
+      "discoveredAt" : "2025-12-16T06:39:35Z",
+      "entryType" : "coverage",
       "input" : [
-        "IlhFTExPXG5XT1JMRCI="
+        "IlRPS0VOXyI="
       ],
-      "parentIndex" : 22,
+      "inputReadable" : [
+        "TOKEN_"
+      ],
+      "signature" : {
+        "buckets" : {
+          "50" : 7
+        }
+      }
+    },
+    {
+      "discoveredAt" : "2025-12-16T06:39:35Z",
+      "entryType" : "coverage",
+      "input" : [
+        "IvCfmIQi"
+      ],
+      "inputReadable" : [
+        "😄"
+      ],
       "signature" : {
         "buckets" : {
           "51" : 7
@@ -287,11 +287,29 @@
       }
     },
     {
-      "discoveredAt" : "2025-12-12T19:59:23Z",
+      "discoveredAt" : "2025-12-16T06:39:35Z",
+      "entryType" : "coverage",
       "input" : [
-        "IlhIZWxsbyFAIyQlXiYqKClfKy09W117fXw7OiwuPD4\/Ig=="
+        "Ilx1MDAwMCI="
       ],
-      "parentIndex" : 21,
+      "inputReadable" : [
+        "\u0000"
+      ],
+      "signature" : {
+        "buckets" : {
+          "52" : 7
+        }
+      }
+    },
+    {
+      "discoveredAt" : "2025-12-16T06:39:35Z",
+      "entryType" : "coverage",
+      "input" : [
+        "IkhlbGxvIFdvcmxkIg=="
+      ],
+      "inputReadable" : [
+        "Hello World"
+      ],
       "signature" : {
         "buckets" : {
           "53" : 7
@@ -299,9 +317,28 @@
       }
     },
     {
-      "discoveredAt" : "2025-12-12T19:59:23Z",
+      "discoveredAt" : "2025-12-16T06:39:35Z",
+      "entryType" : "coverage",
+      "input" : [
+        "IkhlbGxvXG5Xb3JsZCI="
+      ],
+      "inputReadable" : [
+        "Hello\nWorld"
+      ],
+      "signature" : {
+        "buckets" : {
+          "54" : 7
+        }
+      }
+    },
+    {
+      "discoveredAt" : "2025-12-16T06:39:35Z",
+      "entryType" : "coverage",
       "input" : [
         "IkhlbGxvIUAjJCVeJiooKV8rLT1bXXt9fDs6LC48Pj8i"
+      ],
+      "inputReadable" : [
+        "Hello!@#$%^&*()_+-=[]{}|;:,.<>?"
       ],
       "signature" : {
         "buckets" : {
@@ -310,11 +347,30 @@
       }
     },
     {
-      "discoveredAt" : "2025-12-12T19:59:23Z",
+      "discoveredAt" : "2025-12-16T06:39:35Z",
+      "entryType" : "coverage",
       "input" : [
-        "InhlbGxvXG53b3JsZCI="
+        "ImFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWEi"
       ],
-      "parentIndex" : 24,
+      "inputReadable" : [
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      ],
+      "signature" : {
+        "buckets" : {
+          "56" : 7
+        }
+      }
+    },
+    {
+      "discoveredAt" : "2025-12-16T06:39:35Z",
+      "entryType" : "coverage",
+      "input" : [
+        "IlBSSVZBVEVfYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYSI="
+      ],
+      "inputReadable" : [
+        "PRIVATE_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      ],
+      "parentIndex" : 23,
       "signature" : {
         "buckets" : {
           "57" : 7
@@ -322,10 +378,31 @@
       }
     },
     {
-      "discoveredAt" : "2025-12-12T19:59:23Z",
+      "discoveredAt" : "2025-12-16T06:39:35Z",
+      "entryType" : "coverage",
       "input" : [
-        "Ilx1MDAwMCI="
+        "IlBSSVZBVEVfIg=="
       ],
+      "inputReadable" : [
+        "PRIVATE_"
+      ],
+      "parentIndex" : 0,
+      "signature" : {
+        "buckets" : {
+          "58" : 7
+        }
+      }
+    },
+    {
+      "discoveredAt" : "2025-12-16T06:39:35Z",
+      "entryType" : "coverage",
+      "input" : [
+        "IlBSSVZBVEVfbm9uLXBvc2l0aXZlIg=="
+      ],
+      "inputReadable" : [
+        "PRIVATE_non-positive"
+      ],
+      "parentIndex" : 15,
       "signature" : {
         "buckets" : {
           "59" : 7
@@ -333,14 +410,48 @@
       }
     },
     {
-      "discoveredAt" : "2025-12-12T19:59:23Z",
+      "discoveredAt" : "2025-12-16T06:39:35Z",
+      "entryType" : "coverage",
       "input" : [
-        "Ilx1MDAwMCAi"
+        "IlRPS0VOX0FQSV9LRVlfIg=="
       ],
-      "parentIndex" : 28,
+      "inputReadable" : [
+        "TOKEN_API_KEY_"
+      ],
+      "parentIndex" : 16,
+      "signature" : {
+        "buckets" : {
+          "60" : 7
+        }
+      }
+    },
+    {
+      "discoveredAt" : "2025-12-16T06:39:35Z",
+      "entryType" : "coverage",
+      "input" : [
+        "InBsdWdoIg=="
+      ],
+      "inputReadable" : [
+        "plugh"
+      ],
       "signature" : {
         "buckets" : {
           "61" : 7
+        }
+      }
+    },
+    {
+      "discoveredAt" : "2025-12-16T06:39:35Z",
+      "entryType" : "coverage",
+      "input" : [
+        "InBsdWdoIg=="
+      ],
+      "inputReadable" : [
+        "plugh"
+      ],
+      "signature" : {
+        "buckets" : {
+          "62" : 7
         }
       }
     }
@@ -348,37 +459,37 @@
   "schemaVersion" : "v1-100",
   "totalCoverage" : {
     "buckets" : {
-      "11" : 5,
-      "13" : 5,
-      "15" : 6,
-      "17" : 6,
-      "19" : 6,
-      "21" : 6,
-      "23" : 6,
-      "25" : 6,
-      "27" : 6,
-      "29" : 6,
-      "3" : 4,
-      "31" : 7,
       "33" : 7,
+      "34" : 7,
       "35" : 7,
+      "36" : 7,
       "37" : 7,
+      "38" : 7,
       "39" : 7,
+      "40" : 7,
       "41" : 7,
+      "42" : 7,
       "43" : 7,
+      "44" : 7,
       "45" : 7,
+      "46" : 7,
       "47" : 7,
+      "48" : 7,
       "49" : 7,
-      "5" : 4,
+      "50" : 7,
       "51" : 7,
+      "52" : 7,
       "53" : 7,
+      "54" : 7,
       "55" : 7,
+      "56" : 7,
       "57" : 7,
+      "58" : 7,
       "59" : 7,
+      "60" : 7,
       "61" : 7,
-      "7" : 5,
-      "9" : 5
+      "62" : 7
     }
   },
-  "updatedAt" : "2025-12-12T19:59:23Z"
+  "updatedAt" : "2025-12-16T06:39:35Z"
 }

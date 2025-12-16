@@ -7,7 +7,7 @@ import Testing
 import Foundation
 @testable import PropertyTestingKit
 
-@Suite("CoverageSignature", .serialized)
+@Suite("CoverageSignature")
 struct CoverageSignatureTests {
 
     @Test("Bucket categorizes counts correctly")
@@ -117,9 +117,9 @@ struct CoverageSignatureTests {
         #expect(signature.buckets[2] == .sixteenToThirtyOne)
     }
 
-    @Test("Signature from CoverageCounters snapshot")
+    @Test("Signature from SanCovCounters snapshot")
     func testSignatureFromSnapshot() {
-        let counters = CoverageCounters(counters: [0, 1, 0, 128])
+        let counters = SanCovCounters(counters: [0, 1, 0, 128] as [UInt64])
         let signature = CoverageSignature(snapshot: counters)
 
         #expect(signature.executedCount == 2)

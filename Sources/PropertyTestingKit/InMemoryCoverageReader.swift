@@ -485,40 +485,38 @@ public func measureSourceCoverage<T>(
     includeAllFiles: Bool = false,
     _ body: () throws -> T
 ) throws -> (result: T, coverage: ResolvedCoverage) {
-    // Acquire global coverage lock to prevent contamination from concurrent tests.
-    // LLVM coverage counters are global mutable state, so we need exclusive access.
-    return try CoverageLock.shared.withLock {
-        let reader = try getCachedReader()
+    let reader = try getCachedReader()
 
-        // Snapshot before running code
-        guard let before = CoverageCounters.snapshot() else {
-            // Coverage not available, return empty
-            let result = try body()
-            return (result, ResolvedCoverage(functions: [], sourceFiles: []))
-        }
-
+    // Snapshot before running code
+    // Note: This uses global LLVM profile counters which are not isolated
+    // between concurrent tests. Tests using this function should be serialized.
+    guard let before = CoverageCounters.snapshot() else {
+        // Coverage not available, return empty
         let result = try body()
-
-        // Snapshot after running code
-        guard let after = CoverageCounters.snapshot() else {
-            return (result, ResolvedCoverage(functions: [], sourceFiles: []))
-        }
-
-        // Compute difference (what executed during body)
-        let deltaCounters = zip(after.counters, before.counters).map { after, before in
-            after >= before ? after - before : 0
-        }
-
-        // Resolve coverage from delta
-        var coverage = reader.resolveCoverage(counters: deltaCounters)
-
-        // Filter to project files only by default
-        if !includeAllFiles {
-            coverage = filterToProjectOnly(coverage)
-        }
-
-        return (result, coverage)
+        return (result, ResolvedCoverage(functions: [], sourceFiles: []))
     }
+
+    let result = try body()
+
+    // Snapshot after running code
+    guard let after = CoverageCounters.snapshot() else {
+        return (result, ResolvedCoverage(functions: [], sourceFiles: []))
+    }
+
+    // Compute difference (what executed during body)
+    let deltaCounters = zip(after.counters, before.counters).map { after, before in
+        after >= before ? after - before : 0
+    }
+
+    // Resolve coverage from delta
+    var coverage = reader.resolveCoverage(counters: deltaCounters)
+
+    // Filter to project files only by default
+    if !includeAllFiles {
+        coverage = filterToProjectOnly(coverage)
+    }
+
+    return (result, coverage)
 }
 
 /// Measure coverage of a code block with source-level detail (throwing version).

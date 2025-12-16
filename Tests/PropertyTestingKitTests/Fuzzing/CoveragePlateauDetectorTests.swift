@@ -7,7 +7,7 @@ import Testing
 import Foundation
 @testable import PropertyTestingKit
 
-@Suite("CoveragePlateauDetector", .serialized)
+@Suite("CoveragePlateauDetector")
 struct CoveragePlateauDetectorTests {
 
     @Test("Detector starts in non-plateau state")

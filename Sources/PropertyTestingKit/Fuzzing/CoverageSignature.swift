@@ -85,9 +85,19 @@ public struct CoverageSignature: Hashable, Codable, Sendable {
         self.buckets = buckets
     }
 
-    /// Create a signature from a CoverageCounters snapshot.
-    public init(snapshot: CoverageCounters) {
-        self.init(counters: snapshot.counters)
+    /// Create a signature from a SanCovCounters snapshot.
+    ///
+    /// SanCovCounters use 8-bit counters (0 or 1 for edge coverage),
+    /// so bucketing still works but most values will be in the "one" bucket.
+    public init(snapshot: SanCovCounters) {
+        var buckets: [Int: Bucket] = [:]
+        for (index, count) in snapshot.counters.enumerated() {
+            let bucket = Bucket(count: UInt64(count))
+            if bucket != .zero {
+                buckets[index] = bucket
+            }
+        }
+        self.buckets = buckets
     }
 
     /// Create directly from buckets (for testing/deserialization).

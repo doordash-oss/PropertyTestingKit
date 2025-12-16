@@ -10,7 +10,6 @@ import Foundation
 /// These tests demonstrate per-test coverage using the `.coverage` trait.
 ///
 /// The trait automatically:
-/// - Serializes test execution (required for isolated coverage)
 /// - Resets coverage counters before each test
 /// - Writes a separate `.profraw` file after each test
 ///
@@ -23,7 +22,7 @@ import Foundation
 /// ```
 /// ls /tmp/coverage-*.profraw
 /// ```
-@Suite("Per-Test Coverage Demo", .serialized, .coverage(outputDirectory: "/tmp"))
+@Suite("Per-Test Coverage Demo", .coverage(outputDirectory: "/tmp"))
 struct PerTestCoverageDemo {
 
     @Test("Database write path")

@@ -14,6 +14,7 @@
 //
 
 import Foundation
+import Dependencies
 
 // MARK: - ShrinkResult
 
@@ -289,6 +290,7 @@ public struct IntegerShrinker {
 /// )
 /// ```
 public struct TestCaseShrinker<T: Shrinkable & Sendable>: Sendable {
+    @Dependency(\.dateClient) var dateClient
     private let config: ShrinkConfig
 
     public init(config: ShrinkConfig = ShrinkConfig()) {
@@ -305,7 +307,7 @@ public struct TestCaseShrinker<T: Shrinkable & Sendable>: Sendable {
         input: T,
         test: @escaping (T) -> ShrinkResult
     ) -> (minimized: T, stats: ShrinkStats) {
-        let startTime = Date()
+        let startTime = dateClient.now()
         var current = input
         var candidatesTested = 0
         var timedOut = false
@@ -327,7 +329,7 @@ public struct TestCaseShrinker<T: Shrinkable & Sendable>: Sendable {
 
             while offset < current.shrinkableElementCount {
                 // Check stopping conditions
-                if Date().timeIntervalSince(startTime) >= config.timeout {
+                if dateClient.now().timeIntervalSince(startTime) >= config.timeout {
                     timedOut = true
                     break
                 }
@@ -375,7 +377,7 @@ public struct TestCaseShrinker<T: Shrinkable & Sendable>: Sendable {
                     maxExecutionsReached = true
                     break
                 }
-                if Date().timeIntervalSince(startTime) >= config.timeout {
+                if dateClient.now().timeIntervalSince(startTime) >= config.timeout {
                     timedOut = true
                     break
                 }
@@ -390,7 +392,7 @@ public struct TestCaseShrinker<T: Shrinkable & Sendable>: Sendable {
             }
         }
 
-        let duration = Date().timeIntervalSince(startTime)
+        let duration = dateClient.now().timeIntervalSince(startTime)
         let stats = ShrinkStats(
             candidatesTested: candidatesTested,
             originalSize: input.shrinkableElementCount,
@@ -410,6 +412,8 @@ public struct TestCaseShrinker<T: Shrinkable & Sendable>: Sendable {
 ///
 /// Tries shrinking each component independently and in combination.
 public struct MultiComponentShrinker: Sendable {
+    @Dependency(\.dateClient) var dateClient
+
     private let config: ShrinkConfig
 
     public init(config: ShrinkConfig = ShrinkConfig()) {
@@ -421,7 +425,7 @@ public struct MultiComponentShrinker: Sendable {
         input: (A, B),
         test: @escaping ((A, B)) -> ShrinkResult
     ) -> (minimized: (A, B), stats: ShrinkStats) {
-        let startTime = Date()
+        let startTime = dateClient.now()
         var current = input
         var candidatesTested = 0
         var timedOut = false
@@ -457,7 +461,7 @@ public struct MultiComponentShrinker: Sendable {
             maxExecutionsReached = statsA.maxExecutionsReached
         }
 
-        let duration = Date().timeIntervalSince(startTime)
+        let duration = dateClient.now().timeIntervalSince(startTime)
         let stats = ShrinkStats(
             candidatesTested: candidatesTested,
             originalSize: input.0.shrinkableElementCount + input.1.shrinkableElementCount,

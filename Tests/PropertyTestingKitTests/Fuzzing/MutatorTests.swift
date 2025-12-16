@@ -331,13 +331,13 @@ struct DoubleMutatorTests {
 
 // MARK: - FuzzEngine Integration Tests
 
-@Suite("Mutator FuzzEngine Integration", .serialized)
+@Suite("Mutator FuzzEngine Integration")
 struct MutatorFuzzEngineTests {
-    static func makeCounters(_ callNumber: Int) -> CoverageCounters {
+    static func makeCounters(_ callNumber: Int) -> SanCovCounters {
         var counters = [UInt64](repeating: 0, count: 100)
         // Different coverage for each call
         counters[callNumber % 100] = UInt64(callNumber)
-        return CoverageCounters(counters: counters)
+        return SanCovCounters(counters: counters)
     }
 
     @Test("FuzzEngine uses mutator seeds")
@@ -345,13 +345,13 @@ struct MutatorFuzzEngineTests {
         nonisolated(unsafe) var testedInputs: [String] = []
         nonisolated(unsafe) var callCount = 0
 
-        let (snapshotSpy, snapshotFn) = spy { () -> CoverageCounters? in
+        let (snapshotSpy, snapshotFn) = spy { () -> SanCovCounters? in
             callCount += 1
             return Self.makeCounters(callCount)
         }
 
         withDependencies {
-            $0.coverageCounters = CoverageCountersClient(snapshot: snapshotFn)
+            $0.coverageCounters = CoverageCountersClient(snapshot: snapshotFn, reset: {}, isAvailable: { true })
         } operation: {
             let mutator = SingleMutator<String>(
                 seeds: ["custom1", "custom2"],
@@ -380,13 +380,13 @@ struct MutatorFuzzEngineTests {
         nonisolated(unsafe) var testedInputs: [String] = []
         nonisolated(unsafe) var callCount = 0
 
-        let (snapshotSpy, snapshotFn) = spy { () -> CoverageCounters? in
+        let (snapshotSpy, snapshotFn) = spy { () -> SanCovCounters? in
             callCount += 1
             return Self.makeCounters(callCount)
         }
 
         withDependencies {
-            $0.coverageCounters = CoverageCountersClient(snapshot: snapshotFn)
+            $0.coverageCounters = CoverageCountersClient(snapshot: snapshotFn, reset: {}, isAvailable: { true })
         } operation: {
             // Use AnyMutator to test with multiple seeds
             let mutator = AnyMutator<String>(
@@ -416,12 +416,12 @@ struct MutatorFuzzEngineTests {
 
 // MARK: - Public API Tests
 
-@Suite("Mutator Public API", .serialized)
+@Suite("Mutator Public API")
 struct MutatorPublicAPITests {
-    static func makeCounters(_ callNumber: Int) -> CoverageCounters {
+    static func makeCounters(_ callNumber: Int) -> SanCovCounters {
         var counters = [UInt64](repeating: 0, count: 100)
         counters[callNumber % 100] = UInt64(callNumber)
-        return CoverageCounters(counters: counters)
+        return SanCovCounters(counters: counters)
     }
 
     @Test("fuzz(using:) accepts single mutator")
@@ -429,13 +429,13 @@ struct MutatorPublicAPITests {
         nonisolated(unsafe) var testedInputs: [String] = []
         nonisolated(unsafe) var callCount = 0
 
-        let (snapshotSpy, snapshotFn) = spy { () -> CoverageCounters? in
+        let (snapshotSpy, snapshotFn) = spy { () -> SanCovCounters? in
             callCount += 1
             return Self.makeCounters(callCount)
         }
 
         try withDependencies {
-            $0.coverageCounters = CoverageCountersClient(snapshot: snapshotFn)
+            $0.coverageCounters = CoverageCountersClient(snapshot: snapshotFn, reset: {}, isAvailable: { true })
             // Use no-op file manager to avoid writing corpus to disk
             $0.fileManager = FileManagerClient(
                 currentDirectoryPath: { "/test" },
@@ -470,13 +470,13 @@ struct MutatorPublicAPITests {
         nonisolated(unsafe) var testedInputs: [String] = []
         nonisolated(unsafe) var callCount = 0
 
-        let (snapshotSpy, snapshotFn) = spy { () -> CoverageCounters? in
+        let (snapshotSpy, snapshotFn) = spy { () -> SanCovCounters? in
             callCount += 1
             return Self.makeCounters(callCount)
         }
 
         try withDependencies {
-            $0.coverageCounters = CoverageCountersClient(snapshot: snapshotFn)
+            $0.coverageCounters = CoverageCountersClient(snapshot: snapshotFn, reset: {}, isAvailable: { true })
             // Use no-op file manager to avoid writing corpus to disk
             $0.fileManager = FileManagerClient(
                 currentDirectoryPath: { "/test" },
@@ -505,13 +505,13 @@ struct MutatorPublicAPITests {
         nonisolated(unsafe) var testedInputs: [(String, Int)] = []
         nonisolated(unsafe) var callCount = 0
 
-        let (snapshotSpy, snapshotFn) = spy { () -> CoverageCounters? in
+        let (snapshotSpy, snapshotFn) = spy { () -> SanCovCounters? in
             callCount += 1
             return Self.makeCounters(callCount)
         }
 
         try withDependencies {
-            $0.coverageCounters = CoverageCountersClient(snapshot: snapshotFn)
+            $0.coverageCounters = CoverageCountersClient(snapshot: snapshotFn, reset: {}, isAvailable: { true })
             $0.fileManager = FileManagerClient(
                 currentDirectoryPath: { "/test" },
                 fileExists: { _ in false },
@@ -557,13 +557,13 @@ struct MutatorPublicAPITests {
         nonisolated(unsafe) var testedInputs: [(String, Int)] = []
         nonisolated(unsafe) var callCount = 0
 
-        let (snapshotSpy, snapshotFn) = spy { () -> CoverageCounters? in
+        let (snapshotSpy, snapshotFn) = spy { () -> SanCovCounters? in
             callCount += 1
             return Self.makeCounters(callCount)
         }
 
         try withDependencies {
-            $0.coverageCounters = CoverageCountersClient(snapshot: snapshotFn)
+            $0.coverageCounters = CoverageCountersClient(snapshot: snapshotFn, reset: {}, isAvailable: { true })
             $0.fileManager = FileManagerClient(
                 currentDirectoryPath: { "/test" },
                 fileExists: { _ in false },
@@ -601,13 +601,13 @@ struct MutatorPublicAPITests {
         nonisolated(unsafe) var testedInputs: [String] = []
         nonisolated(unsafe) var callCount = 0
 
-        let (snapshotSpy, snapshotFn) = spy { () -> CoverageCounters? in
+        let (snapshotSpy, snapshotFn) = spy { () -> SanCovCounters? in
             callCount += 1
             return Self.makeCounters(callCount)
         }
 
         try withDependencies {
-            $0.coverageCounters = CoverageCountersClient(snapshot: snapshotFn)
+            $0.coverageCounters = CoverageCountersClient(snapshot: snapshotFn, reset: {}, isAvailable: { true })
             $0.fileManager = FileManagerClient(
                 currentDirectoryPath: { "/test" },
                 fileExists: { _ in false },

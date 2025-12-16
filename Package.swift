@@ -83,7 +83,12 @@ let package = Package(
                 .product(name: "FunctionSpy", package: "FunctionSpy"),
             ],
             swiftSettings: [
-                .interoperabilityMode(.Cxx)
+                .interoperabilityMode(.Cxx),
+                // Enable sanitizer coverage for SanCov source mapping tests
+                .unsafeFlags([
+                    "-sanitize=undefined",
+                    "-sanitize-coverage=edge,trace-cmp,pc-table"
+                ])
             ]
         ),
         .testTarget(

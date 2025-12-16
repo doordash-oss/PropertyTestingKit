@@ -7,7 +7,7 @@ import Testing
 import Foundation
 @testable import PropertyTestingKit
 
-@Suite("EntropicScheduler", .serialized)
+@Suite("EntropicScheduler")
 struct EntropicSchedulerTests {
 
     @Test("Scheduler initializes with empty state")

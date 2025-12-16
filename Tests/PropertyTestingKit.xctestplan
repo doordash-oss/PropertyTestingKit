@@ -25,6 +25,13 @@
         "identifier" : "PropertyTestingKitTests",
         "name" : "PropertyTestingKitTests"
       }
+    },
+    {
+      "target" : {
+        "containerPath" : "container:",
+        "identifier" : "SanCovTests",
+        "name" : "SanCovTests"
+      }
     }
   ],
   "version" : 1

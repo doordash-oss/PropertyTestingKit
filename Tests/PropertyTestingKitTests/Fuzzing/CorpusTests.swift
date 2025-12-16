@@ -9,7 +9,7 @@ import Dependencies
 import FunctionSpy
 @testable import PropertyTestingKit
 
-@Suite("Corpus", .serialized)
+@Suite("Corpus")
 struct CorpusTests {
 
     @Test("Corpus adds interesting entries")

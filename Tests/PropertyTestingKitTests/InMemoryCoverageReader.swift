@@ -4,7 +4,7 @@ import Foundation
 
 // MARK: - InMemoryCoverageReader Tests
 
-@Suite("InMemoryCoverageReader API", .serialized)
+@Suite("InMemoryCoverageReader API")
 struct InMemoryCoverageReaderTests {
 
     @Test("InMemoryCoverageReader loads from current process")

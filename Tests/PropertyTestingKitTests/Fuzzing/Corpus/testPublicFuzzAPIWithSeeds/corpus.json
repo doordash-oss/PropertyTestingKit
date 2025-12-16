@@ -1,10 +1,14 @@
 {
-  "createdAt" : "2025-12-12T19:59:23Z",
+  "createdAt" : "2025-12-16T06:39:36Z",
   "entries" : [
     {
-      "discoveredAt" : "2025-12-12T19:59:23Z",
+      "discoveredAt" : "2025-12-16T06:39:36Z",
+      "entryType" : "coverage",
       "input" : [
         "IiI="
+      ],
+      "inputReadable" : [
+        ""
       ],
       "signature" : {
         "buckets" : {
@@ -13,9 +17,28 @@
       }
     },
     {
-      "discoveredAt" : "2025-12-12T19:59:23Z",
+      "discoveredAt" : "2025-12-16T06:39:36Z",
+      "entryType" : "coverage",
       "input" : [
-        "ImEi"
+        "IiAi"
+      ],
+      "inputReadable" : [
+        " "
+      ],
+      "signature" : {
+        "buckets" : {
+          "4" : 4
+        }
+      }
+    },
+    {
+      "discoveredAt" : "2025-12-16T06:39:36Z",
+      "entryType" : "coverage",
+      "input" : [
+        "Ilx0XG5cciI="
+      ],
+      "inputReadable" : [
+        "\t\n\r"
       ],
       "signature" : {
         "buckets" : {
@@ -24,9 +47,28 @@
       }
     },
     {
-      "discoveredAt" : "2025-12-12T19:59:23Z",
+      "discoveredAt" : "2025-12-16T06:39:36Z",
+      "entryType" : "coverage",
       "input" : [
-        "ImFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWEi"
+        "ImEi"
+      ],
+      "inputReadable" : [
+        "a"
+      ],
+      "signature" : {
+        "buckets" : {
+          "6" : 4
+        }
+      }
+    },
+    {
+      "discoveredAt" : "2025-12-16T06:39:36Z",
+      "entryType" : "coverage",
+      "input" : [
+        "ImFiIg=="
+      ],
+      "inputReadable" : [
+        "ab"
       ],
       "signature" : {
         "buckets" : {
@@ -35,9 +77,28 @@
       }
     },
     {
-      "discoveredAt" : "2025-12-12T19:59:23Z",
+      "discoveredAt" : "2025-12-16T06:39:36Z",
+      "entryType" : "coverage",
       "input" : [
-        "IvCfmIQi"
+        "ImFiYyI="
+      ],
+      "inputReadable" : [
+        "abc"
+      ],
+      "signature" : {
+        "buckets" : {
+          "8" : 5
+        }
+      }
+    },
+    {
+      "discoveredAt" : "2025-12-16T06:39:36Z",
+      "entryType" : "coverage",
+      "input" : [
+        "ImFiY2Qi"
+      ],
+      "inputReadable" : [
+        "abcd"
       ],
       "signature" : {
         "buckets" : {
@@ -46,13 +107,47 @@
       }
     },
     {
-      "discoveredAt" : "2025-12-12T19:59:23Z",
+      "discoveredAt" : "2025-12-16T06:39:36Z",
+      "entryType" : "coverage",
       "input" : [
-        "IkhlbGxvIFdvcmxkIg=="
+        "ImFiY2RlIg=="
+      ],
+      "inputReadable" : [
+        "abcde"
+      ],
+      "signature" : {
+        "buckets" : {
+          "0" : 1
+        }
+      }
+    },
+    {
+      "discoveredAt" : "2025-12-16T06:39:36Z",
+      "entryType" : "coverage",
+      "input" : [
+        "ImFiY2RlZiI="
+      ],
+      "inputReadable" : [
+        "abcdef"
       ],
       "signature" : {
         "buckets" : {
           "1" : 2
+        }
+      }
+    },
+    {
+      "discoveredAt" : "2025-12-16T06:39:36Z",
+      "entryType" : "coverage",
+      "input" : [
+        "Inh5enp5Ig=="
+      ],
+      "inputReadable" : [
+        "xyzzy"
+      ],
+      "signature" : {
+        "buckets" : {
+          "2" : 3
         }
       }
     }
@@ -60,12 +155,17 @@
   "schemaVersion" : "v1-100",
   "totalCoverage" : {
     "buckets" : {
+      "0" : 1,
       "1" : 2,
+      "2" : 3,
       "3" : 4,
+      "4" : 4,
       "5" : 4,
+      "6" : 4,
       "7" : 5,
+      "8" : 5,
       "9" : 5
     }
   },
-  "updatedAt" : "2025-12-12T19:59:23Z"
+  "updatedAt" : "2025-12-16T06:39:36Z"
 }

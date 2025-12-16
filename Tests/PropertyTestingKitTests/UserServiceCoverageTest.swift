@@ -3,7 +3,7 @@ import PropertyTestingKit
 
 /// Diagnostic test to investigate why UserService.createUser shows 0 coverage
 /// while updateUser shows 1 call in Xcode.
-@Suite("UserService Coverage Diagnostics", .serialized)
+@Suite("UserService Coverage Diagnostics")
 struct UserServiceCoverageDiagnostics {
 
     @Test("Compare createUser vs updateUser coverage")

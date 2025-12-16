@@ -7,6 +7,7 @@
 
 #include "include/ValueProfileHooks.h"
 #include <string.h>
+#include <dlfcn.h>
 
 // Thread-local storage for comparison records
 static _Thread_local VPComparisonRecord vp_records[VP_MAX_RECORDS];
@@ -113,32 +114,99 @@ void __sanitizer_cov_trace_switch(uint64_t val, uint64_t *cases) {
     }
 }
 
-// MARK: - Thread-Local Coverage Maps (trace_pc_guard)
+// MARK: - Task-Based Coverage Maps (trace_pc_guard)
 //
 // Swift's -sanitize-coverage=edge uses trace_pc_guard callbacks.
-// We maintain thread-local coverage bitmaps that can be reset independently,
+// We maintain per-TASK coverage bitmaps that can be reset independently,
 // providing TRUE per-test isolation even when tests run concurrently.
 //
-// This is the key innovation: each thread gets its own coverage bitmap,
-// so one test's reset doesn't affect another test's measurements.
+// Key insight: Swift Testing uses task groups, and tasks can hop between threads.
+// Thread-local storage does NOT provide isolation for Swift concurrency.
+// Instead, we use swift_task_getCurrent() to key coverage maps by task pointer.
+//
+// When not in a Swift async context (swift_task_getCurrent() returns NULL),
+// we fall back to thread-local storage for compatibility with non-async code.
 
 #include <stdlib.h>
+#include <pthread.h>
 
-// Global guard metadata (shared across threads, read-only after init)
+// Forward declare Swift runtime function
+// Returns the current Swift Task pointer, or NULL if not in an async context
+extern void* swift_task_getCurrent(void) __attribute__((weak_import));
+
+// Global guard metadata (shared across all tasks/threads, read-only after init)
 static uint32_t *g_guards_start = NULL;
 static uint32_t *g_guards_end = NULL;
 static size_t g_guard_count = 0;
 
-// Thread-local coverage bitmap - each thread tracks its own coverage
+// MARK: - Task-Keyed Coverage Registry
+
+#define MAX_TASK_ENTRIES 512
+
+typedef struct {
+    void* task_id;          // Swift task pointer
+    uint8_t* coverage_map;  // Coverage bitmap for this task
+} TaskCoverageEntry;
+
+// Registry of per-task coverage maps
+static TaskCoverageEntry g_task_registry[MAX_TASK_ENTRIES];
+static size_t g_task_registry_count = 0;
+static pthread_mutex_t g_registry_lock = PTHREAD_MUTEX_INITIALIZER;
+
+// Thread-local fallback for non-async contexts
 static _Thread_local uint8_t *tls_coverage_map = NULL;
 static _Thread_local size_t tls_coverage_map_size = 0;
 
-// Ensure thread-local map is allocated
+// Find or create a coverage map for the given task
+static uint8_t* find_or_create_task_map(void* task_id) {
+    pthread_mutex_lock(&g_registry_lock);
+
+    // Search for existing entry
+    for (size_t i = 0; i < g_task_registry_count; i++) {
+        if (g_task_registry[i].task_id == task_id) {
+            uint8_t* map = g_task_registry[i].coverage_map;
+            pthread_mutex_unlock(&g_registry_lock);
+            return map;
+        }
+    }
+
+    // Create new entry if space available
+    if (g_task_registry_count < MAX_TASK_ENTRIES && g_guard_count > 0) {
+        TaskCoverageEntry* entry = &g_task_registry[g_task_registry_count++];
+        entry->task_id = task_id;
+        entry->coverage_map = (uint8_t*)calloc(g_guard_count, 1);
+        uint8_t* map = entry->coverage_map;
+        pthread_mutex_unlock(&g_registry_lock);
+        return map;
+    }
+
+    pthread_mutex_unlock(&g_registry_lock);
+    return NULL;
+}
+
+// Ensure thread-local fallback map is allocated
 static void ensure_tls_coverage_map(void) {
     if (tls_coverage_map == NULL && g_guard_count > 0) {
         tls_coverage_map_size = g_guard_count;
         tls_coverage_map = (uint8_t*)calloc(tls_coverage_map_size, 1);
     }
+}
+
+// Get the coverage map for the current execution context
+// Uses task-keyed map if in Swift async context, otherwise thread-local
+static uint8_t* get_current_coverage_map(void) {
+    // Check if swift_task_getCurrent is available (weak import)
+    if (swift_task_getCurrent != NULL) {
+        void* task = swift_task_getCurrent();
+        if (task != NULL) {
+            // We're in a Swift async task - use task-keyed map
+            return find_or_create_task_map(task);
+        }
+    }
+
+    // Fallback to thread-local storage for non-async contexts
+    ensure_tls_coverage_map();
+    return tls_coverage_map;
 }
 
 // PC guard hooks - used by Swift's -sanitize-coverage=edge
@@ -156,9 +224,9 @@ void __sanitizer_cov_trace_pc_guard_init(uint32_t *start, uint32_t *stop) {
 }
 
 void __sanitizer_cov_trace_pc_guard(uint32_t *guard) {
-    ensure_tls_coverage_map();
-    if (tls_coverage_map && *guard < tls_coverage_map_size) {
-        tls_coverage_map[*guard] = 1;
+    uint8_t* map = get_current_coverage_map();
+    if (map && *guard < g_guard_count) {
+        map[*guard] = 1;
     }
 }
 
@@ -176,15 +244,25 @@ void __sanitizer_cov_8bit_counters_init(uint8_t *start, uint8_t *end) {
     }
 }
 
+// MARK: - PC Storage for Source Mapping
+// Store PCs from __sanitizer_cov_pcs_init for source location lookup
+
+static const uintptr_t *g_pcs_start = NULL;
+static const uintptr_t *g_pcs_end = NULL;
+static size_t g_pcs_count = 0;
+
 void __sanitizer_cov_pcs_init(const uintptr_t *pcs_beg, const uintptr_t *pcs_end) {
-    (void)pcs_beg;
-    (void)pcs_end;
+    if (g_pcs_start == NULL) {
+        g_pcs_start = pcs_beg;
+        g_pcs_end = pcs_end;
+        g_pcs_count = (size_t)(pcs_end - pcs_beg) / 2; // Each entry is 2 uintptrs (PC, flags)
+    }
 }
 
 // MARK: - Unified Public API
 // These functions work with whichever instrumentation mode is active:
-// - trace_pc_guard (Swift): Uses thread-local coverage maps
-// - inline-8bit-counters (Clang): Uses global counters (no TLS isolation)
+// - trace_pc_guard (Swift): Uses task-keyed or thread-local coverage maps
+// - inline-8bit-counters (Clang): Uses global counters (no isolation)
 
 bool sancov_counters_available(void) {
     // Either mode provides coverage
@@ -193,20 +271,23 @@ bool sancov_counters_available(void) {
 }
 
 void sancov_reset_counters(void) {
-    // Reset thread-local map (trace_pc_guard mode)
-    ensure_tls_coverage_map();
-    if (tls_coverage_map) {
-        memset(tls_coverage_map, 0, tls_coverage_map_size);
+    // Reset the current context's coverage map (task-keyed or thread-local)
+    if (g_guard_count > 0) {
+        uint8_t* map = get_current_coverage_map();
+        if (map) {
+            memset(map, 0, g_guard_count);
+        }
+        return;
     }
 
-    // Reset global counters (inline-8bit-counters mode)
+    // Fallback: Reset global counters (inline-8bit-counters mode)
     if (g_8bit_counters_start && g_8bit_counters_end) {
         memset(g_8bit_counters_start, 0, g_8bit_counters_end - g_8bit_counters_start);
     }
 }
 
 size_t sancov_get_counter_count(void) {
-    // Prefer trace_pc_guard (has TLS isolation)
+    // Prefer trace_pc_guard (has task/thread isolation)
     if (g_guard_count > 0) {
         return g_guard_count;
     }
@@ -220,11 +301,13 @@ size_t sancov_get_counter_count(void) {
 size_t sancov_get_covered_count(void) {
     size_t count = 0;
 
-    // Check thread-local map (trace_pc_guard mode)
-    ensure_tls_coverage_map();
-    if (tls_coverage_map) {
-        for (size_t i = 0; i < tls_coverage_map_size; i++) {
-            if (tls_coverage_map[i]) count++;
+    // Check task-keyed or thread-local map (trace_pc_guard mode)
+    if (g_guard_count > 0) {
+        uint8_t* map = get_current_coverage_map();
+        if (map) {
+            for (size_t i = 0; i < g_guard_count; i++) {
+                if (map[i]) count++;
+            }
         }
         return count;
     }
@@ -240,10 +323,9 @@ size_t sancov_get_covered_count(void) {
 }
 
 const uint8_t* sancov_get_counters(void) {
-    // Return thread-local map if available
-    ensure_tls_coverage_map();
-    if (tls_coverage_map) {
-        return tls_coverage_map;
+    // Return task-keyed or thread-local map if available
+    if (g_guard_count > 0) {
+        return get_current_coverage_map();
     }
     // Fallback to global counters
     return g_8bit_counters_start;
@@ -263,4 +345,60 @@ size_t sancov_snapshot_counters(uint8_t* buffer, size_t buffer_size) {
     size_t copy_size = buffer_size < counter_count ? buffer_size : counter_count;
     memcpy(buffer, counters, copy_size);
     return copy_size;
+}
+
+// MARK: - PC-to-Source Mapping Implementation
+
+bool sancov_pcs_available(void) {
+    return g_pcs_start != NULL && g_pcs_count > 0;
+}
+
+uintptr_t sancov_get_pc(size_t edge_index) {
+    if (!sancov_pcs_available() || edge_index >= g_pcs_count) {
+        return 0;
+    }
+    // PC table format: pairs of (PC, flags) - we want the PC
+    return g_pcs_start[edge_index * 2];
+}
+
+bool sancov_get_source_location(size_t edge_index, SanCovSourceLocation* location) {
+    if (!location) return false;
+
+    uintptr_t pc = sancov_get_pc(edge_index);
+    if (pc == 0) return false;
+
+    location->pc = pc;
+    location->edge_index = (uint32_t)edge_index;
+    location->filename = NULL;
+    location->function_name = NULL;
+
+    // Use dladdr to get symbol info
+    Dl_info info;
+    if (dladdr((void*)pc, &info)) {
+        location->filename = info.dli_fname;
+        location->function_name = info.dli_sname;
+    }
+
+    return true;
+}
+
+size_t sancov_get_covered_locations(SanCovSourceLocation* locations, size_t max_locations) {
+    const uint8_t* counters = sancov_get_counters();
+    size_t counter_count = sancov_get_counter_count();
+
+    if (!counters || counter_count == 0) return 0;
+
+    size_t covered_count = 0;
+
+    // First pass: count covered edges (or fill array)
+    for (size_t i = 0; i < counter_count; i++) {
+        if (counters[i] > 0) {
+            if (locations != NULL && covered_count < max_locations) {
+                sancov_get_source_location(i, &locations[covered_count]);
+            }
+            covered_count++;
+        }
+    }
+
+    return covered_count;
 }

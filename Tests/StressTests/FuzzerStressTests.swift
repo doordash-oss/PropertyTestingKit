@@ -72,7 +72,7 @@ import Foundation
 import Testing
 @testable import PropertyTestingKit
 
-@Suite(.serialized)
+@Suite
 struct FuzzerStressTests {
     // MARK: - Easy Tests (should achieve 100% coverage quickly)
 
@@ -855,9 +855,6 @@ struct FuzzerStressTests {
 }
 
 
-// Note: CoverageTests is nested inside FuzzerStressTests to share the .serialized trait.
-// Coverage gap detection relies on global coverage counters, which can be affected by
-// concurrent tests. By running all stress tests serially, we ensure accurate gap detection.
 extension FuzzerStressTests {
     // MARK: - Coverage Gap Detection Tests
 

@@ -7,7 +7,7 @@ import Testing
 import Foundation
 @testable import PropertyTestingKit
 
-@Suite("SwarmTesting", .serialized)
+@Suite("SwarmTesting")
 struct SwarmTestingTests {
 
     // MARK: - SwarmConfig Tests

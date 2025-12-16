@@ -4,7 +4,7 @@ import Dependencies
 import FunctionSpy
 @testable import PropertyTestingKit
 
-@Suite("Custom Fuzzable Types", .serialized)
+@Suite("Custom Fuzzable Types")
 struct CustomFuzzableTests {
 
     @Test("Custom struct generates fuzz values")
@@ -26,15 +26,15 @@ struct CustomFuzzableTests {
     @Test("FuzzEngine works with custom types")
     func testFuzzEngineWithCustomType() {
         nonisolated(unsafe) var callCount = 0
-        let (snapshotSpy, snapshotFn) = spy { () -> CoverageCounters? in
+        let (snapshotSpy, snapshotFn) = spy { () -> SanCovCounters? in
             callCount += 1
             var counters = [UInt64](repeating: 0, count: 100)
             counters[callCount % 100] = UInt64(callCount + 1)
-            return CoverageCounters(counters: counters)
+            return SanCovCounters(counters: counters)
         }
 
         let result = withDependencies {
-            $0.coverageCounters = CoverageCountersClient(snapshot: snapshotFn)
+            $0.coverageCounters = CoverageCountersClient(snapshot: snapshotFn, reset: {}, isAvailable: { true })
         } operation: {
             let config = FuzzEngine<TestConfig>.Config(
                 maxIterations: 30,

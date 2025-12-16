@@ -7,7 +7,7 @@ import Testing
 import Foundation
 @testable import PropertyTestingKit
 
-@Suite("TestCaseShrinker", .serialized)
+@Suite("TestCaseShrinker")
 struct TestCaseShrinkerTests {
 
     // MARK: - ShrinkConfig Tests

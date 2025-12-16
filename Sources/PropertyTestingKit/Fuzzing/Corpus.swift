@@ -28,22 +28,24 @@ public struct FailureInfo: Codable, Sendable {
     public let discoveredAt: Date
 
     public init(error: Error, stackTrace: String? = nil) {
+        @Dependency(\.dateClient) var dateClient
         self.errorType = String(describing: type(of: error))
         self.message = error.localizedDescription
         self.stackTrace = stackTrace
-        self.discoveredAt = Date()
+        self.discoveredAt = dateClient.now()
     }
 
     public init(
         errorType: String,
         message: String,
         stackTrace: String? = nil,
-        discoveredAt: Date = Date()
+        discoveredAt: Date? = nil
     ) {
+        @Dependency(\.dateClient) var dateClient
         self.errorType = errorType
         self.message = message
         self.stackTrace = stackTrace
-        self.discoveredAt = discoveredAt
+        self.discoveredAt = discoveredAt ?? dateClient.now()
     }
 }
 
@@ -89,14 +91,15 @@ public struct CorpusEntry<each Input: Codable & Sendable>: Sendable, Codable {
     public init(
         input: repeat each Input,
         signature: CoverageSignature,
-        discoveredAt: Date = Date(),
+        discoveredAt: Date? = nil,
         parentIndex: Int? = nil,
         entryType: CorpusEntryType = .coverage,
         failure: FailureInfo? = nil
     ) {
+        @Dependency(\.dateClient) var dateClient
         self.input = (repeat each input)
         self.signature = signature
-        self.discoveredAt = discoveredAt
+        self.discoveredAt = discoveredAt ?? dateClient.now()
         self.parentIndex = parentIndex
         self.entryType = entryType
         self.failure = failure
@@ -181,13 +184,13 @@ private enum CorpusCodingKeys: String, CodingKey {
     // Note: entropicScheduler is intentionally excluded - it's runtime state
 }
 
-// MARK: - Corpus
-
 /// A collection of test inputs with their coverage signatures.
 ///
 /// The corpus tracks which inputs produce unique coverage and provides
 /// minimization to keep only the essential inputs.
 public struct Corpus<each Input: Codable & Sendable>: Sendable, Codable {
+    @Dependency(\.dateClient) var dateClient
+
     /// All entries in the corpus.
     public private(set) var entries: [CorpusEntry<repeat each Input>]
 
@@ -207,10 +210,12 @@ public struct Corpus<each Input: Codable & Sendable>: Sendable, Codable {
     // for context - it's excluded from Codable as it's runtime state.
 
     public init(schemaVersion: String) {
+        @Dependency(\.dateClient) var dateClient
+        let now = dateClient.now()
         self.entries = []
         self.schemaVersion = schemaVersion
-        self.createdAt = Date()
-        self.updatedAt = Date()
+        self.createdAt = now
+        self.updatedAt = now
         self.totalCoverage = CoverageSignature(buckets: [:])
     }
 
@@ -284,7 +289,7 @@ public struct Corpus<each Input: Codable & Sendable>: Sendable, Codable {
         )
         entries.append(entry)
         totalCoverage = totalCoverage.union(with: signature)
-        updatedAt = Date()
+        updatedAt = dateClient.now()
         return true
     }
 
@@ -305,7 +310,7 @@ public struct Corpus<each Input: Codable & Sendable>: Sendable, Codable {
         )
         entries.append(entry)
         totalCoverage = totalCoverage.union(with: signature)
-        updatedAt = Date()
+        updatedAt = dateClient.now()
     }
 
     /// Add a failure-inducing input to the corpus.
@@ -327,7 +332,7 @@ public struct Corpus<each Input: Codable & Sendable>: Sendable, Codable {
         )
         entries.append(entry)
         totalCoverage = totalCoverage.union(with: signature)
-        updatedAt = Date()
+        updatedAt = dateClient.now()
     }
 
     /// Add a hang-inducing input to the corpus.
@@ -351,7 +356,7 @@ public struct Corpus<each Input: Codable & Sendable>: Sendable, Codable {
         )
         entries.append(entry)
         totalCoverage = totalCoverage.union(with: signature)
-        updatedAt = Date()
+        updatedAt = dateClient.now()
     }
 
     // MARK: - Failure Statistics
@@ -446,7 +451,7 @@ public struct Corpus<each Input: Codable & Sendable>: Sendable, Codable {
     private mutating func addEntry(_ entry: CorpusEntry<repeat each Input>) {
         entries.append(entry)
         totalCoverage = totalCoverage.union(with: entry.signature)
-        updatedAt = Date()
+        updatedAt = dateClient.now()
     }
 
     // MARK: - Selection for Mutation
@@ -672,7 +677,7 @@ public struct Corpus<each Input: Codable & Sendable>: Sendable, Codable {
             //
             // Total failures: \(failureCount)
             // Total hangs: \(hangCount)
-            // Generated: \(Date())
+            // Generated: \(dateClient.now())
             //
             // =============================================================================
 

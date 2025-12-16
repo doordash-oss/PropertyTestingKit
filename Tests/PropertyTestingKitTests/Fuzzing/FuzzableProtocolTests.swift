@@ -16,7 +16,7 @@ enum TestDirection: Fuzzable, Equatable {
     // Note: No mutate implementation - uses default extension
 }
 
-@Suite("Fuzzable Protocol", .serialized)
+@Suite("Fuzzable Protocol")
 struct FuzzableProtocolTests {
 
     @Test("Bool fuzz values")

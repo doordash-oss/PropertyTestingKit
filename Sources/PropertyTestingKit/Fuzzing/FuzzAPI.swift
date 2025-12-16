@@ -60,14 +60,11 @@ import Dependencies
 ///
 /// ## Requirements
 ///
-/// - Build with coverage: `swift test --enable-code-coverage`
+/// - Build with sanitizer coverage: `-sanitize-coverage=edge,trace-cmp`
 /// - Input type must conform to `Fuzzable & Codable`
-/// - **Coverage isolation**: The fuzzer automatically acquires a global lock
-///   (`CoverageLock.shared`) during execution to prevent contamination from
-///   other PropertyTestingKit code. However, tests that don't use this library
-///   can still run concurrently and contaminate coverage. For complete isolation:
-///   - Use `swift test --no-parallel` (slower but guaranteed accurate)
-///   - Or run fuzz tests separately: `swift test --filter "MyFuzzTests"`
+/// - **Coverage isolation**: The fuzzer uses task-keyed coverage maps that provide
+///   true per-task isolation. Multiple fuzz tests can run concurrently without
+///   coverage contamination, even when tasks share threads.
 ///
 /// - Parameters:
 ///   - mutators: Custom mutators for each input type. Pass one mutator per input.

@@ -78,6 +78,37 @@ const uint8_t* sancov_get_counters(void);
 /// If buffer is NULL, returns the required buffer size.
 size_t sancov_snapshot_counters(uint8_t* buffer, size_t buffer_size);
 
+// MARK: - PC-to-Source Mapping API
+// Maps SanCov edge indices to source locations using dladdr.
+
+/// Source location information for a covered edge.
+typedef struct {
+    const char* filename;      // Source file path (may be NULL)
+    const char* function_name; // Demangled function name (may be NULL)
+    uintptr_t pc;              // Program counter for this edge
+    uint32_t edge_index;       // The SanCov edge index
+} SanCovSourceLocation;
+
+/// Check if PC-to-source mapping is available.
+/// Returns true if PCs were captured during initialization.
+bool sancov_pcs_available(void);
+
+/// Get the PC for a given edge index.
+/// Returns 0 if the index is out of bounds or PCs not available.
+uintptr_t sancov_get_pc(size_t edge_index);
+
+/// Get source location info for a given edge index.
+/// Fills in the provided location struct.
+/// Returns true if successful, false if index out of bounds or PCs unavailable.
+/// Note: filename and function_name point to static storage and must not be freed.
+bool sancov_get_source_location(size_t edge_index, SanCovSourceLocation* location);
+
+/// Get source locations for all covered edges in the current task.
+/// Fills the provided array with location info for covered edges.
+/// Returns the number of locations written (up to max_locations).
+/// If locations is NULL, returns the number of covered edges.
+size_t sancov_get_covered_locations(SanCovSourceLocation* locations, size_t max_locations);
+
 #ifdef __cplusplus
 }
 #endif

@@ -10,6 +10,7 @@
 //
 
 import Foundation
+import Dependencies
 
 /// Detects when fuzzing has reached a coverage plateau and should stop early.
 ///
@@ -32,6 +33,8 @@ import Foundation
 /// This approach is inspired by entropic fuzzing (Böhme 2020) which uses
 /// information-theoretic principles to measure fuzzing progress.
 public struct CoveragePlateauDetector: Sendable {
+    @Dependency(\.dateClient) var dateClient
+
     /// Configuration for plateau detection.
     public struct Config: Sendable {
         /// Size of sliding window for rate calculation.
@@ -63,6 +66,9 @@ public struct CoveragePlateauDetector: Sendable {
     }
 
     private let config: Config
+
+    /// Actual window size used (guaranteed to be at least 1).
+    private let effectiveWindowSize: Int
 
     /// Ring buffer tracking whether each iteration discovered new coverage.
     private var discoveryWindow: [Bool]
@@ -99,7 +105,9 @@ public struct CoveragePlateauDetector: Sendable {
 
     public init(config: Config = Config()) {
         self.config = config
-        self.discoveryWindow = Array(repeating: false, count: config.windowSize)
+        // Ensure windowSize is at least 1 to prevent empty array access
+        self.effectiveWindowSize = max(1, config.windowSize)
+        self.discoveryWindow = Array(repeating: false, count: effectiveWindowSize)
     }
 
     /// Record an iteration and whether it discovered new coverage.
@@ -107,12 +115,12 @@ public struct CoveragePlateauDetector: Sendable {
     /// - Parameter discoveredNewCoverage: true if this iteration found new paths.
     public mutating func record(discoveredNewCoverage: Bool) {
         if startTime == nil {
-            startTime = Date()
+            startTime = dateClient.now()
         }
 
         // Update ring buffer
         let oldValue = discoveryWindow[windowIndex]
-        if oldValue && windowCount == config.windowSize {
+        if oldValue && windowCount == effectiveWindowSize {
             discoveriesInWindow -= 1
         }
 
@@ -122,12 +130,12 @@ public struct CoveragePlateauDetector: Sendable {
             totalDiscoveries += 1
         }
 
-        windowIndex = (windowIndex + 1) % config.windowSize
-        windowCount = min(windowCount + 1, config.windowSize)
+        windowIndex = (windowIndex + 1) % effectiveWindowSize
+        windowCount = min(windowCount + 1, effectiveWindowSize)
         totalIterations += 1
 
         // Update rate tracking when window is full
-        if windowCount >= config.windowSize {
+        if windowCount >= effectiveWindowSize {
             let currentRate = Double(discoveriesInWindow) / Double(windowCount)
 
             // Update rate history
@@ -153,7 +161,7 @@ public struct CoveragePlateauDetector: Sendable {
     /// - Returns: true if fuzzing should stop due to plateau.
     public var hasPlateaued: Bool {
         guard config.enabled else { return false }
-        guard windowCount >= config.windowSize else { return false }
+        guard windowCount >= effectiveWindowSize else { return false }
 
         // Primary signal: consecutive low-rate windows
         if lowRateWindowCount >= config.confirmationWindows {
@@ -196,7 +204,7 @@ public struct CoveragePlateauDetector: Sendable {
             rateEMA: rateEMA,
             lowRateWindowCount: lowRateWindowCount,
             hasPlateaued: hasPlateaued,
-            duration: startTime.map { Date().timeIntervalSince($0) } ?? 0
+            duration: startTime.map { dateClient.now().timeIntervalSince($0) } ?? 0
         )
     }
 

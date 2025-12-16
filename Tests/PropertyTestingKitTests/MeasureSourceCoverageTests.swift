@@ -6,7 +6,7 @@
 import Testing
 import PropertyTestingKit
 
-@Suite(.serialized)
+@Suite
 struct MeasureSourceCoverageTests {
     @Test("measureSourceCoverage captures source-level coverage")
     func testMeasureSourceCoverage() throws {

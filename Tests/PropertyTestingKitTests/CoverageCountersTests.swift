@@ -3,7 +3,7 @@ import Testing
 
 // MARK: - CoverageCounters Tests (In-Memory, No File I/O)
 
-@Suite("CoverageCounters API", .serialized)
+@Suite("CoverageCounters API")
 struct CoverageCountersTests {
 
     @Test("CoverageCounters.snapshot captures counter state")

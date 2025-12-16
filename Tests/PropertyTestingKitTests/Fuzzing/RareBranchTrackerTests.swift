@@ -7,7 +7,7 @@ import Testing
 import Foundation
 @testable import PropertyTestingKit
 
-@Suite("RareBranchTracker", .serialized)
+@Suite("RareBranchTracker")
 struct RareBranchTrackerTests {
 
     @Test("Tracker initializes with empty state")

@@ -14,7 +14,7 @@ import FunctionSpy
 
 // MARK: - CoverageSignature Property Tests
 
-@Suite("CoverageSignature Properties", .serialized)
+@Suite("CoverageSignature Properties")
 struct CoverageSignaturePropertyTests {
 
     // MARK: - Bucket Classification Properties
@@ -170,7 +170,7 @@ struct CoverageSignaturePropertyTests {
 
 // MARK: - SignatureSet Property Tests
 
-@Suite("SignatureSet Properties", .serialized)
+@Suite("SignatureSet Properties")
 struct SignatureSetPropertyTests {
 
     @Test("SignatureSet insert returns correct newness")
@@ -217,7 +217,7 @@ struct SignatureSetPropertyTests {
 
 // MARK: - Fuzzable Conformance Property Tests
 
-@Suite("Fuzzable Properties", .serialized)
+@Suite("Fuzzable Properties")
 struct FuzzablePropertyTests {
 
     @Test("Bool.mutate always returns the opposite value")
@@ -327,7 +327,7 @@ struct FuzzablePropertyTests {
 
 // MARK: - Corpus Property Tests
 
-@Suite("Corpus Properties", .serialized)
+@Suite("Corpus Properties")
 struct CorpusPropertyTests {
 
     @Test("Corpus addIfInteresting rejects redundant coverage")
@@ -539,7 +539,7 @@ struct CorpusPropertyTests {
 
 // MARK: - CorpusEntry Property Tests
 
-@Suite("CorpusEntry Properties", .serialized)
+@Suite("CorpusEntry Properties")
 struct CorpusEntryPropertyTests {
 
     @Test("CorpusEntry preserves all fields through Codable")
@@ -571,7 +571,7 @@ struct CorpusEntryPropertyTests {
 
 // MARK: - CounterDiff Property Tests (via measureCoverage)
 
-@Suite("CounterDiff Properties", .serialized)
+@Suite("CounterDiff Properties")
 struct CounterDiffPropertyTests {
 
     @Test("measureCoverage captures code execution")
@@ -634,7 +634,7 @@ struct CounterDiffPropertyTests {
 
 // MARK: - CoverageCounters Property Tests (via snapshot)
 
-@Suite("CoverageCounters Properties", .serialized)
+@Suite("CoverageCounters Properties")
 struct CoverageCountersPropertyTests {
 
     @Test("CoverageCounters.snapshot returns valid data")
@@ -667,7 +667,7 @@ struct CoverageCountersPropertyTests {
 
 // MARK: - Integration Property Tests
 
-@Suite("Integration Properties", .serialized)
+@Suite("Integration Properties")
 struct IntegrationPropertyTests {
 
     @Test("Signature from counters excludes zeros")
@@ -686,7 +686,7 @@ struct IntegrationPropertyTests {
 
 // MARK: - FuzzError Tests
 
-@Suite("FuzzError Properties", .serialized)
+@Suite("FuzzError Properties")
 struct FuzzErrorTests {
 
     @Test("FuzzError.testFailed has correct description")
@@ -715,16 +715,16 @@ struct FuzzErrorTests {
 
 // MARK: - Regression Mode Tests
 
-@Suite("Regression Mode", .serialized)
+@Suite("Regression Mode")
 struct RegressionModeTests {
 
     @Test("CorpusSchema detects version changes")
     func testSchemaVersioning() throws {
         // Create a mock client with known counter count
-        let (snapshotSpy, snapshotFn) = spy { () -> CoverageCounters? in
-            CoverageCounters(counters: [UInt64](repeating: 0, count: 100))
+        let (snapshotSpy, snapshotFn) = spy { () -> SanCovCounters? in
+            SanCovCounters(counters: [UInt64](repeating: 0, count: 100))
         }
-        let mockClient = CoverageCountersClient(snapshot: snapshotFn)
+        let mockClient = CoverageCountersClient(snapshot: snapshotFn, reset: {}, isAvailable: { true })
         let version1 = CorpusSchema.currentVersion(using: mockClient)
 
         // Version should be in expected format
@@ -757,7 +757,7 @@ struct RegressionModeTests {
     @Test("CorpusSchema returns unknown when coverage unavailable")
     func testSchemaVersioningUnknown() throws {
         // Use a mock client that returns nil (simulating coverage unavailable)
-        let mockClient = CoverageCountersClient(snapshot: { nil })
+        let mockClient = CoverageCountersClient(snapshot: { nil }, reset: {}, isAvailable: { false })
         let version = CorpusSchema.currentVersion(using: mockClient)
         #expect(version == "unknown", "Should return 'unknown' when coverage unavailable")
     }
@@ -765,7 +765,7 @@ struct RegressionModeTests {
 
 // MARK: - Edge Case Tests
 
-@Suite("Edge Cases", .serialized)
+@Suite("Edge Cases")
 struct EdgeCaseTests {
 
     @Test("Very large bucket values")
@@ -845,7 +845,7 @@ struct EdgeCaseTests {
 
 // MARK: - InMemoryCoverageReader Property Tests
 
-@Suite("InMemoryCoverageReader Properties", .serialized)
+@Suite("InMemoryCoverageReader Properties")
 struct InMemoryCoverageReaderPropertyTests {
 
     @Test("InMemoryCoverageReader loads from current process")
@@ -1002,7 +1002,7 @@ struct InMemoryCoverageReaderPropertyTests {
 
 // MARK: - CoverageTrait Tests
 
-@Suite("CoverageTrait", .serialized)
+@Suite("CoverageTrait")
 struct CoverageTraitTests {
 
     @Test("CoverageTrait.isAvailable returns correct status")
@@ -1045,22 +1045,22 @@ struct CoverageTraitTests {
 
 // MARK: - Fuzz API Property Tests
 
-@Suite("Fuzz API Properties", .serialized)
+@Suite("Fuzz API Properties")
 struct FuzzAPIPropertyTests {
 
     @Test("fuzz function runs with default configuration")
     func testFuzzDefaultConfig() throws {
         nonisolated(unsafe) var callCount = 0
-        let (snapshotSpy, snapshotFn) = spy { () -> CoverageCounters? in
+        let (snapshotSpy, snapshotFn) = spy { () -> SanCovCounters? in
             callCount += 1
             var counters = [UInt64](repeating: 0, count: 100)
             counters[callCount % 100] = UInt64(callCount + 1)
-            return CoverageCounters(counters: counters)
+            return SanCovCounters(counters: counters)
         }
 
         // Use a simple test that won't fail
         let result = try withDependencies {
-            $0.coverageCounters = CoverageCountersClient(snapshot: snapshotFn)
+            $0.coverageCounters = CoverageCountersClient(snapshot: snapshotFn, reset: {}, isAvailable: { true })
             $0.fileManager = FileManagerClient(
                 currentDirectoryPath: { "/test" },
                 fileExists: { _ in false },
@@ -1086,15 +1086,15 @@ struct FuzzAPIPropertyTests {
         var seenInputs: [String] = []
 
         nonisolated(unsafe) var callCount = 0
-        let (snapshotSpy, snapshotFn) = spy { () -> CoverageCounters? in
+        let (snapshotSpy, snapshotFn) = spy { () -> SanCovCounters? in
             callCount += 1
             var counters = [UInt64](repeating: 0, count: 100)
             counters[callCount % 100] = UInt64(callCount + 1)
-            return CoverageCounters(counters: counters)
+            return SanCovCounters(counters: counters)
         }
 
         let result = try withDependencies {
-            $0.coverageCounters = CoverageCountersClient(snapshot: snapshotFn)
+            $0.coverageCounters = CoverageCountersClient(snapshot: snapshotFn, reset: {}, isAvailable: { true })
             $0.environment = EnvironmentClient(environment: { [:] })
         } operation: {
             try fuzz(seeds: ["custom1", "custom2", "custom3"], iterations: 30, duration: 5) { (input: String) in
@@ -1112,7 +1112,7 @@ struct FuzzAPIPropertyTests {
 
 // MARK: - measureSourceCoverage API Tests
 
-@Suite("Source Coverage API", .serialized)
+@Suite("Source Coverage API")
 struct SourceCoverageAPITests {
 
     @Test("measureSourceCoverage captures source-level coverage")

@@ -7,7 +7,7 @@ import Testing
 import Foundation
 @testable import PropertyTestingKit
 
-@Suite("AdaptiveMutationScheduler", .serialized)
+@Suite("AdaptiveMutationScheduler")
 struct AdaptiveMutationSchedulerTests {
 
     // MARK: - MutationStrategy Tests

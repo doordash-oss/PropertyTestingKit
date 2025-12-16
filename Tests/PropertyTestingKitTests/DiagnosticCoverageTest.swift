@@ -7,7 +7,7 @@ import Testing
 import PropertyTestingKit
 import Foundation
 
-@Suite(.serialized)
+@Suite
 struct DiagnosticCoverageTest {
     @Test("Diagnose coverage hash matching")
     func testDiagnoseCoverageMatching() throws {

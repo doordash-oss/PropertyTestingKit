@@ -15,6 +15,7 @@
 //
 
 import Foundation
+import Dependencies
 
 // MARK: - MutatorCategory
 
@@ -98,9 +99,11 @@ public struct SwarmConfiguration: Hashable, Sendable {
     /// When this configuration was sampled.
     public let createdAt: Date
 
-    public init(activeCategories: Set<MutatorCategory>, createdAt: Date = Date()) {
+    public init(activeCategories: Set<MutatorCategory>, createdAt: Date? = nil) {
+        @Dependency(\.dateClient) var dateClient
+
         self.activeCategories = activeCategories
-        self.createdAt = createdAt
+        self.createdAt = createdAt ?? dateClient.now()
     }
 
     /// Check if a category is active.
