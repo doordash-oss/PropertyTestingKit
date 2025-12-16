@@ -253,6 +253,246 @@ public func extremeMultipleDynamicStrings(_ str: String) -> String {
     }
 }
 
+// MARK: - Difficulty Level: Loop-based
+// Loop patterns that test iteration-sensitive coverage
+
+/// Easy Loop: Find first element greater than threshold
+/// Tests basic loop with early exit
+public func easyLoopFindFirst(_ values: [Int], threshold: Int) -> String {
+    for value in values {
+        if value > threshold {
+            return "found"
+        }
+    }
+    return "not-found"
+}
+
+/// Easy Loop: Count elements matching a condition
+public func easyLoopCount(_ values: [Int], target: Int) -> String {
+    var count = 0
+    for value in values {
+        if value == target {
+            count += 1
+        }
+    }
+    if count >= 3 {
+        return "many-matches"
+    } else if count > 0 {
+        return "few-matches"
+    } else {
+        return "no-matches"
+    }
+}
+
+/// Medium Loop: Accumulator with threshold
+/// Sum values until we exceed a threshold
+public func mediumLoopAccumulator(_ values: [Int], threshold: Int) -> String {
+    var sum = 0
+    for value in values {
+        sum &+= value  // Wrapping add
+        if sum > threshold {
+            return "threshold-exceeded"
+        }
+    }
+    if sum == threshold {
+        return "exact-threshold"
+    }
+    return "below-threshold"
+}
+
+/// Medium Loop: Index-dependent condition
+/// Different behavior on specific iteration indices
+public func mediumLoopIndexDependent(_ values: [Int]) -> String {
+    for (index, value) in values.enumerated() {
+        if index == 3 && value == 42 {
+            return "magic-at-index-3"
+        }
+        if index == 7 && value < 0 {
+            return "negative-at-index-7"
+        }
+    }
+    return "normal"
+}
+
+/// Medium Loop: General index check for indices 1-20
+/// Tests that array mutations work for arbitrary indices, not just hardcoded 3 and 7
+/// Returns "hit-N" if values[N] < 0 for the given targetIndex N
+public func mediumLoopGeneralIndexCheck(_ values: [Int], targetIndex: Int) -> String {
+    guard targetIndex >= 1 && targetIndex <= 20 else {
+        return "invalid-index"
+    }
+    guard values.count > targetIndex else {
+        return "array-too-short"
+    }
+    if values[targetIndex] < 0 {
+        return "hit-\(targetIndex)"
+    }
+    return "not-negative"
+}
+
+/// Hard Loop: Nested loops with break condition
+/// Find a specific pair in nested iteration
+public func hardLoopNestedFind(_ outer: [Int], _ inner: [Int]) -> String {
+    for a in outer {
+        for b in inner {
+            if a == 42 && b == 1337 {
+                return "magic-pair"
+            }
+            if a + b == 100 {
+                return "sum-100"
+            }
+        }
+    }
+    return "no-special-pair"
+}
+
+/// Hard Loop: State machine with transitions
+/// Process input sequence through state transitions
+public func hardLoopStateMachine(_ inputs: [Int]) -> String {
+    enum State { case idle, processing, error, success }
+    var state: State = .idle
+
+    for input in inputs {
+        switch state {
+        case .idle:
+            if input == 1 {
+                state = .processing
+            } else if input < 0 {
+                state = .error
+            }
+        case .processing:
+            if input == 2 {
+                state = .success
+            } else if input == 0 {
+                state = .idle
+            } else if input < 0 {
+                state = .error
+            }
+        case .error, .success:
+            break  // Terminal states
+        }
+    }
+
+    switch state {
+    case .idle: return "remained-idle"
+    case .processing: return "still-processing"
+    case .error: return "ended-error"
+    case .success: return "ended-success"
+    }
+}
+
+/// Very Hard Loop: Sequence pattern detection
+/// Must find specific sequence [1, 2, 3] in order
+public func veryHardLoopSequenceDetect(_ values: [Int]) -> String {
+    var matchIndex = 0
+    let pattern = [1, 2, 3]
+
+    for value in values {
+        if value == pattern[matchIndex] {
+            matchIndex += 1
+            if matchIndex == pattern.count {
+                return "pattern-found"
+            }
+        } else if value == pattern[0] {
+            matchIndex = 1
+        } else {
+            matchIndex = 0
+        }
+    }
+    return "pattern-not-found"
+}
+
+/// Very Hard Loop: Checksum validation
+/// Compute rolling checksum and validate at end
+public func veryHardLoopChecksum(_ values: [Int]) -> String {
+    guard !values.isEmpty else { return "empty-input" }
+
+    var checksum = 0
+    for (index, value) in values.enumerated() {
+        checksum = (checksum &* 31) &+ value &+ index
+    }
+
+    // Checksum must match a specific value
+    let normalizedChecksum = checksum & 0xFFFF
+    if normalizedChecksum == 0x1234 {
+        return "valid-checksum"
+    } else if normalizedChecksum == 0 {
+        return "zero-checksum"
+    }
+    return "invalid-checksum"
+}
+
+/// Extreme Loop: Matrix search with constraints
+/// Find cell where row*col product equals target AND both coordinates satisfy constraints
+public func extremeLoopMatrixSearch(_ rows: Int, _ cols: Int, target: Int) -> String {
+    guard rows > 0 && rows <= 100 && cols > 0 && cols <= 100 else {
+        return "invalid-dimensions"
+    }
+
+    for row in 0..<rows {
+        for col in 0..<cols {
+            let product = row &* col
+            if product == target && row > 10 && col > 5 {
+                return "constrained-match"
+            }
+            if product == target {
+                return "unconstrained-match"
+            }
+        }
+    }
+    return "no-match"
+}
+
+/// Extreme Loop: Convergence test
+/// Iterate until value converges or max iterations
+public func extremeLoopConvergence(_ start: Int, divisor: Int) -> String {
+    guard divisor > 1 else { return "invalid-divisor" }
+
+    var value = start
+    var iterations = 0
+    let maxIterations = 1000
+
+    while value != 1 && iterations < maxIterations {
+        if value % divisor == 0 {
+            value = value / divisor
+        } else {
+            value = value &+ 1
+        }
+        iterations += 1
+    }
+
+    if value == 1 && iterations == 42 {
+        return "magic-convergence"
+    } else if value == 1 {
+        return "converged"
+    }
+    return "did-not-converge"
+}
+
+// MARK: - Difficulty Level: Large Arrays
+// Tests that require arrays to grow significantly through mutations
+
+/// Requires array of 100+ elements with a negative value somewhere
+/// Tests that array doubling mutations can grow arrays to significant sizes
+public func largeArrayWithNegative(_ values: [Int]) -> String {
+    guard values.count >= 100 else {
+        return "too-small"
+    }
+    if values.contains(where: { $0 < 0 }) {
+        return "large-with-negative"
+    }
+    return "large-all-positive"
+}
+
+/// Requires array of 200+ elements
+/// Tests deeper array growth through repeated doubling
+public func veryLargeArray(_ values: [Int]) -> String {
+    guard values.count >= 200 else {
+        return "too-small"
+    }
+    return "very-large"
+}
+
 // MARK: - Coverage Tracking Helpers
 
 /// Tracks which branches have been covered in a test run

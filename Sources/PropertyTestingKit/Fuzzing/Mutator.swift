@@ -626,6 +626,302 @@ struct PercentageMutator: Mutator, Sendable {
     }
 }
 
+// MARK: - Array Mutators
+
+/// Built-in array mutation strategies.
+public enum ArrayMutationStrategy: Sendable {
+    /// Duplicate elements to create repeated values
+    case duplication
+    /// Insert elements at specific indices (0, 3, 7, middle)
+    case positionAware
+    /// Extend arrays to reach specific lengths (4, 8, 10, 16)
+    case lengthTargeted
+    /// Insert common sequences from element seeds
+    case sequenceInsertion
+    /// Focus on creating repeated matching values
+    case repeatedValues
+    /// All array-aware strategies combined
+    case comprehensive
+}
+
+extension Array where Element: Fuzzable & Sendable {
+    /// Create a composed mutator from multiple array strategies.
+    public static func mutators(_ strategies: ArrayMutationStrategy...) -> AnyMutator<[Element]> {
+        let mutators = strategies.map { strategy -> AnyMutator<[Element]> in
+            switch strategy {
+            case .duplication:
+                return AnyMutator(ArrayDuplicationMutator<Element>())
+            case .positionAware:
+                return AnyMutator(ArrayPositionAwareMutator<Element>())
+            case .lengthTargeted:
+                return AnyMutator(ArrayLengthTargetedMutator<Element>())
+            case .sequenceInsertion:
+                return AnyMutator(ArraySequenceInsertionMutator<Element>())
+            case .repeatedValues:
+                return AnyMutator(ArrayRepeatedValuesMutator<Element>())
+            case .comprehensive:
+                return AnyMutator(ComposedMutator([
+                    AnyMutator(ArrayDuplicationMutator<Element>()),
+                    AnyMutator(ArrayPositionAwareMutator<Element>()),
+                    AnyMutator(ArrayLengthTargetedMutator<Element>()),
+                    AnyMutator(ArraySequenceInsertionMutator<Element>()),
+                    AnyMutator(ArrayRepeatedValuesMutator<Element>()),
+                ]))
+            }
+        }
+        return AnyMutator(ComposedMutator(mutators))
+    }
+}
+
+// MARK: - Array Mutator Implementations
+
+/// Duplicates elements within arrays to create repeated values.
+struct ArrayDuplicationMutator<Element: Fuzzable & Sendable>: Mutator, Sendable {
+    var seeds: [[Element]] {
+        // Include arrays with duplicated elements
+        var result: [[Element]] = []
+        for element in Element.fuzz.prefix(5) {
+            result.append([element, element])
+            result.append([element, element, element])
+            result.append(Array(repeating: element, count: 5))
+        }
+        return result
+    }
+
+    func mutate(_ value: [Element]) -> [[Element]] {
+        var results: [[Element]] = []
+
+        // Duplicate each element in place
+        for i in value.indices {
+            var copy = value
+            copy.insert(value[i], at: i)
+            results.append(copy)
+        }
+
+        // Duplicate entire array
+        if !value.isEmpty && value.count < 20 {
+            results.append(value + value)
+        }
+
+        // Triple an element
+        for i in value.indices where value.count < 15 {
+            var copy = value
+            copy.insert(value[i], at: i)
+            copy.insert(value[i], at: i)
+            results.append(copy)
+        }
+
+        return results
+    }
+}
+
+/// Inserts elements at specific indices commonly used in tests.
+struct ArrayPositionAwareMutator<Element: Fuzzable & Sendable>: Mutator, Sendable {
+    var seeds: [[Element]] {
+        var result: [[Element]] = []
+
+        // Create arrays with seed values at important positions
+        for element in Element.fuzz.prefix(5) {
+            // Arrays of length 4 with element at index 3
+            if let filler = Element.fuzz.first, filler as AnyObject !== element as AnyObject {
+                var arr = Array(repeating: filler, count: 4)
+                arr[3] = element
+                result.append(arr)
+            }
+
+            // Arrays of length 8 with element at index 7
+            if let filler = Element.fuzz.first {
+                var arr = Array(repeating: filler, count: 8)
+                arr[7] = element
+                result.append(arr)
+            }
+        }
+
+        return result
+    }
+
+    func mutate(_ value: [Element]) -> [[Element]] {
+        var results: [[Element]] = []
+        let importantIndices = [0, 3, 7, value.count / 2]
+
+        // Insert seed values at important indices
+        for element in Element.fuzz.prefix(5) {
+            for targetIndex in importantIndices where targetIndex <= value.count {
+                var copy = value
+                copy.insert(element, at: targetIndex)
+                results.append(copy)
+            }
+        }
+
+        // Replace values at important indices with seeds
+        for element in Element.fuzz.prefix(5) {
+            for targetIndex in importantIndices where targetIndex < value.count {
+                var copy = value
+                copy[targetIndex] = element
+                results.append(copy)
+            }
+        }
+
+        return results
+    }
+}
+
+/// Extends arrays to reach specific target lengths.
+struct ArrayLengthTargetedMutator<Element: Fuzzable & Sendable>: Mutator, Sendable {
+    var seeds: [[Element]] {
+        var result: [[Element]] = []
+
+        if let first = Element.fuzz.first {
+            // Common lengths needed for index-based tests
+            for length in [4, 8, 10, 16] {
+                result.append(Array(repeating: first, count: length))
+            }
+        }
+
+        return result
+    }
+
+    func mutate(_ value: [Element]) -> [[Element]] {
+        var results: [[Element]] = []
+        let targetLengths = [4, 8, 10, 16, 32]
+
+        for targetLength in targetLengths where value.count < targetLength {
+            // Extend with last element
+            if let last = value.last {
+                let extension_ = Array(repeating: last, count: targetLength - value.count)
+                results.append(value + extension_)
+            }
+
+            // Extend with first seed
+            if let first = Element.fuzz.first {
+                let extension_ = Array(repeating: first, count: targetLength - value.count)
+                results.append(value + extension_)
+            }
+        }
+
+        // Truncate to important lengths
+        for targetLength in targetLengths where value.count > targetLength {
+            results.append(Array(value.prefix(targetLength)))
+        }
+
+        return results
+    }
+}
+
+/// Inserts sequences of seed values into arrays.
+struct ArraySequenceInsertionMutator<Element: Fuzzable & Sendable>: Mutator, Sendable {
+    var seeds: [[Element]] {
+        var result: [[Element]] = []
+
+        // Create sequences from first few seeds
+        let seedElements = Array(Element.fuzz.prefix(5))
+        if seedElements.count >= 2 {
+            result.append(Array(seedElements.prefix(2)))
+        }
+        if seedElements.count >= 3 {
+            result.append(Array(seedElements.prefix(3)))
+            // Also reversed
+            result.append(Array(seedElements.prefix(3).reversed()))
+        }
+        if seedElements.count >= 5 {
+            result.append(seedElements)
+        }
+
+        return result
+    }
+
+    func mutate(_ value: [Element]) -> [[Element]] {
+        var results: [[Element]] = []
+        let seedElements = Array(Element.fuzz.prefix(5))
+
+        // Insert 2-element sequence
+        if seedElements.count >= 2 {
+            let seq2 = Array(seedElements.prefix(2))
+            results.append(seq2 + value)
+            results.append(value + seq2)
+        }
+
+        // Insert 3-element sequence
+        if seedElements.count >= 3 {
+            let seq3 = Array(seedElements.prefix(3))
+            results.append(seq3 + value)
+            results.append(value + seq3)
+
+            // Insert in middle
+            if !value.isEmpty {
+                let mid = value.count / 2
+                var copy = value
+                copy.insert(contentsOf: seq3, at: mid)
+                results.append(copy)
+            }
+        }
+
+        return results
+    }
+}
+
+/// Creates arrays with many repeated matching values.
+struct ArrayRepeatedValuesMutator<Element: Fuzzable & Sendable>: Mutator, Sendable {
+    var seeds: [[Element]] {
+        var result: [[Element]] = []
+
+        for element in Element.fuzz.prefix(5) {
+            // Arrays with 3+ repeated values (triggers "many-matches")
+            result.append(Array(repeating: element, count: 3))
+            result.append(Array(repeating: element, count: 4))
+            result.append(Array(repeating: element, count: 5))
+        }
+
+        // Mixed arrays with some repeated values
+        if Element.fuzz.count >= 2 {
+            let a = Element.fuzz[0]
+            let b = Element.fuzz[1]
+            result.append([a, a, a, b])  // 3 of first, 1 of second
+            result.append([a, b, a, b, a])  // alternating with majority
+        }
+
+        return result
+    }
+
+    func mutate(_ value: [Element]) -> [[Element]] {
+        var results: [[Element]] = []
+
+        // For each unique element in the array, create version with more of it
+        var seen = Set<Int>()
+        for i in value.indices {
+            let hash = "\(value[i])".hashValue
+            if seen.contains(hash) { continue }
+            seen.insert(hash)
+
+            // Add 2 more copies of this element
+            var copy = value
+            copy.append(value[i])
+            copy.append(value[i])
+            results.append(copy)
+
+            // Replace other elements with this one
+            if value.count >= 3 {
+                var allSame = value
+                for j in allSame.indices.prefix(3) {
+                    allSame[j] = value[i]
+                }
+                results.append(allSame)
+            }
+        }
+
+        // Create arrays with seeds repeated
+        for element in Element.fuzz.prefix(3) {
+            var withRepeats = value
+            withRepeats.append(element)
+            withRepeats.append(element)
+            withRepeats.append(element)
+            results.append(withRepeats)
+        }
+
+        return results
+    }
+}
+
 // MARK: - Helper Extensions
 
 private extension Int8 {

@@ -35,6 +35,13 @@
 //  - Dynamic password: ❌ (String dictionary doesn't capture this pattern)
 //  - Multiple dynamic strings: ✅ (String dictionary captures components)
 //
+//  Loop-based tests: Test iteration-sensitive coverage (with array mutations)
+//  - Easy: find first ✅, count many-matches ✅ (array duplication creates repeats)
+//  - Medium: accumulator ✅, index-dependent partial (neg7 ✅, magic3 ❌)
+//  - Hard: nested find ❌ (needs coordinated arrays), state machine ✅ (sequences)
+//  - Very Hard: sequence detection ❌, checksum partial (zero ✅, valid ❌)
+//  - Extreme: matrix search ✅, convergence ❌ (needs specific iteration count)
+//
 //  ## Techniques Applied
 //
 //  1. Dictionary-based seeds: Common magic values (1337, xyzzy, SECRET_),
@@ -497,5 +504,375 @@ struct FuzzerStressTests {
         #expect(seenNoMatch, "Should have covered 'no-match' branch")
         print("Extreme multiple dynamic: full=\(seenFullMatch), prefix=\(seenPrefixMatch), suffix=\(seenSuffixMatch), no=\(seenNoMatch)")
         print("  \(result.stats.totalInputs) inputs, \(result.stats.newPaths) paths")
+    }
+
+    // MARK: - Loop-Based Tests
+
+    @Test("Easy Loop: Find first element above threshold")
+    func easyLoopFindFirstCoverage() throws {
+        var seenFound = false
+        var seenNotFound = false
+
+        let result = try fuzz(
+            iterations: 200,
+            duration: 5
+        ) { (values: [Int], threshold: Int) in
+            let output = easyLoopFindFirst(values, threshold: threshold)
+            if output == "found" { seenFound = true }
+            if output == "not-found" { seenNotFound = true }
+        }
+
+        #expect(seenFound, "Should have covered 'found' branch")
+        #expect(seenNotFound, "Should have covered 'not-found' branch")
+        print("Easy loop find first: found=\(seenFound), notFound=\(seenNotFound), \(result.stats.totalInputs) inputs")
+    }
+
+    @Test("Easy Loop: Count matching elements")
+    func easyLoopCountCoverage() throws {
+        var seenMany = false
+        var seenFew = false
+        var seenNone = false
+
+        let result = try fuzz(
+            iterations: 500,
+            duration: 10
+        ) { (values: [Int], target: Int) in
+            let output = easyLoopCount(values, target: target)
+            if output == "many-matches" { seenMany = true }
+            if output == "few-matches" { seenFew = true }
+            if output == "no-matches" { seenNone = true }
+        }
+
+        #expect(seenFew, "Should have covered 'few-matches' branch")
+        #expect(seenNone, "Should have covered 'no-matches' branch")
+        #expect(seenMany, "Should have covered 'many-matches' branch (array mutations create repeated values)")
+        print("Easy loop count: many=\(seenMany), few=\(seenFew), none=\(seenNone), \(result.stats.totalInputs) inputs")
+    }
+
+    @Test("Medium Loop: Accumulator with threshold")
+    func mediumLoopAccumulatorCoverage() throws {
+        var seenExceeded = false
+        var seenExact = false
+        var seenBelow = false
+
+        let result = try fuzz(
+            iterations: 500,
+            duration: 10
+        ) { (values: [Int], threshold: Int) in
+            let output = mediumLoopAccumulator(values, threshold: threshold)
+            if output == "threshold-exceeded" { seenExceeded = true }
+            if output == "exact-threshold" { seenExact = true }
+            if output == "below-threshold" { seenBelow = true }
+        }
+
+        #expect(seenExceeded, "Should have covered 'threshold-exceeded' branch")
+        #expect(seenBelow, "Should have covered 'below-threshold' branch")
+        #expect(seenExact, "Should have covered 'exact-threshold' branch")
+        print("Medium loop accumulator: exceeded=\(seenExceeded), exact=\(seenExact), below=\(seenBelow), \(result.stats.totalInputs) inputs")
+    }
+
+    @Test("Medium Loop: Index-dependent condition")
+    func mediumLoopIndexDependentCoverage() throws {
+        var seenMagicAt3 = false
+        var seenNegativeAt7 = false
+        var seenNormal = false
+
+        let result = try fuzz(
+            iterations: 1000,
+            duration: 15
+        ) { (values: [Int]) in
+            let output = mediumLoopIndexDependent(values)
+            if output == "magic-at-index-3" { seenMagicAt3 = true }
+            if output == "negative-at-index-7" { seenNegativeAt7 = true }
+            if output == "normal" { seenNormal = true }
+        }
+
+        #expect(seenNormal, "Should have covered 'normal' branch")
+        // These require specific array lengths AND specific values at specific indices
+        withKnownIssue("Requires array[3] == 42 - needs array length >= 4 with 42 at exact index", isIntermittent: true) {
+            #expect(seenMagicAt3, "Should have covered 'magic-at-index-3' branch")
+        }
+        withKnownIssue("Requires array[7] < 0 - needs array length >= 8 with negative at exact index", isIntermittent: true) {
+            #expect(seenNegativeAt7, "Should have covered 'negative-at-index-7' branch")
+        }
+        print("Medium loop index: magic3=\(seenMagicAt3), neg7=\(seenNegativeAt7), normal=\(seenNormal), \(result.stats.totalInputs) inputs")
+    }
+
+    @Test("Medium Loop: General index check 1-20")
+    func mediumLoopGeneralIndexCheckCoverage() throws {
+        // Track which indices we successfully hit with a negative value
+        // Single fuzzer run checks ALL indices - this is realistic usage
+        var hitIndices: Set<Int> = []
+
+        let result = try fuzz(
+            iterations: 5000,
+            duration: 30
+        ) { (values: [Int]) in
+            // Check all indices 1-20 in each iteration
+            for targetIndex in 1...20 {
+                let output = mediumLoopGeneralIndexCheck(values, targetIndex: targetIndex)
+                if output == "hit-\(targetIndex)" {
+                    hitIndices.insert(targetIndex)
+                }
+            }
+        }
+
+        let hitCount = hitIndices.count
+        let missedIndices = Set(1...20).subtracting(hitIndices)
+
+        print("General index check: hit \(hitCount)/20 indices in \(result.stats.totalInputs) inputs")
+        print("  Hit: \(hitIndices.sorted())")
+        if !missedIndices.isEmpty {
+            print("  Missed: \(missedIndices.sorted())")
+        }
+
+        // With incremental array growth and position mutations, we should hit most indices
+        // The fuzzer grows arrays by appending, then mutates each position
+        #expect(hitCount >= 15, "Should hit at least 15/20 indices with general array mutations (hit \(hitCount))")
+
+        // Track if we can't hit all as a known limitation
+        if hitCount < 20 {
+            withKnownIssue("Incremental array growth may not reach all indices in time budget", isIntermittent: true) {
+                #expect(hitCount == 20, "Should hit all 20 indices")
+            }
+        }
+    }
+
+    @Test("Hard Loop: Nested find with magic pair")
+    func hardLoopNestedFindCoverage() throws {
+        var seenMagicPair = false
+        var seenSum100 = false
+        var seenNoSpecial = false
+
+        let result = try fuzz(
+            iterations: 1000,
+            duration: 15
+        ) { (outer: [Int], inner: [Int]) in
+            let output = hardLoopNestedFind(outer, inner)
+            if output == "magic-pair" { seenMagicPair = true }
+            if output == "sum-100" { seenSum100 = true }
+            if output == "no-special-pair" { seenNoSpecial = true }
+        }
+
+        #expect(seenNoSpecial, "Should have covered 'no-special-pair' branch")
+        // sum-100 needs a in outer and b in inner where a+b=100 (e.g., 0+100, 50+50)
+        withKnownIssue("Sum-100 needs complementary values in both arrays", isIntermittent: true) {
+            #expect(seenSum100, "Should have covered 'sum-100' branch")
+        }
+        // magic-pair needs 42 in outer AND 1337 in inner simultaneously
+        withKnownIssue("Magic pair needs 42 in outer array AND 1337 in inner array", isIntermittent: true) {
+            #expect(seenMagicPair, "Should have covered 'magic-pair' branch")
+        }
+        print("Hard loop nested: magic=\(seenMagicPair), sum100=\(seenSum100), noSpecial=\(seenNoSpecial), \(result.stats.totalInputs) inputs")
+    }
+
+    @Test("Hard Loop: State machine transitions")
+    func hardLoopStateMachineCoverage() throws {
+        var seenIdle = false
+        var seenProcessing = false
+        var seenError = false
+        var seenSuccess = false
+
+        let result = try fuzz(
+            iterations: 1000,
+            duration: 15
+        ) { (inputs: [Int]) in
+            let output = hardLoopStateMachine(inputs)
+            if output == "remained-idle" { seenIdle = true }
+            if output == "still-processing" { seenProcessing = true }
+            if output == "ended-error" { seenError = true }
+            if output == "ended-success" { seenSuccess = true }
+        }
+
+        #expect(seenIdle, "Should have covered 'remained-idle' branch")
+        #expect(seenProcessing, "Should have covered 'still-processing' (1 in seeds)")
+        #expect(seenError, "Should have covered 'ended-error' (negative values in seeds)")
+        #expect(seenSuccess, "Should have covered 'ended-success' (sequence mutations create [1, 2])")
+        print("Hard loop state: idle=\(seenIdle), processing=\(seenProcessing), error=\(seenError), success=\(seenSuccess)")
+        print("  \(result.stats.totalInputs) inputs, \(result.stats.newPaths) paths")
+    }
+
+    @Test("Very Hard Loop: Sequence pattern detection")
+    func veryHardLoopSequenceDetectCoverage() throws {
+        var seenFound = false
+        var seenNotFound = false
+
+        let result = try fuzz(
+            iterations: 2000,
+            duration: 20
+        ) { (values: [Int]) in
+            let output = veryHardLoopSequenceDetect(values)
+            if output == "pattern-found" { seenFound = true }
+            if output == "pattern-not-found" { seenNotFound = true }
+        }
+
+        #expect(seenNotFound, "Should have covered 'pattern-not-found' branch")
+        // Pattern [1, 2, 3] in sequence - needs array containing these values in order
+        withKnownIssue("Pattern detection needs [1, 2, 3] consecutive in array", isIntermittent: true) {
+            #expect(seenFound, "Should have covered 'pattern-found' branch")
+        }
+        print("Very hard loop sequence: found=\(seenFound), notFound=\(seenNotFound), \(result.stats.totalInputs) inputs")
+    }
+
+    @Test("Very Hard Loop: Checksum validation")
+    func veryHardLoopChecksumCoverage() throws {
+        var seenValid = false
+        var seenZero = false
+        var seenInvalid = false
+        var seenEmpty = false
+
+        let result = try fuzz(
+            iterations: 1000,
+            duration: 15
+        ) { (values: [Int]) in
+            let output = veryHardLoopChecksum(values)
+            if output == "valid-checksum" { seenValid = true }
+            if output == "zero-checksum" { seenZero = true }
+            if output == "invalid-checksum" { seenInvalid = true }
+            if output == "empty-input" { seenEmpty = true }
+        }
+
+        #expect(seenInvalid, "Should have covered 'invalid-checksum' branch")
+        #expect(seenEmpty, "Should have covered 'empty-input' branch")
+        #expect(seenZero, "Should have covered 'zero-checksum' branch")
+        // Valid checksum 0x1234 requires very specific input combination
+        withKnownIssue("Checksum 0x1234 requires specific input combination", isIntermittent: true) {
+            #expect(seenValid, "Should have covered 'valid-checksum' branch")
+        }
+        print("Very hard loop checksum: valid=\(seenValid), zero=\(seenZero), invalid=\(seenInvalid), empty=\(seenEmpty)")
+        print("  \(result.stats.totalInputs) inputs, \(result.stats.newPaths) paths")
+    }
+
+    @Test("Extreme Loop: Matrix search with constraints")
+    func extremeLoopMatrixSearchCoverage() throws {
+        var seenConstrained = false
+        var seenUnconstrained = false
+        var seenNoMatch = false
+        var seenInvalid = false
+
+        let result = try fuzz(
+            iterations: 1000,
+            duration: 15
+        ) { (rows: Int, cols: Int, target: Int) in
+            let output = extremeLoopMatrixSearch(rows, cols, target: target)
+            if output == "constrained-match" { seenConstrained = true }
+            if output == "unconstrained-match" { seenUnconstrained = true }
+            if output == "no-match" { seenNoMatch = true }
+            if output == "invalid-dimensions" { seenInvalid = true }
+        }
+
+        #expect(seenInvalid, "Should have covered 'invalid-dimensions' branch")
+        #expect(seenNoMatch, "Should have covered 'no-match' branch")
+        #expect(seenUnconstrained, "Should have covered 'unconstrained-match' (product at small indices)")
+        // Constrained match requires row>10, col>5 and specific product - very hard
+        withKnownIssue("Constrained match requires row>10, col>5 with specific product", isIntermittent: true) {
+            #expect(seenConstrained, "Should have covered 'constrained-match' branch")
+        }
+        print("Extreme loop matrix: constrained=\(seenConstrained), unconstrained=\(seenUnconstrained), noMatch=\(seenNoMatch), invalid=\(seenInvalid)")
+        print("  \(result.stats.totalInputs) inputs, \(result.stats.newPaths) paths")
+    }
+
+    @Test("Extreme Loop: Convergence with magic iteration count")
+    func extremeLoopConvergenceCoverage() throws {
+        var seenMagic = false
+        var seenConverged = false
+        var seenNotConverged = false
+        var seenInvalid = false
+
+        let result = try fuzz(
+            iterations: 1000,
+            duration: 15
+        ) { (start: Int, divisor: Int) in
+            let output = extremeLoopConvergence(start, divisor: divisor)
+            if output == "magic-convergence" { seenMagic = true }
+            if output == "converged" { seenConverged = true }
+            if output == "did-not-converge" { seenNotConverged = true }
+            if output == "invalid-divisor" { seenInvalid = true }
+        }
+
+        #expect(seenInvalid, "Should have covered 'invalid-divisor' branch")
+        #expect(seenConverged, "Should have covered 'converged' branch")
+        #expect(seenNotConverged, "Should have covered 'did-not-converge' branch")
+        // Magic convergence (exactly 42 iterations) is very hard
+        withKnownIssue("Magic convergence requires exactly 42 iterations", isIntermittent: true) {
+            #expect(seenMagic, "Should have covered 'magic-convergence' branch")
+        }
+        print("Extreme loop convergence: magic=\(seenMagic), converged=\(seenConverged), notConverged=\(seenNotConverged), invalid=\(seenInvalid)")
+        print("  \(result.stats.totalInputs) inputs, \(result.stats.newPaths) paths")
+    }
+
+    // MARK: - Large Array Tests
+
+    @Test("Large Array: 100+ elements with negative value")
+    func largeArrayWithNegativeCoverage() throws {
+        var seenLargeWithNegative = false
+        var seenLargeAllPositive = false
+        var seenTooSmall = false
+        var maxArraySize = 0
+
+        let result = try fuzz(
+            iterations: 2000,
+            duration: 30
+        ) { (values: [Int]) in
+            maxArraySize = max(maxArraySize, values.count)
+            let output = largeArrayWithNegative(values)
+            if output == "large-with-negative" { seenLargeWithNegative = true }
+            if output == "large-all-positive" { seenLargeAllPositive = true }
+            if output == "too-small" { seenTooSmall = true }
+        }
+
+        print("Large array test: negative=\(seenLargeWithNegative), positive=\(seenLargeAllPositive), small=\(seenTooSmall)")
+        print("  Max array size reached: \(maxArraySize)")
+        print("  \(result.stats.totalInputs) inputs, \(result.stats.newPaths) paths")
+
+        #expect(seenTooSmall, "Should have covered 'too-small' branch")
+        #expect(seenLargeWithNegative, "Should grow array to 100+ with negative via doubling mutations")
+    }
+
+    @Test("Very Large Array: 200+ elements")
+    func veryLargeArrayCoverage() throws {
+        var seenVeryLarge = false
+        var seenTooSmall = false
+        var maxArraySize = 0
+
+        let result = try fuzz(
+            iterations: 3000,
+            duration: 45
+        ) { (values: [Int]) in
+            maxArraySize = max(maxArraySize, values.count)
+            let output = veryLargeArray(values)
+            if output == "very-large" { seenVeryLarge = true }
+            if output == "too-small" { seenTooSmall = true }
+        }
+
+        print("Very large array test: large=\(seenVeryLarge), small=\(seenTooSmall)")
+        print("  Max array size reached: \(maxArraySize)")
+        print("  \(result.stats.totalInputs) inputs, \(result.stats.newPaths) paths")
+
+        #expect(seenTooSmall, "Should have covered 'too-small' branch")
+        #expect(seenVeryLarge, "Should grow array to 200+ via repeated doubling (21->42->84->168->336)")
+    }
+}
+
+
+// Note: CoverageTests is nested inside FuzzerStressTests to share the .serialized trait.
+// Coverage gap detection relies on global coverage counters, which can be affected by
+// concurrent tests. By running all stress tests serially, we ensure accurate gap detection.
+extension FuzzerStressTests {
+    // MARK: - Coverage Gap Detection Tests
+
+    func functionWithImpossibleCoverage(input: Int) -> Bool {
+        if input > Int.max {
+            return true
+        }
+
+        return false
+    }
+
+    @Test("Coverage holes discovered")
+    func coverageHolesDiscovered() throws {
+        try fuzz(detectCoverageGaps: true) { input in
+            functionWithImpossibleCoverage(input: input)
+        }
     }
 }

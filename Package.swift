@@ -101,6 +101,19 @@ let package = Package(
                 ])
             ]
         ),
+        .testTarget(
+            name: "SanCovTests",
+            dependencies: [
+                "ValueProfileHooks",
+            ],
+            swiftSettings: [
+                // Enable sanitizer coverage for thread-local coverage testing
+                .unsafeFlags([
+                    "-sanitize=undefined",
+                    "-sanitize-coverage=edge,trace-cmp"
+                ])
+            ]
+        ),
         .macro(
             name: "PropertyTestingKitMacros",
             dependencies: [

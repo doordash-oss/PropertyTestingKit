@@ -67,23 +67,35 @@ const uint64_t* counters = reinterpret_cast<const uint64_t*>(
 
 **Symptom:** Tests pass individually but fail when run together.
 
-**Root Cause:** Swift Testing runs different suites in parallel by default. The `.serialized` trait only serializes tests *within* a suite, not between suites.
+**Root Cause:** Swift Testing runs different suites in parallel by default. The `.serialized` trait only serializes tests *within* a suite, not between suites. LLVM coverage counters are global mutable state.
 
-**Solution:** Consolidate all counter-dependent tests into a single serialized suite (`AllCoverageTests`), or use `--no-parallel` flag when running tests.
+**Solution:** `CoverageLock.shared` - a global lock that all coverage-dependent code acquires:
 
-```bash
-# Run all tests serially (guaranteed to pass):
-swift test --enable-code-coverage --no-parallel
+- `FuzzEngine.run()` acquires the lock for the entire fuzz run
+- `measureSourceCoverage()` acquires the lock during measurement
+- `measureCoverage()` acquires the lock during measurement
 
-# Or run counter-dependent tests separately:
-swift test --enable-code-coverage --filter "Coverage Counter Tests"
+This ensures only one test can measure coverage at a time, even when tests run in parallel.
+
+```swift
+// The lock is acquired automatically by these APIs:
+try fuzz { input in ... }  // Lock held for entire fuzz run
+try measureSourceCoverage { ... }  // Lock held during measurement
+measureCoverage { ... }  // Lock held during measurement
+
+// Manual usage for custom scenarios:
+CoverageLock.shared.withLock {
+    let before = CoverageCounters.snapshot()
+    // ... run code ...
+    let after = CoverageCounters.snapshot()
+}
 ```
 
 **Tests affected by counter state:**
 - Any test using `measureSourceCoverage`
-- Any test using `CoverageCounters.reset()`
-- Any test using `withCoverage` (writes profraw files)
-- Any test using `LLVMCoverageReader` (reads profraw files)
+- Any test using `measureCoverage`
+- Any test using `fuzz()`
+- Any test using `CoverageLock.shared.withLock`
 
 ---
 

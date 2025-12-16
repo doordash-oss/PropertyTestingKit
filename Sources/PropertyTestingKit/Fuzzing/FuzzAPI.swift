@@ -62,7 +62,12 @@ import Dependencies
 ///
 /// - Build with coverage: `swift test --enable-code-coverage`
 /// - Input type must conform to `Fuzzable & Codable`
-/// - Tests must run serially (coverage counters are global state)
+/// - **Coverage isolation**: The fuzzer automatically acquires a global lock
+///   (`CoverageLock.shared`) during execution to prevent contamination from
+///   other PropertyTestingKit code. However, tests that don't use this library
+///   can still run concurrently and contaminate coverage. For complete isolation:
+///   - Use `swift test --no-parallel` (slower but guaranteed accurate)
+///   - Or run fuzz tests separately: `swift test --filter "MyFuzzTests"`
 ///
 /// - Parameters:
 ///   - mutators: Custom mutators for each input type. Pass one mutator per input.
@@ -77,6 +82,11 @@ import Dependencies
 ///   - corpusMode: Controls corpus behavior. Use `.refuzzReplace` to start fresh,
 ///     `.refuzzExtend` to add to existing corpus, or `.auto` for default behavior.
 ///     Can also be set via `FUZZ_CORPUS_MODE` environment variable.
+///   - detectCoverageGaps: When true, analyzes coverage at the end of fuzzing
+///     and reports functions that have partial coverage (some regions executed,
+///     some not). Gaps are recorded as test issues using `Issue.record()`,
+///     making them visible in test output without failing the test.
+///     Default: false.
 ///   - filePath: Source file path (auto-filled).
 ///   - function: Test function name (auto-filled).
 ///   - test: The test closure receiving fuzzed inputs.
@@ -90,6 +100,7 @@ public func fuzz<each Input: Fuzzable & Codable & Sendable, each M: Mutator>(
     duration: TimeInterval = 60,
     perInputTimeout: TimeInterval? = nil,
     corpusMode: CorpusMode? = nil,
+    detectCoverageGaps: Bool = false,
     filePath: StaticString = #filePath,
     function: StaticString = #function,
     test: @escaping ((repeat each Input)) throws -> Void
@@ -101,7 +112,8 @@ public func fuzz<each Input: Fuzzable & Codable & Sendable, each M: Mutator>(
         maxDuration: duration,
         verbose: environment.environment()["FUZZ_VERBOSE"] != nil,
         corpusMode: corpusMode,
-        perInputTimeout: perInputTimeout
+        perInputTimeout: perInputTimeout,
+        detectCoverageGaps: detectCoverageGaps
     )
 
     // WORKAROUND: Create engine inline to avoid parameter pack forwarding issues.
@@ -131,6 +143,11 @@ public func fuzz<each Input: Fuzzable & Codable & Sendable, each M: Mutator>(
 ///   - corpusMode: Controls corpus behavior. Use `.refuzzReplace` to start fresh,
 ///     `.refuzzExtend` to add to existing corpus, or `.auto` for default behavior.
 ///     Can also be set via `FUZZ_CORPUS_MODE` environment variable.
+///   - detectCoverageGaps: When true, analyzes coverage at the end of fuzzing
+///     and reports functions that have partial coverage (some regions executed,
+///     some not). Gaps are recorded as test issues using `Issue.record()`,
+///     making them visible in test output without failing the test.
+///     Default: false.
 ///   - filePath: Source file path (auto-filled).
 ///   - function: Test function name (auto-filled).
 ///   - test: The test closure receiving fuzzed inputs.
@@ -143,6 +160,7 @@ public func fuzz<each Input: Fuzzable & Codable & Sendable>(
     duration: TimeInterval = 60,
     perInputTimeout: TimeInterval? = nil,
     corpusMode: CorpusMode? = nil,
+    detectCoverageGaps: Bool = false,
     filePath: StaticString = #filePath,
     function: StaticString = #function,
     test: @escaping ((repeat each Input)) throws -> Void
@@ -154,7 +172,8 @@ public func fuzz<each Input: Fuzzable & Codable & Sendable>(
         maxDuration: duration,
         verbose: environment.environment()["FUZZ_VERBOSE"] != nil,
         corpusMode: corpusMode,
-        perInputTimeout: perInputTimeout
+        perInputTimeout: perInputTimeout,
+        detectCoverageGaps: detectCoverageGaps
     )
 
     let engine = FuzzEngine<repeat each Input>(

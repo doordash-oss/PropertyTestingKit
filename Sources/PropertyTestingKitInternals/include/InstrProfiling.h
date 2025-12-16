@@ -120,4 +120,32 @@ static inline const __llvm_profile_data *__llvm_profile_end_data(void) {
     return fn ? fn() : NULL;
 }
 
+// MARK: - SanitizerCoverage Inline 8-bit Counters
+// These provide resettable coverage counters when compiled with
+// -sanitize-coverage=inline-8bit-counters. Unlike LLVM profiling counters,
+// these can be safely reset with memset() without breaking Xcode.
+
+/// Check if inline 8-bit counters are available.
+/// Returns true if the binary was compiled with -sanitize-coverage=inline-8bit-counters.
+PTK_EXTERN bool sancov_counters_available(void);
+
+/// Reset all coverage counters to zero.
+/// Safe to call even if counters are not available (no-op).
+PTK_EXTERN void sancov_reset_counters(void);
+
+/// Get the number of instrumented edges (total counter count).
+PTK_EXTERN size_t sancov_get_counter_count(void);
+
+/// Get the number of edges that were executed (non-zero counters).
+PTK_EXTERN size_t sancov_get_covered_count(void);
+
+/// Get a pointer to the raw counter array.
+/// Returns NULL if counters are not available.
+PTK_EXTERN const uint8_t* sancov_get_counters(void);
+
+/// Copy the current counter state into a user-provided buffer.
+/// Returns the number of bytes copied, or 0 if counters unavailable.
+/// If buffer is NULL, returns the required buffer size.
+PTK_EXTERN size_t sancov_snapshot_counters(uint8_t* buffer, size_t buffer_size);
+
 #endif // PROPERTYTESTINGKIT_INSTR_PROFILING_H

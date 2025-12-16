@@ -8,6 +8,106 @@
 import Foundation
 import PropertyTestingKitInternals
 
+// MARK: - Coverage Lock
+
+/// A global lock for coverage operations.
+///
+/// LLVM coverage counters are global mutable state shared across all threads
+/// in a process. When tests run concurrently, coverage from one test can
+/// contaminate another test's measurements.
+///
+/// Use this lock to ensure exclusive access to coverage counters:
+///
+/// ```swift
+/// let result = CoverageLock.shared.withLock {
+///     let before = CoverageCounters.snapshot()
+///     runMyTest()
+///     let after = CoverageCounters.snapshot()
+///     return after?.difference(from: before!)
+/// }
+/// ```
+///
+/// - Important: This lock only protects against contamination from other code
+///   that also uses `CoverageLock`. Tests that don't use PropertyTestingKit
+///   (or don't acquire this lock) can still run concurrently and contaminate
+///   coverage measurements. For complete isolation, use `swift test --no-parallel`
+///   or run fuzz tests in a separate `swift test --filter` invocation.
+public final class CoverageLock: Sendable {
+    /// The shared global coverage lock.
+    public static let shared = CoverageLock()
+
+    private let lock = NSLock()
+
+    private init() {}
+
+    /// Execute a closure while holding the coverage lock.
+    ///
+    /// This ensures exclusive access to coverage counters, preventing
+    /// contamination from concurrent tests.
+    ///
+    /// - Parameter body: The closure to execute while holding the lock.
+    /// - Returns: The result of the closure.
+    /// - Throws: Re-throws any error from the closure.
+    public func withLock<T>(_ body: () throws -> T) rethrows -> T {
+        lock.lock()
+        defer { lock.unlock() }
+        return try body()
+    }
+
+    /// Execute an async closure while holding the coverage lock.
+    ///
+    /// - Warning: Be careful with async code - the lock is held for the
+    ///   entire duration, which may cause deadlocks if other tasks also
+    ///   need the lock. Prefer synchronous code when possible.
+    ///
+    /// - Parameter body: The async closure to execute while holding the lock.
+    /// - Returns: The result of the closure.
+    /// - Throws: Re-throws any error from the closure.
+    public func withLock<T>(_ body: () async throws -> T) async rethrows -> T {
+        // Use an actor to safely bridge sync/async locking
+        await asyncLock.acquire()
+        defer { asyncLock.release() }
+        return try await body()
+    }
+
+    /// Internal actor for async lock management.
+    private let asyncLock = AsyncLockHelper()
+}
+
+/// Helper actor for async-safe locking.
+///
+/// This bridges the gap between NSLock (which isn't async-safe) and
+/// Swift's structured concurrency.
+private actor AsyncLockHelper {
+    private var isLocked = false
+    private var waiters: [CheckedContinuation<Void, Never>] = []
+
+    func acquire() async {
+        if !isLocked {
+            isLocked = true
+            return
+        }
+
+        // Wait for lock to be released
+        await withCheckedContinuation { continuation in
+            waiters.append(continuation)
+        }
+    }
+
+    nonisolated func release() {
+        Task { await _release() }
+    }
+
+    private func _release() {
+        if let next = waiters.first {
+            waiters.removeFirst()
+            next.resume()
+        } else {
+            isLocked = false
+        }
+    }
+}
+
 // MARK: - CoverageCounters
 
 /// A snapshot of coverage counters captured directly from memory.
@@ -181,17 +281,31 @@ public struct CounterDiff: Sendable {
 /// print("Executed \(diff.executedRegions) new regions")
 /// ```
 ///
+/// - Note: This function acquires a global lock to prevent contamination
+///   from concurrent tests. All coverage measurement functions use this
+///   lock, so tests will effectively serialize their coverage measurements.
+///
 /// - Parameter body: The code to measure.
 /// - Returns: The counter diff, or `nil` if coverage unavailable.
 @discardableResult
 public func measureCoverage(_ body: () throws -> Void) rethrows -> CounterDiff? {
-    try measureCoverage(snapshotProvider: CoverageCounters.snapshot, body)
+    // Acquire global coverage lock to prevent contamination from concurrent tests.
+    try CoverageLock.shared.withLock {
+        try measureCoverage(snapshotProvider: CoverageCounters.snapshot, body)
+    }
 }
 
 /// Execute a closure and capture the coverage counters that changed (async).
+///
+/// - Note: This function acquires a global lock to prevent contamination
+///   from concurrent tests. Be careful with long-running async code as
+///   other tests will block waiting for the lock.
 @discardableResult
 public func measureCoverage(_ body: () async throws -> Void) async rethrows -> CounterDiff? {
-    try await measureCoverage(snapshotProvider: CoverageCounters.snapshot, body)
+    // Acquire global coverage lock to prevent contamination from concurrent tests.
+    try await CoverageLock.shared.withLock {
+        try await measureCoverage(snapshotProvider: CoverageCounters.snapshot, body)
+    }
 }
 
 // MARK: - Internal API for Testing

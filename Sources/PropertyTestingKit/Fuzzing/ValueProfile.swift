@@ -88,7 +88,7 @@ public final class ValueProfileTracker: @unchecked Sendable {
     /// Process comparisons from the last test execution.
     ///
     /// - Returns: Array of comparisons that made progress (got closer to their target).
-    public func processComparisons() -> [ComparisonRecord] {
+    public func processComparisons(debug: Bool = false) -> [ComparisonRecord] {
         let count = vp_get_count()
         guard count > 0, let records = vp_get_records() else {
             return []
@@ -111,6 +111,10 @@ public final class ValueProfileTracker: @unchecked Sendable {
                 isConstant: record.is_const
             )
 
+            if debug && record.is_const {
+                print("[VP Debug] const cmp: arg1=\(record.arg1), arg2=\(record.arg2), distance=\(record.distance), size=\(record.size)")
+            }
+
             // For constant comparisons, track progress toward the constant
             if record.is_const {
                 let key = LocationKey(pc: record.pc, constantValue: record.arg1)
@@ -119,6 +123,9 @@ public final class ValueProfileTracker: @unchecked Sendable {
                 if record.distance < previousMin {
                     minimumDistances[key] = record.distance
                     improvements.append(swiftRecord)
+                    if debug {
+                        print("[VP Debug] IMPROVEMENT: arg1=\(record.arg1) -> distance \(previousMin) -> \(record.distance)")
+                    }
                 }
             }
         }
@@ -142,6 +149,24 @@ public final class ValueProfileTracker: @unchecked Sendable {
         minimumDistances.removeAll()
         lock.unlock()
         vp_reset()
+    }
+
+    /// Debug: dump all comparisons from the last test execution.
+    public static func dumpComparisons() {
+        let count = vp_get_count()
+        print("[VP Dump] \(count) comparisons recorded")
+        guard count > 0, let records = vp_get_records() else {
+            return
+        }
+
+        for i in 0..<min(count, 20) {  // Limit to first 20
+            let r = records[i]
+            let constStr = r.is_const ? "CONST" : "var"
+            print("[VP Dump] [\(i)] \(constStr) cmp\(r.size): arg1=\(r.arg1), arg2=\(r.arg2), distance=\(r.distance)")
+        }
+        if count > 20 {
+            print("[VP Dump] ... and \(count - 20) more")
+        }
     }
 }
 

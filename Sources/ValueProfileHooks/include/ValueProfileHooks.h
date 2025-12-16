@@ -49,6 +49,35 @@ void vp_set_enabled(bool enabled);
 /// Check if recording is enabled.
 bool vp_is_enabled(void);
 
+// MARK: - Inline 8-bit Counters API
+// These provide resettable coverage counters via SanitizerCoverage's
+// inline-8bit-counters mode. Unlike LLVM's profiling counters, these
+// can be safely reset between test executions without breaking Xcode.
+
+/// Check if inline 8-bit counters are available.
+/// Returns true if the binary was compiled with -sanitize-coverage=inline-8bit-counters.
+bool sancov_counters_available(void);
+
+/// Reset all coverage counters to zero.
+/// Safe to call even if counters are not available (no-op).
+void sancov_reset_counters(void);
+
+/// Get the number of instrumented edges (total counter count).
+size_t sancov_get_counter_count(void);
+
+/// Get the number of edges that were executed (non-zero counters).
+size_t sancov_get_covered_count(void);
+
+/// Get a pointer to the raw counter array.
+/// Returns NULL if counters are not available.
+/// The array contains sancov_get_counter_count() bytes.
+const uint8_t* sancov_get_counters(void);
+
+/// Copy the current counter state into a user-provided buffer.
+/// Returns the number of bytes copied, or 0 if counters unavailable.
+/// If buffer is NULL, returns the required buffer size.
+size_t sancov_snapshot_counters(uint8_t* buffer, size_t buffer_size);
+
 #ifdef __cplusplus
 }
 #endif

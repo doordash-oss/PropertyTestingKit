@@ -269,37 +269,53 @@ extension Optional: Fuzzable where Wrapped: Fuzzable {
 
 extension Array: Fuzzable where Element: Fuzzable {
     public static var fuzz: [[Element]] {
-        // Empty, single element variations, and a few elements
         var result: [[Element]] = [[]]
-        for element in Element.fuzz.prefix(3) {
+
+        let elementSeeds = Array(Element.fuzz.prefix(3))
+        guard !elementSeeds.isEmpty else { return result }
+
+        // Single element arrays with first few seeds
+        for element in elementSeeds {
             result.append([element])
         }
-        if Element.fuzz.count >= 2 {
-            result.append(Array(Element.fuzz.prefix(2)))
+
+        // Small multi-element array from seeds (provides variety)
+        if elementSeeds.count >= 3 {
+            result.append(elementSeeds)
         }
-        if Element.fuzz.count >= 3 {
-            result.append(Array(Element.fuzz.prefix(3)))
-        }
+
         return result
     }
 
     public func mutate() -> [[Element]] {
         var mutations: [[Element]] = []
 
-        // Remove element
+        // === Removal mutations ===
         for i in indices {
             var copy = self
             copy.remove(at: i)
             mutations.append(copy)
         }
 
-        // Add element
-        for element in Element.fuzz.prefix(2) {
+        // === Append elements (incremental growth) ===
+        for element in Element.fuzz.prefix(3) {
             mutations.append(self + [element])
+        }
+
+        // === Prepend element ===
+        for element in Element.fuzz.prefix(2) {
             mutations.append([element] + self)
         }
 
-        // Mutate individual elements
+        // === Array doubling (exponential growth) ===
+        // No cap - allows arrays to grow to any size needed.
+        // Value profile guidance will prioritize growth when comparisons
+        // like `count >= 100` are encountered.
+        if count > 0 {
+            mutations.append(self + self)
+        }
+
+        // === Mutate individual elements ===
         for i in indices {
             for mutated in self[i].mutate().prefix(2) {
                 var copy = self
@@ -308,7 +324,7 @@ extension Array: Fuzzable where Element: Fuzzable {
             }
         }
 
-        // Shuffle (if not empty)
+        // === Reversal ===
         if count > 1 {
             mutations.append(reversed())
         }
