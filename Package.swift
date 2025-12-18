@@ -20,6 +20,7 @@ let package = Package(
         .package(url: "https://github.com/swiftlang/swift-syntax.git", from: "600.0.1"),
         .package(url: "https://github.com/pointfreeco/swift-dependencies.git", from: "1.6.0"),
         .package(url: "https://github.com/twof/FunctionSpy.git", from: "1.2.0"),
+        .package(url: "https://github.com/ordo-one/package-benchmark.git", from: "1.4.0"),
     ],
     targets: [
         // C module for value profile hooks (sanitizer coverage)
@@ -120,3 +121,29 @@ let package = Package(
         )
     ]
 )
+
+// Benchmark of CoverageBenchmarks
+// Note: This target intentionally only depends on ValueProfileHooks (not PropertyTestingKit)
+// because PropertyTestingKit uses parameter packs which crash the Swift 6.2 compiler in release mode.
+// The benchmark includes its own minimal implementations of the types being benchmarked.
+package.targets += [
+    .executableTarget(
+        name: "CoverageBenchmarks",
+        dependencies: [
+            .product(name: "Benchmark", package: "package-benchmark"),
+            "ValueProfileHooks",
+        ],
+        path: "Benchmarks/CoverageBenchmarks",
+        swiftSettings: [
+            // Enable sanitizer coverage so we have realistic counter counts
+            // Note: sanitize-coverage requires a sanitizer to be enabled
+            .unsafeFlags([
+                "-sanitize=undefined",
+                "-sanitize-coverage=edge,trace-cmp,pc-table"
+            ])
+        ],
+        plugins: [
+            .plugin(name: "BenchmarkPlugin", package: "package-benchmark")
+        ]
+    ),
+]
