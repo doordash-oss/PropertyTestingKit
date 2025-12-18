@@ -123,15 +123,12 @@ let package = Package(
 )
 
 // Benchmark of CoverageBenchmarks
-// Note: This target intentionally only depends on ValueProfileHooks (not PropertyTestingKit)
-// because PropertyTestingKit uses parameter packs which crash the Swift 6.2 compiler in release mode.
-// The benchmark includes its own minimal implementations of the types being benchmarked.
 package.targets += [
     .executableTarget(
         name: "CoverageBenchmarks",
         dependencies: [
             .product(name: "Benchmark", package: "package-benchmark"),
-            "ValueProfileHooks",
+            "PropertyTestingKit",
         ],
         path: "Benchmarks/CoverageBenchmarks",
         swiftSettings: [
