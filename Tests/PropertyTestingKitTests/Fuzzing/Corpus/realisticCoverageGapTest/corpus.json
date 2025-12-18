@@ -1,8 +1,8 @@
 {
-  "createdAt" : "2025-12-18T18:33:36Z",
+  "createdAt" : "2025-12-18T23:25:34Z",
   "entries" : [
     {
-      "discoveredAt" : "2025-12-18T18:33:36Z",
+      "discoveredAt" : "2025-12-18T23:25:33Z",
       "entryType" : "coverage",
       "input" : [
         "MA=="
@@ -12,14 +12,14 @@
       ],
       "signature" : {
         "buckets" : {
-          "3468" : 1,
-          "3471" : 1,
-          "3477" : 1
+          "3467" : 1,
+          "3470" : 1,
+          "3476" : 1
         }
       }
     },
     {
-      "discoveredAt" : "2025-12-18T18:33:36Z",
+      "discoveredAt" : "2025-12-18T23:25:33Z",
       "entryType" : "coverage",
       "input" : [
         "LTE="
@@ -29,21 +29,21 @@
       ],
       "signature" : {
         "buckets" : {
-          "3468" : 1,
-          "3470" : 1,
-          "3477" : 1
+          "3467" : 1,
+          "3469" : 1,
+          "3476" : 1
         }
       }
     }
   ],
-  "schemaVersion" : "v1-26158",
+  "schemaVersion" : "v1-26152",
   "totalCoverage" : {
     "buckets" : {
-      "3468" : 1,
+      "3467" : 1,
+      "3469" : 1,
       "3470" : 1,
-      "3471" : 1,
-      "3477" : 1
+      "3476" : 1
     }
   },
-  "updatedAt" : "2025-12-18T18:33:36Z"
+  "updatedAt" : "2025-12-18T23:25:34Z"
 }

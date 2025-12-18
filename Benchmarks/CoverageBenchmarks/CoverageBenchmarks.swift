@@ -67,6 +67,30 @@ func validateString(_ input: String) throws {
     }
 }
 
+/// A function with an unreachable branch that creates a realistic coverage gap.
+/// Uses a hash-based check that value profile guidance can't easily solve.
+@inline(never)
+func realisticCoverageGap(_ input: Int) {
+    // Simple hash to defeat value profile guidance
+    let hash = (input &* 31) ^ (input >> 4)
+    if hash == 0x7FFFFFFE {
+        // This branch is effectively unreachable (requires specific input)
+        blackHole("found magic!")
+    } else if input < 0 {
+        blackHole("negative")
+    } else {
+        blackHole("positive")
+    }
+}
+
+/// A Fuzzable type with empty fuzz array and empty mutations.
+/// Used to benchmark edge case handling in FuzzEngine.
+struct EmptyFuzzable: Fuzzable, Codable, Sendable, Equatable {
+    let value: Int
+    static var fuzz: [EmptyFuzzable] { [] }
+    func mutate() -> [EmptyFuzzable] { [] }
+}
+
 // MARK: - Benchmarks
 
 let benchmarks: @Sendable () -> Void = {
@@ -141,6 +165,57 @@ let benchmarks: @Sendable () -> Void = {
     // Note: These benchmarks use small iteration counts to measure per-iteration overhead.
     // The fuzz function is called once per benchmark iteration.
 
+    // MARK: - Raw Baseline (no fuzz overhead)
+    // These measure just calling the test function without fuzz infrastructure
+    // Note: Each "call" in the name refers to inner loop iterations per benchmark iteration
+
+    Benchmark(
+        "parseAndValidate(Int) - single call",
+        configuration: .init(
+            metrics: [.cpuTotal, .wallClock, .mallocCountTotal],
+            warmupIterations: 100,
+            scalingFactor: .kilo
+        )
+    ) { benchmark in
+        for _ in benchmark.scaledIterations {
+            blackHole(try? parseAndValidate(42))
+        }
+    }
+
+    Benchmark(
+        "parseAndValidate(Int) - 100 calls (raw baseline)",
+        configuration: .init(
+            metrics: [.cpuTotal, .wallClock, .mallocCountTotal],
+            warmupIterations: 10,
+            scalingFactor: .kilo
+        )
+    ) { benchmark in
+        for _ in benchmark.scaledIterations {
+            for i in 0..<100 {
+                blackHole(try? parseAndValidate(i))
+            }
+        }
+    }
+
+    Benchmark(
+        "parseAndValidate(Int) - 1000 calls (raw baseline)",
+        configuration: .init(
+            metrics: [.cpuTotal, .wallClock, .mallocCountTotal],
+            warmupIterations: 5,
+            scalingFactor: .one,
+            maxDuration: .seconds(5),
+            maxIterations: 500
+        )
+    ) { benchmark in
+        for _ in benchmark.scaledIterations {
+            for i in 0..<1000 {
+                blackHole(try? parseAndValidate(i))
+            }
+        }
+    }
+
+    // MARK: - Fuzz Benchmarks
+
     Benchmark(
         "fuzz(Int) - 100 iterations, refuzzReplace",
         configuration: .init(
@@ -158,6 +233,30 @@ let benchmarks: @Sendable () -> Void = {
                 corpusMode: .refuzzReplace,
                 detectCoverageGaps: false
             ) { (input: Int) in
+                try parseAndValidate(input)
+            }
+        }
+    }
+
+    Benchmark(
+        "fuzz(Int) - 100 iterations, no value profile",
+        configuration: .init(
+            metrics: [.cpuTotal, .wallClock, .mallocCountTotal],
+            warmupIterations: 1,
+            scalingFactor: .one,
+            maxDuration: .seconds(30),
+            maxIterations: 10
+        )
+    ) { benchmark in
+        for _ in benchmark.scaledIterations {
+            let config = FuzzEngine<Int>.Config(
+                maxIterations: 100,
+                maxDuration: 1,
+                enableValueProfile: false,
+                corpusMode: .refuzzReplace
+            )
+            let engine = FuzzEngine<Int>(config: config)
+            let _ = engine.run { input in
                 try parseAndValidate(input)
             }
         }
@@ -248,6 +347,49 @@ let benchmarks: @Sendable () -> Void = {
             ) { (input: Int) in
                 try parseAndValidate(input)
             }
+        }
+    }
+
+    Benchmark(
+        "fuzz(Int) - realistic coverage gap, with gap detection",
+        configuration: .init(
+            metrics: [.cpuTotal, .wallClock, .mallocCountTotal],
+            warmupIterations: 1,
+            scalingFactor: .one,
+            maxDuration: .seconds(60),
+            maxIterations: 5
+        )
+    ) { benchmark in
+        for _ in benchmark.scaledIterations {
+            let _ = try? fuzz(
+                iterations: 100,
+                duration: 5,
+                corpusMode: .refuzzReplace,
+                detectCoverageGaps: true
+            ) { (input: Int) in
+                realisticCoverageGap(input)
+            }
+        }
+    }
+
+    Benchmark(
+        "fuzz(EmptyFuzzable) - empty fuzz array",
+        configuration: .init(
+            metrics: [.cpuTotal, .wallClock, .mallocCountTotal],
+            warmupIterations: 1,
+            scalingFactor: .one,
+            maxDuration: .seconds(30),
+            maxIterations: 5
+        )
+    ) { benchmark in
+        for _ in benchmark.scaledIterations {
+            let config = FuzzEngine<EmptyFuzzable>.Config(
+                maxIterations: 10,
+                maxDuration: 1,
+                corpusMode: .refuzzReplace
+            )
+            let engine = FuzzEngine<EmptyFuzzable>(config: config, corpusDirectory: nil)
+            let _ = engine.run { _ in }
         }
     }
 
@@ -352,4 +494,482 @@ let benchmarks: @Sendable () -> Void = {
             blackHole(SanCovCounters.currentCoveredCount)
         }
     }
+
+    // MARK: - Coverage Snapshot Benchmarks
+    // Note: SanCovCounters.snapshot() is not benchmarked directly because
+    // the benchmark binary itself is instrumented, creating millions of edges.
+    // Instead we benchmark operations with pre-created data.
+
+    Benchmark(
+        "SanCovCounters.reset()",
+        configuration: .init(
+            metrics: [.cpuTotal, .wallClock],
+            warmupIterations: 100,
+            scalingFactor: .kilo
+        )
+    ) { benchmark in
+        for _ in benchmark.scaledIterations {
+            SanCovCounters.reset()
+        }
+    }
+
+    // MARK: - Mutation Strategy Benchmarks
+
+    Benchmark(
+        "Int.mutate() - single value",
+        configuration: .init(
+            metrics: [.cpuTotal, .wallClock, .mallocCountTotal],
+            warmupIterations: 100,
+            scalingFactor: .kilo
+        )
+    ) { benchmark in
+        let value = 42
+        for _ in benchmark.scaledIterations {
+            blackHole(value.mutate())
+        }
+    }
+
+    Benchmark(
+        "String.mutate() - short string",
+        configuration: .init(
+            metrics: [.cpuTotal, .wallClock, .mallocCountTotal],
+            warmupIterations: 100,
+            scalingFactor: .kilo
+        )
+    ) { benchmark in
+        let value = "hello"
+        for _ in benchmark.scaledIterations {
+            blackHole(value.mutate())
+        }
+    }
+
+    Benchmark(
+        "String.mutate() - medium string",
+        configuration: .init(
+            metrics: [.cpuTotal, .wallClock, .mallocCountTotal],
+            warmupIterations: 100,
+            scalingFactor: .kilo
+        )
+    ) { benchmark in
+        let value = String(repeating: "a", count: 100)
+        for _ in benchmark.scaledIterations {
+            blackHole(value.mutate())
+        }
+    }
+
+    Benchmark(
+        "[Int].mutate() - small array",
+        configuration: .init(
+            metrics: [.cpuTotal, .wallClock, .mallocCountTotal],
+            warmupIterations: 100,
+            scalingFactor: .kilo
+        )
+    ) { benchmark in
+        let value = [1, 2, 3, 4, 5]
+        for _ in benchmark.scaledIterations {
+            blackHole(value.mutate())
+        }
+    }
+
+    Benchmark(
+        "[Int].mutate() - medium array",
+        configuration: .init(
+            metrics: [.cpuTotal, .wallClock, .mallocCountTotal],
+            warmupIterations: 100,
+            scalingFactor: .kilo
+        )
+    ) { benchmark in
+        let value = Array(1...50)
+        for _ in benchmark.scaledIterations {
+            blackHole(value.mutate())
+        }
+    }
+
+    // MARK: - Plateau Detection Benchmarks
+
+    Benchmark(
+        "CoveragePlateauDetector.record - no discovery",
+        configuration: .init(
+            metrics: [.cpuTotal, .wallClock],
+            warmupIterations: 100,
+            scalingFactor: .kilo
+        )
+    ) { benchmark in
+        for _ in benchmark.scaledIterations {
+            var detector = CoveragePlateauDetector()
+            for _ in 0..<100 {
+                detector.record(discoveredNewCoverage: false)
+            }
+            blackHole(detector.hasPlateaued)
+        }
+    }
+
+    Benchmark(
+        "CoveragePlateauDetector.record - mixed discovery",
+        configuration: .init(
+            metrics: [.cpuTotal, .wallClock],
+            warmupIterations: 100,
+            scalingFactor: .kilo
+        )
+    ) { benchmark in
+        for _ in benchmark.scaledIterations {
+            var detector = CoveragePlateauDetector()
+            for i in 0..<100 {
+                detector.record(discoveredNewCoverage: i % 10 == 0)
+            }
+            blackHole(detector.hasPlateaued)
+        }
+    }
+
+    // MARK: - Corpus Growth Benchmarks
+
+    Benchmark(
+        "Corpus growth - 100 entries",
+        configuration: .init(
+            metrics: [.cpuTotal, .wallClock, .mallocCountTotal],
+            warmupIterations: 5,
+            scalingFactor: .one
+        )
+    ) { benchmark in
+        for _ in benchmark.scaledIterations {
+            var corpus = Corpus<Int>(schemaVersion: "bench-v1")
+            for i in 0..<100 {
+                let sig = CoverageSignature(sparseCoverage: makeSparseCoverage(
+                    coveredCount: typicalCoveredEdges + i,
+                    totalEdges: totalEdges
+                ))
+                corpus.add(input: i, signature: sig)
+            }
+            blackHole(corpus.count)
+        }
+    }
+
+    Benchmark(
+        "Corpus.selectForMutation - 100 entries",
+        configuration: .init(
+            metrics: [.cpuTotal, .wallClock],
+            warmupIterations: 100,
+            scalingFactor: .kilo
+        )
+    ) { benchmark in
+        var corpus = Corpus<Int>(schemaVersion: "bench-v1")
+        for i in 0..<100 {
+            let sig = CoverageSignature(sparseCoverage: makeSparseCoverage(
+                coveredCount: typicalCoveredEdges,
+                totalEdges: totalEdges
+            ))
+            corpus.add(input: i, signature: sig)
+        }
+
+        for _ in benchmark.scaledIterations {
+            blackHole(corpus.selectForMutation())
+        }
+    }
+
+    Benchmark(
+        "Corpus.minimized - 100 entries",
+        configuration: .init(
+            metrics: [.cpuTotal, .wallClock, .mallocCountTotal],
+            warmupIterations: 1,
+            scalingFactor: .one
+        )
+    ) { benchmark in
+        var corpus = Corpus<Int>(schemaVersion: "bench-v1")
+        for i in 0..<100 {
+            // Create overlapping signatures to test minimization
+            let sig = CoverageSignature(sparseCoverage: makeSparseCoverage(
+                coveredCount: typicalCoveredEdges,
+                totalEdges: totalEdges
+            ))
+            corpus.add(input: i, signature: sig)
+        }
+
+        for _ in benchmark.scaledIterations {
+            blackHole(corpus.minimized())
+        }
+    }
+
+    // MARK: - Fuzz Loop Simulation Benchmarks
+    // These benchmarks isolate specific parts of the fuzz loop to find bottlenecks
+
+    Benchmark(
+        "Fuzz loop iteration - mutate + signature + corpus check",
+        configuration: .init(
+            metrics: [.cpuTotal, .wallClock, .mallocCountTotal],
+            warmupIterations: 10,
+            scalingFactor: .kilo
+        )
+    ) { benchmark in
+        // Setup: create a corpus with some entries
+        var corpus = Corpus<Int>(schemaVersion: "bench-v1")
+        for i in 0..<10 {
+            let sig = CoverageSignature(sparseCoverage: makeSparseCoverage(
+                coveredCount: typicalCoveredEdges + i,
+                totalEdges: totalEdges
+            ))
+            corpus.add(input: i * 100, signature: sig)
+        }
+
+        // Simulate one fuzz iteration: mutate -> create signature -> check corpus
+        for _ in benchmark.scaledIterations {
+            // 1. Select and mutate
+            let parent = corpus.selectForMutation()!
+            let entry = corpus.entries[parent]
+            let mutated = entry.input.mutate().randomElement() ?? entry.input
+
+            // 2. Create coverage signature (simulated sparse coverage)
+            let sig = CoverageSignature(sparseCoverage: sparseSmall)
+
+            // 3. Check if interesting
+            blackHole(corpus.addIfInteresting(input: mutated, signature: sig))
+        }
+    }
+
+    Benchmark(
+        "Int.fuzz generation",
+        configuration: .init(
+            metrics: [.cpuTotal, .wallClock, .mallocCountTotal],
+            warmupIterations: 100,
+            scalingFactor: .kilo
+        )
+    ) { benchmark in
+        for _ in benchmark.scaledIterations {
+            blackHole(Int.fuzz)
+        }
+    }
+
+    Benchmark(
+        "String.fuzz generation",
+        configuration: .init(
+            metrics: [.cpuTotal, .wallClock, .mallocCountTotal],
+            warmupIterations: 100,
+            scalingFactor: .kilo
+        )
+    ) { benchmark in
+        for _ in benchmark.scaledIterations {
+            blackHole(String.fuzz)
+        }
+    }
+
+    Benchmark(
+        "[Int].fuzz generation",
+        configuration: .init(
+            metrics: [.cpuTotal, .wallClock, .mallocCountTotal],
+            warmupIterations: 100,
+            scalingFactor: .kilo
+        )
+    ) { benchmark in
+        for _ in benchmark.scaledIterations {
+            blackHole([Int].fuzz)
+        }
+    }
+
+    Benchmark(
+        "Date.now() call overhead",
+        configuration: .init(
+            metrics: [.cpuTotal, .wallClock],
+            warmupIterations: 100,
+            scalingFactor: .kilo
+        )
+    ) { benchmark in
+        for _ in benchmark.scaledIterations {
+            blackHole(Date())
+        }
+    }
+
+    Benchmark(
+        "CFAbsoluteTimeGetCurrent() call overhead",
+        configuration: .init(
+            metrics: [.cpuTotal, .wallClock],
+            warmupIterations: 100,
+            scalingFactor: .kilo
+        )
+    ) { benchmark in
+        for _ in benchmark.scaledIterations {
+            blackHole(CFAbsoluteTimeGetCurrent())
+        }
+    }
+
+    Benchmark(
+        "Double.random() call overhead",
+        configuration: .init(
+            metrics: [.cpuTotal, .wallClock],
+            warmupIterations: 100,
+            scalingFactor: .kilo
+        )
+    ) { benchmark in
+        for _ in benchmark.scaledIterations {
+            blackHole(Double.random(in: 0..<1))
+        }
+    }
+
+    Benchmark(
+        "Array.randomElement() - small array",
+        configuration: .init(
+            metrics: [.cpuTotal, .wallClock],
+            warmupIterations: 100,
+            scalingFactor: .kilo
+        )
+    ) { benchmark in
+        let array = Array(1...10)
+        for _ in benchmark.scaledIterations {
+            blackHole(array.randomElement())
+        }
+    }
+
+    Benchmark(
+        "NSLock lock/unlock cycle",
+        configuration: .init(
+            metrics: [.cpuTotal, .wallClock],
+            warmupIterations: 100,
+            scalingFactor: .kilo
+        )
+    ) { benchmark in
+        let lock = NSLock()
+        for _ in benchmark.scaledIterations {
+            lock.lock()
+            lock.unlock()
+        }
+    }
+
+    // MARK: - Fuzz Overhead Deep Dive Benchmarks
+
+    Benchmark(
+        "fuzz(Int) - 10 iterations only (minimal)",
+        configuration: .init(
+            metrics: [.cpuTotal, .wallClock, .mallocCountTotal],
+            warmupIterations: 5,
+            scalingFactor: .one,
+            maxDuration: .seconds(30),
+            maxIterations: 20
+        )
+    ) { benchmark in
+        for _ in benchmark.scaledIterations {
+            let _ = try? fuzz(
+                iterations: 10,
+                duration: 1,
+                corpusMode: .refuzzReplace,
+                detectCoverageGaps: false
+            ) { (input: Int) in
+                // Minimal test - just touch the input
+                blackHole(input)
+            }
+        }
+    }
+
+    Benchmark(
+        "fuzz(Int) - 50 iterations only",
+        configuration: .init(
+            metrics: [.cpuTotal, .wallClock, .mallocCountTotal],
+            warmupIterations: 3,
+            scalingFactor: .one,
+            maxDuration: .seconds(30),
+            maxIterations: 15
+        )
+    ) { benchmark in
+        for _ in benchmark.scaledIterations {
+            let _ = try? fuzz(
+                iterations: 50,
+                duration: 1,
+                corpusMode: .refuzzReplace,
+                detectCoverageGaps: false
+            ) { (input: Int) in
+                blackHole(input)
+            }
+        }
+    }
+
+    // MARK: - Seed Phase Simulation Benchmarks
+    // These simulate what happens during the seed phase of fuzz()
+
+    Benchmark(
+        "Seed iteration: reset + test + snapshot + signature + corpus",
+        configuration: .init(
+            metrics: [.cpuTotal, .wallClock, .mallocCountTotal],
+            warmupIterations: 10,
+            scalingFactor: .one,
+            maxDuration: .seconds(10),
+            maxIterations: 100
+        )
+    ) { benchmark in
+        for _ in benchmark.scaledIterations {
+            // This simulates one seed iteration in the fuzz loop
+            var corpus = Corpus<Int>(schemaVersion: "bench-v1")
+
+            // Process all Int.fuzz seeds (21 values)
+            for input in Int.fuzz {
+                // 1. Reset coverage
+                SanCovCounters.reset()
+
+                // 2. Run test
+                blackHole(try? parseAndValidate(input))
+
+                // 3. Snapshot coverage
+                if let sparse = SanCovCounters.snapshotCoveredOnly() {
+                    // 4. Create signature
+                    let sig = CoverageSignature(sparseCoverage: sparse)
+
+                    // 5. Add to corpus if interesting
+                    blackHole(corpus.addIfInteresting(input: input, signature: sig))
+                }
+            }
+        }
+    }
+
+    Benchmark(
+        "Single seed iteration: reset + test + snapshot + signature + corpus",
+        configuration: .init(
+            metrics: [.cpuTotal, .wallClock, .mallocCountTotal],
+            warmupIterations: 100,
+            scalingFactor: .kilo
+        )
+    ) { benchmark in
+        var corpus = Corpus<Int>(schemaVersion: "bench-v1")
+
+        for _ in benchmark.scaledIterations {
+            // 1. Reset coverage
+            SanCovCounters.reset()
+
+            // 2. Run test
+            blackHole(try? parseAndValidate(42))
+
+            // 3. Snapshot coverage
+            if let sparse = SanCovCounters.snapshotCoveredOnly() {
+                // 4. Create signature
+                let sig = CoverageSignature(sparseCoverage: sparse)
+
+                // 5. Add to corpus if interesting
+                blackHole(corpus.addIfInteresting(input: 42, signature: sig))
+            }
+        }
+    }
+
+    // MARK: - Overhead Source Benchmarks
+
+    Benchmark(
+        "SanCovCounters.snapshotCoveredOnly()",
+        configuration: .init(
+            metrics: [.cpuTotal, .wallClock, .mallocCountTotal],
+            warmupIterations: 10,
+            scalingFactor: .kilo
+        )
+    ) { benchmark in
+        for _ in benchmark.scaledIterations {
+            blackHole(SanCovCounters.snapshotCoveredOnly())
+        }
+    }
+
+    Benchmark(
+        "SanCovCounters.snapshot() - full",
+        configuration: .init(
+            metrics: [.cpuTotal, .wallClock, .mallocCountTotal],
+            warmupIterations: 10,
+            scalingFactor: .one
+        )
+    ) { benchmark in
+        for _ in benchmark.scaledIterations {
+            blackHole(SanCovCounters.snapshot())
+        }
+    }
+
 }

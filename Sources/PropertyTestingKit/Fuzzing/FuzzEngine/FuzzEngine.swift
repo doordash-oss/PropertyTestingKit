@@ -60,9 +60,6 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
     /// Tracks comparison operand distances for value profile guidance.
     private let valueProfileTracker = ValueProfileTracker()
 
-    /// Captures magic strings at runtime for dictionary-based mutation.
-    private let stringDictionary = StringDictionary.shared
-
     /// Index of corpus entry that most recently made value profile progress.
     /// We prioritize mutating this entry to continue the chain of progress.
     private var priorityMutationIndex: Int?
@@ -445,14 +442,6 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
             valueProfileTracker.clearState()
         }
 
-        // Enable string capture if configured
-        if config.enableStringCapture && stringDictionary.isAvailable {
-            stringDictionary.clear()
-            if config.verbose {
-                print("[Fuzz] String capture enabled")
-            }
-        }
-
         // Phase 1: Seed with boundary values (defaults + user-provided)
         // Use mutator seeds if provided, otherwise use Fuzzable defaults
         let defaultSeeds = mutatorSeeds?() ?? cartesianProductFuzz()
@@ -463,11 +452,6 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
             coverageCounters.reset()
             if config.enableValueProfile {
                 valueProfileTracker.reset()
-            }
-
-            // Start string capture for this test
-            if config.enableStringCapture && stringDictionary.isAvailable {
-                stringDictionary.startCapture()
             }
 
             // Run test - with optional timeout if configured
@@ -506,11 +490,6 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
                 } catch {
                     testError = error
                 }
-            }
-
-            // Stop string capture and accumulate
-            if config.enableStringCapture && stringDictionary.isAvailable {
-                stringDictionary.stopCapture()
             }
 
             // Handle test result
@@ -717,11 +696,6 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
                 valueProfileTracker.reset()
             }
 
-            // Start string capture for this test
-            if config.enableStringCapture && stringDictionary.isAvailable {
-                stringDictionary.startCapture()
-            }
-
             let testStart = CFAbsoluteTimeGetCurrent()
             // Run test - with optional timeout if configured
             var testError: Error?
@@ -763,11 +737,6 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
 
             let testEnd = CFAbsoluteTimeGetCurrent()
             timeInTest += testEnd - testStart
-
-            // Stop string capture and accumulate
-            if config.enableStringCapture && stringDictionary.isAvailable {
-                stringDictionary.stopCapture()
-            }
 
             let coverageStart = CFAbsoluteTimeGetCurrent()
             iteration += 1
@@ -873,11 +842,6 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
                 let (tracked, solved) = valueProfileTracker.stats()
                 print("[Fuzz] Value profile: \(tracked) comparisons tracked, \(solved) solved")
             }
-        }
-
-        // Report string dictionary stats
-        if config.enableStringCapture && stringDictionary.isAvailable && config.verbose {
-            print("[Fuzz] String dictionary: \(stringDictionary.count) unique strings captured")
         }
 
         // Report rare branch stats
@@ -1157,11 +1121,6 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
         // Strategy 3: Arithmetic relationship mutations for (Int, Int) pairs
         results.append(contentsOf: arithmeticRelationshipMutations(input))
 
-        // Strategy 4: Dictionary-based string mutations
-        if config.enableStringCapture && stringDictionary.count > 0 {
-            results.append(contentsOf: stringDictionaryMutations(input))
-        }
-
         return results
     }
 
@@ -1262,7 +1221,7 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
         case .arithmetic:
             return arithmeticRelationshipMutations(input)
         case .stringDictionary:
-            return stringDictionaryMutations(input)
+            return []  // String dictionary capture is disabled
         case .valueProfileDirected:
             // Value profile mutations need targets, so return empty if not available
             return []
@@ -1323,66 +1282,6 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
         if value != Int.min { derived.append(value - 1) }
 
         return Array(Set(derived)) // Deduplicate
-    }
-
-    /// Generate mutations using strings captured from the string dictionary.
-    /// This helps crack magic string comparisons by using actual strings seen at runtime.
-    private func stringDictionaryMutations(_ input: (repeat each Input)) -> [(repeat each Input)] {
-        var results: [(repeat each Input)] = []
-
-        // Find String components and their indices
-        var stringComponents: [(index: Int, value: String)] = []
-        var componentIdx = 0
-
-        func findStrings<V>(_ value: V) {
-            if let strVal = value as? String {
-                stringComponents.append((componentIdx, strVal))
-            }
-            componentIdx += 1
-        }
-        (repeat findStrings(each input))
-
-        guard !stringComponents.isEmpty else { return [] }
-
-        // Get candidate strings from the dictionary
-        let candidates = stringDictionary.mutationCandidates
-
-        // For each String component, try substituting dictionary strings
-        for (stringIndex, currentValue) in stringComponents {
-            // Try direct substitutions
-            for candidate in candidates.prefix(20) { // Limit to avoid explosion
-                if candidate != currentValue {
-                    if let newTuple = createMutatedTuple(input, mutating: stringIndex, with: candidate) {
-                        results.append(newTuple)
-                    }
-                }
-            }
-
-            // Try related strings (similar prefix)
-            let related = stringDictionary.relatedStrings(to: currentValue)
-            for relatedStr in related.prefix(10) {
-                if let newTuple = createMutatedTuple(input, mutating: stringIndex, with: relatedStr) {
-                    results.append(newTuple)
-                }
-            }
-
-            // Try combining current value with dictionary strings
-            for candidate in candidates.prefix(5) {
-                // Prefix combination
-                let prefixed = candidate + currentValue
-                if let newTuple = createMutatedTuple(input, mutating: stringIndex, with: prefixed) {
-                    results.append(newTuple)
-                }
-
-                // Suffix combination
-                let suffixed = currentValue + candidate
-                if let newTuple = createMutatedTuple(input, mutating: stringIndex, with: suffixed) {
-                    results.append(newTuple)
-                }
-            }
-        }
-
-        return results
     }
 
     /// Generate mutations that target specific comparison values discovered by value profiling.

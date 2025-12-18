@@ -37,10 +37,6 @@ extension FuzzEngine {
         /// Requires test code to be compiled with `-sanitize-coverage=trace-cmp`.
         public var enableValueProfile: Bool
 
-        /// Enable string dictionary capture to discover magic strings at runtime.
-        /// Captured strings are added to the mutation dictionary for String inputs.
-        public var enableStringCapture: Bool
-
         /// Controls how the fuzzer handles existing corpus files.
         /// Defaults to checking the `FUZZ_CORPUS_MODE` environment variable,
         /// then falling back to `.auto`.
@@ -106,7 +102,6 @@ extension FuzzEngine {
             minimizeCorpus: Bool = true,
             verbose: Bool = false,
             enableValueProfile: Bool = true,
-            enableStringCapture: Bool = true,
             corpusMode: CorpusMode? = nil,
             perInputTimeout: TimeInterval? = nil,
             enableRareBranchTargeting: Bool = false,
@@ -132,7 +127,6 @@ extension FuzzEngine {
             self.minimizeCorpus = minimizeCorpus
             self.verbose = verbose
             self.enableValueProfile = enableValueProfile
-            self.enableStringCapture = enableStringCapture
             // Use provided mode, or check environment, or default to auto
             self.corpusMode = corpusMode ?? CorpusMode.fromEnvironment()
             self.perInputTimeout = perInputTimeout

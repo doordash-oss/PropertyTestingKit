@@ -139,6 +139,13 @@ package.targets += [
                 "-sanitize-coverage=edge,trace-cmp,pc-table"
             ])
         ],
+        linkerSettings: [
+            // Add rpath for Testing.framework from Xcode (needed for local toolchain)
+            .unsafeFlags([
+                "-Xlinker", "-rpath",
+                "-Xlinker", "/Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks"
+            ])
+        ],
         plugins: [
             .plugin(name: "BenchmarkPlugin", package: "package-benchmark")
         ]
