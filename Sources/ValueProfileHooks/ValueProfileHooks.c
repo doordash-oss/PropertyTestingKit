@@ -405,6 +405,32 @@ size_t sancov_snapshot_counters(uint8_t* buffer, size_t buffer_size) {
     return copy_size;
 }
 
+size_t sancov_snapshot_covered_indices(uint32_t* indices, uint8_t* counts, size_t max_entries) {
+    const uint8_t* counters = sancov_get_counters();
+    size_t counter_count = sancov_get_counter_count();
+    if (!counters || counter_count == 0) return 0;
+
+    // If indices is NULL, just count covered edges
+    if (indices == NULL) {
+        size_t covered = 0;
+        for (size_t i = 0; i < counter_count; i++) {
+            if (counters[i] > 0) covered++;
+        }
+        return covered;
+    }
+
+    // Fill arrays with covered indices and their counts
+    size_t filled = 0;
+    for (size_t i = 0; i < counter_count && filled < max_entries; i++) {
+        if (counters[i] > 0) {
+            indices[filled] = (uint32_t)i;
+            if (counts) counts[filled] = counters[i];
+            filled++;
+        }
+    }
+    return filled;
+}
+
 // MARK: - PC-to-Source Mapping Implementation
 
 bool sancov_pcs_available(void) {

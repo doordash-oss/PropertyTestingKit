@@ -78,6 +78,14 @@ const uint8_t* sancov_get_counters(void);
 /// If buffer is NULL, returns the required buffer size.
 size_t sancov_snapshot_counters(uint8_t* buffer, size_t buffer_size);
 
+/// Get only the covered (non-zero) counter indices and their values.
+/// Returns the number of entries filled, or if indices is NULL, the count of covered edges.
+/// This is more efficient than snapshot_counters when coverage is sparse.
+/// @param indices Output array of covered edge indices (can be NULL to just get count)
+/// @param counts Output array of counter values (can be NULL if only indices needed)
+/// @param max_entries Maximum number of entries to fill
+size_t sancov_snapshot_covered_indices(uint32_t* indices, uint8_t* counts, size_t max_entries);
+
 // MARK: - PC-to-Source Mapping API
 // Maps SanCov edge indices to source locations using dladdr.
 

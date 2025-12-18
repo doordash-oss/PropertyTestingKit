@@ -1,16 +1,16 @@
 {
-  "createdAt" : "2025-12-18T08:50:34Z",
+  "createdAt" : "2025-12-18T17:04:21Z",
   "entries" : [
     {
-      "discoveredAt" : "2025-12-18T08:50:28Z",
+      "discoveredAt" : "2025-12-18T17:04:16Z",
       "entryType" : "coverage",
       "input" : [
-        "WzAsMSwtMSwwLDAsMCwwLDAsMF0="
+        "WzAsMSwtMSwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDBd"
       ],
       "inputReadable" : [
-        "[0, 1, -1, 0, 0, 0, 0, 0, 0]"
+        "[0, 1, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]"
       ],
-      "parentIndex" : 2,
+      "parentIndex" : 3,
       "signature" : {
         "buckets" : {
           "24615" : 1,
@@ -48,5 +48,5 @@
       "25648" : 1
     }
   },
-  "updatedAt" : "2025-12-18T08:50:34Z"
+  "updatedAt" : "2025-12-18T17:04:21Z"
 }

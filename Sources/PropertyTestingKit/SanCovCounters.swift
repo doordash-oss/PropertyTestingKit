@@ -139,6 +139,31 @@ public struct SanCovCounters: Sendable {
         return SanCovCounters(counters: buffer)
     }
 
+    /// Get only the covered (non-zero) edge indices with their hit counts.
+    /// This is more efficient than `snapshot()` when coverage is sparse.
+    ///
+    /// - Returns: Dictionary mapping edge index to hit count, or nil if unavailable.
+    public static func snapshotCoveredOnly() -> [Int: UInt8]? {
+        guard isAvailable else { return nil }
+
+        // First get the count of covered edges
+        let coveredCount = sancov_snapshot_covered_indices(nil, nil, 0)
+        guard coveredCount > 0 else { return [:] }
+
+        // Allocate buffers and get the data
+        var indices = [UInt32](repeating: 0, count: coveredCount)
+        var counts = [UInt8](repeating: 0, count: coveredCount)
+        let filled = sancov_snapshot_covered_indices(&indices, &counts, coveredCount)
+
+        // Build dictionary
+        var result: [Int: UInt8] = [:]
+        result.reserveCapacity(filled)
+        for i in 0..<filled {
+            result[Int(indices[i])] = counts[i]
+        }
+        return result
+    }
+
     // MARK: - Comparison
 
     /// Compute the difference between this snapshot and an earlier one.
@@ -490,16 +515,18 @@ extension SanCovCounters {
     /// When DWARF debug info is available, includes line and column numbers.
     /// Otherwise falls back to function-level info from dladdr.
     ///
-    /// - Parameter edgeIndex: The edge index to look up.
+    /// - Parameters:
+    ///   - edgeIndex: The edge index to look up.
+    ///   - includeDWARF: Whether to include DWARF debug info (slower but has line numbers).
     /// - Returns: Source location info, or nil if unavailable.
-    public static func getSourceLocation(for edgeIndex: Int) -> SanCovSourceLocation? {
+    public static func getSourceLocation(for edgeIndex: Int, includeDWARF: Bool = true) -> SanCovSourceLocation? {
         var cLocation = SanCovSourceLocation_C()
         guard sancov_get_source_location(edgeIndex, &cLocation) else {
             return nil
         }
 
-        // Try to get DWARF line info
-        let dwarfLocation = DWARFSymbolizerHelper.lookup(pc: UInt(cLocation.pc))
+        // Try to get DWARF line info (expensive - skip if not needed)
+        let dwarfLocation = includeDWARF ? DWARFSymbolizerHelper.lookup(pc: UInt(cLocation.pc)) : nil
         return SanCovSourceLocation(from: cLocation, dwarfLocation: dwarfLocation)
     }
 

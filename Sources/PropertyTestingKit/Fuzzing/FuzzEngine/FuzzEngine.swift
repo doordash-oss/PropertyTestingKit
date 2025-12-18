@@ -528,8 +528,9 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
             let vpImprovements = config.enableValueProfile ? valueProfileTracker.processComparisons() : []
 
             // Get coverage snapshot (task-isolated, no diff needed)
-            if let snapshot = coverageCounters.snapshot() {
-                let signature = CoverageSignature(snapshot: snapshot)
+            // Use sparse snapshot for efficiency - only iterates non-zero counters
+            if let sparseCoverage = coverageCounters.snapshotCoveredOnly() {
+                let signature = CoverageSignature(sparseCoverage: sparseCoverage)
                 let addedForCoverage = corpus.addIfInteresting(input: repeat each input, signature: signature)
 
                 if addedForCoverage {
@@ -565,11 +566,19 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
         totalGenerations = seedInputs.count
         // Note: don't clear priorityMutationIndex - seeds may have set a priority to follow up on
 
+        let fuzzLoopStart = CFAbsoluteTimeGetCurrent()
         // Phase 2: Coverage-guided fuzzing
         var iteration = seedInputs.count
         var stopReason: FuzzStats.StopReason = .iterationLimit
 
+        // Timing accumulators for profiling
+        var timeInMutation: Double = 0
+        var timeInTest: Double = 0
+        var timeInCoverage: Double = 0
+        var timeInOverhead: Double = 0
+
         while iteration < config.maxIterations {
+            let iterStart = CFAbsoluteTimeGetCurrent()
             // Check stopping conditions
             if dateClient.now().timeIntervalSince(startTime) >= config.maxDuration {
                 if config.verbose {
@@ -664,27 +673,42 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
                 }
 
                 // When following a priority chain, prefer target-directed mutations
-                let mutated: (repeat each Input)
                 if usingPriority && !targetMutations.isEmpty {
                     // Try target mutations first when following value profile chain
-                    mutated = targetMutations.randomElement()!
+                    input = targetMutations.randomElement()!
                     // Keep priority if we have more targets to try
                     if targetMutations.count <= 1 {
                         priorityMutationIndex = nil
                         savedTargets = []
                     }
-                } else {
-                    guard let m = mutations.randomElement() else {
-                        continue
-                    }
-                    mutated = m
+                    parentIndex = selectedIndex
+                    totalMutations += 1
+                } else if let m = mutations.randomElement() {
+                    input = m
                     priorityMutationIndex = nil  // Clear priority when not using it
                     savedTargets = []
+                    parentIndex = selectedIndex
+                    totalMutations += 1
+                } else {
+                    // Mutations exhausted - fall back to generation to make progress
+                    let fuzzValues = mutatorSeeds?() ?? cartesianProductFuzz()
+                    guard let fuzzValue = fuzzValues.randomElement() else {
+                        // No seeds and no mutations - can't make progress
+                        // Increment iteration to avoid infinite loop
+                        iteration += 1
+                        continue
+                    }
+                    input = fuzzValue
+                    parentIndex = nil
+                    totalGenerations += 1
+                    usedStrategy = .freshGeneration
+                    priorityMutationIndex = nil
+                    savedTargets = []
                 }
-                input = mutated
-                parentIndex = selectedIndex
-                totalMutations += 1
             }
+
+            let mutationEnd = CFAbsoluteTimeGetCurrent()
+            timeInMutation += mutationEnd - iterStart
 
             // Reset coverage and value profile for this test
             // Task-isolated: only affects this task's counters
@@ -698,6 +722,7 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
                 stringDictionary.startCapture()
             }
 
+            let testStart = CFAbsoluteTimeGetCurrent()
             // Run test - with optional timeout if configured
             var testError: Error?
             var timedOut = false
@@ -736,11 +761,15 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
                 }
             }
 
+            let testEnd = CFAbsoluteTimeGetCurrent()
+            timeInTest += testEnd - testStart
+
             // Stop string capture and accumulate
             if config.enableStringCapture && stringDictionary.isAvailable {
                 stringDictionary.stopCapture()
             }
 
+            let coverageStart = CFAbsoluteTimeGetCurrent()
             iteration += 1
             iterationsSinceNewCoverage += 1
 
@@ -759,9 +788,19 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
             let vpImprovements = config.enableValueProfile ? valueProfileTracker.processComparisons() : []
 
             // Get coverage snapshot (task-isolated, no diff needed)
-            if let snapshot = coverageCounters.snapshot() {
-                let signature = CoverageSignature(snapshot: snapshot)
+            // Use sparse snapshot for efficiency - only iterates non-zero counters
+            let snapshotStart = CFAbsoluteTimeGetCurrent()
+            if let sparseCoverage = coverageCounters.snapshotCoveredOnly() {
+                let snapshotTime = CFAbsoluteTimeGetCurrent() - snapshotStart
+                let sigStart = CFAbsoluteTimeGetCurrent()
+                let signature = CoverageSignature(sparseCoverage: sparseCoverage)
+                let sigTime = CFAbsoluteTimeGetCurrent() - sigStart
+                let corpusStart = CFAbsoluteTimeGetCurrent()
                 let addedForCoverage = corpus.addIfInteresting(input: repeat each input, signature: signature, parentIndex: parentIndex)
+                let corpusTime = CFAbsoluteTimeGetCurrent() - corpusStart
+                if iteration == seedInputs.count + 1 {
+                    print("[Timing] First iter breakdown: snapshot=\(String(format: "%.4f", snapshotTime))s, sig=\(String(format: "%.4f", sigTime))s, corpus=\(String(format: "%.4f", corpusTime))s")
+                }
 
                 // Record discovery status for plateau detection
                 let discoveredNew = addedForCoverage || !vpImprovements.isEmpty
@@ -822,6 +861,9 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
                 // No coverage counters available - still record for plateau detection
                 plateauDetector.record(discoveredNewCoverage: false)
             }
+
+            let coverageEnd = CFAbsoluteTimeGetCurrent()
+            timeInCoverage += coverageEnd - coverageStart
         }
 
         // Disable value profile tracking
@@ -849,6 +891,12 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
             }
         }
 
+        let fuzzLoopEnd = CFAbsoluteTimeGetCurrent()
+        print("[Timing] Fuzz loop: \(String(format: "%.3f", fuzzLoopEnd - fuzzLoopStart))s (\(iteration) iterations)")
+        print("[Timing]   - Mutation: \(String(format: "%.3f", timeInMutation))s")
+        print("[Timing]   - Test execution: \(String(format: "%.3f", timeInTest))s")
+        print("[Timing]   - Coverage processing: \(String(format: "%.3f", timeInCoverage))s")
+
         // Report swarm testing stats
         if config.swarmConfig.enabled, let scheduler = swarmScheduler {
             if config.verbose {
@@ -864,6 +912,7 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
         }
 
         // Phase 3: Minimize corpus
+        let minimizeStart = CFAbsoluteTimeGetCurrent()
         var finalCorpus = corpus
         if config.minimizeCorpus && corpus.count > 1 {
             finalCorpus = corpus.minimized()
@@ -871,8 +920,11 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
                 print("[Fuzz] Minimized corpus: \(corpus.count) -> \(finalCorpus.count)")
             }
         }
+        let minimizeEnd = CFAbsoluteTimeGetCurrent()
+        print("[Timing] Minimize corpus: \(String(format: "%.3f", minimizeEnd - minimizeStart))s")
 
         // Phase 4: Save corpus
+        let saveStart = CFAbsoluteTimeGetCurrent()
         if let directory = corpusDirectory {
             do {
                 try finalCorpus.save(to: directory)
@@ -885,6 +937,8 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
                 }
             }
         }
+        let saveEnd = CFAbsoluteTimeGetCurrent()
+        print("[Timing] Save corpus: \(String(format: "%.3f", saveEnd - saveStart))s")
 
         let duration = dateClient.now().timeIntervalSince(startTime)
 
@@ -913,6 +967,7 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
         )
 
         // Detect coverage gaps if enabled
+        let gapStart = CFAbsoluteTimeGetCurrent()
         var coverageGapReport: CoverageGapReport?
         if config.detectCoverageGaps {
             let totalCoveredIndices = finalCorpus.totalCoverage.executedIndices
@@ -928,6 +983,8 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
                 print("[Fuzz] \(report.detailedSummary)")
             }
         }
+        let gapEnd = CFAbsoluteTimeGetCurrent()
+        print("[Timing] Gap detection: \(String(format: "%.3f", gapEnd - gapStart))s")
 
         return FuzzResult(
             corpus: finalCorpus,
@@ -972,8 +1029,9 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
             }
 
             // Get coverage snapshot (task-isolated, no diff needed)
-            if let snapshot = coverageCounters.snapshot() {
-                let actualSignature = CoverageSignature(snapshot: snapshot)
+            // Use sparse snapshot for efficiency - only iterates non-zero counters
+            if let sparseCoverage = coverageCounters.snapshotCoveredOnly() {
+                let actualSignature = CoverageSignature(sparseCoverage: sparseCoverage)
                 if actualSignature != entry.signature {
                     coverageChanges.append((
                         input: entry.input,

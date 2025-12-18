@@ -232,15 +232,22 @@ public struct CoverageGapDetector: Sendable {
             )
         }
 
-        // Group all edges by function
-        var functionEdges: [String: FunctionEdgeInfo] = [:]
+        // Optimization: Use fast dladdr lookups (no DWARF) for initial function detection,
+        // then only use expensive DWARF lookups for uncovered edges that need line numbers.
 
-        for edgeIndex in 0..<totalEdges {
-            guard let location = SanCovCounters.getSourceLocation(for: edgeIndex) else {
+        // Step 1: Fast scan to find all function keys and count edges (no DWARF)
+        // Also track PC ranges for each function to enable fast filtering in Step 2
+        var functionEdges: [String: FunctionEdgeInfo] = [:]
+        var testedFunctions: Set<String> = []
+        var functionPCRanges: [String: (min: UInt, max: UInt)] = [:]
+
+        // Mark functions that have covered edges as "tested"
+        for edgeIndex in coveredIndices {
+            guard edgeIndex < totalEdges else { continue }
+            guard let location = SanCovCounters.getSourceLocation(for: edgeIndex, includeDWARF: false) else {
                 continue
             }
 
-            // Skip edges without function names
             guard let funcName = location.functionName,
                   let filename = location.filename else {
                 continue
@@ -252,24 +259,87 @@ public struct CoverageGapDetector: Sendable {
             }
 
             let key = "\(filename):\(funcName)"
+            testedFunctions.insert(key)
+
+            // Track PC range for this function
+            let pc = location.pc
+            if let existing = functionPCRanges[key] {
+                functionPCRanges[key] = (min: min(existing.min, pc), max: max(existing.max, pc))
+            } else {
+                functionPCRanges[key] = (min: pc, max: pc)
+            }
+
             var info = functionEdges[key] ?? FunctionEdgeInfo(
                 functionName: funcName,
                 filename: filename
             )
 
-            let isCovered = coveredIndices.contains(edgeIndex)
             info.totalEdges += 1
-            if isCovered {
-                info.coveredEdges += 1
-            } else {
-                info.uncoveredEdges.append(EdgeInfo(
-                    index: edgeIndex,
-                    line: location.line ?? 0,
-                    column: location.column ?? 0
-                ))
+            info.coveredEdges += 1
+            functionEdges[key] = info
+        }
+
+        // Build a combined PC range with some padding for uncovered edges within tested functions
+        // Functions are typically contiguous in memory, so edges within the function should be nearby
+        var globalMinPC: UInt = .max
+        var globalMaxPC: UInt = 0
+        for (_, range) in functionPCRanges {
+            globalMinPC = min(globalMinPC, range.min)
+            globalMaxPC = max(globalMaxPC, range.max)
+        }
+        // Add padding to account for uncovered branches (typically within ~64KB of covered code)
+        let pcPadding: UInt = 65536
+        let filterMinPC = globalMinPC > pcPadding ? globalMinPC - pcPadding : 0
+        let filterMaxPC = globalMaxPC.addingReportingOverflow(pcPadding).overflow ? .max : globalMaxPC + pcPadding
+
+        // If no functions were tested, return early (no gaps to detect)
+        if testedFunctions.isEmpty {
+            return CoverageGapReport(
+                gaps: [],
+                totalFunctionsAnalyzed: 0,
+                fullyCoveredFunctionCount: 0,
+                uncoveredFunctionCount: 0
+            )
+        }
+
+        // Step 2: Scan uncovered edges, but only for functions we're tracking
+        // Optimization: First filter by PC range (fast array lookup), then dladdr only for candidates
+        let coveredSet = coveredIndices
+        for edgeIndex in 0..<totalEdges where !coveredSet.contains(edgeIndex) {
+            // Fast PC range filter - skip edges clearly outside tested functions
+            let pc = SanCovCounters.getPC(for: edgeIndex)
+            if pc < filterMinPC || pc > filterMaxPC {
+                continue
             }
 
-            functionEdges[key] = info
+            guard let location = SanCovCounters.getSourceLocation(for: edgeIndex, includeDWARF: false) else {
+                continue
+            }
+
+            guard let funcName = location.functionName,
+                  let filename = location.filename else {
+                continue
+            }
+
+            let key = "\(filename):\(funcName)"
+
+            // Only track uncovered edges from tested functions
+            guard testedFunctions.contains(key) else {
+                continue
+            }
+
+            // Now get the full location with DWARF for line numbers
+            let fullLocation = SanCovCounters.getSourceLocation(for: edgeIndex, includeDWARF: true)
+
+            if var info = functionEdges[key] {
+                info.totalEdges += 1
+                info.uncoveredEdges.append(EdgeInfo(
+                    index: edgeIndex,
+                    line: fullLocation?.line ?? 0,
+                    column: fullLocation?.column ?? 0
+                ))
+                functionEdges[key] = info
+            }
         }
 
         // Analyze each function and detect gaps

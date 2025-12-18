@@ -300,7 +300,11 @@ struct CoverageGapDetectorTests {
 
         // This test intentionally creates a coverage gap to verify detection works
         withKnownIssue("Expected coverage gap in partiallyCoveredFunction") {
-            try fuzz(iterations: 100, detectCoverageGaps: true) { (input: Int) in
+            try fuzz(
+                iterations: 100,
+                corpusMode: .refuzzReplace,
+                detectCoverageGaps: true
+            ) { (input: Int) in
                 partiallyCoveredFunction(input: input)
             }
         }

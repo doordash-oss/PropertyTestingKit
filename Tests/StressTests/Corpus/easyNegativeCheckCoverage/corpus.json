@@ -1,8 +1,8 @@
 {
-  "createdAt" : "2025-12-18T08:50:35Z",
+  "createdAt" : "2025-12-18T17:04:25Z",
   "entries" : [
     {
-      "discoveredAt" : "2025-12-18T08:50:34Z",
+      "discoveredAt" : "2025-12-18T17:04:23Z",
       "entryType" : "coverage",
       "input" : [
         "MA=="
@@ -22,7 +22,7 @@
       }
     },
     {
-      "discoveredAt" : "2025-12-18T08:50:34Z",
+      "discoveredAt" : "2025-12-18T17:04:23Z",
       "entryType" : "coverage",
       "input" : [
         "LTE="
@@ -56,5 +56,5 @@
       "25520" : 1
     }
   },
-  "updatedAt" : "2025-12-18T08:50:35Z"
+  "updatedAt" : "2025-12-18T17:04:25Z"
 }
