@@ -1,0 +1,13 @@
+// SanCov.xcconfig - Enable SanitizerCoverage for xcodebuild
+//
+// Usage: xcodebuild test -scheme PropertyTestingKit -xcconfig SanCov.xcconfig ...
+
+// Enable UndefinedBehavior Sanitizer (required for -sanitize-coverage)
+// and SanitizerCoverage with edge+trace-cmp+pc-table instrumentation
+OTHER_SWIFT_FLAGS = $(inherited) -sanitize=undefined -sanitize-coverage=edge,trace-cmp,pc-table
+
+// Link against the UBSan runtime which provides the coverage symbols
+OTHER_LDFLAGS = $(inherited) -L$(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin -lclang_rt.ubsan_osx_dynamic
+
+// Ensure runtime library is found at runtime
+LD_RUNPATH_SEARCH_PATHS = $(inherited) $(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin

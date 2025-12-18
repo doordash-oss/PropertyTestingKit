@@ -429,7 +429,9 @@ private enum DWARFSymbolizerHelper {
 
     /// Look up DWARF info for a PC address.
     static func lookup(pc: UInt) -> DWARFSourceLocation? {
-        guard let symbolizer = shared else { return nil }
+        guard let symbolizer = shared else {
+            return nil
+        }
         let fileOffset = runtimeToFileOffset(pc)
         return symbolizer.lookup(address: fileOffset)
     }

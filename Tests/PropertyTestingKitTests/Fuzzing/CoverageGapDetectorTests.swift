@@ -280,4 +280,29 @@ struct CoverageGapDetectorTests {
         let defaultConfig = FuzzEngine<Int>.Config()
         #expect(defaultConfig.detectCoverageGaps == false)
     }
+
+    @Test("Realistic coverage gap test")
+    func realisticCoverageGapTest() throws {
+        // Use a hash-based check that value profile can't solve easily
+        @inline(never)
+        func partiallyCoveredFunction(input: Int) {
+            // Simple hash to defeat value profile guidance
+            let hash = (input &* 31) ^ (input >> 4)
+            if hash == 0x7FFFFFFE {
+                // This branch is effectively unreachable (requires specific input)
+                print("found magic!")
+            } else if input < 0 {
+                print("negative")
+            } else {
+                print("positive")
+            }
+        }
+
+        // This test intentionally creates a coverage gap to verify detection works
+        withKnownIssue("Expected coverage gap in partiallyCoveredFunction") {
+            try fuzz(iterations: 100, detectCoverageGaps: true) { (input: Int) in
+                partiallyCoveredFunction(input: input)
+            }
+        }
+    }
 }

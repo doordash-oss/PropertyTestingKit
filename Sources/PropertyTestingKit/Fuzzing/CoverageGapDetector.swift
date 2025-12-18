@@ -305,9 +305,8 @@ public struct CoverageGapDetector: Sendable {
                     totalEdgeCount: info.totalEdges
                 )
 
-                if !config.onlyReportSignificant || gap.isSignificant {
-                    gaps.append(gap)
-                }
+                // Always include gaps - significance filtering happens at reporting time
+                gaps.append(gap)
             }
         }
 
@@ -322,10 +321,14 @@ public struct CoverageGapDetector: Sendable {
     /// Check if a filename should be excluded from gap detection.
     private func shouldExclude(filename: String, projectPath: String?) -> Bool {
         // Always exclude system and build paths
+        // Note: Be careful with "/Library/" - user Library paths like
+        // "/Users/alex/Library/Developer" should NOT be excluded
         let systemPrefixes = [
-            "/usr/",
+            "/usr/lib/",
+            "/usr/share/",
             "/System/",
-            "/Library/",
+            "/Library/Frameworks/",
+            "/Library/Developer/",  // System-wide developer tools
             ".build/checkouts/",
             ".build/repositories/",
             "SourcePackages/checkouts/",
@@ -334,6 +337,11 @@ public struct CoverageGapDetector: Sendable {
 
         for prefix in systemPrefixes {
             if filename.contains(prefix) {
+                // Exception: Don't exclude user-specific Library paths
+                // e.g., /Users/alex/Library/Developer/Xcode/DerivedData
+                if prefix == "/Library/Developer/" && filename.contains("/Users/") {
+                    continue
+                }
                 return true
             }
         }

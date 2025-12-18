@@ -23,14 +23,33 @@ struct DWARFSymbolizerTests {
             if imageNameStr == binaryPath {
                 let slide = _dyld_get_image_vmaddr_slide(i)
                 print("Found binary at index \(i), slide: 0x\(String(slide, radix: 16))")
-                // The slide is the runtime load address - file vmaddr
-                // Since vmaddr is typically 0, slide equals the load address
-                // So: file_offset = runtime_address - slide
-                return address - UInt64(bitPattern: Int64(slide))
+                print("  address: 0x\(String(address, radix: 16))")
+                print("  slide (signed): \(slide)")
+
+                // Sanity check: slide should be positive and less than address
+                guard slide >= 0 else {
+                    print("  ERROR: Negative slide value, returning address unchanged")
+                    return address
+                }
+
+                let slideUnsigned = UInt64(slide)
+                guard address >= slideUnsigned else {
+                    print("  ERROR: address (0x\(String(address, radix: 16))) < slide (0x\(String(slideUnsigned, radix: 16)))")
+                    print("  This suggests we matched the wrong binary or the address is invalid")
+                    return address
+                }
+
+                return address - slideUnsigned
             }
         }
 
-        print("Warning: Could not find binary in loaded images")
+        print("Warning: Could not find binary '\(binaryPath)' in loaded images")
+        print("Loaded images:")
+        for i in 0..<min(10, _dyld_image_count()) {
+            if let name = _dyld_get_image_name(i) {
+                print("  [\(i)]: \(String(cString: name))")
+            }
+        }
         return address
     }
 
@@ -82,12 +101,12 @@ struct DWARFSymbolizerTests {
         }
         let symbolizer = try DWARFSymbolizer(path: path)
 
-        // Use dladdr to get the address of DWARFSymbolizer type metadata
-        // This is a simple way to get a valid address in our binary
+        // Use dladdr on a function in the TEST bundle (same binary as getBinaryPath returns)
         var info = Dl_info()
-        let typePtr = unsafeBitCast(DWARFSymbolizer.self as Any.Type, to: UnsafeRawPointer.self)
+        let testFunc: @convention(c) () -> Void = testFunctionForSymbolication
+        let funcPtr = unsafeBitCast(testFunc, to: UnsafeRawPointer.self)
 
-        guard dladdr(typePtr, &info) != 0, let saddr = info.dli_saddr else {
+        guard dladdr(funcPtr, &info) != 0, let saddr = info.dli_saddr else {
             Issue.record("Could not get address info")
             return
         }
@@ -113,12 +132,6 @@ struct DWARFSymbolizerTests {
 
     @Test("DWARFSymbolizer looks up real source location")
     func testLookupRealFunction() throws {
-        guard let path = getBinaryPath() else {
-            Issue.record("Could not determine binary path")
-            return
-        }
-        let symbolizer = try DWARFSymbolizer(path: path)
-
         // Use dlsym to get a known function by name
         // DWARFSymbolizer.findClosest mangled name
         let mangledName = "$s18PropertyTestingKit15DWARFSymbolizerC11findClosest7addressAA19DWARFSourceLocationVSgs6UInt64V_tF"
@@ -128,14 +141,22 @@ struct DWARFSymbolizerTests {
             return
         }
 
+        // Get the binary path from dladdr on the SAME address we're looking up
         var info = Dl_info()
-        guard dladdr(funcAddr, &info) != 0, let saddr = info.dli_saddr else {
+        guard dladdr(funcAddr, &info) != 0,
+              let saddr = info.dli_saddr,
+              let fname = info.dli_fname else {
             Issue.record("Could not get address info")
             return
         }
 
+        let binaryPath = String(cString: fname)
+        print("Binary for DWARFSymbolizer: \(binaryPath)")
+
+        let symbolizer = try DWARFSymbolizer(path: binaryPath)
+
         let runtimeAddress = UInt64(UInt(bitPattern: saddr))
-        let fileOffset = runtimeAddressToFileOffset(runtimeAddress, binaryPath: path)
+        let fileOffset = runtimeAddressToFileOffset(runtimeAddress, binaryPath: binaryPath)
 
         print("findClosest runtime address: 0x\(String(runtimeAddress, radix: 16))")
         print("findClosest file offset: 0x\(String(fileOffset, radix: 16))")

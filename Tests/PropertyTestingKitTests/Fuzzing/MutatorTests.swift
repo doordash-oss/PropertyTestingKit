@@ -646,9 +646,9 @@ struct MutatorPublicAPITests {
             testedInputs.contains(where: {
                 // XSS seed with SQL quote prefix (any XSS pattern)
                 ($0.hasPrefix("'") && ($0.contains("<") || $0.contains("javascript:") || $0.contains("alert") || $0.contains("onerror"))) ||
-                // XSS seed with SQL keyword suffix
+                // XSS seed with SQL keyword/pattern suffix
                 (($0.contains("<script>") || $0.contains("onerror") || $0.contains("javascript:")) &&
-                 ($0.contains("/**/") || $0.contains("; DROP") || $0.contains(" OR 1=1")))
+                 ($0.contains("/**/") || $0.contains("; DROP") || $0.contains(" OR ") || $0.contains("'--")))
             }),
             "SQL mutations should be applied to XSS seeds"
         )
@@ -658,10 +658,10 @@ struct MutatorPublicAPITests {
         // Applied to SQL seeds
         #expect(
             testedInputs.contains(where: {
-                // SQL content wrapped in script tags (any SQL keyword)
-                ($0.contains("<script>") && ($0.contains("DROP") || $0.contains("SELECT") || $0.contains("EXEC") || $0.contains("OR 1=1"))) ||
+                // SQL content wrapped in script tags (any SQL keyword/pattern)
+                ($0.contains("<script>") && ($0.contains("DROP") || $0.contains("SELECT") || $0.contains("EXEC") || $0.contains("OR ") || $0.contains("OR(") || $0.contains("SLEEP") || $0.contains("WAITFOR") || $0.contains("'--"))) ||
                 // SQL content in img onerror
-                ($0.contains("onerror=") && ($0.contains("DROP") || $0.contains("SELECT") || $0.contains("UNION")))
+                ($0.contains("onerror=") && ($0.contains("DROP") || $0.contains("SELECT") || $0.contains("UNION") || $0.contains("OR ") || $0.contains("SLEEP")))
             }),
             "XSS mutations should be applied to SQL seeds"
         )

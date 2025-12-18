@@ -98,6 +98,7 @@ public func fuzz<each Input: Fuzzable & Codable & Sendable, each M: Mutator>(
     detectCoverageGaps: Bool = false,
     filePath: StaticString = #filePath,
     function: StaticString = #function,
+    line: Int = #line,
     test: @escaping ((repeat each Input)) throws -> Void
 ) throws -> FuzzResult<repeat each Input> where (repeat (each M).Value) == (repeat each Input) {
     @Dependency(\.environment) var environment
@@ -108,7 +109,8 @@ public func fuzz<each Input: Fuzzable & Codable & Sendable, each M: Mutator>(
         verbose: environment.environment()["FUZZ_VERBOSE"] != nil,
         corpusMode: corpusMode,
         perInputTimeout: perInputTimeout,
-        detectCoverageGaps: detectCoverageGaps
+        detectCoverageGaps: detectCoverageGaps,
+        projectPath: projectPath(from: filePath)
     )
 
     // WORKAROUND: Create engine inline to avoid parameter pack forwarding issues.
@@ -120,7 +122,7 @@ public func fuzz<each Input: Fuzzable & Codable & Sendable, each M: Mutator>(
         corpusDirectory: corpusDirectory(filePath: filePath, function: function)
     )
 
-    return try reportFuzzResult(engine.run(additionalSeeds: seeds, test: test), filePath: filePath)
+    return try reportFuzzResult(engine.run(additionalSeeds: seeds, test: test), filePath: filePath, line: line)
 }
 
 /// Run a coverage-guided fuzz test using the type's `Fuzzable` conformance.
@@ -156,6 +158,7 @@ public func fuzz<each Input: Fuzzable & Codable & Sendable>(
     detectCoverageGaps: Bool = false,
     filePath: StaticString = #filePath,
     function: StaticString = #function,
+    line: Int = #line,
     test: @escaping ((repeat each Input)) throws -> Void
 ) throws -> FuzzResult<repeat each Input> {
     @Dependency(\.environment) var environment
@@ -166,7 +169,8 @@ public func fuzz<each Input: Fuzzable & Codable & Sendable>(
         verbose: environment.environment()["FUZZ_VERBOSE"] != nil,
         corpusMode: corpusMode,
         perInputTimeout: perInputTimeout,
-        detectCoverageGaps: detectCoverageGaps
+        detectCoverageGaps: detectCoverageGaps,
+        projectPath: projectPath(from: filePath)
     )
 
     let engine = FuzzEngine<repeat each Input>(
@@ -174,7 +178,7 @@ public func fuzz<each Input: Fuzzable & Codable & Sendable>(
         corpusDirectory: corpusDirectory(filePath: filePath, function: function)
     )
 
-    return try reportFuzzResult(engine.run(additionalSeeds: seeds, test: test), filePath: filePath)
+    return try reportFuzzResult(engine.run(additionalSeeds: seeds, test: test), filePath: filePath, line: line)
 }
 
 // MARK: - Fuzz Helpers
@@ -182,7 +186,8 @@ public func fuzz<each Input: Fuzzable & Codable & Sendable>(
 /// Report fuzz result failures and throw if any occurred.
 private func reportFuzzResult<each Input: Codable & Sendable>(
     _ result: FuzzResult<repeat each Input>,
-    filePath: StaticString
+    filePath: StaticString,
+    line: Int = #line
 ) throws -> FuzzResult<repeat each Input> {
     for (input, error) in result.failures {
         Issue.record(
@@ -197,6 +202,37 @@ private func reportFuzzResult<each Input: Codable & Sendable>(
         Issue.record(error)
     }
 
+    // Record coverage gaps as issues (fails the test)
+    if let report = result.coverageGapReport, !report.gaps.isEmpty {
+        let testFilePath = String(describing: filePath)
+
+        for gap in report.gaps {
+            let file = URL(fileURLWithPath: gap.filename).lastPathComponent
+            let pct = String(format: "%.0f", gap.coveragePercentage)
+            let uncoveredLines = gap.uncoveredRegions
+                .compactMap { $0.lineStart > 0 ? String($0.lineStart) : nil }
+                .prefix(5)
+                .joined(separator: ", ")
+            let lineInfo = uncoveredLines.isEmpty ? "" : " (lines: \(uncoveredLines))"
+            let message = "Coverage gap: \(gap.functionName) in \(file) is \(pct)% covered\(lineInfo)"
+
+            // Use uncovered line if available, otherwise fall back to test file location
+            let hasValidLine = gap.uncoveredRegions.first.map { $0.lineStart > 0 } ?? false
+            let issueFile = hasValidLine ? gap.filename : testFilePath
+            let issueLine = hasValidLine ? (gap.uncoveredRegions.first?.lineStart ?? 1) : line
+
+            Issue.record(
+                Comment(rawValue: message),
+                sourceLocation: SourceLocation(
+                    fileID: issueFile,
+                    filePath: issueFile,
+                    line: issueLine,
+                    column: 1
+                )
+            )
+        }
+    }
+
     if let firstFailure = result.failures.first {
         throw FuzzError.testFailed(
             input: "\(firstFailure.input)",
@@ -207,7 +243,30 @@ private func reportFuzzResult<each Input: Codable & Sendable>(
     return result
 }
 
-// MARK: - Corpus Directory Resolution
+// MARK: - Path Resolution
+
+/// Derive the project root path from a test file path.
+///
+/// Finds the nearest ancestor directory containing Package.swift or .git.
+private func projectPath(from filePath: StaticString) -> String? {
+    let path = String(describing: filePath)
+    var url = URL(fileURLWithPath: path).deletingLastPathComponent()
+
+    // Walk up looking for project root markers
+    while url.path != "/" {
+        let packageSwift = url.appendingPathComponent("Package.swift")
+        let gitDir = url.appendingPathComponent(".git")
+
+        if FileManager.default.fileExists(atPath: packageSwift.path) ||
+           FileManager.default.fileExists(atPath: gitDir.path) {
+            return url.path
+        }
+
+        url = url.deletingLastPathComponent()
+    }
+
+    return nil
+}
 
 /// Determine the corpus directory for a test.
 ///

@@ -93,6 +93,10 @@ extension FuzzEngine {
         /// Configuration for coverage gap detection.
         public var coverageGapConfig: CoverageGapDetector.Config
 
+        /// Project root path for filtering coverage gaps to project files only.
+        /// When set, only reports gaps in files under this path.
+        public var projectPath: String?
+
         public init(
             maxIterations: Int = 10_000,
             maxDuration: TimeInterval = 60,
@@ -111,7 +115,8 @@ extension FuzzEngine {
             swarmConfig: SwarmConfig = SwarmConfig(),
             adaptiveMutationConfig: AdaptiveMutationConfig = AdaptiveMutationConfig(),
             detectCoverageGaps: Bool = false,
-            coverageGapConfig: CoverageGapDetector.Config = CoverageGapDetector.Config()
+            coverageGapConfig: CoverageGapDetector.Config = CoverageGapDetector.Config(),
+            projectPath: String? = nil
         ) {
             self.maxIterations = maxIterations
             self.maxDuration = maxDuration
@@ -138,6 +143,7 @@ extension FuzzEngine {
             self.adaptiveMutationConfig = adaptiveMutationConfig
             self.detectCoverageGaps = detectCoverageGaps
             self.coverageGapConfig = coverageGapConfig
+            self.projectPath = projectPath
         }
     }
 }

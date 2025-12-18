@@ -917,7 +917,12 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
         if config.detectCoverageGaps {
             let totalCoveredIndices = finalCorpus.totalCoverage.executedIndices
             let detector = CoverageGapDetector(config: config.coverageGapConfig)
-            coverageGapReport = detector.detect(from: totalCoveredIndices)
+
+            if config.verbose {
+                print("[Fuzz] Gap detection: corpus covered \(totalCoveredIndices.count) edges, total edges: \(SanCovCounters.totalEdgeCount)")
+            }
+
+            coverageGapReport = detector.detect(from: totalCoveredIndices, projectPath: config.projectPath)
 
             if config.verbose, let report = coverageGapReport {
                 print("[Fuzz] \(report.detailedSummary)")
@@ -1003,13 +1008,30 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
             plateauStats: nil
         )
 
+        // Detect coverage gaps if enabled
+        var coverageGapReport: CoverageGapReport?
+        if config.detectCoverageGaps {
+            let totalCoveredIndices = corpus.totalCoverage.executedIndices
+            let detector = CoverageGapDetector(config: config.coverageGapConfig)
+
+            if config.verbose {
+                print("[Regression] Gap detection: corpus covered \(totalCoveredIndices.count) edges, total edges: \(SanCovCounters.totalEdgeCount)")
+            }
+
+            coverageGapReport = detector.detect(from: totalCoveredIndices, projectPath: config.projectPath)
+
+            if config.verbose, let report = coverageGapReport {
+                print("[Regression] \(report.detailedSummary)")
+            }
+        }
+
         return FuzzResult(
             corpus: corpus,
             failures: failures,
             stats: stats,
             wasRegression: true,
             coverageChanges: coverageChanges,
-            coverageGapReport: nil
+            coverageGapReport: coverageGapReport
         )
     }
 

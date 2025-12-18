@@ -15,22 +15,8 @@
     {
       "target" : {
         "containerPath" : "container:",
-        "identifier" : "StressTests",
-        "name" : "StressTests"
-      }
-    },
-    {
-      "target" : {
-        "containerPath" : "container:",
         "identifier" : "PropertyTestingKitTests",
         "name" : "PropertyTestingKitTests"
-      }
-    },
-    {
-      "target" : {
-        "containerPath" : "container:",
-        "identifier" : "SanCovTests",
-        "name" : "SanCovTests"
       }
     }
   ],

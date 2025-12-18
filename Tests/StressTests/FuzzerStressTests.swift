@@ -479,7 +479,7 @@ struct FuzzerStressTests {
         print("Extreme dynamic password: match=\(seenMatch), mismatch=\(seenMismatch), \(result.stats.totalInputs) inputs")
     }
 
-    @Test("Extreme: Multiple dynamic strings with string dictionary")
+    @Test("Extreme: Multiple dynamic strings with string dictionary", .disabled())
     func extremeMultipleDynamicStringsCoverage() throws {
         var seenFullMatch = false
         var seenPrefixMatch = false

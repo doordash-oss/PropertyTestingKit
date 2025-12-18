@@ -53,20 +53,88 @@ public final class DWARFSymbolizer: @unchecked Sendable {
 
     /// Initialize a symbolizer for the given binary path.
     ///
+    /// Automatically searches for dSYM bundles when the binary doesn't contain
+    /// embedded debug info (common with Xcode's `dwarf-with-dsym` builds).
+    ///
     /// - Parameter path: Path to the binary or dSYM with DWARF debug info.
     /// - Throws: `DWARFSymbolizerError` if initialization fails.
     public init(path: String) throws {
-        guard let ref = llvm_symbolizer_create(path) else {
-            let errorMsg = llvm_symbolizer_get_error().map { String(cString: $0) } ?? "unknown error"
-            throw DWARFSymbolizerError.initFailed(errorMsg)
+        // Try paths in order: dSYM first (more likely to have full debug info), then binary
+        let pathsToTry = Self.findDebugInfoPaths(for: path)
+
+        var lastError: String = "unknown error"
+        for tryPath in pathsToTry {
+            if let ref = llvm_symbolizer_create(tryPath) {
+                self.symbolizerRef = ref
+                return
+            }
+            lastError = llvm_symbolizer_get_error().map { String(cString: $0) } ?? "unknown error"
         }
-        self.symbolizerRef = ref
+
+        throw DWARFSymbolizerError.initFailed(lastError)
     }
 
     /// Initialize a symbolizer for the current process executable.
     public convenience init() throws {
         let path = ProcessInfo.processInfo.arguments[0]
         try self.init(path: path)
+    }
+
+    /// Find possible paths containing debug info for a binary.
+    ///
+    /// Searches for dSYM bundles in common locations:
+    /// - Adjacent to .xctest/.app/.framework bundle
+    /// - Adjacent to standalone binary (non-bundle case)
+    private static func findDebugInfoPaths(for binaryPath: String) -> [String] {
+        var paths: [String] = []
+        let fm = FileManager.default
+
+        // Get binary name
+        let binaryURL = URL(fileURLWithPath: binaryPath)
+        let binaryName = binaryURL.lastPathComponent
+
+        // Look for dSYM adjacent to bundle (.xctest, .app, etc.)
+        // Binary: /path/to/Foo.xctest/Contents/MacOS/Foo
+        // dSYM:   /path/to/Foo.xctest.dSYM/Contents/Resources/DWARF/Foo
+        var foundBundle = false
+        var searchURL = binaryURL.deletingLastPathComponent()
+        while searchURL.path != "/" {
+            let parentName = searchURL.lastPathComponent
+            if parentName.hasSuffix(".xctest") || parentName.hasSuffix(".app") || parentName.hasSuffix(".framework") {
+                foundBundle = true
+                let dsymPath = searchURL
+                    .deletingLastPathComponent()
+                    .appendingPathComponent("\(parentName).dSYM")
+                    .appendingPathComponent("Contents/Resources/DWARF")
+                    .appendingPathComponent(binaryName)
+                    .path
+                if fm.fileExists(atPath: dsymPath) {
+                    paths.append(dsymPath)
+                }
+                break
+            }
+            searchURL = searchURL.deletingLastPathComponent()
+        }
+
+        // For standalone binaries (not in a bundle), check for dSYM adjacent to binary
+        // Binary: /path/to/Foo
+        // dSYM:   /path/to/Foo.dSYM/Contents/Resources/DWARF/Foo
+        if !foundBundle {
+            let adjacentDsym = binaryURL
+                .deletingLastPathComponent()
+                .appendingPathComponent("\(binaryName).dSYM")
+                .appendingPathComponent("Contents/Resources/DWARF")
+                .appendingPathComponent(binaryName)
+                .path
+            if fm.fileExists(atPath: adjacentDsym) {
+                paths.append(adjacentDsym)
+            }
+        }
+
+        // Always try the original binary path last
+        paths.append(binaryPath)
+
+        return paths
     }
 
     deinit {
