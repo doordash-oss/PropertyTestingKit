@@ -9,6 +9,18 @@ import Dependencies
 import Foundation
 import Testing
 
+// MARK: - Seed Task Result
+
+/// Result type for parallel seed execution.
+/// Defined at file scope because Swift doesn't allow nested types in generic functions.
+struct SeedTaskResult: Sendable {
+    let index: Int
+    let signature: CoverageSignature?
+    let error: (any Error)?
+    let timedOut: Bool
+    let timeout: TimeInterval
+}
+
 // MARK: - FuzzEngine
 
 /// A coverage-guided fuzzing engine.
@@ -293,18 +305,18 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
     /// - Returns: The fuzz result with corpus and any failures.
     public func run(
         additionalSeeds: [(repeat each Input)] = [],
-        test: @escaping ((repeat each Input)) throws -> Void
-    ) -> FuzzResult<repeat each Input> {
+        test: @escaping @Sendable ((repeat each Input)) throws -> Void
+    ) async -> FuzzResult<repeat each Input> {
         // No lock needed - SanitizerCoverage uses task-keyed maps that provide
         // true per-task isolation, even when tasks share threads.
-        runWithMode(additionalSeeds: additionalSeeds, test: test)
+        await runWithMode(additionalSeeds: additionalSeeds, test: test)
     }
 
     /// Internal dispatch based on corpus mode.
     private func runWithMode(
         additionalSeeds: [(repeat each Input)],
-        test: @escaping ((repeat each Input)) throws -> Void
-    ) -> FuzzResult<repeat each Input> {
+        test: @escaping @Sendable ((repeat each Input)) throws -> Void
+    ) async -> FuzzResult<repeat each Input> {
         let corpusExists = corpusDirectory.map { Corpus<repeat each Input>.exists(at: $0) } ?? false
 
         // Handle refuzzReplace: delete corpus and fuzz fresh
@@ -315,7 +327,7 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
                 }
                 try? Corpus<repeat each Input>.delete(from: directory)
             }
-            return runFuzzing(additionalSeeds: additionalSeeds, test: test)
+            return await runFuzzing(additionalSeeds: additionalSeeds, test: test)
         }
 
         // Handle refuzzExtend: load corpus as seeds and continue fuzzing
@@ -337,7 +349,7 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
                     }
                 }
             }
-            return runFuzzing(additionalSeeds: allSeeds, test: test)
+            return await runFuzzing(additionalSeeds: allSeeds, test: test)
         }
 
         // Handle regressionOnly: only run regression, return empty if no corpus
@@ -350,7 +362,7 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
             }
             do {
                 let savedCorpus = try Corpus<repeat each Input>.load(from: directory)
-                return runRegression(corpus: savedCorpus, test: test)
+                return await runRegression(corpus: savedCorpus, test: test)
             } catch {
                 if config.verbose {
                     print("[Fuzz] Mode: regressionOnly - failed to load corpus: \(error)")
@@ -364,7 +376,7 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
             do {
                 let savedCorpus = try Corpus<repeat each Input>.load(from: directory)
                 if CorpusSchema.isCompatible(savedCorpus.schemaVersion) {
-                    return runRegression(corpus: savedCorpus, test: test)
+                    return await runRegression(corpus: savedCorpus, test: test)
                 } else {
                     if config.verbose {
                         print("[Fuzz] Schema changed, re-fuzzing...")
@@ -377,7 +389,7 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
             }
         }
 
-        return runFuzzing(additionalSeeds: additionalSeeds, test: test)
+        return await runFuzzing(additionalSeeds: additionalSeeds, test: test)
     }
 
     /// Create an empty result for regression-only mode when no corpus exists.
@@ -406,8 +418,8 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
 
     private func runFuzzing(
         additionalSeeds: [(repeat each Input)] = [],
-        test: @escaping ((repeat each Input)) throws -> Void
-    ) -> FuzzResult<repeat each Input> {
+        test: @escaping @Sendable ((repeat each Input)) throws -> Void
+    ) async -> FuzzResult<repeat each Input> {
         @Dependency(\.coverageCounters) var coverageCounters
 
         let startTime = dateClient.now()
@@ -443,100 +455,109 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
         }
 
         // Phase 1: Seed with boundary values (defaults + user-provided)
-        // Use mutator seeds if provided, otherwise use Fuzzable defaults
+        // Run seeds in parallel using Swift structured concurrency
+        // Each Task gets its own coverage map via swift_task_getCurrent()
         let defaultSeeds = mutatorSeeds?() ?? cartesianProductFuzz()
         let seedInputs = defaultSeeds + additionalSeeds
-        for input in seedInputs {
-            // Reset coverage and value profile for this test
-            // Task-isolated: only affects this task's counters
-            coverageCounters.reset()
-            if config.enableValueProfile {
-                valueProfileTracker.reset()
-            }
 
-            // Run test - with optional timeout if configured
-            var testError: Error?
-            var timedOut = false
+        // Phase 1: Run seeds in parallel using withTaskGroup
+        // Each task gets isolated coverage via swift_task_getCurrent()
+        let perTimeout = config.perInputTimeout
+        let verbose = config.verbose
 
-            if let perTimeout = config.perInputTimeout {
-                // With timeout - use DispatchSemaphore for synchronization
-                let semaphore = DispatchSemaphore(value: 0)
-                let lock = NSLock()
-                nonisolated(unsafe) var capturedError: Error?
+        // Capture coverage client before task group to satisfy Sendable requirements
+        let coverageClient = coverageCounters
 
-                DispatchQueue.global(qos: .userInitiated).async {
-                    do {
-                        try test(input)
-                    } catch {
-                        lock.lock()
-                        capturedError = error
-                        lock.unlock()
+        let seedResults = await withTaskGroup(
+            of: SeedTaskResult.self,
+            returning: [SeedTaskResult].self
+        ) { group in
+            for (index, input) in seedInputs.enumerated() {
+                group.addTask {
+                    // Reset coverage for this task (task-isolated via swift_task_getCurrent)
+                    coverageClient.reset()
+
+                    // Run test with optional timeout
+                    var testError: (any Error)?
+                    var timedOut = false
+
+                    if let timeout = perTimeout {
+                        // Race test against timeout
+                        do {
+                            try await withThrowingTaskGroup(of: Void.self) { timeoutGroup in
+                                timeoutGroup.addTask {
+                                    try test(input)
+                                }
+                                timeoutGroup.addTask {
+                                    try await Task.sleep(nanoseconds: UInt64(timeout * 1_000_000_000))
+                                    throw HangDetectedError(timeout: timeout)
+                                }
+                                _ = try await timeoutGroup.next()
+                                timeoutGroup.cancelAll()
+                            }
+                        } catch is HangDetectedError {
+                            timedOut = true
+                        } catch {
+                            testError = error
+                        }
+                    } else {
+                        // No timeout - run directly
+                        do {
+                            try test(input)
+                        } catch {
+                            testError = error
+                        }
                     }
-                    semaphore.signal()
-                }
 
-                let waitResult = semaphore.wait(timeout: .now() + perTimeout)
-                if waitResult == .timedOut {
-                    timedOut = true
-                } else {
-                    lock.lock()
-                    testError = capturedError
-                    lock.unlock()
-                }
-            } else {
-                // No timeout - run directly
-                do {
-                    try test(input)
-                } catch {
-                    testError = error
+                    // Get coverage snapshot for this task
+                    let signature: CoverageSignature?
+                    if let sparseCoverage = coverageClient.snapshotCoveredOnly() {
+                        signature = CoverageSignature(sparseCoverage: sparseCoverage)
+                    } else {
+                        signature = nil
+                    }
+
+                    return SeedTaskResult(
+                        index: index,
+                        signature: signature,
+                        error: testError,
+                        timedOut: timedOut,
+                        timeout: perTimeout ?? 0
+                    )
                 }
             }
 
-            // Handle test result
-            if timedOut {
-                let timeout = config.perInputTimeout ?? 0
-                hangs.append((input, timeout))
-                if config.verbose {
-                    print("[Fuzz] Hang detected in seed: input timed out after \(timeout)s")
+            // Collect results
+            var results: [SeedTaskResult] = []
+            for await result in group {
+                results.append(result)
+            }
+            // Sort by index to maintain deterministic corpus building
+            return results.sorted { $0.index < $1.index }
+        }
+
+        // Process results sequentially to build corpus
+        for result in seedResults {
+            let input = seedInputs[result.index]
+
+            // Handle test failures and hangs
+            if result.timedOut {
+                hangs.append((input, result.timeout))
+                if verbose {
+                    print("[Fuzz] Hang detected in seed: input timed out after \(result.timeout)s")
                 }
-            } else if let error = testError {
+            } else if let error = result.error {
                 failures.append((input, error))
             }
 
-            // Process value profile improvements
-            let vpImprovements = config.enableValueProfile ? valueProfileTracker.processComparisons() : []
-
-            // Get coverage snapshot (task-isolated, no diff needed)
-            // Use sparse snapshot for efficiency - only iterates non-zero counters
-            if let sparseCoverage = coverageCounters.snapshotCoveredOnly() {
-                let signature = CoverageSignature(sparseCoverage: sparseCoverage)
-                let addedForCoverage = corpus.addIfInteresting(input: repeat each input, signature: signature)
+            // Add to corpus if we have coverage (using tuple overload)
+            if let signature = result.signature {
+                let addedForCoverage = corpus.addIfInteresting(input: input, signature: signature)
 
                 if addedForCoverage {
                     iterationsSinceNewCoverage = 0
-                    if config.verbose {
+                    if verbose {
                         print("[Fuzz] New coverage from seed: \(corpus.count) entries")
-                    }
-                    // CRITICAL: Even when we found new coverage, check for VP targets to continue the chain.
-                    if config.enableValueProfile && !vpImprovements.isEmpty {
-                        let newTargets = valueProfileTracker.extractTargets()
-                        if !newTargets.isEmpty {
-                            priorityMutationIndex = corpus.count - 1
-                            savedTargets = newTargets
-                            if config.verbose {
-                                print("[Fuzz] Coverage + VP chain from seed: \(newTargets.count) target(s)")
-                            }
-                        }
-                    }
-                } else if !vpImprovements.isEmpty {
-                    // Input made progress on comparisons (new comparison or closer distance)
-                    // Always add to corpus to preserve incremental progress
-                    corpus.add(input: repeat each input, signature: signature)
-                    priorityMutationIndex = corpus.count - 1  // Prioritize this entry next
-                    savedTargets = valueProfileTracker.extractTargets()  // Save targets for follow-up
-                    iterationsSinceNewCoverage = 0
-                    if config.verbose {
-                        print("[Fuzz] Value profile progress from seed: \(vpImprovements.count) comparison(s), \(savedTargets.count) target(s)")
                     }
                 }
             }
@@ -730,29 +751,25 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
             var timedOut = false
 
             if let perTimeout = config.perInputTimeout {
-                // With timeout - use DispatchSemaphore for synchronization
-                let semaphore = DispatchSemaphore(value: 0)
-                let lock = NSLock()
-                nonisolated(unsafe) var capturedError: Error?
-
-                DispatchQueue.global(qos: .userInitiated).async {
-                    do {
-                        try test(input)
-                    } catch {
-                        lock.lock()
-                        capturedError = error
-                        lock.unlock()
+                // With timeout - race test against timeout using async
+                do {
+                    try await withThrowingTaskGroup(of: Void.self) { timeoutGroup in
+                        timeoutGroup.addTask {
+                            try test(input)
+                        }
+                        timeoutGroup.addTask {
+                            try await Task.sleep(nanoseconds: UInt64(perTimeout * 1_000_000_000))
+                            throw HangDetectedError(timeout: perTimeout)
+                        }
+                        // Wait for first to complete
+                        _ = try await timeoutGroup.next()
+                        // Cancel the other
+                        timeoutGroup.cancelAll()
                     }
-                    semaphore.signal()
-                }
-
-                let waitResult = semaphore.wait(timeout: .now() + perTimeout)
-                if waitResult == .timedOut {
+                } catch is HangDetectedError {
                     timedOut = true
-                } else {
-                    lock.lock()
-                    testError = capturedError
-                    lock.unlock()
+                } catch {
+                    testError = error
                 }
             } else {
                 // No timeout - run directly
@@ -992,8 +1009,8 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
 
     private func runRegression(
         corpus: Corpus<repeat each Input>,
-        test: @escaping ((repeat each Input)) throws -> Void
-    ) -> FuzzResult<repeat each Input> {
+        test: @escaping @Sendable ((repeat each Input)) throws -> Void
+    ) async -> FuzzResult<repeat each Input> {
         @Dependency(\.coverageCounters) var coverageCounters
 
         let startTime = dateClient.now()
@@ -1044,7 +1061,7 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
             if let directory = corpusDirectory {
                 try? Corpus<repeat each Input>.delete(from: directory)
             }
-            return runFuzzing(test: test)
+            return await runFuzzing(test: test)
         }
 
         let duration = dateClient.now().timeIntervalSince(startTime)

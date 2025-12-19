@@ -277,6 +277,19 @@ public struct Corpus<each Input: Codable & Sendable>: Sendable, Codable {
         signature: CoverageSignature,
         parentIndex: Int? = nil
     ) -> Bool {
+        return addIfInteresting(
+            input: (repeat each input),
+            signature: signature,
+            parentIndex: parentIndex
+        )
+    }
+
+    @discardableResult
+    public mutating func addIfInteresting(
+        input: (repeat each Input),
+        signature: CoverageSignature,
+        parentIndex: Int? = nil
+    ) -> Bool {
         // Check if this signature adds new coverage
         guard signature.hasUniqueCoverage(comparedTo: totalCoverage) else {
             return false

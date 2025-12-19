@@ -8,14 +8,14 @@ import FunctionSpy
 struct CustomFuzzableTests {
 
     @Test("Custom struct generates fuzz values")
-    func testCustomFuzzable() {
+    func testCustomFuzzable() async {
         let values = TestConfig.fuzz
         #expect(!values.isEmpty)
         print("TestConfig.fuzz generated \(values.count) values")
     }
 
     @Test("Custom struct mutations work")
-    func testCustomMutation() {
+    func testCustomMutation() async {
         let original = TestConfig(timeout: 10, retries: 3)
         let mutations = original.mutate()
 
@@ -24,7 +24,7 @@ struct CustomFuzzableTests {
     }
 
     @Test("FuzzEngine works with custom types")
-    func testFuzzEngineWithCustomType() {
+    func testFuzzEngineWithCustomType() async {
         nonisolated(unsafe) var callCount = 0
         let (snapshotSpy, snapshotFn) = spy { () -> SanCovCounters? in
             callCount += 1
@@ -33,7 +33,7 @@ struct CustomFuzzableTests {
             return SanCovCounters(counters: counters)
         }
 
-        let result = withDependencies {
+        let result = await withDependencies {
             $0.coverageCounters = CoverageCountersClient(snapshot: snapshotFn, reset: {}, isAvailable: { true })
         } operation: {
             let config = FuzzEngine<TestConfig>.Config(
@@ -44,7 +44,7 @@ struct CustomFuzzableTests {
 
             let engine = FuzzEngine<TestConfig>(config: config, corpusDirectory: nil)
 
-            return engine.run { _ in
+            return await engine.run { _ in
                 // Note: Cannot access input properties due to compiler limitation with variadic generics
                 // This test validates that the engine runs with custom types
             }

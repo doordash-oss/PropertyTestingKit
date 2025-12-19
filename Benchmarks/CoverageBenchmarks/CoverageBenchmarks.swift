@@ -240,7 +240,7 @@ let benchmarks: @Sendable () -> Void = {
         )
     ) { benchmark in
         for _ in benchmark.scaledIterations {
-            let _ = try? fuzz(
+            let _ = try? await fuzz(
                 iterations: 100,
                 duration: 1,
                 corpusMode: .refuzzReplace,
@@ -269,7 +269,7 @@ let benchmarks: @Sendable () -> Void = {
                 corpusMode: .refuzzReplace
             )
             let engine = FuzzEngine<Int>(config: config)
-            let _ = engine.run { input in
+            let _ = await engine.run { input in
                 try parseAndValidate(input)
             }
         }
@@ -286,7 +286,7 @@ let benchmarks: @Sendable () -> Void = {
         )
     ) { benchmark in
         for _ in benchmark.scaledIterations {
-            let _ = try? fuzz(
+            let _ = try? await fuzz(
                 iterations: 100,
                 duration: 1,
                 corpusMode: .refuzzReplace,
@@ -308,7 +308,7 @@ let benchmarks: @Sendable () -> Void = {
         )
     ) { benchmark in
         for _ in benchmark.scaledIterations {
-            let _ = try? fuzz(
+            let _ = try? await fuzz(
                 iterations: 100,
                 duration: 1,
                 corpusMode: .refuzzReplace,
@@ -330,7 +330,7 @@ let benchmarks: @Sendable () -> Void = {
         )
     ) { benchmark in
         for _ in benchmark.scaledIterations {
-            let _ = try? fuzz(
+            let _ = try? await fuzz(
                 iterations: 1000,
                 duration: 10,
                 corpusMode: .refuzzReplace,
@@ -352,7 +352,7 @@ let benchmarks: @Sendable () -> Void = {
         )
     ) { benchmark in
         for _ in benchmark.scaledIterations {
-            let _ = try? fuzz(
+            let _ = try? await fuzz(
                 iterations: 1000,
                 duration: 10,
                 corpusMode: .refuzzReplace,
@@ -374,7 +374,7 @@ let benchmarks: @Sendable () -> Void = {
         )
     ) { benchmark in
         for _ in benchmark.scaledIterations {
-            let _ = try? fuzz(
+            let _ = try? await fuzz(
                 iterations: 100,
                 duration: 5,
                 corpusMode: .refuzzReplace,
@@ -402,7 +402,7 @@ let benchmarks: @Sendable () -> Void = {
                 corpusMode: .refuzzReplace
             )
             let engine = FuzzEngine<EmptyFuzzable>(config: config, corpusDirectory: nil)
-            let _ = engine.run { _ in }
+            let _ = await engine.run { _ in }
         }
     }
 
@@ -702,42 +702,6 @@ let benchmarks: @Sendable () -> Void = {
         }
     }
 
-    // MARK: - Fuzz Loop Simulation Benchmarks
-    // These benchmarks isolate specific parts of the fuzz loop to find bottlenecks
-
-    Benchmark(
-        "Fuzz loop iteration - mutate + signature + corpus check",
-        configuration: .init(
-            metrics: [.cpuTotal, .wallClock, .mallocCountTotal],
-            warmupIterations: 10,
-            scalingFactor: .kilo
-        )
-    ) { benchmark in
-        // Setup: create a corpus with some entries
-        var corpus = Corpus<Int>(schemaVersion: "bench-v1")
-        for i in 0..<10 {
-            let sig = CoverageSignature(sparseCoverage: makeSparseCoverage(
-                coveredCount: typicalCoveredEdges + i,
-                totalEdges: totalEdges
-            ))
-            corpus.add(input: i * 100, signature: sig)
-        }
-
-        // Simulate one fuzz iteration: mutate -> create signature -> check corpus
-        for _ in benchmark.scaledIterations {
-            // 1. Select and mutate
-            let parent = corpus.selectForMutation()!
-            let entry = corpus.entries[parent]
-            let mutated = entry.input.mutate().randomElement() ?? entry.input
-
-            // 2. Create coverage signature (simulated sparse coverage)
-            let sig = CoverageSignature(sparseCoverage: sparseSmall)
-
-            // 3. Check if interesting
-            blackHole(corpus.addIfInteresting(input: mutated, signature: sig))
-        }
-    }
-
     Benchmark(
         "Int.fuzz generation",
         configuration: .init(
@@ -776,75 +740,6 @@ let benchmarks: @Sendable () -> Void = {
             blackHole([Int].fuzz)
         }
     }
-
-    Benchmark(
-        "Date.now() call overhead",
-        configuration: .init(
-            metrics: [.cpuTotal, .wallClock],
-            warmupIterations: 100,
-            scalingFactor: .kilo
-        )
-    ) { benchmark in
-        for _ in benchmark.scaledIterations {
-            blackHole(Date())
-        }
-    }
-
-    Benchmark(
-        "CFAbsoluteTimeGetCurrent() call overhead",
-        configuration: .init(
-            metrics: [.cpuTotal, .wallClock],
-            warmupIterations: 100,
-            scalingFactor: .kilo
-        )
-    ) { benchmark in
-        for _ in benchmark.scaledIterations {
-            blackHole(CFAbsoluteTimeGetCurrent())
-        }
-    }
-
-    Benchmark(
-        "Double.random() call overhead",
-        configuration: .init(
-            metrics: [.cpuTotal, .wallClock],
-            warmupIterations: 100,
-            scalingFactor: .kilo
-        )
-    ) { benchmark in
-        for _ in benchmark.scaledIterations {
-            blackHole(Double.random(in: 0..<1))
-        }
-    }
-
-    Benchmark(
-        "Array.randomElement() - small array",
-        configuration: .init(
-            metrics: [.cpuTotal, .wallClock],
-            warmupIterations: 100,
-            scalingFactor: .kilo
-        )
-    ) { benchmark in
-        let array = Array(1...10)
-        for _ in benchmark.scaledIterations {
-            blackHole(array.randomElement())
-        }
-    }
-
-    Benchmark(
-        "NSLock lock/unlock cycle",
-        configuration: .init(
-            metrics: [.cpuTotal, .wallClock],
-            warmupIterations: 100,
-            scalingFactor: .kilo
-        )
-    ) { benchmark in
-        let lock = NSLock()
-        for _ in benchmark.scaledIterations {
-            lock.lock()
-            lock.unlock()
-        }
-    }
-
     // MARK: - Fuzz Overhead Deep Dive Benchmarks
 
     Benchmark(
@@ -858,7 +753,7 @@ let benchmarks: @Sendable () -> Void = {
         )
     ) { benchmark in
         for _ in benchmark.scaledIterations {
-            let _ = try? fuzz(
+            let _ = try? await fuzz(
                 iterations: 10,
                 duration: 1,
                 corpusMode: .refuzzReplace,
@@ -881,7 +776,7 @@ let benchmarks: @Sendable () -> Void = {
         )
     ) { benchmark in
         for _ in benchmark.scaledIterations {
-            let _ = try? fuzz(
+            let _ = try? await fuzz(
                 iterations: 50,
                 duration: 1,
                 corpusMode: .refuzzReplace,

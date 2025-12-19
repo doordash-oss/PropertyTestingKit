@@ -77,11 +77,11 @@ struct FuzzerStressTests {
     // MARK: - Easy Tests (should achieve 100% coverage quickly)
 
     @Test("Easy: Greater-than comparison")
-    func easyGreaterThanCoverage() throws {
-        var seenAbove = false
-        var seenBelow = false
+    func easyGreaterThanCoverage() async throws {
+        nonisolated(unsafe) var seenAbove = false
+        nonisolated(unsafe) var seenBelow = false
 
-        let result = try fuzz(
+        let result = try await fuzz(
             iterations: 100,
             duration: 5
         ) { (num: Int) in
@@ -96,11 +96,11 @@ struct FuzzerStressTests {
     }
 
     @Test("Easy: Negative check")
-    func easyNegativeCheckCoverage() throws {
-        var seenNegative = false
-        var seenNonNegative = false
+    func easyNegativeCheckCoverage() async throws {
+        nonisolated(unsafe) var seenNegative = false
+        nonisolated(unsafe) var seenNonNegative = false
 
-        let result = try fuzz(
+        let result = try await fuzz(
             iterations: 100,
             duration: 5
         ) { (num: Int) in
@@ -115,11 +115,11 @@ struct FuzzerStressTests {
     }
 
     @Test("Easy: Empty string check")
-    func easyEmptyStringCoverage() throws {
-        var seenEmpty = false
-        var seenNonEmpty = false
+    func easyEmptyStringCoverage() async throws {
+        nonisolated(unsafe) var seenEmpty = false
+        nonisolated(unsafe) var seenNonEmpty = false
 
-        let result = try fuzz(
+        let result = try await fuzz(
             iterations: 100,
             duration: 5
         ) { (str: String) in
@@ -136,11 +136,11 @@ struct FuzzerStressTests {
     // MARK: - Medium Tests (should achieve coverage with some effort)
 
     @Test("Medium: Range check [100, 200]")
-    func mediumRangeCheckCoverage() throws {
-        var seenInRange = false
-        var seenOutOfRange = false
+    func mediumRangeCheckCoverage() async throws {
+        nonisolated(unsafe) var seenInRange = false
+        nonisolated(unsafe) var seenOutOfRange = false
 
-        let result = try fuzz(
+        let result = try await fuzz(
             iterations: 500,
             duration: 10
         ) { (num: Int) in
@@ -155,11 +155,11 @@ struct FuzzerStressTests {
     }
 
     @Test("Medium: String length == 5")
-    func mediumLengthCheckCoverage() throws {
-        var seenFiveChars = false
-        var seenOtherLength = false
+    func mediumLengthCheckCoverage() async throws {
+        nonisolated(unsafe) var seenFiveChars = false
+        nonisolated(unsafe) var seenOtherLength = false
 
-        let result = try fuzz(
+        let result = try await fuzz(
             iterations: 500,
             duration: 10
         ) { (str: String) in
@@ -174,11 +174,11 @@ struct FuzzerStressTests {
     }
 
     @Test("Medium: Two conditions (a > 50 && b < 10)")
-    func mediumTwoConditionsCoverage() throws {
-        var seenBothTrue = false
-        var seenNotBoth = false
+    func mediumTwoConditionsCoverage() async throws {
+        nonisolated(unsafe) var seenBothTrue = false
+        nonisolated(unsafe) var seenNotBoth = false
 
-        let result = try fuzz(
+        let result = try await fuzz(
             iterations: 500,
             duration: 10
         ) { (a: Int, b: Int) in
@@ -195,11 +195,11 @@ struct FuzzerStressTests {
     // MARK: - Hard Tests (magic numbers - requires value profile guidance)
 
     @Test("Hard: Magic number 12324")
-    func hardMagicNumberCoverage() throws {
-        var seenMagic = false
-        var seenOrdinary = false
+    func hardMagicNumberCoverage() async throws {
+        nonisolated(unsafe) var seenMagic = false
+        nonisolated(unsafe) var seenOrdinary = false
 
-        let result = try fuzz(
+        let result = try await fuzz(
             iterations: 1000,
             duration: 10
         ) { (num: Int) in
@@ -214,11 +214,11 @@ struct FuzzerStressTests {
     }
 
     @Test("Hard: Large magic number 98765432")
-    func hardLargeMagicNumberCoverage() throws {
-        var seenMagic = false
-        var seenOrdinary = false
+    func hardLargeMagicNumberCoverage() async throws {
+        nonisolated(unsafe) var seenMagic = false
+        nonisolated(unsafe) var seenOrdinary = false
 
-        let result = try fuzz(
+        let result = try await fuzz(
             iterations: 1000,
             duration: 10
         ) { (num: Int) in
@@ -233,11 +233,11 @@ struct FuzzerStressTests {
     }
 
     @Test("Hard: Magic string 'xyzzy'")
-    func hardMagicStringCoverage() throws {
-        var seenMagic = false
-        var seenOrdinary = false
+    func hardMagicStringCoverage() async throws {
+        nonisolated(unsafe) var seenMagic = false
+        nonisolated(unsafe) var seenOrdinary = false
 
-        let result = try fuzz(
+        let result = try await fuzz(
             iterations: 1000,
             duration: 10
         ) { (str: String) in
@@ -252,11 +252,11 @@ struct FuzzerStressTests {
     }
 
     @Test("Hard: Magic prefix 'SECRET_'")
-    func hardMagicPrefixCoverage() throws {
-        var seenSecret = false
-        var seenPublic = false
+    func hardMagicPrefixCoverage() async throws {
+        nonisolated(unsafe) var seenSecret = false
+        nonisolated(unsafe) var seenPublic = false
 
-        let result = try fuzz(
+        let result = try await fuzz(
             iterations: 1000,
             duration: 10
         ) { (str: String) in
@@ -273,13 +273,13 @@ struct FuzzerStressTests {
     // MARK: - Very Hard Tests (multiple magic conditions)
 
     @Test("Very Hard: Two magic numbers (42, 1337)")
-    func veryHardTwoMagicNumbersCoverage() throws {
-        var seenBothMagic = false
-        var seenFirstMagic = false
-        var seenSecondMagic = false
-        var seenNeither = false
+    func veryHardTwoMagicNumbersCoverage() async throws {
+        nonisolated(unsafe) var seenBothMagic = false
+        nonisolated(unsafe) var seenFirstMagic = false
+        nonisolated(unsafe) var seenSecondMagic = false
+        nonisolated(unsafe) var seenNeither = false
 
-        let result = try fuzz(
+        let result = try await fuzz(
             iterations: 500,
             duration: 10
         ) { (a: Int, b: Int) in
@@ -299,11 +299,11 @@ struct FuzzerStressTests {
     }
 
     @Test("Very Hard: Checksum (b == a * 7 + 3)")
-    func veryHardChecksumCoverage() throws {
-        var seenValid = false
-        var seenInvalid = false
+    func veryHardChecksumCoverage() async throws {
+        nonisolated(unsafe) var seenValid = false
+        nonisolated(unsafe) var seenInvalid = false
 
-        let result = try fuzz(
+        let result = try await fuzz(
             iterations: 1000,
             duration: 10
         ) { (a: Int, b: Int) in
@@ -318,14 +318,14 @@ struct FuzzerStressTests {
     }
 
     @Test("Very Hard: Nested conditions (1001-1999, div by 77)")
-    func veryHardNestedMagicCoverage() throws {
-        var seenDeeplyNested = false
-        var seenDivBy7 = false
-        var seenInRange = false
-        var seenAbove2000 = false
-        var seenBelow1000 = false
+    func veryHardNestedMagicCoverage() async throws {
+        nonisolated(unsafe) var seenDeeplyNested = false
+        nonisolated(unsafe) var seenDivBy7 = false
+        nonisolated(unsafe) var seenInRange = false
+        nonisolated(unsafe) var seenAbove2000 = false
+        nonisolated(unsafe) var seenBelow1000 = false
 
-        let result = try fuzz(
+        let result = try await fuzz(
             iterations: 500,
             duration: 10
         ) { (num: Int) in
@@ -347,11 +347,11 @@ struct FuzzerStressTests {
     }
 
     @Test("Very Hard: Hash match (sum mod 1000 == 777)")
-    func veryHardHashMatchCoverage() throws {
-        var seenMatch = false
-        var seenMismatch = false
+    func veryHardHashMatchCoverage() async throws {
+        nonisolated(unsafe) var seenMatch = false
+        nonisolated(unsafe) var seenMismatch = false
 
-        let result = try fuzz(
+        let result = try await fuzz(
             iterations: 500,
             duration: 10
         ) { (str: String) in
@@ -370,11 +370,11 @@ struct FuzzerStressTests {
     }
 
     @Test("Very Hard: Modulo sum ((a + b) % 1000 == 777)")
-    func veryHardModuloSumCoverage() throws {
-        var seenMatch = false
-        var seenMismatch = false
+    func veryHardModuloSumCoverage() async throws {
+        nonisolated(unsafe) var seenMatch = false
+        nonisolated(unsafe) var seenMismatch = false
 
-        let result = try fuzz(
+        let result = try await fuzz(
             iterations: 1000,
             duration: 10
         ) { (a: Int, b: Int) in
@@ -391,11 +391,11 @@ struct FuzzerStressTests {
     // MARK: - Extreme Tests (practically impossible without special techniques)
 
     @Test("Extreme: 64-bit magic number")
-    func extremeMagic64Coverage() throws {
-        var seenMagic = false
-        var seenOrdinary = false
+    func extremeMagic64Coverage() async throws {
+        nonisolated(unsafe) var seenMagic = false
+        nonisolated(unsafe) var seenOrdinary = false
 
-        let result = try fuzz(
+        let result = try await fuzz(
             iterations: 1000,
             duration: 10
         ) { (num: Int) in
@@ -410,12 +410,12 @@ struct FuzzerStressTests {
     }
 
     @Test("Extreme: Three-value sequence (111, 222, 333)")
-    func extremeSequenceCoverage() throws {
-        var seenMatch = false
-        var seenMismatch = false
+    func extremeSequenceCoverage() async throws {
+        nonisolated(unsafe) var seenMatch = false
+        nonisolated(unsafe) var seenMismatch = false
 
         // With 3 Int inputs, seeds = 21^3 = 9261, so we need extra iterations for mutations
-        let result = try fuzz(
+        let result = try await fuzz(
             iterations: 15000,
             duration: 30
         ) { (a: Int, b: Int, c: Int) in
@@ -430,11 +430,11 @@ struct FuzzerStressTests {
     }
 
     @Test("Extreme: Password string")
-    func extremePasswordCoverage() throws {
-        var seenGranted = false
-        var seenDenied = false
+    func extremePasswordCoverage() async throws {
+        nonisolated(unsafe) var seenGranted = false
+        nonisolated(unsafe) var seenDenied = false
 
-        let result = try fuzz(
+        let result = try await fuzz(
             iterations: 1000,
             duration: 10
         ) { (str: String) in
@@ -455,13 +455,13 @@ struct FuzzerStressTests {
     // MARK: - String Dictionary Tests (dynamic string capture)
 
     @Test("Extreme: Dynamic password with string dictionary")
-    func extremeDynamicPasswordCoverage() throws {
-        var seenMatch = false
-        var seenMismatch = false
+    func extremeDynamicPasswordCoverage() async throws {
+        nonisolated(unsafe) var seenMatch = false
+        nonisolated(unsafe) var seenMismatch = false
 
         // The string dictionary should capture "token_2024_secret" at runtime
         // and use it for mutations
-        let result = try fuzz(
+        let result = try await fuzz(
             iterations: 2000,
             duration: 20
         ) { (str: String) in
@@ -480,14 +480,14 @@ struct FuzzerStressTests {
     }
 
     @Test("Extreme: Multiple dynamic strings with string dictionary", .disabled())
-    func extremeMultipleDynamicStringsCoverage() throws {
-        var seenFullMatch = false
-        var seenPrefixMatch = false
-        var seenSuffixMatch = false
-        var seenNoMatch = false
+    func extremeMultipleDynamicStringsCoverage() async throws {
+        nonisolated(unsafe) var seenFullMatch = false
+        nonisolated(unsafe) var seenPrefixMatch = false
+        nonisolated(unsafe) var seenSuffixMatch = false
+        nonisolated(unsafe) var seenNoMatch = false
 
         // The string dictionary should capture "admin", "_root", and "admin_root"
-        let result = try fuzz(
+        let result = try await fuzz(
             iterations: 2000,
             duration: 20
         ) { (str: String) in
@@ -509,11 +509,11 @@ struct FuzzerStressTests {
     // MARK: - Loop-Based Tests
 
     @Test("Easy Loop: Find first element above threshold")
-    func easyLoopFindFirstCoverage() throws {
-        var seenFound = false
-        var seenNotFound = false
+    func easyLoopFindFirstCoverage() async throws {
+        nonisolated(unsafe) var seenFound = false
+        nonisolated(unsafe) var seenNotFound = false
 
-        let result = try fuzz(
+        let result = try await fuzz(
             iterations: 200,
             duration: 5
         ) { (values: [Int], threshold: Int) in
@@ -528,12 +528,12 @@ struct FuzzerStressTests {
     }
 
     @Test("Easy Loop: Count matching elements")
-    func easyLoopCountCoverage() throws {
-        var seenMany = false
-        var seenFew = false
-        var seenNone = false
+    func easyLoopCountCoverage() async throws {
+        nonisolated(unsafe) var seenMany = false
+        nonisolated(unsafe) var seenFew = false
+        nonisolated(unsafe) var seenNone = false
 
-        let result = try fuzz(
+        let result = try await fuzz(
             iterations: 500,
             duration: 10
         ) { (values: [Int], target: Int) in
@@ -550,12 +550,12 @@ struct FuzzerStressTests {
     }
 
     @Test("Medium Loop: Accumulator with threshold")
-    func mediumLoopAccumulatorCoverage() throws {
-        var seenExceeded = false
-        var seenExact = false
-        var seenBelow = false
+    func mediumLoopAccumulatorCoverage() async throws {
+        nonisolated(unsafe) var seenExceeded = false
+        nonisolated(unsafe) var seenExact = false
+        nonisolated(unsafe) var seenBelow = false
 
-        let result = try fuzz(
+        let result = try await fuzz(
             iterations: 500,
             duration: 10
         ) { (values: [Int], threshold: Int) in
@@ -572,12 +572,12 @@ struct FuzzerStressTests {
     }
 
     @Test("Medium Loop: Index-dependent condition")
-    func mediumLoopIndexDependentCoverage() throws {
-        var seenMagicAt3 = false
-        var seenNegativeAt7 = false
-        var seenNormal = false
+    func mediumLoopIndexDependentCoverage() async throws {
+        nonisolated(unsafe) var seenMagicAt3 = false
+        nonisolated(unsafe) var seenNegativeAt7 = false
+        nonisolated(unsafe) var seenNormal = false
 
-        let result = try fuzz(
+        let result = try await fuzz(
             iterations: 1000,
             duration: 15
         ) { (values: [Int]) in
@@ -599,12 +599,12 @@ struct FuzzerStressTests {
     }
 
     @Test("Medium Loop: General index check 1-20")
-    func mediumLoopGeneralIndexCheckCoverage() throws {
+    func mediumLoopGeneralIndexCheckCoverage() async throws {
         // Track which indices we successfully hit with a negative value
         // Single fuzzer run checks ALL indices - this is realistic usage
-        var hitIndices: Set<Int> = []
+        nonisolated(unsafe) var hitIndices: Set<Int> = []
 
-        let result = try fuzz(
+        let result = try await fuzz(
             iterations: 5000,
             duration: 30
         ) { (values: [Int]) in
@@ -639,12 +639,12 @@ struct FuzzerStressTests {
     }
 
     @Test("Hard Loop: Nested find with magic pair")
-    func hardLoopNestedFindCoverage() throws {
-        var seenMagicPair = false
-        var seenSum100 = false
-        var seenNoSpecial = false
+    func hardLoopNestedFindCoverage() async throws {
+        nonisolated(unsafe) var seenMagicPair = false
+        nonisolated(unsafe) var seenSum100 = false
+        nonisolated(unsafe) var seenNoSpecial = false
 
-        let result = try fuzz(
+        let result = try await fuzz(
             iterations: 1000,
             duration: 15
         ) { (outer: [Int], inner: [Int]) in
@@ -667,13 +667,13 @@ struct FuzzerStressTests {
     }
 
     @Test("Hard Loop: State machine transitions")
-    func hardLoopStateMachineCoverage() throws {
-        var seenIdle = false
-        var seenProcessing = false
-        var seenError = false
-        var seenSuccess = false
+    func hardLoopStateMachineCoverage() async throws {
+        nonisolated(unsafe) var seenIdle = false
+        nonisolated(unsafe) var seenProcessing = false
+        nonisolated(unsafe) var seenError = false
+        nonisolated(unsafe) var seenSuccess = false
 
-        let result = try fuzz(
+        let result = try await fuzz(
             iterations: 1000,
             duration: 15
         ) { (inputs: [Int]) in
@@ -693,11 +693,11 @@ struct FuzzerStressTests {
     }
 
     @Test("Very Hard Loop: Sequence pattern detection")
-    func veryHardLoopSequenceDetectCoverage() throws {
-        var seenFound = false
-        var seenNotFound = false
+    func veryHardLoopSequenceDetectCoverage() async throws {
+        nonisolated(unsafe) var seenFound = false
+        nonisolated(unsafe) var seenNotFound = false
 
-        let result = try fuzz(
+        let result = try await fuzz(
             iterations: 2000,
             duration: 20
         ) { (values: [Int]) in
@@ -715,13 +715,13 @@ struct FuzzerStressTests {
     }
 
     @Test("Very Hard Loop: Checksum validation")
-    func veryHardLoopChecksumCoverage() throws {
-        var seenValid = false
-        var seenZero = false
-        var seenInvalid = false
-        var seenEmpty = false
+    func veryHardLoopChecksumCoverage() async throws {
+        nonisolated(unsafe) var seenValid = false
+        nonisolated(unsafe) var seenZero = false
+        nonisolated(unsafe) var seenInvalid = false
+        nonisolated(unsafe) var seenEmpty = false
 
-        let result = try fuzz(
+        let result = try await fuzz(
             iterations: 1000,
             duration: 15
         ) { (values: [Int]) in
@@ -744,13 +744,13 @@ struct FuzzerStressTests {
     }
 
     @Test("Extreme Loop: Matrix search with constraints")
-    func extremeLoopMatrixSearchCoverage() throws {
-        var seenConstrained = false
-        var seenUnconstrained = false
-        var seenNoMatch = false
-        var seenInvalid = false
+    func extremeLoopMatrixSearchCoverage() async throws {
+        nonisolated(unsafe) var seenConstrained = false
+        nonisolated(unsafe) var seenUnconstrained = false
+        nonisolated(unsafe) var seenNoMatch = false
+        nonisolated(unsafe) var seenInvalid = false
 
-        let result = try fuzz(
+        let result = try await fuzz(
             iterations: 1000,
             duration: 15
         ) { (rows: Int, cols: Int, target: Int) in
@@ -773,13 +773,13 @@ struct FuzzerStressTests {
     }
 
     @Test("Extreme Loop: Convergence with magic iteration count")
-    func extremeLoopConvergenceCoverage() throws {
-        var seenMagic = false
-        var seenConverged = false
-        var seenNotConverged = false
-        var seenInvalid = false
+    func extremeLoopConvergenceCoverage() async throws {
+        nonisolated(unsafe) var seenMagic = false
+        nonisolated(unsafe) var seenConverged = false
+        nonisolated(unsafe) var seenNotConverged = false
+        nonisolated(unsafe) var seenInvalid = false
 
-        let result = try fuzz(
+        let result = try await fuzz(
             iterations: 1000,
             duration: 15
         ) { (start: Int, divisor: Int) in
@@ -804,13 +804,13 @@ struct FuzzerStressTests {
     // MARK: - Large Array Tests
 
     @Test("Large Array: 100+ elements with negative value")
-    func largeArrayWithNegativeCoverage() throws {
-        var seenLargeWithNegative = false
-        var seenLargeAllPositive = false
-        var seenTooSmall = false
-        var maxArraySize = 0
+    func largeArrayWithNegativeCoverage() async throws {
+        nonisolated(unsafe) var seenLargeWithNegative = false
+        nonisolated(unsafe) var seenLargeAllPositive = false
+        nonisolated(unsafe) var seenTooSmall = false
+        nonisolated(unsafe) var maxArraySize = 0
 
-        let result = try fuzz(
+        let result = try await fuzz(
             iterations: 2000,
             duration: 30
         ) { (values: [Int]) in
@@ -830,12 +830,12 @@ struct FuzzerStressTests {
     }
 
     @Test("Very Large Array: 200+ elements")
-    func veryLargeArrayCoverage() throws {
-        var seenVeryLarge = false
-        var seenTooSmall = false
-        var maxArraySize = 0
+    func veryLargeArrayCoverage() async throws {
+        nonisolated(unsafe) var seenVeryLarge = false
+        nonisolated(unsafe) var seenTooSmall = false
+        nonisolated(unsafe) var maxArraySize = 0
 
-        let result = try fuzz(
+        let result = try await fuzz(
             iterations: 3000,
             duration: 45
         ) { (values: [Int]) in

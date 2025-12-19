@@ -99,8 +99,8 @@ public func fuzz<each Input: Fuzzable & Codable & Sendable, each M: Mutator>(
     filePath: StaticString = #filePath,
     function: StaticString = #function,
     line: Int = #line,
-    test: @escaping ((repeat each Input)) throws -> Void
-) throws -> FuzzResult<repeat each Input> where (repeat (each M).Value) == (repeat each Input) {
+    test: @escaping @Sendable ((repeat each Input)) throws -> Void
+) async throws -> FuzzResult<repeat each Input> where (repeat (each M).Value) == (repeat each Input) {
     @Dependency(\.environment) var environment
 
     let config = FuzzEngine<repeat each Input>.Config(
@@ -122,7 +122,7 @@ public func fuzz<each Input: Fuzzable & Codable & Sendable, each M: Mutator>(
         corpusDirectory: corpusDirectory(filePath: filePath, function: function)
     )
 
-    return try reportFuzzResult(engine.run(additionalSeeds: seeds, test: test), filePath: filePath, line: line)
+    return try reportFuzzResult(await engine.run(additionalSeeds: seeds, test: test), filePath: filePath, line: line)
 }
 
 /// Run a coverage-guided fuzz test using the type's `Fuzzable` conformance.
@@ -159,8 +159,8 @@ public func fuzz<each Input: Fuzzable & Codable & Sendable>(
     filePath: StaticString = #filePath,
     function: StaticString = #function,
     line: Int = #line,
-    test: @escaping ((repeat each Input)) throws -> Void
-) throws -> FuzzResult<repeat each Input> {
+    test: @escaping @Sendable ((repeat each Input)) throws -> Void
+) async throws -> FuzzResult<repeat each Input> {
     @Dependency(\.environment) var environment
 
     let config = FuzzEngine<repeat each Input>.Config(
@@ -178,7 +178,7 @@ public func fuzz<each Input: Fuzzable & Codable & Sendable>(
         corpusDirectory: corpusDirectory(filePath: filePath, function: function)
     )
 
-    return try reportFuzzResult(engine.run(additionalSeeds: seeds, test: test), filePath: filePath, line: line)
+    return try reportFuzzResult(await engine.run(additionalSeeds: seeds, test: test), filePath: filePath, line: line)
 }
 
 // MARK: - Fuzz Helpers

@@ -10,7 +10,7 @@ import Testing
 struct ValueProfileDebugTest {
 
     @Test("Debug: Check what comparisons are captured for array size check")
-    func debugArraySizeComparisons() throws {
+    func debugArraySizeComparisons() async throws {
         // Simple function with size check - defined at file scope to ensure it's compiled with instrumentation
         func checkSize(_ values: [Int]) -> String {
             if values.count >= 100 {
@@ -55,7 +55,7 @@ struct ValueProfileDebugTest {
     }
 
     @Test("Debug: Simulate fuzzer VP improvement detection")
-    func debugVPImprovementDetection() throws {
+    func debugVPImprovementDetection() async throws {
         func checkSize(_ values: [Int]) -> String {
             if values.count >= 100 {
                 return "large"
@@ -85,7 +85,7 @@ struct ValueProfileDebugTest {
     }
 
     @Test("Debug: Test array mutations include doubling")
-    func debugArrayMutations() throws {
+    func debugArrayMutations() async throws {
         let arr = [0, 1, -1]  // Size 3
         let mutations = arr.mutate()
 
@@ -108,7 +108,7 @@ struct ValueProfileDebugTest {
     }
 
     @Test("Debug: Count all comparisons in a fuzz iteration")
-    func debugAllComparisons() throws {
+    func debugAllComparisons() async throws {
         func checkSize(_ values: [Int]) -> String {
             if values.count >= 100 {
                 return "large"
@@ -134,11 +134,11 @@ struct ValueProfileDebugTest {
     }
 
     @Test("Debug: Run actual fuzzer with size check")
-    func debugActualFuzzer() throws {
-        var maxArraySize = 0
-        var hitLarge = false
+    func debugActualFuzzer() async throws {
+        nonisolated(unsafe) var maxArraySize = 0
+        nonisolated(unsafe) var hitLarge = false
 
-        let result = try fuzz(
+        let result = try await fuzz(
             iterations: 100,  // Small number
             duration: 60
         ) { (values: [Int]) in

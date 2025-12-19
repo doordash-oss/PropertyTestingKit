@@ -31,7 +31,7 @@ struct DeterministicTimingTests {
     struct FuzzEngineTimeLimitTests {
 
         @Test("FuzzEngine stops when maxDuration is reached")
-        func testStopsAtMaxDuration() {
+        func testStopsAtMaxDuration() async {
             nonisolated(unsafe) var currentTime = Date(timeIntervalSince1970: 0)
             nonisolated(unsafe) var testCount = 0
 
@@ -41,7 +41,7 @@ struct DeterministicTimingTests {
                 return SanCovCounters(counters: counters)
             }
 
-            let result = withDependencies {
+            let result = await withDependencies {
                 $0.dateClient = DateClient(now: { currentTime })
                 $0.coverageCounters = CoverageCountersClient(
                     snapshot: snapshotFn,
@@ -56,7 +56,7 @@ struct DeterministicTimingTests {
                 )
 
                 let engine = FuzzEngine<SingleSeedInt>(config: config, corpusDirectory: nil)
-                return engine.run { _ in
+                return await engine.run { _ in
                     testCount += 1
                     // Advance time by 3 seconds each test
                     currentTime = currentTime.addingTimeInterval(3)
@@ -70,7 +70,7 @@ struct DeterministicTimingTests {
         }
 
         @Test("FuzzEngine duration is computed correctly")
-        func testDurationComputation() {
+        func testDurationComputation() async {
             // Use actor to safely manage mutable state
             final class TestState: @unchecked Sendable {
                 var currentTime = Date(timeIntervalSince1970: 1000)
@@ -101,7 +101,7 @@ struct DeterministicTimingTests {
 
             let state = TestState()
 
-            let result = withDependencies {
+            let result = await withDependencies {
                 $0.dateClient = DateClient(now: { state.now() })
                 $0.coverageCounters = CoverageCountersClient(
                     snapshot: { state.makeCounters() },
@@ -117,7 +117,7 @@ struct DeterministicTimingTests {
                 config.enableValueProfile = false  // Disable to avoid C library interaction
 
                 let engine = FuzzEngine<SingleSeedInt>(config: config, corpusDirectory: nil)
-                return engine.run { _ in
+                return await engine.run { _ in
                     // Advance time by exactly 2.5 seconds each test
                     state.advanceTime(by: 2.5)
                 }
@@ -129,7 +129,7 @@ struct DeterministicTimingTests {
         }
 
         @Test("FuzzEngine prefers iteration limit over time limit when iterations complete first")
-        func testIterationLimitBeforeTimeLimit() {
+        func testIterationLimitBeforeTimeLimit() async {
             nonisolated(unsafe) var currentTime = Date(timeIntervalSince1970: 0)
             nonisolated(unsafe) var testCount = 0
 
@@ -140,7 +140,7 @@ struct DeterministicTimingTests {
                 return SanCovCounters(counters: counters)
             }
 
-            let result = withDependencies {
+            let result = await withDependencies {
                 $0.dateClient = DateClient(now: { currentTime })
                 $0.coverageCounters = CoverageCountersClient(
                     snapshot: snapshotFn,
@@ -156,7 +156,7 @@ struct DeterministicTimingTests {
                 config.enableValueProfile = false  // Disable to avoid C library interaction
 
                 let engine = FuzzEngine<SingleSeedInt>(config: config, corpusDirectory: nil)
-                return engine.run { _ in
+                return await engine.run { _ in
                     testCount += 1
                     // Only advance 1 second per test
                     currentTime = currentTime.addingTimeInterval(1)
@@ -175,7 +175,7 @@ struct DeterministicTimingTests {
     struct TestCaseShrinkerTimeoutTests {
 
         @Test("Shrinker sets timedOut flag when timeout exceeded")
-        func testTimeoutFlag() {
+        func testTimeoutFlag() async {
             nonisolated(unsafe) var currentTime = Date(timeIntervalSince1970: 0)
 
             let (minimized, stats) = withDependencies {
@@ -199,7 +199,7 @@ struct DeterministicTimingTests {
         }
 
         @Test("Shrinker duration is computed correctly")
-        func testDurationComputation() {
+        func testDurationComputation() async {
             nonisolated(unsafe) var currentTime = Date(timeIntervalSince1970: 100)
             nonisolated(unsafe) var testCount = 0
 
@@ -224,7 +224,7 @@ struct DeterministicTimingTests {
         }
 
         @Test("Shrinker stops immediately when timeout reached mid-shrink")
-        func testImmediateStop() {
+        func testImmediateStop() async {
             nonisolated(unsafe) var currentTime = Date(timeIntervalSince1970: 0)
             nonisolated(unsafe) var testsRun = 0
 
@@ -259,7 +259,7 @@ struct DeterministicTimingTests {
     struct CoveragePlateauDetectorDurationTests {
 
         @Test("PlateauStats duration tracks elapsed time")
-        func testDurationTracking() {
+        func testDurationTracking() async {
             nonisolated(unsafe) var currentTime = Date(timeIntervalSince1970: 0)
 
             let stats = withDependencies {
@@ -293,7 +293,7 @@ struct DeterministicTimingTests {
         }
 
         @Test("PlateauStats duration is zero before any records")
-        func testZeroDurationBeforeRecords() {
+        func testZeroDurationBeforeRecords() async {
             let stats = withDependencies {
                 $0.dateClient = DateClient.constant(Date())
             } operation: {
@@ -306,7 +306,7 @@ struct DeterministicTimingTests {
         }
 
         @Test("PlateauStats discoveryRate uses duration")
-        func testDiscoveryRateCalculation() {
+        func testDiscoveryRateCalculation() async {
             nonisolated(unsafe) var currentTime = Date(timeIntervalSince1970: 0)
 
             let stats = withDependencies {
@@ -340,7 +340,7 @@ struct DeterministicTimingTests {
     struct ShrinkStatsDurationTests {
 
         @Test("ShrinkStats captures exact duration")
-        func testExactDuration() {
+        func testExactDuration() async {
             nonisolated(unsafe) var currentTime = Date(timeIntervalSince1970: 500)
 
             let (_, stats) = withDependencies {
@@ -362,7 +362,7 @@ struct DeterministicTimingTests {
         }
 
         @Test("ShrinkStats duration reflects actual work done")
-        func testDurationReflectsWork() {
+        func testDurationReflectsWork() async {
             nonisolated(unsafe) var currentTime = Date(timeIntervalSince1970: 0)
             nonisolated(unsafe) var workUnits = 0
 
@@ -393,7 +393,7 @@ struct DeterministicTimingTests {
     struct MultiComponentShrinkerTimeBudgetTests {
 
         @Test("MultiComponentShrinker allocates remaining time to second component")
-        func testTimeBudgetAllocation() {
+        func testTimeBudgetAllocation() async {
             nonisolated(unsafe) var currentTime = Date(timeIntervalSince1970: 0)
             nonisolated(unsafe) var componentATests = 0
             nonisolated(unsafe) var componentBTests = 0
@@ -425,7 +425,7 @@ struct DeterministicTimingTests {
         }
 
         @Test("MultiComponentShrinker stops second component when time exhausted")
-        func testSecondComponentTimeBudgetExhaustion() {
+        func testSecondComponentTimeBudgetExhaustion() async {
             nonisolated(unsafe) var currentTime = Date(timeIntervalSince1970: 0)
             nonisolated(unsafe) var phase = 0  // 0 = component A, 1 = component B
 
@@ -456,7 +456,7 @@ struct DeterministicTimingTests {
         }
 
         @Test("MultiComponentShrinker duration is sum of both phases")
-        func testTotalDuration() {
+        func testTotalDuration() async {
             nonisolated(unsafe) var currentTime = Date(timeIntervalSince1970: 1000)
 
             let (_, stats) = withDependencies {

@@ -20,7 +20,7 @@ struct CoverageSignaturePropertyTests {
     // MARK: - Bucket Classification Properties
 
     @Test("Bucket classifies all UInt64 values into expected ranges")
-    func testBucketClassification() throws {
+    func testBucketClassification() async throws {
         // Test boundary values for each bucket
         let testCases: [(UInt64, CoverageSignature.Bucket)] = [
             (0, .zero),
@@ -48,7 +48,7 @@ struct CoverageSignaturePropertyTests {
     }
 
     @Test("Bucket classification is monotonic")
-    func testBucketMonotonicity() throws {
+    func testBucketMonotonicity() async throws {
         // Property: larger counts should never produce smaller buckets
         // Test specific boundary values
         let testCounts: [UInt64] = [0, 1, 2, 3, 4, 7, 8, 15, 16, 31, 32, 127, 128, 1000, UInt64.max]
@@ -75,7 +75,7 @@ struct CoverageSignaturePropertyTests {
     // MARK: - Signature Algebra Properties
 
     @Test("Signature union is commutative")
-    func testUnionCommutative() throws {
+    func testUnionCommutative() async throws {
         // Property: A ∪ B = B ∪ A
         let sig1 = CoverageSignature(buckets: [0: .one, 1: .two, 2: .three])
         let sig2 = CoverageSignature(buckets: [1: .three, 2: .one, 3: .two])
@@ -87,7 +87,7 @@ struct CoverageSignaturePropertyTests {
     }
 
     @Test("Signature union is associative")
-    func testUnionAssociative() throws {
+    func testUnionAssociative() async throws {
         // Property: (A ∪ B) ∪ C = A ∪ (B ∪ C)
         let sig1 = CoverageSignature(buckets: [0: .one, 1: .two])
         let sig2 = CoverageSignature(buckets: [1: .three, 2: .one])
@@ -100,7 +100,7 @@ struct CoverageSignaturePropertyTests {
     }
 
     @Test("Signature union with empty is identity")
-    func testUnionIdentity() throws {
+    func testUnionIdentity() async throws {
         let sig = CoverageSignature(buckets: [0: .one, 5: .fourToSeven, 10: .oneHundredTwentyEightPlus])
         let empty = CoverageSignature(buckets: [:])
 
@@ -109,7 +109,7 @@ struct CoverageSignaturePropertyTests {
     }
 
     @Test("Signature union takes maximum bucket values")
-    func testUnionTakesMax() throws {
+    func testUnionTakesMax() async throws {
         let sig1 = CoverageSignature(buckets: [0: .one, 1: .fourToSeven])
         let sig2 = CoverageSignature(buckets: [0: .three, 1: .two])
 
@@ -120,7 +120,7 @@ struct CoverageSignaturePropertyTests {
     }
 
     @Test("uniqueIndices and commonIndices are complementary")
-    func testIndexSetOperations() throws {
+    func testIndexSetOperations() async throws {
         let sig1 = CoverageSignature(buckets: [0: .one, 1: .two, 2: .three])
         let sig2 = CoverageSignature(buckets: [1: .one, 2: .two, 3: .three])
 
@@ -137,7 +137,7 @@ struct CoverageSignaturePropertyTests {
     }
 
     @Test("hasUniqueCoverage consistent with uniqueIndices")
-    func testHasUniqueCoverage() throws {
+    func testHasUniqueCoverage() async throws {
         let sig1 = CoverageSignature(buckets: [0: .one, 1: .two])
         let sig2 = CoverageSignature(buckets: [1: .one])
         let sig3 = CoverageSignature(buckets: [0: .three, 1: .three])
@@ -150,7 +150,7 @@ struct CoverageSignaturePropertyTests {
     // MARK: - Serialization Properties
 
     @Test("CoverageSignature round-trips through Codable")
-    func testSignatureCodableRoundTrip() throws {
+    func testSignatureCodableRoundTrip() async throws {
         let signatures = [
             CoverageSignature(buckets: [:]),
             CoverageSignature(buckets: [0: .one]),
@@ -174,7 +174,7 @@ struct CoverageSignaturePropertyTests {
 struct SignatureSetPropertyTests {
 
     @Test("SignatureSet insert returns correct newness")
-    func testInsertNewness() throws {
+    func testInsertNewness() async throws {
         var set = SignatureSet()
 
         let sig1 = CoverageSignature(buckets: [0: .one])
@@ -187,7 +187,7 @@ struct SignatureSetPropertyTests {
     }
 
     @Test("SignatureSet totalCoverage is union of all signatures")
-    func testTotalCoverageIsUnion() throws {
+    func testTotalCoverageIsUnion() async throws {
         var set = SignatureSet()
 
         let sig1 = CoverageSignature(buckets: [0: .one, 1: .two])
@@ -201,7 +201,7 @@ struct SignatureSetPropertyTests {
     }
 
     @Test("wouldAddNewCoverage is consistent with totalCoverage")
-    func testWouldAddNewCoverage() throws {
+    func testWouldAddNewCoverage() async throws {
         var set = SignatureSet()
 
         let sig1 = CoverageSignature(buckets: [0: .one, 1: .two])
@@ -221,13 +221,13 @@ struct SignatureSetPropertyTests {
 struct FuzzablePropertyTests {
 
     @Test("Bool.mutate always returns the opposite value")
-    func testBoolMutate() throws {
+    func testBoolMutate() async throws {
         #expect(true.mutate() == [false])
         #expect(false.mutate() == [true])
     }
 
     @Test("Int.mutate never returns the original value")
-    func testIntMutateExcludesOriginal() throws {
+    func testIntMutateExcludesOriginal() async throws {
         // Test specific values including edge cases
         let testValues = [0, 1, -1, 42, -42, 1000, -1000, Int.max, Int.min, Int.max / 2, Int.min / 2]
 
@@ -238,7 +238,7 @@ struct FuzzablePropertyTests {
     }
 
     @Test("Int.mutate produces valid mutations without overflow")
-    func testIntMutateNoOverflow() throws {
+    func testIntMutateNoOverflow() async throws {
         // Test edge cases explicitly
         let edgeCases = [Int.max, Int.min, 0, 1, -1]
 
@@ -252,7 +252,7 @@ struct FuzzablePropertyTests {
     }
 
     @Test("String.mutate never returns the original value")
-    func testStringMutateExcludesOriginal() throws {
+    func testStringMutateExcludesOriginal() async throws {
         // Test specific values from String.fuzz plus some extras
         let testValues = String.fuzz + ["test", "Hello World", "12345"]
 
@@ -263,20 +263,20 @@ struct FuzzablePropertyTests {
     }
 
     @Test("Optional.mutate includes nil when value is some")
-    func testOptionalMutateIncludesNil() throws {
+    func testOptionalMutateIncludesNil() async throws {
         let mutations = (Optional<Int>.some(42)).mutate()
         #expect(mutations.contains(nil), "Mutating some should include nil")
     }
 
     @Test("Optional.mutate includes some values when value is nil")
-    func testOptionalMutateFromNil() throws {
+    func testOptionalMutateFromNil() async throws {
         let mutations = (nil as Int?).mutate()
         #expect(mutations.allSatisfy { $0 != nil }, "Mutating nil should only produce some values")
         #expect(!mutations.isEmpty, "Mutating nil should produce some mutations")
     }
 
     @Test("Array.mutate produces structural variations")
-    func testArrayMutate() throws {
+    func testArrayMutate() async throws {
         let original = [1, 2, 3]
         let mutations = original.mutate()
 
@@ -294,7 +294,7 @@ struct FuzzablePropertyTests {
     }
 
     @Test("UInt.mutate respects bounds")
-    func testUIntMutateBounds() throws {
+    func testUIntMutateBounds() async throws {
         // Test UInt.max - should not overflow
         let maxMutations = (UInt.max).mutate()
         #expect(!maxMutations.isEmpty, "Should have mutations for UInt.max")
@@ -307,7 +307,7 @@ struct FuzzablePropertyTests {
     }
 
     @Test("Double.mutate handles special values")
-    func testDoubleMutateSpecialValues() throws {
+    func testDoubleMutateSpecialValues() async throws {
         // NaN should produce finite mutations
         let nanMutations = (Double.nan).mutate()
         #expect(nanMutations.allSatisfy { $0.isFinite }, "NaN mutations should be finite")
@@ -318,7 +318,7 @@ struct FuzzablePropertyTests {
     }
 
     @Test("Character.mutate returns all other fuzz characters")
-    func testCharacterMutate() throws {
+    func testCharacterMutate() async throws {
         let mutations = ("a" as Character).mutate()
         #expect(!mutations.contains("a" as Character), "Should not contain original")
         #expect(mutations.count == Character.fuzz.count - 1, "Should have all other fuzz chars")
@@ -331,7 +331,7 @@ struct FuzzablePropertyTests {
 struct CorpusPropertyTests {
 
     @Test("Corpus addIfInteresting rejects redundant coverage")
-    func testAddIfInterestingRejectsRedundant() throws {
+    func testAddIfInterestingRejectsRedundant() async throws {
         var corpus = Corpus<String>(schemaVersion: "test")
 
         let sig1 = CoverageSignature(buckets: [0: .one, 1: .two, 2: .three])
@@ -352,7 +352,7 @@ struct CorpusPropertyTests {
     }
 
     @Test("Corpus minimization preserves total coverage")
-    func testMinimizationPreservesCoverage() throws {
+    func testMinimizationPreservesCoverage() async throws {
         var corpus = Corpus<String>(schemaVersion: "test")
 
         // Add entries with overlapping coverage
@@ -375,7 +375,7 @@ struct CorpusPropertyTests {
     }
 
     @Test("Corpus selectForMutation returns valid indices")
-    func testSelectForMutationValidIndex() throws {
+    func testSelectForMutationValidIndex() async throws {
         var corpus = Corpus<String>(schemaVersion: "test")
 
         // Empty corpus should return nil
@@ -395,7 +395,7 @@ struct CorpusPropertyTests {
     }
 
     @Test("Corpus persistence calls correct file operations")
-    func testCorpusPersistenceOperations() throws {
+    func testCorpusPersistenceOperations() async throws {
         let corpusDir = URL(fileURLWithPath: "/test/corpus-roundtrip")
         let (writeDataSpy, writeDataFn) = spy { (_: Data, _: URL) in }
         let (fileExistsSpy, fileExistsFn) = spy { (_: String) in true }
@@ -404,7 +404,7 @@ struct CorpusPropertyTests {
         var corpus = Corpus<String>(schemaVersion: "test-v1")
         corpus.add(input: "hello", signature: CoverageSignature(buckets: [0: .one]))
 
-        try withDependencies {
+        try await withDependencies {
             $0.fileManager = FileManagerClient(
                 currentDirectoryPath: { "/test" },
                 fileExists: fileExistsFn,
@@ -433,14 +433,14 @@ struct CorpusPropertyTests {
     }
 
     @Test("Corpus handles empty minimization")
-    func testEmptyMinimization() throws {
+    func testEmptyMinimization() async throws {
         let corpus = Corpus<String>(schemaVersion: "test")
         let minimized = corpus.minimized()
         #expect(minimized.isEmpty, "Minimized empty corpus should be empty")
     }
 
     @Test("Corpus isEmpty property")
-    func testCorpusIsEmpty() throws {
+    func testCorpusIsEmpty() async throws {
         var corpus = Corpus<String>(schemaVersion: "test")
         #expect(corpus.isEmpty, "New corpus should be empty")
 
@@ -449,7 +449,7 @@ struct CorpusPropertyTests {
     }
 
     @Test("Corpus signatures property")
-    func testCorpusSignatures() throws {
+    func testCorpusSignatures() async throws {
         var corpus = Corpus<String>(schemaVersion: "test")
 
         let sig1 = CoverageSignature(buckets: [0: .one])
@@ -465,7 +465,7 @@ struct CorpusPropertyTests {
     }
 
     @Test("Corpus inputs property")
-    func testCorpusInputs() throws {
+    func testCorpusInputs() async throws {
         var corpus = Corpus<String>(schemaVersion: "test")
 
         corpus.add(input: "hello", signature: CoverageSignature(buckets: [0: .one]))
@@ -478,11 +478,11 @@ struct CorpusPropertyTests {
     }
 
     @Test("Corpus delete when file does not exist")
-    func testDeleteNonexistent() throws {
+    func testDeleteNonexistent() async throws {
         let corpusDir = URL(fileURLWithPath: "/test/corpus-nonexistent")
         let (removeItemSpy, removeItemFn) = spy { (_: URL) in }
 
-        try withDependencies {
+        try await withDependencies {
             $0.fileManager = FileManagerClient(
                 currentDirectoryPath: { "/test" },
                 fileExists: { _ in false },
@@ -501,7 +501,7 @@ struct CorpusPropertyTests {
     }
 
     @Test("Corpus selectForMutation with empty signatures")
-    func testSelectForMutationEmptySignatures() throws {
+    func testSelectForMutationEmptySignatures() async throws {
         var corpus = Corpus<String>(schemaVersion: "test")
 
         // Add entries with empty signatures (totalScore will be 0)
@@ -516,7 +516,7 @@ struct CorpusPropertyTests {
     }
 
     @Test("Corpus minimization with no new coverage")
-    func testMinimizationNoNewCoverage() throws {
+    func testMinimizationNoNewCoverage() async throws {
         var corpus = Corpus<String>(schemaVersion: "test")
 
         // Add one entry that covers everything
@@ -543,7 +543,7 @@ struct CorpusPropertyTests {
 struct CorpusEntryPropertyTests {
 
     @Test("CorpusEntry preserves all fields through Codable")
-    func testCorpusEntryCodable() throws {
+    func testCorpusEntryCodable() async throws {
         let entry = CorpusEntry(
             input: "test input",
             signature: CoverageSignature(buckets: [0: .one, 5: .fourToSeven]),
@@ -638,7 +638,7 @@ struct SanCovDiffPropertyTests {
 struct IntegrationPropertyTests {
 
     @Test("Signature from counters excludes zeros")
-    func testSignatureFromCountersExcludesZeros() throws {
+    func testSignatureFromCountersExcludesZeros() async throws {
         // Use raw UInt64 array directly
         let rawCounters: [UInt64] = [0, 1, 0, 2, 0, 0, 3]
         let signature = CoverageSignature(counters: rawCounters)
@@ -657,7 +657,7 @@ struct IntegrationPropertyTests {
 struct FuzzErrorTests {
 
     @Test("FuzzError.testFailed has correct description")
-    func testTestFailedDescription() throws {
+    func testTestFailedDescription() async throws {
         let error = FuzzError.testFailed(input: "test input", underlyingError: NSError(domain: "test", code: 1))
         let desc = error.errorDescription ?? ""
         #expect(desc.contains("test input"))
@@ -665,14 +665,14 @@ struct FuzzErrorTests {
     }
 
     @Test("FuzzError.coverageUnavailable has correct description")
-    func testCoverageUnavailableDescription() throws {
+    func testCoverageUnavailableDescription() async throws {
         let error = FuzzError.coverageUnavailable
         let desc = error.errorDescription ?? ""
         #expect(desc.contains("Coverage instrumentation"))
     }
 
     @Test("FuzzError.corpusError has correct description")
-    func testCorpusErrorDescription() throws {
+    func testCorpusErrorDescription() async throws {
         let error = FuzzError.corpusError("test message")
         let desc = error.errorDescription ?? ""
         #expect(desc.contains("test message"))
@@ -686,7 +686,7 @@ struct FuzzErrorTests {
 struct RegressionModeTests {
 
     @Test("CorpusSchema detects version changes")
-    func testSchemaVersioning() throws {
+    func testSchemaVersioning() async throws {
         // Create a mock client with known counter count
         let (snapshotSpy, snapshotFn) = spy { () -> SanCovCounters? in
             SanCovCounters(counters: [UInt64](repeating: 0, count: 100))
@@ -698,7 +698,7 @@ struct RegressionModeTests {
         #expect(version1 == "v1-100", "Version should be 'v1-100' for 100 counters")
 
         // Should be compatible with itself
-        let isCompatible = withDependencies {
+        let isCompatible = await withDependencies {
             $0.coverageCounters = mockClient
         } operation: {
             CorpusSchema.isCompatible(version1)
@@ -706,12 +706,12 @@ struct RegressionModeTests {
         #expect(isCompatible, "Schema should be compatible with itself")
 
         // Should not be compatible with different version
-        let notCompatible1 = withDependencies {
+        let notCompatible1 = await withDependencies {
             $0.coverageCounters = mockClient
         } operation: {
             CorpusSchema.isCompatible("v1-0")
         }
-        let notCompatible2 = withDependencies {
+        let notCompatible2 = await withDependencies {
             $0.coverageCounters = mockClient
         } operation: {
             CorpusSchema.isCompatible("v2-999")
@@ -722,7 +722,7 @@ struct RegressionModeTests {
     }
 
     @Test("CorpusSchema returns unknown when coverage unavailable")
-    func testSchemaVersioningUnknown() throws {
+    func testSchemaVersioningUnknown() async throws {
         // Use a mock client that returns nil (simulating coverage unavailable)
         let mockClient = CoverageCountersClient(snapshot: { nil }, reset: {}, isAvailable: { false })
         let version = CorpusSchema.currentVersion(using: mockClient)
@@ -736,13 +736,13 @@ struct RegressionModeTests {
 struct EdgeCaseTests {
 
     @Test("Very large bucket values")
-    func testLargeBucketValues() throws {
+    func testLargeBucketValues() async throws {
         let bucket = CoverageSignature.Bucket(count: UInt64.max)
         #expect(bucket == .oneHundredTwentyEightPlus)
     }
 
     @Test("Signature with many indices")
-    func testManyIndices() throws {
+    func testManyIndices() async throws {
         var buckets: [Int: CoverageSignature.Bucket] = [:]
         for i in 0..<1000 {
             buckets[i] = .one
@@ -758,7 +758,7 @@ struct EdgeCaseTests {
     }
 
     @Test("Corpus with complex input types")
-    func testCorpusComplexTypes() throws {
+    func testCorpusComplexTypes() async throws {
         var corpus = Corpus<[String]>(schemaVersion: "test")
 
         corpus.add(
@@ -782,7 +782,7 @@ struct EdgeCaseTests {
     }
 
     @Test("Bucket description strings")
-    func testBucketDescriptions() throws {
+    func testBucketDescriptions() async throws {
         let cases: [(CoverageSignature.Bucket, String)] = [
             (.zero, "0"),
             (.one, "1"),
@@ -801,7 +801,7 @@ struct EdgeCaseTests {
     }
 
     @Test("CoverageSignature description")
-    func testSignatureDescription() throws {
+    func testSignatureDescription() async throws {
         let sig = CoverageSignature(buckets: [0: .one, 1: .two, 2: .three])
         #expect(sig.description == "CoverageSignature(3 regions)")
 
@@ -816,7 +816,7 @@ struct EdgeCaseTests {
 struct FuzzAPIPropertyTests {
 
     @Test("fuzz function runs with default configuration")
-    func testFuzzDefaultConfig() throws {
+    func testFuzzDefaultConfig() async throws {
         nonisolated(unsafe) var callCount = 0
         let (snapshotSpy, snapshotFn) = spy { () -> SanCovCounters? in
             callCount += 1
@@ -826,7 +826,7 @@ struct FuzzAPIPropertyTests {
         }
 
         // Use a simple test that won't fail
-        let result = try withDependencies {
+        let result = try await withDependencies {
             $0.coverageCounters = CoverageCountersClient(snapshot: snapshotFn, reset: {}, isAvailable: { true })
             $0.fileManager = FileManagerClient(
                 currentDirectoryPath: { "/test" },
@@ -838,7 +838,7 @@ struct FuzzAPIPropertyTests {
             )
             $0.environment = EnvironmentClient(environment: { [:] })
         } operation: {
-            try fuzz(iterations: 20, duration: 5) { (input: Int) in
+            try await fuzz(iterations: 20, duration: 5) { (input: Int) in
                 _ = input > 0 ? "positive" : "non-positive"
             }
         }
@@ -849,8 +849,8 @@ struct FuzzAPIPropertyTests {
     }
 
     @Test("fuzz function accepts custom seeds")
-    func testFuzzWithCustomSeeds() throws {
-        var seenInputs: [String] = []
+    func testFuzzWithCustomSeeds() async throws {
+        nonisolated(unsafe) var seenInputs: [String] = []
 
         nonisolated(unsafe) var callCount = 0
         let (snapshotSpy, snapshotFn) = spy { () -> SanCovCounters? in
@@ -860,11 +860,11 @@ struct FuzzAPIPropertyTests {
             return SanCovCounters(counters: counters)
         }
 
-        let result = try withDependencies {
+        let result = try await withDependencies {
             $0.coverageCounters = CoverageCountersClient(snapshot: snapshotFn, reset: {}, isAvailable: { true })
             $0.environment = EnvironmentClient(environment: { [:] })
         } operation: {
-            try fuzz(seeds: ["custom1", "custom2", "custom3"], iterations: 30, duration: 5) { (input: String) in
+            try await fuzz(seeds: ["custom1", "custom2", "custom3"], iterations: 30, duration: 5) { (input: String) in
                 seenInputs.append(input)
                 _ = input.count
             }

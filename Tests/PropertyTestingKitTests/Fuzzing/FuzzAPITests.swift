@@ -127,18 +127,18 @@ struct FuzzAPITests {
     }
 
     @Test("Coverage-guided fuzzing finds all code paths in NumberParser")
-    func testNumberParserCoverage() throws {
+    func testNumberParserCoverage() async throws {
         let corpusDir = URL(fileURLWithPath: "/test/fuzz-numberparser")
         let (writeDataSpy, writeDataFn) = spy { (_: Data, _: URL) in }
 
         // Track which code paths we hit
-        var sawEmpty = false
-        var sawZero = false
-        var sawNegativeValid = false
-        var sawNegativeInvalid = false
-        var sawPositiveValid = false
-        var sawPositiveInvalid = false
-        var roundTripFailures: [String] = []
+        nonisolated(unsafe) var sawEmpty = false
+        nonisolated(unsafe) var sawZero = false
+        nonisolated(unsafe) var sawNegativeValid = false
+        nonisolated(unsafe) var sawNegativeInvalid = false
+        nonisolated(unsafe) var sawPositiveValid = false
+        nonisolated(unsafe) var sawPositiveInvalid = false
+        nonisolated(unsafe) var roundTripFailures: [String] = []
 
         nonisolated(unsafe) var callCount = 0
         let (snapshotSpy, snapshotFn) = spy { () -> SanCovCounters? in
@@ -146,7 +146,7 @@ struct FuzzAPITests {
             return FuzzAPITests.makeCounters(callCount % 10)
         }
 
-        let result = withDependencies {
+        let result = await withDependencies {
             $0.coverageCounters = CoverageCountersClient(snapshot: snapshotFn, reset: {}, isAvailable: { true })
             $0.fileManager = FileManagerClient(
                 currentDirectoryPath: { "/test" },
@@ -169,7 +169,7 @@ struct FuzzAPITests {
             let engine = FuzzEngine<String>(config: config, corpusDirectory: corpusDir)
 
             // Use String directly with domain-specific seeds
-            return engine.run(additionalSeeds: numberParserSeeds) { input in
+            return await engine.run(additionalSeeds: numberParserSeeds) { input in
                 let parsed = NumberParser.parse(input)
 
                 // Track paths
@@ -238,7 +238,7 @@ struct FuzzAPITests {
     }
 
     @Test("Fuzzing verifies negation property")
-    func testNegationProperty() throws {
+    func testNegationProperty() async throws {
         let corpusDir = URL(fileURLWithPath: "/test/fuzz-negation")
 
         nonisolated(unsafe) var callCount = 0
@@ -247,8 +247,8 @@ struct FuzzAPITests {
             return FuzzAPITests.makeCounters(callCount % 10)
         }
 
-        var negationFailures: [String] = []
-        let result = withDependencies {
+        nonisolated(unsafe) var negationFailures: [String] = []
+        let result = await withDependencies {
             $0.coverageCounters = CoverageCountersClient(snapshot: snapshotFn, reset: {}, isAvailable: { true })
             $0.fileManager = FileManagerClient(
                 currentDirectoryPath: { "/test" },
@@ -267,7 +267,7 @@ struct FuzzAPITests {
 
             let engine = FuzzEngine<String>(config: config, corpusDirectory: corpusDir)
 
-            return engine.run(additionalSeeds: numberParserSeeds) { input in
+            return await engine.run(additionalSeeds: numberParserSeeds) { input in
                 if !NumberParser.negationProperty(input) {
                     negationFailures.append(input)
                 }
@@ -281,7 +281,7 @@ struct FuzzAPITests {
     }
 
     @Test("FuzzEngine saves corpus after run")
-    func testFuzzEngineSavesCorpus() throws {
+    func testFuzzEngineSavesCorpus() async throws {
         let corpusDir = URL(fileURLWithPath: "/test/fuzz-persist")
         let (writeDataSpy, writeDataFn) = spy { (_: Data, _: URL) in }
 
@@ -291,7 +291,7 @@ struct FuzzAPITests {
             return FuzzAPITests.makeCounters(callCount % 10)
         }
 
-        withDependencies {
+        await withDependencies {
             $0.coverageCounters = CoverageCountersClient(snapshot: snapshotFn, reset: {}, isAvailable: { true })
             $0.fileManager = FileManagerClient(
                 currentDirectoryPath: { "/test" },
@@ -310,7 +310,7 @@ struct FuzzAPITests {
             )
 
             let engine = FuzzEngine<String>(config: config, corpusDirectory: corpusDir)
-            let result = engine.run(additionalSeeds: numberParserSeeds) { input in
+            let result = await engine.run(additionalSeeds: numberParserSeeds) { input in
                 _ = NumberParser.parse(input)
             }
 
@@ -326,9 +326,9 @@ struct FuzzAPITests {
     }
 
     @Test("Public fuzz API with custom seeds")
-    func testPublicFuzzAPIWithSeeds() throws {
+    func testPublicFuzzAPIWithSeeds() async throws {
         // Demonstrates the simplified public API with custom seeds
-        var inputCount = 0
+        nonisolated(unsafe) var inputCount = 0
 
         nonisolated(unsafe) var callCount = 0
         let (snapshotSpy, snapshotFn) = spy { () -> SanCovCounters? in
@@ -336,11 +336,11 @@ struct FuzzAPITests {
             return FuzzAPITests.makeCounters(callCount % 10)
         }
 
-        try withDependencies {
+        try await withDependencies {
             $0.coverageCounters = CoverageCountersClient(snapshot: snapshotFn, reset: {}, isAvailable: { true })
             $0.environment = EnvironmentClient(environment: { [:] })
         } operation: {
-            try fuzz(
+            try await fuzz(
                 seeds: ["0", "-0", "-1", "abc", String(Int.max)],
                 iterations: 50,
                 duration: 5
@@ -383,8 +383,8 @@ struct FuzzAPITests {
     }
 
     @Test("Config.fromEnvironment reads environment variables")
-    func testConfigFromEnvironment() {
-        withDependencies {
+    func testConfigFromEnvironment() async {
+        await withDependencies {
             $0.environment = EnvironmentClient(environment: {
                 [
                     "FUZZ_ITERATIONS": "500",
@@ -402,8 +402,8 @@ struct FuzzAPITests {
     }
 
     @Test("Config.fromEnvironment uses defaults when env vars not set")
-    func testConfigFromEnvironmentDefaults() {
-        withDependencies {
+    func testConfigFromEnvironmentDefaults() async {
+        await withDependencies {
             $0.environment = EnvironmentClient(environment: { [:] })
         } operation: {
             let config: FuzzEngine<String>.Config = .fromEnvironment()
@@ -415,7 +415,7 @@ struct FuzzAPITests {
     }
 
     @Test("FuzzEngine captures failures correctly")
-    func testFuzzEngineFailureCapture() throws {
+    func testFuzzEngineFailureCapture() async throws {
         // Create an error to throw
         struct TestFailure: Error {}
 
@@ -426,7 +426,7 @@ struct FuzzAPITests {
         }
 
         // Test FuzzEngine directly to verify failure capture without Issue.record noise
-        let result = withDependencies {
+        let result = await withDependencies {
             $0.coverageCounters = CoverageCountersClient(snapshot: snapshotFn, reset: {}, isAvailable: { true })
         } operation: {
             let config = FuzzEngine<Bool>.Config(
@@ -436,7 +436,7 @@ struct FuzzAPITests {
             )
 
             let engine = FuzzEngine<Bool>(config: config)
-            return engine.run { _ in
+            return await engine.run { _ in
                 // Throw for any input to guarantee a failure
                 throw TestFailure()
             }
@@ -453,7 +453,7 @@ struct FuzzAPITests {
     }
 
     @Test("fuzz() records issues and throws on failure")
-    func testFuzzRecordsIssuesOnFailure() throws {
+    func testFuzzRecordsIssuesOnFailure() async throws {
         struct TestFailure: Error {}
 
         nonisolated(unsafe) var callCount = 0
@@ -463,8 +463,8 @@ struct FuzzAPITests {
         }
 
         // Use withKnownIssue to expect the recorded issues from fuzz()
-        withKnownIssue {
-            try withDependencies {
+        await withKnownIssue {
+            try await withDependencies {
                 $0.coverageCounters = CoverageCountersClient(snapshot: snapshotFn, reset: {}, isAvailable: { true })
                 $0.fileManager = FileManagerClient(
                     currentDirectoryPath: { "/test" },
@@ -477,7 +477,7 @@ struct FuzzAPITests {
             } operation: {
                 // This will throw because the test always fails
                 // Note: Seeds are required to provide type context for the variadic generic
-                _ = try fuzz(seeds: [true, false], iterations: 10, duration: 5) { _ in
+                _ = try await fuzz(seeds: [true, false], iterations: 10, duration: 5) { _ in
                     throw TestFailure()
                 }
             }
@@ -485,7 +485,7 @@ struct FuzzAPITests {
     }
 
     @Test("fuzz writes corpus to filesystem")
-    func testFuzzWritesCorpus() throws {
+    func testFuzzWritesCorpus() async throws {
         nonisolated(unsafe) var callCount = 0
         let (snapshotSpy, snapshotFn) = spy { () -> SanCovCounters? in
             callCount += 1
@@ -494,7 +494,7 @@ struct FuzzAPITests {
 
         let (writeDataSpy, writeDataFn) = spy { (_: Data, _: URL) in }
 
-        try withDependencies {
+        try await withDependencies {
             $0.coverageCounters = CoverageCountersClient(snapshot: snapshotFn, reset: {}, isAvailable: { true })
             $0.environment = EnvironmentClient(environment: { [:] })
             $0.fileManager = FileManagerClient(
@@ -506,7 +506,7 @@ struct FuzzAPITests {
                 readData: { _ in Data() }
             )
         } operation: {
-            try fuzz(seeds: ["a", "ab", "abc"], iterations: 20, duration: 5) { input in
+            try await fuzz(seeds: ["a", "ab", "abc"], iterations: 20, duration: 5) { input in
                 _ = input.count
             }
         }
@@ -521,7 +521,7 @@ struct FuzzAPITests {
     }
 
     @Test("fuzz reads existing corpus from filesystem")
-    func testFuzzReadsCorpus() throws {
+    func testFuzzReadsCorpus() async throws {
         nonisolated(unsafe) var callCount = 0
         let (snapshotSpy, snapshotFn) = spy { () -> SanCovCounters? in
             callCount += 1
@@ -540,9 +540,9 @@ struct FuzzAPITests {
             return corpusData
         }
 
-        var seenInputs: [String] = []
+        nonisolated(unsafe) var seenInputs: [String] = []
 
-        try withDependencies {
+        try await withDependencies {
             $0.coverageCounters = CoverageCountersClient(snapshot: snapshotFn, reset: {}, isAvailable: { true })
             $0.environment = EnvironmentClient(environment: { [:] })
             $0.fileManager = FileManagerClient(
@@ -555,7 +555,7 @@ struct FuzzAPITests {
             )
         } operation: {
             // Use seeds that include the corpus entry so it gets tested
-            try fuzz(seeds: ["from_corpus"], iterations: 20, duration: 5) { input in
+            try await fuzz(seeds: ["from_corpus"], iterations: 20, duration: 5) { input in
                 seenInputs.append(input)
             }
         }
@@ -566,7 +566,7 @@ struct FuzzAPITests {
     }
 
     @Test("Corpus directory path is computed correctly")
-    func testCorpusDirectoryPath() throws {
+    func testCorpusDirectoryPath() async throws {
         // Verify that #filePath returns the correct path for corpus placement
         let filePath = #filePath
         let fileURL = URL(fileURLWithPath: String(describing: filePath))

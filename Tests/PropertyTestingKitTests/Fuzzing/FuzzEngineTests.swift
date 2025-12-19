@@ -46,7 +46,7 @@ struct FuzzEngineTests {
     // MARK: - Tests
 
     @Test("FuzzEngine discovers multiple paths with mocked coverage")
-    func testFuzzEngineDiscoversPaths() {
+    func testFuzzEngineDiscoversPaths() async {
         nonisolated(unsafe) var callCount = 0
         // Use varying coverage values so difference between before/after produces new paths
         let (snapshotSpy, snapshotFn) = spy { () -> SanCovCounters? in
@@ -54,7 +54,7 @@ struct FuzzEngineTests {
             return FuzzEngineTests.makeCounters(callCount % 10)
         }
 
-        let result = withDependencies {
+        let result = await withDependencies {
             $0.coverageCounters = CoverageCountersClient(snapshot: snapshotFn, reset: {}, isAvailable: { true })
         } operation: {
             let config = FuzzEngine<Int>.Config(
@@ -66,7 +66,7 @@ struct FuzzEngineTests {
             )
 
             let engine = FuzzEngine<Int>(config: config, corpusDirectory: nil)
-            return engine.run { _ in }
+            return await engine.run { _ in }
         }
 
         #expect(snapshotSpy.callCount > 1, "Should have called snapshot multiple times")
@@ -75,7 +75,7 @@ struct FuzzEngineTests {
     }
 
     @Test("FuzzEngine detects test failures")
-    func testFuzzEngineDetectsFailures() {
+    func testFuzzEngineDetectsFailures() async {
         nonisolated(unsafe) var callCount = 0
         // before returns zeros, after returns coverage
         let snapshotFn: @Sendable () -> SanCovCounters? = {
@@ -89,7 +89,7 @@ struct FuzzEngineTests {
 
         struct TestError: Error {}
 
-        let result = withDependencies {
+        let result = await withDependencies {
             $0.coverageCounters = CoverageCountersClient(snapshot: snapshotFn, reset: {}, isAvailable: { true })
         } operation: {
             let config = FuzzEngine<Int>.Config(
@@ -99,7 +99,7 @@ struct FuzzEngineTests {
             )
 
             let engine = FuzzEngine<Int>(config: config, corpusDirectory: nil)
-            return engine.run { (input: Int) in
+            return await engine.run { (input: Int) in
                 if input == 42 {
                     throw TestError()
                 }
@@ -112,12 +112,12 @@ struct FuzzEngineTests {
     }
 
     @Test("FuzzEngine respects iteration limit")
-    func testIterationLimit() {
+    func testIterationLimit() async {
         let (snapshotSpy, snapshotFn) = spy { () -> SanCovCounters? in
             FuzzEngineTests.makeCounters(1)
         }
 
-        let result = withDependencies {
+        let result = await withDependencies {
             $0.coverageCounters = CoverageCountersClient(snapshot: snapshotFn, reset: {}, isAvailable: { true })
         } operation: {
             let config = FuzzEngine<Int>.Config(
@@ -129,7 +129,7 @@ struct FuzzEngineTests {
             )
 
             let engine = FuzzEngine<Int>(config: config, corpusDirectory: nil)
-            return engine.run { _ in }
+            return await engine.run { _ in }
         }
 
         #expect(snapshotSpy.callCount > 0)
@@ -137,12 +137,12 @@ struct FuzzEngineTests {
     }
 
     @Test("FuzzStats.inputsPerSecond computes correctly")
-    func testInputsPerSecond() {
+    func testInputsPerSecond() async {
         let (_, snapshotFn) = spy { () -> SanCovCounters? in
             FuzzEngineTests.makeCounters(1)
         }
 
-        let result = withDependencies {
+        let result = await withDependencies {
             $0.coverageCounters = CoverageCountersClient(snapshot: snapshotFn, reset: {}, isAvailable: { true })
         } operation: {
             let config = FuzzEngine<Int>.Config(
@@ -152,7 +152,7 @@ struct FuzzEngineTests {
             )
 
             let engine = FuzzEngine<Int>(config: config, corpusDirectory: nil)
-            return engine.run { _ in }
+            return await engine.run { _ in }
         }
 
         let rate = result.stats.inputsPerSecond
@@ -161,14 +161,14 @@ struct FuzzEngineTests {
     }
 
     @Test("FuzzEngine verbose mode logs messages")
-    func testVerboseMode() {
+    func testVerboseMode() async {
         nonisolated(unsafe) var callCount = 0
         let (snapshotSpy, snapshotFn) = spy { () -> SanCovCounters? in
             callCount += 1
             return FuzzEngineTests.makeCounters(callCount / 2)
         }
 
-        let result = withDependencies {
+        let result = await withDependencies {
             $0.coverageCounters = CoverageCountersClient(snapshot: snapshotFn, reset: {}, isAvailable: { true })
         } operation: {
             let config = FuzzEngine<Int>.Config(
@@ -179,7 +179,7 @@ struct FuzzEngineTests {
             )
 
             let engine = FuzzEngine<Int>(config: config, corpusDirectory: nil)
-            return engine.run { _ in }
+            return await engine.run { _ in }
         }
 
         #expect(snapshotSpy.callCount > 0)
@@ -187,12 +187,12 @@ struct FuzzEngineTests {
     }
 
     @Test("FuzzEngine reaches time limit")
-    func testTimeLimit() {
+    func testTimeLimit() async {
         let (snapshotSpy, snapshotFn) = spy { () -> SanCovCounters? in
             FuzzEngineTests.makeCounters(1)
         }
 
-        let result = withDependencies {
+        let result = await withDependencies {
             $0.coverageCounters = CoverageCountersClient(snapshot: snapshotFn, reset: {}, isAvailable: { true })
         } operation: {
             let config = FuzzEngine<Int>.Config(
@@ -203,7 +203,7 @@ struct FuzzEngineTests {
             )
 
             let engine = FuzzEngine<Int>(config: config, corpusDirectory: nil)
-            return engine.run { _ in }
+            return await engine.run { _ in }
         }
 
         #expect(snapshotSpy.callCount > 0)
@@ -211,14 +211,14 @@ struct FuzzEngineTests {
     }
 
     @Test("FuzzEngine handles test errors during fuzzing")
-    func testErrorsDuringFuzzing() {
+    func testErrorsDuringFuzzing() async {
         struct FuzzError: Error {}
 
         let (snapshotSpy, snapshotFn) = spy { () -> SanCovCounters? in
             FuzzEngineTests.makeCounters(1)
         }
 
-        let result = withDependencies {
+        let result = await withDependencies {
             $0.coverageCounters = CoverageCountersClient(snapshot: snapshotFn, reset: {}, isAvailable: { true })
         } operation: {
             let config = FuzzEngine<Int>.Config(
@@ -228,7 +228,7 @@ struct FuzzEngineTests {
             )
 
             let engine = FuzzEngine<Int>(config: config, corpusDirectory: nil)
-            return engine.run { (input: Int) in
+            return await engine.run { (input: Int) in
                 if input % 10 == 0 {
                     throw FuzzError()
                 }
@@ -240,7 +240,7 @@ struct FuzzEngineTests {
     }
 
     @Test("FuzzEngine saves corpus to directory")
-    func testCorpusSaveToDirectory() throws {
+    func testCorpusSaveToDirectory() async throws {
         let corpusDir = URL(fileURLWithPath: "/test/fuzz-corpus")
         nonisolated(unsafe) var callCount = 0
 
@@ -252,7 +252,7 @@ struct FuzzEngineTests {
         let (writeDataSpy, writeDataFn) = spy { (_: Data, _: URL) in }
         let (createDirSpy, createDirFn) = spy { (_: URL, _: Bool) in }
 
-        let result = withDependencies {
+        let result = await withDependencies {
             $0.coverageCounters = CoverageCountersClient(snapshot: snapshotFn, reset: {}, isAvailable: { true })
             $0.fileManager = FileManagerClient(
                 currentDirectoryPath: { "/test" },
@@ -271,7 +271,7 @@ struct FuzzEngineTests {
             )
 
             let engine = FuzzEngine<Int>(config: config, corpusDirectory: corpusDir)
-            return engine.run { _ in }
+            return await engine.run { _ in }
         }
 
         #expect(snapshotSpy.callCount > 1, "Should have called snapshot multiple times")
@@ -282,7 +282,7 @@ struct FuzzEngineTests {
     }
 
     @Test("FuzzEngine loads existing corpus and runs regression")
-    func testRegressionMode() throws {
+    func testRegressionMode() async throws {
         let corpusDir = URL(fileURLWithPath: "/test/fuzz-regression")
 
         // For regression to succeed, the mock must return consistent coverage that
@@ -343,7 +343,7 @@ struct FuzzEngineTests {
             path.contains("corpus.json")
         }
 
-        let result = withDependencies {
+        let result = await withDependencies {
             $0.coverageCounters = CoverageCountersClient(snapshot: snapshotFn, reset: {}, isAvailable: { true })
             $0.fileManager = FileManagerClient(
                 currentDirectoryPath: { "/test" },
@@ -365,7 +365,7 @@ struct FuzzEngineTests {
             )
 
             let engine = FuzzEngine<Int>(config: config, corpusDirectory: corpusDir)
-            return engine.run { _ in }
+            return await engine.run { _ in }
         }
 
         #expect(fileExistsSpy.callCount >= 1, "Should check if corpus exists")
@@ -376,7 +376,7 @@ struct FuzzEngineTests {
     }
 
     @Test("FuzzEngine handles schema change")
-    func testSchemaChange() throws {
+    func testSchemaChange() async throws {
         let corpusDir = URL(fileURLWithPath: "/test/fuzz-schema")
 
         let oldCorpusJSON = """
@@ -398,7 +398,7 @@ struct FuzzEngineTests {
             path.contains("corpus.json")
         }
 
-        let result = withDependencies {
+        let result = await withDependencies {
             $0.coverageCounters = CoverageCountersClient(snapshot: snapshotFn, reset: {}, isAvailable: { true })
             $0.fileManager = FileManagerClient(
                 currentDirectoryPath: { "/test" },
@@ -416,7 +416,7 @@ struct FuzzEngineTests {
             )
 
             let engine = FuzzEngine<Int>(config: config, corpusDirectory: corpusDir)
-            return engine.run { _ in }
+            return await engine.run { _ in }
         }
 
         #expect(fileExistsSpy.callCount >= 1)
@@ -426,7 +426,7 @@ struct FuzzEngineTests {
     }
 
     @Test("FuzzEngine handles corpus load failure")
-    func testCorpusLoadFailure() throws {
+    func testCorpusLoadFailure() async throws {
         let corpusDir = URL(fileURLWithPath: "/test/fuzz-loadfail")
         let invalidJSON = Data("{ invalid json }".utf8)
 
@@ -438,7 +438,7 @@ struct FuzzEngineTests {
             path.contains("corpus.json")
         }
 
-        let result = withDependencies {
+        let result = await withDependencies {
             $0.coverageCounters = CoverageCountersClient(snapshot: snapshotFn, reset: {}, isAvailable: { true })
             $0.fileManager = FileManagerClient(
                 currentDirectoryPath: { "/test" },
@@ -456,7 +456,7 @@ struct FuzzEngineTests {
             )
 
             let engine = FuzzEngine<Int>(config: config, corpusDirectory: corpusDir)
-            return engine.run { _ in }
+            return await engine.run { _ in }
         }
 
         #expect(fileExistsSpy.callCount >= 1)
@@ -466,7 +466,7 @@ struct FuzzEngineTests {
     }
 
     @Test("FuzzEngine discovers new coverage during iteration")
-    func testNewCoverageDuringIteration() {
+    func testNewCoverageDuringIteration() async {
         nonisolated(unsafe) var callCount = 0
 
         // Return different coverage each time to ensure new paths discovered
@@ -476,7 +476,7 @@ struct FuzzEngineTests {
             return FuzzEngineTests.makeCounters(callCount % 10)
         }
 
-        let result = withDependencies {
+        let result = await withDependencies {
             $0.coverageCounters = CoverageCountersClient(snapshot: snapshotFn, reset: {}, isAvailable: { true })
         } operation: {
             let config = FuzzEngine<Int>.Config(
@@ -488,7 +488,7 @@ struct FuzzEngineTests {
             )
 
             let engine = FuzzEngine<Int>(config: config, corpusDirectory: nil)
-            return engine.run { _ in }
+            return await engine.run { _ in }
         }
 
         #expect(snapshotSpy.callCount > 0)
@@ -497,7 +497,7 @@ struct FuzzEngineTests {
     }
 
     @Test("FuzzEngine handles corpus save failure")
-    func testCorpusSaveFailure() throws {
+    func testCorpusSaveFailure() async throws {
         let corpusDir = URL(fileURLWithPath: "/test/fuzz-savefail")
 
         struct SaveError: Error {}
@@ -512,7 +512,7 @@ struct FuzzEngineTests {
         }
         let (createDirSpy, createDirFn) = spy { (_: URL, _: Bool) in }
 
-        let result = withDependencies {
+        let result = await withDependencies {
             $0.coverageCounters = CoverageCountersClient(snapshot: snapshotFn, reset: {}, isAvailable: { true })
             $0.fileManager = FileManagerClient(
                 currentDirectoryPath: { "/test" },
@@ -530,7 +530,7 @@ struct FuzzEngineTests {
             )
 
             let engine = FuzzEngine<Int>(config: config, corpusDirectory: corpusDir)
-            return engine.run { _ in }
+            return await engine.run { _ in }
         }
 
         #expect(snapshotSpy.callCount > 0)
@@ -540,7 +540,7 @@ struct FuzzEngineTests {
     }
 
     @Test("FuzzEngine regression success without coverage change")
-    func testRegressionSuccessPath() throws {
+    func testRegressionSuccessPath() async throws {
         let corpusDir = URL(fileURLWithPath: "/test/fuzz-regression-success")
 
         // Use 100 counters so schema version is "v1-100"
@@ -565,7 +565,7 @@ struct FuzzEngineTests {
             path.contains("corpus.json")
         }
 
-        let result = withDependencies {
+        let result = await withDependencies {
             $0.coverageCounters = CoverageCountersClient(snapshot: snapshotFn, reset: {}, isAvailable: { true })
             $0.fileManager = FileManagerClient(
                 currentDirectoryPath: { "/test" },
@@ -583,7 +583,7 @@ struct FuzzEngineTests {
             )
 
             let engine = FuzzEngine<Int>(config: config, corpusDirectory: corpusDir)
-            return engine.run { _ in }
+            return await engine.run { _ in }
         }
 
         #expect(fileExistsSpy.callCount >= 1)
@@ -593,12 +593,12 @@ struct FuzzEngineTests {
     }
 
     @Test("FuzzEngine handles coverage unavailable - test succeeds")
-    func testCoverageUnavailableSuccess() throws {
+    func testCoverageUnavailableSuccess() async throws {
         nonisolated(unsafe) var testExecuted = false
 
         let (snapshotSpy, snapshotFn) = spy { () -> SanCovCounters? in nil }
 
-        let result = withDependencies {
+        let result = await withDependencies {
             $0.coverageCounters = CoverageCountersClient(snapshot: snapshotFn, reset: {}, isAvailable: { true })
         } operation: {
             let config = FuzzEngine<Int>.Config(
@@ -608,7 +608,7 @@ struct FuzzEngineTests {
             )
 
             let engine = FuzzEngine<Int>(config: config, corpusDirectory: nil)
-            return engine.run { _ in
+            return await engine.run { _ in
                 testExecuted = true
             }
         }
@@ -620,12 +620,12 @@ struct FuzzEngineTests {
     }
 
     @Test("FuzzEngine handles coverage unavailable - test throws")
-    func testCoverageUnavailableWithError() throws {
+    func testCoverageUnavailableWithError() async throws {
         struct TestError: Error {}
 
         let (snapshotSpy, snapshotFn) = spy { () -> SanCovCounters? in nil }
 
-        let result = withDependencies {
+        let result = await withDependencies {
             $0.coverageCounters = CoverageCountersClient(snapshot: snapshotFn, reset: {}, isAvailable: { true })
         } operation: {
             let config = FuzzEngine<Int>.Config(
@@ -635,7 +635,7 @@ struct FuzzEngineTests {
             )
 
             let engine = FuzzEngine<Int>(config: config, corpusDirectory: nil)
-            return engine.run { _ in
+            return await engine.run { _ in
                 throw TestError()
             }
         }
@@ -646,7 +646,7 @@ struct FuzzEngineTests {
     }
 
     @Test("FuzzEngine handles coverage unavailable after test execution")
-    func testCoverageUnavailableAfter() throws {
+    func testCoverageUnavailableAfter() async throws {
         // With reset+snapshot model:
         // - reset() is called before each test
         // - snapshot() is called after each test
@@ -656,7 +656,7 @@ struct FuzzEngineTests {
             return nil
         }
 
-        let result = withDependencies {
+        let result = await withDependencies {
             $0.coverageCounters = CoverageCountersClient(snapshot: snapshotFn, reset: {}, isAvailable: { true })
         } operation: {
             let config = FuzzEngine<Int>.Config(
@@ -666,7 +666,7 @@ struct FuzzEngineTests {
             )
 
             let engine = FuzzEngine<Int>(config: config, corpusDirectory: nil)
-            return engine.run { _ in }
+            return await engine.run { _ in }
         }
 
         #expect(snapshotSpy.callCount > 0)
@@ -674,7 +674,7 @@ struct FuzzEngineTests {
     }
 
     @Test("FuzzEngine regression detects coverage change and re-fuzzes")
-    func testRegressionCoverageChange() throws {
+    func testRegressionCoverageChange() async throws {
         let corpusDir = URL(fileURLWithPath: "/test/fuzz-regression-change")
 
         // Return different signature than corpus has (corpus: {5: 1}, mock returns {1: 1})
@@ -719,7 +719,7 @@ struct FuzzEngineTests {
             return path.contains("corpus.json")
         }
 
-        let result = withDependencies {
+        let result = await withDependencies {
             $0.coverageCounters = CoverageCountersClient(snapshot: snapshotFn, reset: {}, isAvailable: { true })
             $0.fileManager = FileManagerClient(
                 currentDirectoryPath: { "/test" },
@@ -737,7 +737,7 @@ struct FuzzEngineTests {
             )
 
             let engine = FuzzEngine<Int>(config: config, corpusDirectory: corpusDir)
-            return engine.run { _ in }
+            return await engine.run { _ in }
         }
 
         #expect(fileExistsCallCount >= 1)
@@ -747,7 +747,7 @@ struct FuzzEngineTests {
     }
 
     @Test("FuzzEngine verbose logs new coverage during iterations")
-    func testNewCoverageVerboseInIterations() {
+    func testNewCoverageVerboseInIterations() async {
         // This test covers the "New coverage!" verbose path at lines 247-249
         // Seeds all produce the same coverage, but iterations produce different coverage
         nonisolated(unsafe) var callCount = 0
@@ -760,7 +760,7 @@ struct FuzzEngineTests {
             return FuzzEngineTests.makeCounters(callCount)
         }
 
-        let result = withDependencies {
+        let result = await withDependencies {
             $0.coverageCounters = CoverageCountersClient(snapshot: snapshotFn, reset: {}, isAvailable: { true })
         } operation: {
             let config = FuzzEngine<Int>.Config(
@@ -773,7 +773,7 @@ struct FuzzEngineTests {
             )
 
             let engine = FuzzEngine<Int>(config: config, corpusDirectory: nil)
-            return engine.run { input in
+            return await engine.run { input in
                 inputCount += 1
             }
         }
@@ -784,7 +784,7 @@ struct FuzzEngineTests {
     }
 
     @Test("FuzzEngine regression captures failures during replay")
-    func testRegressionFailures() throws {
+    func testRegressionFailures() async throws {
         let corpusDir = URL(fileURLWithPath: "/test/fuzz-regression-fail")
 
         // With reset+snapshot model:
@@ -825,7 +825,7 @@ struct FuzzEngineTests {
 
         struct RegressionError: Error {}
 
-        let result = withDependencies {
+        let result = await withDependencies {
             $0.coverageCounters = CoverageCountersClient(snapshot: snapshotFn, reset: {}, isAvailable: { true })
             $0.fileManager = FileManagerClient(
                 currentDirectoryPath: { "/test" },
@@ -843,7 +843,7 @@ struct FuzzEngineTests {
             )
 
             let engine = FuzzEngine<Int>(config: config, corpusDirectory: corpusDir)
-            return engine.run { (input: Int) in
+            return await engine.run { (input: Int) in
                 if input == 42 {
                     throw RegressionError()
                 }
@@ -856,14 +856,14 @@ struct FuzzEngineTests {
     }
 
     @Test("FuzzEngine handles empty fuzz array gracefully")
-    func testEmptyFuzzArray() {
+    func testEmptyFuzzArray() async {
         nonisolated(unsafe) var callCount = 0
         let (snapshotSpy, snapshotFn) = spy { () -> SanCovCounters? in
             callCount += 1
             return FuzzEngineTests.makeCounters(callCount)
         }
 
-        let result = withDependencies {
+        let result = await withDependencies {
             $0.coverageCounters = CoverageCountersClient(snapshot: snapshotFn, reset: {}, isAvailable: { true })
         } operation: {
             let config = FuzzEngine<EmptyFuzzable>.Config(
@@ -874,7 +874,7 @@ struct FuzzEngineTests {
             )
 
             let engine = FuzzEngine<EmptyFuzzable>(config: config, corpusDirectory: nil)
-            return engine.run { _ in }
+            return await engine.run { _ in }
         }
 
         // With empty fuzz, no seeds are processed and iterations skip via guard
@@ -884,14 +884,14 @@ struct FuzzEngineTests {
     }
 
     @Test("FuzzEngine handles empty mutations array gracefully")
-    func testEmptyMutationsArray() {
+    func testEmptyMutationsArray() async {
         nonisolated(unsafe) var callCount = 0
         let (snapshotSpy, snapshotFn) = spy { () -> SanCovCounters? in
             callCount += 1
             return FuzzEngineTests.makeCounters(callCount)
         }
 
-        let result = withDependencies {
+        let result = await withDependencies {
             $0.coverageCounters = CoverageCountersClient(snapshot: snapshotFn, reset: {}, isAvailable: { true })
         } operation: {
             let config = FuzzEngine<EmptyMutationsFuzzable>.Config(
@@ -903,7 +903,7 @@ struct FuzzEngineTests {
             )
 
             let engine = FuzzEngine<EmptyMutationsFuzzable>(config: config, corpusDirectory: nil)
-            return engine.run { _ in }
+            return await engine.run { _ in }
         }
 
         // With one seed value, corpus gets one entry, then mutations fail

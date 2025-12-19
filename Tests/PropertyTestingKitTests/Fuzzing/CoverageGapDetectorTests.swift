@@ -249,7 +249,7 @@ struct CoverageGapDetectorTests {
     // MARK: - Integration Tests
 
     @Test("Coverage gap detection in fuzz result")
-    func fuzzResultIncludesGapReport() throws {
+    func fuzzResultIncludesGapReport() async throws {
         // Verify that FuzzResult has the coverageGapReport field
         let emptyCorpus = Corpus<Int>(schemaVersion: "1.0.0")
         let stats = FuzzStats(
@@ -282,9 +282,9 @@ struct CoverageGapDetectorTests {
     }
 
     @Test("Realistic coverage gap test")
-    func realisticCoverageGapTest() throws {
+    func realisticCoverageGapTest() async throws {
         // Use a hash-based check that value profile can't solve easily
-        @inline(never)
+        @Sendable @inline(never)
         func partiallyCoveredFunction(input: Int) {
             // Simple hash to defeat value profile guidance
             let hash = (input &* 31) ^ (input >> 4)
@@ -299,8 +299,8 @@ struct CoverageGapDetectorTests {
         }
 
         // This test intentionally creates a coverage gap to verify detection works
-        withKnownIssue("Expected coverage gap in partiallyCoveredFunction") {
-            try fuzz(
+        await withKnownIssue("Expected coverage gap in partiallyCoveredFunction") {
+            try await fuzz(
                 iterations: 100,
                 corpusMode: .refuzzReplace,
                 detectCoverageGaps: true

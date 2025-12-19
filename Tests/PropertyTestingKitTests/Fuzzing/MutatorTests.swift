@@ -16,7 +16,7 @@ import FunctionSpy
 @Suite("Mutator Protocol")
 struct MutatorProtocolTests {
     @Test("AnyMutator type erases correctly")
-    func anyMutatorTypeErases() {
+    func anyMutatorTypeErases() async {
         let stringMutator = String.mutators(.empty)
         let erased = AnyMutator(stringMutator)
 
@@ -25,7 +25,7 @@ struct MutatorProtocolTests {
     }
 
     @Test("ComposedMutator combines seeds from all mutators")
-    func composedMutatorCombinesSeeds() {
+    func composedMutatorCombinesSeeds() async {
         let composed = String.mutators(.empty, .whitespace)
 
         // Should have seeds from both strategies
@@ -35,7 +35,7 @@ struct MutatorProtocolTests {
     }
 
     @Test("ComposedMutator combines mutations from all mutators")
-    func composedMutatorCombinesMutations() {
+    func composedMutatorCombinesMutations() async {
         let composed = String.mutators(.empty, .whitespace)
         let mutations = composed.mutate("test")
 
@@ -44,7 +44,7 @@ struct MutatorProtocolTests {
     }
 
     @Test("DefaultMutator uses Fuzzable conformance")
-    func defaultMutatorUsesFuzzable() {
+    func defaultMutatorUsesFuzzable() async {
         let mutator = DefaultMutator<Int>()
 
         #expect(mutator.seeds == Int.fuzz)
@@ -52,7 +52,7 @@ struct MutatorProtocolTests {
     }
 
     @Test("SingleMutator works with custom seeds and mutate")
-    func singleMutatorWorks() {
+    func singleMutatorWorks() async {
         let mutator = SingleMutator<Int>(
             seeds: [1, 2, 3],
             mutate: { [$0 * 2] }
@@ -68,7 +68,7 @@ struct MutatorProtocolTests {
 @Suite("String Mutators")
 struct StringMutatorTests {
     @Test("PhoneNumber mutator has valid seeds")
-    func phoneNumberSeeds() {
+    func phoneNumberSeeds() async {
         let mutator = String.mutators(.phoneNumbers)
 
         #expect(!mutator.seeds.isEmpty)
@@ -77,7 +77,7 @@ struct StringMutatorTests {
     }
 
     @Test("PhoneNumber mutator generates mutations")
-    func phoneNumberMutations() {
+    func phoneNumberMutations() async {
         let mutator = String.mutators(.phoneNumbers)
         let mutations = mutator.mutate("555-1234")
 
@@ -87,7 +87,7 @@ struct StringMutatorTests {
     }
 
     @Test("Email mutator has valid seeds")
-    func emailSeeds() {
+    func emailSeeds() async {
         let mutator = String.mutators(.emails)
 
         #expect(!mutator.seeds.isEmpty)
@@ -95,7 +95,7 @@ struct StringMutatorTests {
     }
 
     @Test("Email mutator generates mutations")
-    func emailMutations() {
+    func emailMutations() async {
         let mutator = String.mutators(.emails)
         let mutations = mutator.mutate("test@example.com")
 
@@ -105,7 +105,7 @@ struct StringMutatorTests {
     }
 
     @Test("URL mutator has valid seeds")
-    func urlSeeds() {
+    func urlSeeds() async {
         let mutator = String.mutators(.urls)
 
         #expect(!mutator.seeds.isEmpty)
@@ -114,7 +114,7 @@ struct StringMutatorTests {
     }
 
     @Test("SQL injection mutator has dangerous seeds")
-    func sqlSeeds() {
+    func sqlSeeds() async {
         let mutator = String.mutators(.sql)
 
         #expect(!mutator.seeds.isEmpty)
@@ -123,7 +123,7 @@ struct StringMutatorTests {
     }
 
     @Test("SQL injection mutator generates attacks")
-    func sqlMutations() {
+    func sqlMutations() async {
         let mutator = String.mutators(.sql)
         let mutations = mutator.mutate("admin")
 
@@ -132,7 +132,7 @@ struct StringMutatorTests {
     }
 
     @Test("XSS mutator has script tags")
-    func xssSeeds() {
+    func xssSeeds() async {
         let mutator = String.mutators(.xss)
 
         #expect(!mutator.seeds.isEmpty)
@@ -141,7 +141,7 @@ struct StringMutatorTests {
     }
 
     @Test("Unicode mutator has diverse characters")
-    func unicodeSeeds() {
+    func unicodeSeeds() async {
         let mutator = String.mutators(.unicode)
 
         #expect(!mutator.seeds.isEmpty)
@@ -149,7 +149,7 @@ struct StringMutatorTests {
     }
 
     @Test("Whitespace mutator has various whitespace")
-    func whitespaceSeeds() {
+    func whitespaceSeeds() async {
         let mutator = String.mutators(.whitespace)
 
         #expect(mutator.seeds.contains(" "))
@@ -158,14 +158,14 @@ struct StringMutatorTests {
     }
 
     @Test("Empty string mutator includes empty")
-    func emptySeeds() {
+    func emptySeeds() async {
         let mutator = String.mutators(.empty)
 
         #expect(mutator.seeds.contains(""))
     }
 
     @Test("Boundary mutator has length extremes")
-    func boundarySeeds() {
+    func boundarySeeds() async {
         let mutator = String.mutators(.boundaries)
 
         #expect(mutator.seeds.contains(""))
@@ -174,7 +174,7 @@ struct StringMutatorTests {
     }
 
     @Test("Multiple strategies combine correctly")
-    func multipleStrategies() {
+    func multipleStrategies() async {
         let mutator = String.mutators(.sql, .xss)
 
         #expect(mutator.seeds.contains(where: { $0.contains("DROP") }))
@@ -187,7 +187,7 @@ struct StringMutatorTests {
 @Suite("Int Mutators")
 struct IntMutatorTests {
     @Test("Boundary mutator has extremes")
-    func boundarySeeds() {
+    func boundarySeeds() async {
         let mutator = Int.mutators(.boundaries)
 
         #expect(mutator.seeds.contains(0))
@@ -198,7 +198,7 @@ struct IntMutatorTests {
     }
 
     @Test("Boundary mutator generates useful mutations")
-    func boundaryMutations() {
+    func boundaryMutations() async {
         let mutator = Int.mutators(.boundaries)
         let mutations = mutator.mutate(100)
 
@@ -210,7 +210,7 @@ struct IntMutatorTests {
     }
 
     @Test("Port mutator has common ports")
-    func portSeeds() {
+    func portSeeds() async {
         let mutator = Int.mutators(.ports)
 
         #expect(mutator.seeds.contains(80))
@@ -221,7 +221,7 @@ struct IntMutatorTests {
     }
 
     @Test("HTTP status code mutator has all classes")
-    func httpStatusSeeds() {
+    func httpStatusSeeds() async {
         let mutator = Int.mutators(.httpStatusCodes)
 
         // 1xx informational
@@ -237,7 +237,7 @@ struct IntMutatorTests {
     }
 
     @Test("Negative mutator has negative values")
-    func negativeSeeds() {
+    func negativeSeeds() async {
         let mutator = Int.mutators(.negative)
 
         #expect(mutator.seeds.allSatisfy { $0 < 0 })
@@ -246,7 +246,7 @@ struct IntMutatorTests {
     }
 
     @Test("Powers mutator has powers of two")
-    func powersSeeds() {
+    func powersSeeds() async {
         let mutator = Int.mutators(.powers)
 
         #expect(mutator.seeds.contains(1))
@@ -256,7 +256,7 @@ struct IntMutatorTests {
     }
 
     @Test("Multiple strategies combine correctly")
-    func multipleStrategies() {
+    func multipleStrategies() async {
         let mutator = Int.mutators(.boundaries, .ports)
 
         #expect(mutator.seeds.contains(Int.max))
@@ -269,7 +269,7 @@ struct IntMutatorTests {
 @Suite("Bool Mutator")
 struct BoolMutatorTests {
     @Test("Bool mutator has both values")
-    func boolSeeds() {
+    func boolSeeds() async {
         let mutator = Bool.mutator()
 
         #expect(mutator.seeds.contains(true))
@@ -277,7 +277,7 @@ struct BoolMutatorTests {
     }
 
     @Test("Bool mutator flips value")
-    func boolMutations() {
+    func boolMutations() async {
         let mutator = Bool.mutator()
 
         #expect(mutator.mutate(true) == [false])
@@ -290,7 +290,7 @@ struct BoolMutatorTests {
 @Suite("Double Mutators")
 struct DoubleMutatorTests {
     @Test("Boundary mutator has extremes")
-    func boundarySeeds() {
+    func boundarySeeds() async {
         let mutator = Double.mutators(.boundaries)
 
         #expect(mutator.seeds.contains(0.0))
@@ -300,7 +300,7 @@ struct DoubleMutatorTests {
     }
 
     @Test("Special mutator has special values")
-    func specialSeeds() {
+    func specialSeeds() async {
         let mutator = Double.mutators(.special)
 
         #expect(mutator.seeds.contains(where: { $0.isNaN }))
@@ -310,7 +310,7 @@ struct DoubleMutatorTests {
     }
 
     @Test("Percentage mutator has 0-1 range values")
-    func percentageSeeds() {
+    func percentageSeeds() async {
         let mutator = Double.mutators(.percentages)
 
         #expect(mutator.seeds.contains(0.0))
@@ -321,7 +321,7 @@ struct DoubleMutatorTests {
     }
 
     @Test("Multiple strategies combine correctly")
-    func multipleStrategies() {
+    func multipleStrategies() async {
         let mutator = Double.mutators(.boundaries, .special)
 
         #expect(mutator.seeds.contains(0.0))
@@ -341,7 +341,7 @@ struct MutatorFuzzEngineTests {
     }
 
     @Test("FuzzEngine uses mutator seeds")
-    func engineUsesMutatorSeeds() {
+    func engineUsesMutatorSeeds() async {
         nonisolated(unsafe) var testedInputs: [String] = []
         nonisolated(unsafe) var callCount = 0
 
@@ -350,7 +350,7 @@ struct MutatorFuzzEngineTests {
             return Self.makeCounters(callCount)
         }
 
-        withDependencies {
+        await withDependencies {
             $0.coverageCounters = CoverageCountersClient(snapshot: snapshotFn, reset: {}, isAvailable: { true })
         } operation: {
             let mutator = SingleMutator<String>(
@@ -365,7 +365,7 @@ struct MutatorFuzzEngineTests {
             )
 
             let engine = FuzzEngine<String>(mutators: mutator, config: config)
-            _ = engine.run { input in
+            _ = await engine.run { input in
                 testedInputs.append(input)
             }
         }
@@ -376,7 +376,7 @@ struct MutatorFuzzEngineTests {
     }
 
     @Test("FuzzEngine uses mutator with multiple seeds")
-    func engineUsesMutatorWithMultipleSeeds() {
+    func engineUsesMutatorWithMultipleSeeds() async {
         nonisolated(unsafe) var testedInputs: [String] = []
         nonisolated(unsafe) var callCount = 0
 
@@ -385,7 +385,7 @@ struct MutatorFuzzEngineTests {
             return Self.makeCounters(callCount)
         }
 
-        withDependencies {
+        await withDependencies {
             $0.coverageCounters = CoverageCountersClient(snapshot: snapshotFn, reset: {}, isAvailable: { true })
         } operation: {
             // Use AnyMutator to test with multiple seeds
@@ -401,7 +401,7 @@ struct MutatorFuzzEngineTests {
             )
 
             let engine = FuzzEngine<String>(mutators: mutator, config: config)
-            _ = engine.run { input in
+            _ = await engine.run { input in
                 testedInputs.append(input)
             }
         }
@@ -425,7 +425,7 @@ struct MutatorPublicAPITests {
     }
 
     @Test("fuzz(using:) accepts single mutator")
-    func fuzzWithSingleMutator() throws {
+    func fuzzWithSingleMutator() async throws {
         nonisolated(unsafe) var testedInputs: [String] = []
         nonisolated(unsafe) var callCount = 0
 
@@ -434,7 +434,7 @@ struct MutatorPublicAPITests {
             return Self.makeCounters(callCount)
         }
 
-        try withDependencies {
+        try await withDependencies {
             $0.coverageCounters = CoverageCountersClient(snapshot: snapshotFn, reset: {}, isAvailable: { true })
             // Use no-op file manager to avoid writing corpus to disk
             $0.fileManager = FileManagerClient(
@@ -451,7 +451,7 @@ struct MutatorPublicAPITests {
                 mutate: { _ in [] }
             )
 
-            try fuzz(
+            try await fuzz(
                 using: mutator,
                 iterations: 10,
                 duration: 1
@@ -466,7 +466,7 @@ struct MutatorPublicAPITests {
     }
 
     @Test("fuzz(using:) accepts built-in mutators")
-    func fuzzWithBuiltInMutators() throws {
+    func fuzzWithBuiltInMutators() async throws {
         nonisolated(unsafe) var testedInputs: [String] = []
         nonisolated(unsafe) var callCount = 0
 
@@ -475,7 +475,7 @@ struct MutatorPublicAPITests {
             return Self.makeCounters(callCount)
         }
 
-        try withDependencies {
+        try await withDependencies {
             $0.coverageCounters = CoverageCountersClient(snapshot: snapshotFn, reset: {}, isAvailable: { true })
             // Use no-op file manager to avoid writing corpus to disk
             $0.fileManager = FileManagerClient(
@@ -487,7 +487,7 @@ struct MutatorPublicAPITests {
                 readData: { _ in Data() }
             )
         } operation: {
-            try fuzz(
+            try await fuzz(
                 using: String.mutators(.empty),
                 iterations: 10,
                 duration: 1
@@ -501,7 +501,7 @@ struct MutatorPublicAPITests {
     }
 
     @Test("fuzz(using:) accepts multiple mutators for multiple inputs")
-    func fuzzWithMultipleMutators() throws {
+    func fuzzWithMultipleMutators() async throws {
         nonisolated(unsafe) var testedInputs: [(String, Int)] = []
         nonisolated(unsafe) var callCount = 0
 
@@ -510,7 +510,7 @@ struct MutatorPublicAPITests {
             return Self.makeCounters(callCount)
         }
 
-        try withDependencies {
+        try await withDependencies {
             $0.coverageCounters = CoverageCountersClient(snapshot: snapshotFn, reset: {}, isAvailable: { true })
             $0.fileManager = FileManagerClient(
                 currentDirectoryPath: { "/test" },
@@ -530,7 +530,7 @@ struct MutatorPublicAPITests {
                 mutate: { [$0 + 1] }
             )
 
-            try fuzz(
+            try await fuzz(
                 using: stringMutator, intMutator,
                 iterations: 20,
                 duration: 2
@@ -553,7 +553,7 @@ struct MutatorPublicAPITests {
     }
 
     @Test("fuzz(using:) with built-in mutators for multiple inputs")
-    func fuzzWithMultipleBuiltInMutators() throws {
+    func fuzzWithMultipleBuiltInMutators() async throws {
         nonisolated(unsafe) var testedInputs: [(String, Int)] = []
         nonisolated(unsafe) var callCount = 0
 
@@ -562,7 +562,7 @@ struct MutatorPublicAPITests {
             return Self.makeCounters(callCount)
         }
 
-        try withDependencies {
+        try await withDependencies {
             $0.coverageCounters = CoverageCountersClient(snapshot: snapshotFn, reset: {}, isAvailable: { true })
             $0.fileManager = FileManagerClient(
                 currentDirectoryPath: { "/test" },
@@ -573,7 +573,7 @@ struct MutatorPublicAPITests {
                 readData: { _ in Data() }
             )
         } operation: {
-            try fuzz(
+            try await fuzz(
                 using: String.mutators(.empty), Int.mutators(.boundaries),
                 iterations: 50,
                 duration: 3
@@ -597,7 +597,7 @@ struct MutatorPublicAPITests {
     }
 
     @Test("fuzz(using:) with composed mutator strategies for single input")
-    func fuzzWithComposedStrategies() throws {
+    func fuzzWithComposedStrategies() async throws {
         nonisolated(unsafe) var testedInputs: [String] = []
         nonisolated(unsafe) var callCount = 0
 
@@ -606,7 +606,7 @@ struct MutatorPublicAPITests {
             return Self.makeCounters(callCount)
         }
 
-        try withDependencies {
+        try await withDependencies {
             $0.coverageCounters = CoverageCountersClient(snapshot: snapshotFn, reset: {}, isAvailable: { true })
             $0.fileManager = FileManagerClient(
                 currentDirectoryPath: { "/test" },
@@ -618,7 +618,7 @@ struct MutatorPublicAPITests {
             )
         } operation: {
             // Compose multiple strategies for a single String input
-            try fuzz(
+            try await fuzz(
                 using: String.mutators(.empty, .sql, .xss),
                 iterations: 500,
                 duration: 5
