@@ -21,14 +21,14 @@ extension Cat {
 
 // Example using the @Fuzzable macro
 @Fuzzable
-struct Dog {
+struct Dog: Hashable {
     let age: Int
     let isBrown: Bool
 }
 
 // Nested fuzzable type - Human contains a Dog
 @Fuzzable
-struct Human {
+struct Human: Hashable {
     let age: Int
     let dog: Dog
 }
@@ -37,17 +37,17 @@ struct Human {
 struct FuzzableMacroTests {
     @Test func fuzzableMacroGeneratesCorrectCombinations() {
         // Dog.fuzz should produce the cartesian product of Int.fuzz and Bool.fuzz
-        let dogs = Dog.fuzz
+        let dogSet = Set(Dog.fuzz)
 
         // Expected count: Int.fuzz.count * Bool.fuzz.count
         let expectedCount = Int.fuzz.count * Bool.fuzz.count
-        #expect(dogs.count == expectedCount)
+        #expect(dogSet.count == expectedCount)
 
-        // Verify that all combinations are present
+        // Verify that all combinations are present (O(n) with Set)
         for intValue in Int.fuzz {
             for boolValue in Bool.fuzz {
-                let matchingDog = dogs.contains { $0.age == intValue && $0.isBrown == boolValue }
-                #expect(matchingDog, "Missing combination: age=\(intValue), isBrown=\(boolValue)")
+                let candidate = Dog(age: intValue, isBrown: boolValue)
+                #expect(dogSet.contains(candidate), "Missing combination: \(candidate)")
             }
         }
     }
@@ -74,15 +74,13 @@ struct FuzzableMacroTests {
     }
 
     @Test func nestedFuzzableContainsAllCombinations() {
-        let humans = Human.fuzz
+        let humanSet = Set(Human.fuzz)
 
-        // Verify all combinations of human age and dog are present
+        // Verify all combinations of human age and dog are present (O(n) with Set)
         for humanAge in Int.fuzz {
             for dog in Dog.fuzz {
-                let matchingHuman = humans.contains {
-                    $0.age == humanAge && $0.dog.age == dog.age && $0.dog.isBrown == dog.isBrown
-                }
-                #expect(matchingHuman, "Missing combination: Human(age: \(humanAge), dog: Dog(age: \(dog.age), isBrown: \(dog.isBrown)))")
+                let candidate = Human(age: humanAge, dog: dog)
+                #expect(humanSet.contains(candidate), "Missing combination: \(candidate)")
             }
         }
     }

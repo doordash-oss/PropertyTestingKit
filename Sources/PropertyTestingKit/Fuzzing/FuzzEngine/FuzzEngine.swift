@@ -545,6 +545,34 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
         totalGenerations = seedInputs.count
         // Note: don't clear priorityMutationIndex - seeds may have set a priority to follow up on
 
+        // Early exit if no seeds were processed and no mutations are possible
+        // This prevents spinning until time limit when fuzz array is empty
+        let canGenerateFresh = !(mutatorSeeds?() ?? cartesianProductFuzz()).isEmpty
+        if corpus.isEmpty && !canGenerateFresh {
+            if config.verbose {
+                print("[Fuzz] No seeds and no mutations possible - exiting early")
+            }
+            let duration = dateClient.now().timeIntervalSince(startTime)
+            let stats = FuzzStats(
+                totalInputs: 0,
+                newPaths: 0,
+                mutations: 0,
+                generations: 0,
+                duration: duration,
+                stopReason: .noSeedsAvailable,
+                failures: failures.count,
+                hangs: hangs.count
+            )
+            return FuzzResult(
+                corpus: corpus,
+                failures: failures,
+                stats: stats,
+                wasRegression: false,
+                coverageChanges: [],
+                coverageGapReport: nil
+            )
+        }
+
         let fuzzLoopStart = CFAbsoluteTimeGetCurrent()
         // Phase 2: Coverage-guided fuzzing
         var iteration = seedInputs.count

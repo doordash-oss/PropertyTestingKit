@@ -1,6 +1,6 @@
 import Foundation
 
-func cartesianProduct<each T>(_ input: repeat [each T]) -> [(repeat each T)] {
+public func cartesianProduct<each T>(_ input: repeat [each T]) -> [(repeat each T)] {
     for array in repeat each input {
         guard !array.isEmpty else {
             return []

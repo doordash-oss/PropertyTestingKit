@@ -91,6 +91,19 @@ struct EmptyFuzzable: Fuzzable, Codable, Sendable, Equatable {
     func mutate() -> [EmptyFuzzable] { [] }
 }
 
+/// Nested Fuzzable types for benchmarking cartesian product generation.
+@Fuzzable
+struct BenchDog: Codable, Sendable, Equatable, Hashable {
+    let age: Int
+    let isBrown: Bool
+}
+
+@Fuzzable
+struct BenchHuman: Codable, Sendable, Equatable, Hashable {
+    let age: Int
+    let dog: BenchDog
+}
+
 // MARK: - Benchmarks
 
 let benchmarks: @Sendable () -> Void = {
@@ -969,6 +982,86 @@ let benchmarks: @Sendable () -> Void = {
     ) { benchmark in
         for _ in benchmark.scaledIterations {
             blackHole(SanCovCounters.snapshot())
+        }
+    }
+
+    // MARK: - Nested Fuzzable Benchmarks
+
+    Benchmark(
+        "BenchHuman.fuzz generation",
+        configuration: .init(
+            metrics: [.cpuTotal, .wallClock, .mallocCountTotal],
+            warmupIterations: 10,
+            scalingFactor: .one
+        )
+    ) { benchmark in
+        for _ in benchmark.scaledIterations {
+            blackHole(BenchHuman.fuzz)
+        }
+    }
+
+    Benchmark(
+        "BenchDog.fuzz generation",
+        configuration: .init(
+            metrics: [.cpuTotal, .wallClock, .mallocCountTotal],
+            warmupIterations: 10,
+            scalingFactor: .kilo
+        )
+    ) { benchmark in
+        for _ in benchmark.scaledIterations {
+            blackHole(BenchDog.fuzz)
+        }
+    }
+
+    Benchmark(
+        "Nested fuzzable contains all combinations (O(n²) check)",
+        configuration: .init(
+            metrics: [.cpuTotal, .wallClock, .mallocCountTotal],
+            warmupIterations: 1,
+            scalingFactor: .one,
+            maxDuration: .seconds(30),
+            maxIterations: 5
+        )
+    ) { benchmark in
+        // This mirrors the nestedFuzzableContainsAllCombinations test
+        for _ in benchmark.scaledIterations {
+            let humans = BenchHuman.fuzz
+
+            // O(n²) verification - same as the test
+            for humanAge in Int.fuzz {
+                for dog in BenchDog.fuzz {
+                    let matchingHuman = humans.contains {
+                        $0.age == humanAge && $0.dog.age == dog.age && $0.dog.isBrown == dog.isBrown
+                    }
+                    blackHole(matchingHuman)
+                }
+            }
+        }
+    }
+
+    Benchmark(
+        "Nested fuzzable O(n) check using Set",
+        configuration: .init(
+            metrics: [.cpuTotal, .wallClock, .mallocCountTotal],
+            warmupIterations: 10,
+            scalingFactor: .one,
+            maxDuration: .seconds(30),
+            maxIterations: 100
+        )
+    ) { benchmark in
+        // This shows the improvement possible with a Set-based approach
+        for _ in benchmark.scaledIterations {
+            let humans = BenchHuman.fuzz
+            let humanSet = Set(humans)
+
+            // O(n) verification using Set
+            for humanAge in Int.fuzz {
+                for dog in BenchDog.fuzz {
+                    let candidate = BenchHuman(age: humanAge, dog: dog)
+                    let matchingHuman = humanSet.contains(candidate)
+                    blackHole(matchingHuman)
+                }
+            }
         }
     }
 

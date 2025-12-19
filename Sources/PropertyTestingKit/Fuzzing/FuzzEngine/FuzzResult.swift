@@ -67,6 +67,7 @@ public struct FuzzStats: Sendable {
         case coveragePlateau = "coverage_plateau"
         case legacyPlateau = "legacy_plateau"
         case regression = "regression"
+        case noSeedsAvailable = "no_seeds_available"
     }
 
     public init(
