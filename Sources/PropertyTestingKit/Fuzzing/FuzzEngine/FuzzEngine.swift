@@ -21,6 +21,22 @@ struct SeedTaskResult: Sendable {
     let timeout: TimeInterval
 }
 
+/// Metadata for a batch entry (input stored separately due to generic constraints).
+struct BatchEntryMeta: Sendable {
+    let index: Int
+    let parentIndex: Int?
+    let strategy: MutationStrategy?
+    let isMutation: Bool
+}
+
+/// Result type for parallel mutation testing.
+struct BatchTestResult: Sendable {
+    let index: Int
+    let signature: CoverageSignature?
+    let error: (any Error)?
+    let timedOut: Bool
+}
+
 // MARK: - FuzzEngine
 
 /// A coverage-guided fuzzing engine.
@@ -595,7 +611,7 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
         }
 
         let fuzzLoopStart = CFAbsoluteTimeGetCurrent()
-        // Phase 2: Coverage-guided fuzzing
+        // Phase 2: Coverage-guided fuzzing with batch parallelization
         var iteration = seedInputs.count
         var stopReason: FuzzStats.StopReason = .iterationLimit
 
@@ -603,11 +619,13 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
         var timeInMutation: Double = 0
         var timeInTest: Double = 0
         var timeInCoverage: Double = 0
-        var timeInOverhead: Double = 0
+
+        let batchSize = config.mutationBatchSize
 
         while iteration < config.maxIterations {
-            let iterStart = CFAbsoluteTimeGetCurrent()
-            // Check stopping conditions
+            let batchStart = CFAbsoluteTimeGetCurrent()
+
+            // Check stopping conditions before generating batch
             if dateClient.now().timeIntervalSince(startTime) >= config.maxDuration {
                 if config.verbose {
                     print("[Fuzz] Time limit reached after \(iteration) iterations")
@@ -616,7 +634,6 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
                 break
             }
 
-            // Adaptive plateau detection (primary)
             if plateauDetector.hasPlateaued {
                 if config.verbose {
                     print("[Fuzz] Coverage plateau detected: \(plateauDetector.summary(includeDetails: true))")
@@ -626,7 +643,6 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
                 break
             }
 
-            // Legacy plateau threshold (fallback when detector disabled)
             if !config.plateauConfig.enabled && iterationsSinceNewCoverage >= config.plateauThreshold {
                 if config.verbose {
                     print("[Fuzz] Coverage plateau reached (legacy threshold)")
@@ -645,235 +661,233 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
                 }
             }
 
-            // Decide: generate fresh or mutate?
-            let input: (repeat each Input)
-            let parentIndex: Int?
-            var usedStrategy: MutationStrategy?
+            // Generate batch of inputs from current corpus state
+            // Inputs and metadata stored in parallel arrays (structs can't contain parameter packs)
+            let remainingIterations = config.maxIterations - iteration
+            let currentBatchSize = min(batchSize, remainingIterations)
+            var batchInputs: [(repeat each Input)] = []
+            var batchMeta: [BatchEntryMeta] = []
+            batchInputs.reserveCapacity(currentBatchSize)
+            batchMeta.reserveCapacity(currentBatchSize)
 
-            if corpus.isEmpty || Double.random(in: 0..<1) < config.generationRatio {
-                // Generate fresh input
-                // Use mutator seeds if provided, otherwise use Fuzzable defaults
-                let fuzzValues = mutatorSeeds?() ?? cartesianProductFuzz()
-                guard let fuzzValue = fuzzValues.randomElement() else {
-                    continue
-                }
-                input = fuzzValue
-                parentIndex = nil
-                totalGenerations += 1
-                usedStrategy = .freshGeneration  // Track as fresh generation for adaptive scheduler
-            } else {
-                // Mutate existing corpus entry
-                // Safe: we only enter this branch when !corpus.isEmpty
-                // Prioritize entries that made recent value profile progress
-                let selectedIndex: Int
-                let usingPriority: Bool
+            for batchIdx in 0..<currentBatchSize {
+                let input: (repeat each Input)
+                let parentIndex: Int?
+                var usedStrategy: MutationStrategy?
+                var isMutation = false
 
-                if let priorityIdx = priorityMutationIndex, priorityIdx < corpus.count {
-                    selectedIndex = priorityIdx
-                    usingPriority = true
-                } else if let tracker = rareBranchTracker,
-                          config.enableRareBranchTargeting,
-                          !tracker.rareIndices.isEmpty {
-                    // FairFuzz mode: prefer rare-branch-hitting entries
-                    let rareIndices = tracker.rareIndices
-                    selectedIndex = corpus.selectForMutation(
-                        preferring: rareIndices,
-                        probability: config.rareBranchSelectionProbability
-                    )!
-                    usingPriority = false
-                } else {
-                    selectedIndex = corpus.selectForMutation()!
-                    usingPriority = false
-                }
-                let parent = corpus.entries[selectedIndex].input
-                // Use mutator mutate if provided, otherwise use Fuzzable mutate
-                var mutations = mutatorMutate?(parent) ?? mutateInput(parent)
-
-                // Add target-directed mutations from value profile
-                var targetMutations: [(repeat each Input)] = []
-                if config.enableValueProfile {
-                    // Use saved targets for priority entries, otherwise extract from last test
-                    let targets = usingPriority && !savedTargets.isEmpty
-                        ? savedTargets
-                        : valueProfileTracker.extractTargets()
-                    targetMutations = generateTargetDirectedMutations(from: parent, targets: targets)
-                    mutations.append(contentsOf: targetMutations)
-                }
-
-                // When following a priority chain, prefer target-directed mutations
-                if usingPriority && !targetMutations.isEmpty {
-                    // Try target mutations first when following value profile chain
-                    input = targetMutations.randomElement()!
-                    // Keep priority if we have more targets to try
-                    if targetMutations.count <= 1 {
-                        priorityMutationIndex = nil
-                        savedTargets = []
-                    }
-                    parentIndex = selectedIndex
-                    totalMutations += 1
-                } else if let m = mutations.randomElement() {
-                    input = m
-                    priorityMutationIndex = nil  // Clear priority when not using it
-                    savedTargets = []
-                    parentIndex = selectedIndex
-                    totalMutations += 1
-                } else {
-                    // Mutations exhausted - fall back to generation to make progress
+                if corpus.isEmpty || Double.random(in: 0..<1) < config.generationRatio {
+                    // Generate fresh input
                     let fuzzValues = mutatorSeeds?() ?? cartesianProductFuzz()
                     guard let fuzzValue = fuzzValues.randomElement() else {
-                        // No seeds and no mutations - can't make progress
-                        // Increment iteration to avoid infinite loop
-                        iteration += 1
                         continue
                     }
                     input = fuzzValue
                     parentIndex = nil
                     totalGenerations += 1
                     usedStrategy = .freshGeneration
-                    priorityMutationIndex = nil
-                    savedTargets = []
+                } else {
+                    // Mutate existing corpus entry
+                    let selectedIndex: Int
+                    let usingPriority: Bool
+
+                    if let priorityIdx = priorityMutationIndex, priorityIdx < corpus.count {
+                        selectedIndex = priorityIdx
+                        usingPriority = true
+                    } else if let tracker = rareBranchTracker,
+                              config.enableRareBranchTargeting,
+                              !tracker.rareIndices.isEmpty {
+                        let rareIndices = tracker.rareIndices
+                        selectedIndex = corpus.selectForMutation(
+                            preferring: rareIndices,
+                            probability: config.rareBranchSelectionProbability
+                        )!
+                        usingPriority = false
+                    } else {
+                        selectedIndex = corpus.selectForMutation()!
+                        usingPriority = false
+                    }
+
+                    let parent = corpus.entries[selectedIndex].input
+                    var mutations = mutatorMutate?(parent) ?? mutateInput(parent)
+
+                    // Add target-directed mutations from value profile
+                    var targetMutations: [(repeat each Input)] = []
+                    if config.enableValueProfile {
+                        let targets = usingPriority && !savedTargets.isEmpty
+                            ? savedTargets
+                            : valueProfileTracker.extractTargets()
+                        targetMutations = generateTargetDirectedMutations(from: parent, targets: targets)
+                        mutations.append(contentsOf: targetMutations)
+                    }
+
+                    if usingPriority && !targetMutations.isEmpty {
+                        input = targetMutations.randomElement()!
+                        if targetMutations.count <= 1 {
+                            priorityMutationIndex = nil
+                            savedTargets = []
+                        }
+                        parentIndex = selectedIndex
+                        totalMutations += 1
+                        isMutation = true
+                    } else if let m = mutations.randomElement() {
+                        input = m
+                        priorityMutationIndex = nil
+                        savedTargets = []
+                        parentIndex = selectedIndex
+                        totalMutations += 1
+                        isMutation = true
+                    } else {
+                        // Mutations exhausted - fall back to generation
+                        let fuzzValues = mutatorSeeds?() ?? cartesianProductFuzz()
+                        guard let fuzzValue = fuzzValues.randomElement() else {
+                            continue
+                        }
+                        input = fuzzValue
+                        parentIndex = nil
+                        totalGenerations += 1
+                        usedStrategy = .freshGeneration
+                        priorityMutationIndex = nil
+                        savedTargets = []
+                    }
                 }
+
+                batchInputs.append(input)
+                batchMeta.append(BatchEntryMeta(
+                    index: batchIdx,
+                    parentIndex: parentIndex,
+                    strategy: usedStrategy,
+                    isMutation: isMutation
+                ))
+            }
+
+            // Skip if no inputs were generated
+            guard !batchInputs.isEmpty else {
+                iteration += 1
+                continue
             }
 
             let mutationEnd = CFAbsoluteTimeGetCurrent()
-            timeInMutation += mutationEnd - iterStart
+            timeInMutation += mutationEnd - batchStart
 
-            // Reset coverage and value profile for this test
-            // Task-isolated: only affects this task's counters
-            coverageCounters.reset()
-            if config.enableValueProfile {
-                valueProfileTracker.reset()
-            }
-
+            // Run batch in parallel using withTaskGroup
+            // Each task gets isolated coverage via swift_task_getCurrent()
             let testStart = CFAbsoluteTimeGetCurrent()
-            // Run test - with optional timeout if configured
-            var testError: Error?
-            var timedOut = false
+            let batchResults = await withTaskGroup(
+                of: BatchTestResult.self,
+                returning: [BatchTestResult].self
+            ) { group in
+                for (index, input) in batchInputs.enumerated() {
+                    group.addTask {
+                        // Reset coverage for this task (task-isolated)
+                        coverageClient.reset()
 
-            if let perTimeout = config.perInputTimeout {
-                // With timeout - race test against timeout using async
-                do {
-                    try await withThrowingTaskGroup(of: Void.self) { timeoutGroup in
-                        timeoutGroup.addTask {
-                            try test(input)
+                        var testError: (any Error)?
+                        var timedOut = false
+
+                        if let timeout = perTimeout {
+                            do {
+                                try await withThrowingTaskGroup(of: Void.self) { timeoutGroup in
+                                    timeoutGroup.addTask {
+                                        try test(input)
+                                    }
+                                    timeoutGroup.addTask {
+                                        try await Task.sleep(nanoseconds: UInt64(timeout * 1_000_000_000))
+                                        throw HangDetectedError(timeout: timeout)
+                                    }
+                                    _ = try await timeoutGroup.next()
+                                    timeoutGroup.cancelAll()
+                                }
+                            } catch is HangDetectedError {
+                                timedOut = true
+                            } catch {
+                                testError = error
+                            }
+                        } else {
+                            do {
+                                try test(input)
+                            } catch {
+                                testError = error
+                            }
                         }
-                        timeoutGroup.addTask {
-                            try await Task.sleep(nanoseconds: UInt64(perTimeout * 1_000_000_000))
-                            throw HangDetectedError(timeout: perTimeout)
+
+                        // Get coverage snapshot
+                        let signature: CoverageSignature?
+                        if let sparseCoverage = coverageClient.snapshotCoveredOnly() {
+                            signature = CoverageSignature(sparseCoverage: sparseCoverage)
+                        } else {
+                            signature = nil
                         }
-                        // Wait for first to complete
-                        _ = try await timeoutGroup.next()
-                        // Cancel the other
-                        timeoutGroup.cancelAll()
+
+                        return BatchTestResult(
+                            index: index,
+                            signature: signature,
+                            error: testError,
+                            timedOut: timedOut
+                        )
                     }
-                } catch is HangDetectedError {
-                    timedOut = true
-                } catch {
-                    testError = error
                 }
-            } else {
-                // No timeout - run directly
-                do {
-                    try test(input)
-                } catch {
-                    testError = error
+
+                var results: [BatchTestResult] = []
+                for await result in group {
+                    results.append(result)
                 }
+                return results.sorted { $0.index < $1.index }
             }
 
             let testEnd = CFAbsoluteTimeGetCurrent()
             timeInTest += testEnd - testStart
 
+            // Process results sequentially to update corpus and state
             let coverageStart = CFAbsoluteTimeGetCurrent()
-            iteration += 1
-            iterationsSinceNewCoverage += 1
 
-            // Handle test result
-            if timedOut {
-                let timeout = config.perInputTimeout ?? 0
-                hangs.append((input, timeout))
-                if config.verbose {
-                    print("[Fuzz] Hang detected: input timed out after \(timeout)s, iteration \(iteration)")
-                }
-            } else if let error = testError {
-                failures.append((input, error))
-            }
+            for result in batchResults {
+                let input = batchInputs[result.index]
+                let meta = batchMeta[result.index]
+                iteration += 1
+                iterationsSinceNewCoverage += 1
 
-            // Process value profile improvements
-            let vpImprovements = config.enableValueProfile ? valueProfileTracker.processComparisons() : []
-
-            // Get coverage snapshot (task-isolated, no diff needed)
-            // Use sparse snapshot for efficiency - only iterates non-zero counters
-            let snapshotStart = CFAbsoluteTimeGetCurrent()
-            if let sparseCoverage = coverageCounters.snapshotCoveredOnly() {
-                let snapshotTime = CFAbsoluteTimeGetCurrent() - snapshotStart
-                let sigStart = CFAbsoluteTimeGetCurrent()
-                let signature = CoverageSignature(sparseCoverage: sparseCoverage)
-                let sigTime = CFAbsoluteTimeGetCurrent() - sigStart
-                let corpusStart = CFAbsoluteTimeGetCurrent()
-                let addedForCoverage = corpus.addIfInteresting(input: repeat each input, signature: signature, parentIndex: parentIndex)
-                let corpusTime = CFAbsoluteTimeGetCurrent() - corpusStart
-                if iteration == seedInputs.count + 1 {
-                    print("[Timing] First iter breakdown: snapshot=\(String(format: "%.4f", snapshotTime))s, sig=\(String(format: "%.4f", sigTime))s, corpus=\(String(format: "%.4f", corpusTime))s")
+                // Handle test errors and hangs
+                if result.timedOut {
+                    let timeout = config.perInputTimeout ?? 0
+                    hangs.append((input, timeout))
+                    if verbose {
+                        print("[Fuzz] Hang detected: input timed out after \(timeout)s, iteration \(iteration)")
+                    }
+                } else if let error = result.error {
+                    failures.append((input, error))
                 }
 
-                // Record discovery status for plateau detection
-                let discoveredNew = addedForCoverage || !vpImprovements.isEmpty
-                plateauDetector.record(discoveredNewCoverage: discoveredNew)
+                // Process coverage
+                if let signature = result.signature {
+                    let addedForCoverage = corpus.addIfInteresting(input: input, signature: signature, parentIndex: meta.parentIndex)
 
-                // Record strategy effectiveness for adaptive mutation scheduler
-                if let strategy = usedStrategy, var scheduler = adaptiveMutationScheduler {
-                    scheduler.recordAttempt(strategy, discoveredNewCoverage: discoveredNew)
-                    adaptiveMutationScheduler = scheduler
-                }
+                    // Record discovery status for plateau detection
+                    plateauDetector.record(discoveredNewCoverage: addedForCoverage)
 
-                // Update rare branch tracker when new entry is added
-                if addedForCoverage {
-                    rareBranchTracker?.recordEntry(signature)
-                    // Periodically recompute threshold (every 50 new entries)
-                    if corpus.count % 50 == 0 {
-                        rareBranchTracker?.recomputeThreshold()
+                    // Record strategy effectiveness for adaptive mutation scheduler
+                    if let strategy = meta.strategy, var scheduler = adaptiveMutationScheduler {
+                        scheduler.recordAttempt(strategy, discoveredNewCoverage: addedForCoverage)
+                        adaptiveMutationScheduler = scheduler
                     }
 
-                    // Track swarm coverage hit
-                    swarmScheduler?.recordCoverageHit()
-                }
+                    if addedForCoverage {
+                        rareBranchTracker?.recordEntry(signature)
+                        if corpus.count % 50 == 0 {
+                            rareBranchTracker?.recomputeThreshold()
+                        }
+                        swarmScheduler?.recordCoverageHit()
+                        iterationsSinceNewCoverage = 0
 
-                if addedForCoverage {
-                    iterationsSinceNewCoverage = 0
-                    if config.verbose {
-                        let rareInfo = rareBranchTracker.map { " (\($0.summary()))" } ?? ""
-                        let swarmInfo = swarmScheduler.map { " \($0.summary())" } ?? ""
-                        print("[Fuzz] New coverage! \(corpus.count) entries, iteration \(iteration)\(rareInfo)\(swarmInfo)")
-                    }
-                    // CRITICAL: Even when we found new coverage, check for VP targets to continue the chain.
-                    // This handles cases like: a==111 passes (new branch!) revealing b==222 (new comparison).
-                    // We need to follow up on b==222 even though we already added for coverage.
-                    if config.enableValueProfile && !vpImprovements.isEmpty {
-                        let newTargets = valueProfileTracker.extractTargets()
-                        if !newTargets.isEmpty {
-                            // The corpus entry was just added at addIfInteresting, point to it
-                            priorityMutationIndex = corpus.count - 1
-                            savedTargets = newTargets
-                            if config.verbose {
-                                print("[Fuzz] Coverage + VP chain: \(newTargets.count) target(s) to follow")
-                            }
+                        if verbose {
+                            let rareInfo = rareBranchTracker.map { " (\($0.summary()))" } ?? ""
+                            let swarmInfo = swarmScheduler.map { " \($0.summary())" } ?? ""
+                            print("[Fuzz] New coverage! \(corpus.count) entries, iteration \(iteration)\(rareInfo)\(swarmInfo)")
                         }
                     }
-                } else if !vpImprovements.isEmpty {
-                    // Input made progress on comparisons (new comparison or closer distance)
-                    // Always add to corpus to preserve incremental progress
-                    corpus.add(input: repeat each input, signature: signature, parentIndex: parentIndex)
-                    rareBranchTracker?.recordEntry(signature)
-                    priorityMutationIndex = corpus.count - 1  // Prioritize this entry next
-                    savedTargets = valueProfileTracker.extractTargets()  // Save targets for follow-up
-                    iterationsSinceNewCoverage = 0
-                    if config.verbose {
-                        print("[Fuzz] Value profile progress: \(vpImprovements.count) comparison(s), \(savedTargets.count) target(s), iteration \(iteration)")
-                    }
+                } else {
+                    plateauDetector.record(discoveredNewCoverage: false)
                 }
-            } else {
-                // No coverage counters available - still record for plateau detection
-                plateauDetector.record(discoveredNewCoverage: false)
             }
 
             let coverageEnd = CFAbsoluteTimeGetCurrent()

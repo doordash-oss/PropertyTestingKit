@@ -83,6 +83,60 @@ func realisticCoverageGap(_ input: Int) {
     }
 }
 
+/// An expensive validation function that simulates realistic test workloads.
+/// Takes ~100μs per call with multiple code paths for coverage.
+@inline(never)
+func expensiveValidation(_ input: Int) throws {
+    // Simulate parsing/validation work with many branches
+    var accumulator: Int = 0
+
+    // Multiple passes over the input to create measurable work
+    for iteration in 0..<100 {
+        let adjusted = input &+ iteration
+
+        if adjusted < 0 {
+            accumulator &+= hashValue(adjusted, seed: 1)
+        } else if adjusted == 0 {
+            accumulator &+= hashValue(adjusted, seed: 2)
+        } else if adjusted < 100 {
+            accumulator &+= hashValue(adjusted, seed: 3)
+        } else if adjusted < 1000 {
+            accumulator &+= hashValue(adjusted, seed: 4)
+        } else if adjusted < 10000 {
+            accumulator &+= hashValue(adjusted, seed: 5)
+        } else {
+            accumulator &+= hashValue(adjusted, seed: 6)
+        }
+
+        // Add more branching based on bits
+        if adjusted & 1 != 0 {
+            accumulator &+= hashValue(adjusted, seed: 7)
+        }
+        if adjusted & 2 != 0 {
+            accumulator &+= hashValue(adjusted, seed: 8)
+        }
+        if adjusted & 4 != 0 {
+            accumulator &+= hashValue(adjusted, seed: 9)
+        }
+        if adjusted & 8 != 0 {
+            accumulator &+= hashValue(adjusted, seed: 10)
+        }
+    }
+
+    blackHole(accumulator)
+}
+
+/// Hash function to create work and prevent optimization.
+@inline(never)
+func hashValue(_ value: Int, seed: Int) -> Int {
+    var result = value ^ seed
+    for _ in 0..<10 {
+        result = result &* 31 &+ seed
+        result = result ^ (result >> 7)
+    }
+    return result
+}
+
 /// A Fuzzable type with empty fuzz array and empty mutations.
 /// Used to benchmark edge case handling in FuzzEngine.
 struct EmptyFuzzable: Fuzzable, Codable, Sendable, Equatable {
@@ -956,6 +1010,80 @@ let benchmarks: @Sendable () -> Void = {
                     let matchingHuman = humanSet.contains(candidate)
                     blackHole(matchingHuman)
                 }
+            }
+        }
+    }
+
+    // MARK: - Expensive Test Function Benchmarks (Real Coverage)
+    // These benchmarks use computationally expensive test functions to simulate
+    // realistic fuzzing scenarios where parallelization benefits outweigh overhead.
+
+    Benchmark(
+        "fuzz(Int) - 100 iterations, expensive test (real coverage)",
+        configuration: .init(
+            metrics: [.cpuTotal, .wallClock, .mallocCountTotal],
+            warmupIterations: 1,
+            scalingFactor: .one,
+            maxDuration: .seconds(60),
+            maxIterations: 5
+        )
+    ) { benchmark in
+        for _ in benchmark.scaledIterations {
+            let _ = try? await fuzz(
+                iterations: 100,
+                duration: 30,
+                corpusMode: .refuzzReplace,
+                detectCoverageGaps: false
+            ) { (input: Int) in
+                try expensiveValidation(input)
+            }
+        }
+    }
+
+    Benchmark(
+        "fuzz(Int) - 100 iterations, expensive test, batchSize=1 (sequential)",
+        configuration: .init(
+            metrics: [.cpuTotal, .wallClock, .mallocCountTotal],
+            warmupIterations: 1,
+            scalingFactor: .one,
+            maxDuration: .seconds(60),
+            maxIterations: 5
+        )
+    ) { benchmark in
+        for _ in benchmark.scaledIterations {
+            let config = FuzzEngine<Int>.Config(
+                maxIterations: 100,
+                maxDuration: 30,
+                corpusMode: .refuzzReplace,
+                mutationBatchSize: 1  // Force sequential execution
+            )
+            let engine = FuzzEngine<Int>(config: config)
+            let _ = await engine.run { input in
+                try expensiveValidation(input)
+            }
+        }
+    }
+
+    Benchmark(
+        "fuzz(Int) - 100 iterations, expensive test, batchSize=16",
+        configuration: .init(
+            metrics: [.cpuTotal, .wallClock, .mallocCountTotal],
+            warmupIterations: 1,
+            scalingFactor: .one,
+            maxDuration: .seconds(60),
+            maxIterations: 5
+        )
+    ) { benchmark in
+        for _ in benchmark.scaledIterations {
+            let config = FuzzEngine<Int>.Config(
+                maxIterations: 100,
+                maxDuration: 30,
+                corpusMode: .refuzzReplace,
+                mutationBatchSize: 16
+            )
+            let engine = FuzzEngine<Int>(config: config)
+            let _ = await engine.run { input in
+                try expensiveValidation(input)
             }
         }
     }

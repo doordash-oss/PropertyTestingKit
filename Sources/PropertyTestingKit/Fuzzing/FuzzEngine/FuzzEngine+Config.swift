@@ -50,6 +50,12 @@ extension FuzzEngine {
         /// Based on Miller 1990 "Fuzz" paper which used 5-minute timeouts to detect hangs.
         public var perInputTimeout: TimeInterval?
 
+        /// Number of inputs to test in parallel during the mutation phase.
+        /// Higher values increase parallelism but may reduce coverage guidance accuracy
+        /// since corpus updates happen in batches rather than after each test.
+        /// Default: 8 (balanced parallelism with reasonable guidance accuracy).
+        public var mutationBatchSize: Int
+
         /// Enable FairFuzz-style rare branch targeting.
         /// When enabled, preferentially selects and mutates inputs that hit
         /// rarely-covered branches, improving coverage uniformity.
@@ -104,6 +110,7 @@ extension FuzzEngine {
             enableValueProfile: Bool = true,
             corpusMode: CorpusMode? = nil,
             perInputTimeout: TimeInterval? = nil,
+            mutationBatchSize: Int = 8,
             enableRareBranchTargeting: Bool = false,
             rareBranchSelectionProbability: Double = 0.8,
             rareBranchMutationAmplification: Int = 3,
@@ -130,6 +137,7 @@ extension FuzzEngine {
             // Use provided mode, or check environment, or default to auto
             self.corpusMode = corpusMode ?? CorpusMode.fromEnvironment()
             self.perInputTimeout = perInputTimeout
+            self.mutationBatchSize = max(1, mutationBatchSize)  // Ensure at least 1
             self.enableRareBranchTargeting = enableRareBranchTargeting
             self.rareBranchSelectionProbability = rareBranchSelectionProbability
             self.rareBranchMutationAmplification = rareBranchMutationAmplification

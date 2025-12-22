@@ -161,12 +161,41 @@ static _Thread_local size_t tls_coverage_map_size = 0;
 // When set, this takes priority over swift_task_getCurrent()
 static _Thread_local void* tls_measurement_context = NULL;
 
-// Find or create a coverage map for the given task
-static uint8_t* find_or_create_task_map(void* task_id) {
+// Thread-local cache for coverage map lookup.
+// Since tasks stay on the same thread within synchronous code blocks,
+// we can cache the last-used task's coverage map per-thread.
+// This avoids the registry lookup on every edge hit.
+static _Thread_local void* tls_cached_context_id = NULL;
+static _Thread_local uint8_t* tls_cached_coverage_map = NULL;
+
+// Lock-free lookup for existing task map.
+// Returns NULL if not found (caller should use create_task_map_locked).
+//
+// Safety: This is safe because entries are append-only during normal operation.
+// The memory ordering ensures that when we read count=N, all entries 0..N-1
+// are fully initialized (map pointer and task_id both valid).
+static uint8_t* find_task_map_lockfree(void* task_id) {
+    // Read count with acquire semantics - synchronizes with release in creation
+    size_t count = __atomic_load_n(&g_task_registry_count, __ATOMIC_ACQUIRE);
+
+    // Search existing entries (all guaranteed fully initialized)
+    for (size_t i = 0; i < count; i++) {
+        if (g_task_registry[i].task_id == task_id) {
+            return g_task_registry[i].coverage_map;
+        }
+    }
+
+    return NULL;
+}
+
+// Locked creation of new task map.
+// Called when find_task_map_lockfree returns NULL.
+static uint8_t* create_task_map_locked(void* task_id) {
     pthread_mutex_lock(&g_registry_lock);
 
-    // Search for existing entry
-    for (size_t i = 0; i < g_task_registry_count; i++) {
+    // Double-check: another thread might have created it while we waited
+    size_t count = g_task_registry_count;
+    for (size_t i = 0; i < count; i++) {
         if (g_task_registry[i].task_id == task_id) {
             uint8_t* map = g_task_registry[i].coverage_map;
             pthread_mutex_unlock(&g_registry_lock);
@@ -175,17 +204,35 @@ static uint8_t* find_or_create_task_map(void* task_id) {
     }
 
     // Create new entry if space available
-    if (g_task_registry_count < MAX_TASK_ENTRIES && g_guard_count > 0) {
-        TaskCoverageEntry* entry = &g_task_registry[g_task_registry_count++];
-        entry->task_id = task_id;
-        entry->coverage_map = (uint8_t*)calloc(g_guard_count, 1);
-        uint8_t* map = entry->coverage_map;
+    if (count < MAX_TASK_ENTRIES && g_guard_count > 0) {
+        uint8_t* map = (uint8_t*)calloc(g_guard_count, 1);
+        if (map) {
+            // Write order matters for lock-free readers:
+            // 1. Store map pointer first (entry not yet visible)
+            g_task_registry[count].coverage_map = map;
+            // 2. Store task_id (entry still not visible, count unchanged)
+            g_task_registry[count].task_id = task_id;
+            // 3. Increment count with release - makes entry visible to readers
+            //    The release ensures steps 1 and 2 are visible before count changes
+            __atomic_store_n(&g_task_registry_count, count + 1, __ATOMIC_RELEASE);
+        }
         pthread_mutex_unlock(&g_registry_lock);
         return map;
     }
 
     pthread_mutex_unlock(&g_registry_lock);
     return NULL;
+}
+
+// Find or create a coverage map for the given task.
+// Uses lock-free lookup on the hot path, only takes lock for creation.
+static uint8_t* find_or_create_task_map(void* task_id) {
+    // Fast path: lock-free lookup
+    uint8_t* map = find_task_map_lockfree(task_id);
+    if (map) return map;
+
+    // Slow path: locked creation
+    return create_task_map_locked(task_id);
 }
 
 // Remove a task map entry and free its memory
@@ -224,6 +271,12 @@ void sancov_end_measurement(void* context) {
     if (tls_measurement_context == context) {
         tls_measurement_context = NULL;
     }
+    // Invalidate cache if it was using this context
+    // (The context pointer could be reused by a future malloc)
+    if (tls_cached_context_id == context) {
+        tls_cached_context_id = NULL;
+        tls_cached_coverage_map = NULL;
+    }
     // Clean up the task registry entry for this context
     cleanup_task_map(context);
     free(context);
@@ -239,27 +292,32 @@ static void ensure_tls_coverage_map(void) {
 
 // Get the coverage map for the current execution context
 // Priority: measurement context > Swift async task > thread-local
+//
+// Uses thread-local caching to avoid registry lookup on every edge hit.
+// Since tasks stay on the same thread within synchronous code blocks,
+// the cache hit rate is very high during test execution.
 static uint8_t* get_current_coverage_map(void) {
-    // First, check for active measurement context (sync isolation)
-    if (tls_measurement_context != NULL) {
-        uint8_t* map = find_or_create_task_map(tls_measurement_context);
-        if (map != NULL) {
-            return map;
-        }
-        // Registry full - fall through to other options
+    // Determine the current context ID (measurement context or task)
+    void* context_id = tls_measurement_context;
+    if (context_id == NULL && swift_task_getCurrent != NULL) {
+        context_id = swift_task_getCurrent();
     }
 
-    // Check if swift_task_getCurrent is available (weak import)
-    if (swift_task_getCurrent != NULL) {
-        void* task = swift_task_getCurrent();
-        if (task != NULL) {
-            // We're in a Swift async task - use task-keyed map
-            uint8_t* map = find_or_create_task_map(task);
-            if (map != NULL) {
-                return map;
-            }
-            // Task registry full - fall through to thread-local fallback
+    // Fast path: check thread-local cache
+    if (context_id != NULL && context_id == tls_cached_context_id && tls_cached_coverage_map != NULL) {
+        return tls_cached_coverage_map;
+    }
+
+    // Slow path: lookup or create, then cache
+    if (context_id != NULL) {
+        uint8_t* map = find_or_create_task_map(context_id);
+        if (map != NULL) {
+            // Update cache for next call
+            tls_cached_context_id = context_id;
+            tls_cached_coverage_map = map;
+            return map;
         }
+        // Registry full - fall through to thread-local fallback
     }
 
     // Fallback to thread-local storage for non-async contexts or when registry is full
