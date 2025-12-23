@@ -423,7 +423,6 @@ struct DeterministicTimingTests {
         @Test("MultiComponentShrinker stops second component when time exhausted")
         func testSecondComponentTimeBudgetExhaustion() async {
             let currentTime = ThreadSafeDate(Date(timeIntervalSince1970: 0))
-            let inPhaseB = ThreadSafeFlag()  // false = component A, true = component B
 
             let (minimized, stats) = withDependencies {
                 $0.dateClient = DateClient(now: { currentTime.value })
@@ -434,10 +433,10 @@ struct DeterministicTimingTests {
                 ))
 
                 return shrinker.shrink(input: (Array(0..<50), "abcdefghij")) { (arr, str) in
-                    if !inPhaseB.isSet {
-                        // Component A consumes 6 seconds
+                    // Use time-based phase detection
+                    if currentTime.value.timeIntervalSince1970 < 6 {
+                        // Component A consumes 6 seconds on first call
                         currentTime.addInterval(6)
-                        inPhaseB.set()
                     } else {
                         // Component B gets only 2 seconds remaining
                         currentTime.addInterval(1)

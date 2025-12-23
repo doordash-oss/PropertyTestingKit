@@ -67,46 +67,6 @@ actor ThreadSafeCollector<T: Sendable> {
     }
 }
 
-/// A thread-safe flag for tracking boolean state in concurrent fuzz tests.
-///
-/// Example:
-/// ```swift
-/// let sawEmpty = ThreadSafeFlag()
-/// try await fuzz { (input: String) in
-///     if input.isEmpty { sawEmpty.set() }
-/// }
-/// #expect(sawEmpty.isSet)
-/// ```
-final class ThreadSafeFlag: @unchecked Sendable {
-    private var flag: Bool
-    private let lock = NSLock()
-
-    init(_ initialValue: Bool = false) {
-        flag = initialValue
-    }
-
-    /// Set the flag to true.
-    func set() {
-        lock.lock()
-        defer { lock.unlock() }
-        flag = true
-    }
-
-    /// Clear the flag to false.
-    func clear() {
-        lock.lock()
-        defer { lock.unlock() }
-        flag = false
-    }
-
-    /// Check if the flag is set.
-    var isSet: Bool {
-        lock.lock()
-        defer { lock.unlock() }
-        return flag
-    }
-}
-
 /// A thread-safe wrapper for Date values in concurrent tests.
 ///
 /// Example:
