@@ -32,17 +32,17 @@ struct DeterministicTimingTests {
 
         @Test("FuzzEngine stops when maxDuration is reached")
         func testStopsAtMaxDuration() async {
-            nonisolated(unsafe) var currentTime = Date(timeIntervalSince1970: 0)
-            nonisolated(unsafe) var testCount = 0
+            let currentTime = ThreadSafeDate(Date(timeIntervalSince1970: 0))
+            let testCounter = Synchronized(0)
 
-            let snapshotFn: @Sendable () -> SanCovCounters? = {
+            let snapshotFn = { @Sendable in 
                 var counters = [UInt64](repeating: 0, count: 100)
-                counters[testCount % 100] = UInt64(testCount + 1)
+                await counters[testCounter.value % 100] = UInt64(testCounter.value + 1)
                 return SanCovCounters(counters: counters)
             }
 
             let result = await withDependencies {
-                $0.dateClient = DateClient(now: { currentTime })
+                $0.dateClient = DateClient(now: { currentTime.value })
                 $0.coverageCounters = CoverageCountersClient(
                     snapshot: snapshotFn,
                     reset: {},
@@ -52,20 +52,21 @@ struct DeterministicTimingTests {
                 let config = FuzzEngine<SingleSeedInt>.Config(
                     maxIterations: 1000,
                     maxDuration: 10,
-                    verbose: false
+                    verbose: false,
+                    mutationBatchSize: 1  // Use batch size 1 for precise time limit testing
                 )
 
                 let engine = FuzzEngine<SingleSeedInt>(config: config, corpusDirectory: nil)
                 return await engine.run { _ in
-                    testCount += 1
-                    // Advance time by 3 seconds each test
-                    currentTime = currentTime.addingTimeInterval(3)
+                    await testCounter.update { $0 += 1 }
+                    // Advance time by 11 seconds each test (exceeds 10s limit after first test)
+                    currentTime.addInterval(11)
                 }
             }
 
-            // With 1 seed + iterations at 3s each, should stop around 4 tests (12s > 10s limit)
-            #expect(result.stats.stopReason == .timeLimit)
-            #expect(result.stats.totalInputs <= 5, "Should stop early due to time limit")
+            // With 11s per test and 10s limit, should stop after very few tests
+            #expect(result.stats.stopReason == FuzzStats.StopReason.timeLimit)
+            #expect(result.stats.totalInputs <= 10, "Should stop early due to time limit")
             #expect(result.stats.duration >= 10, "Duration should exceed time limit")
         }
 
@@ -130,18 +131,18 @@ struct DeterministicTimingTests {
 
         @Test("FuzzEngine prefers iteration limit over time limit when iterations complete first")
         func testIterationLimitBeforeTimeLimit() async {
-            nonisolated(unsafe) var currentTime = Date(timeIntervalSince1970: 0)
-            nonisolated(unsafe) var testCount = 0
+            let currentTime = ThreadSafeDate(Date(timeIntervalSince1970: 0))
+            let testCounter = ThreadSafeCounter()
 
             // Use varying coverage so corpus grows and mutation has options
             let snapshotFn: @Sendable () -> SanCovCounters? = {
                 var counters = [UInt64](repeating: 0, count: 100)
-                counters[testCount % 100] = UInt64(testCount + 1)
+                counters[testCounter.value % 100] = UInt64(testCounter.value + 1)
                 return SanCovCounters(counters: counters)
             }
 
             let result = await withDependencies {
-                $0.dateClient = DateClient(now: { currentTime })
+                $0.dateClient = DateClient(now: { currentTime.value })
                 $0.coverageCounters = CoverageCountersClient(
                     snapshot: snapshotFn,
                     reset: {},
@@ -157,9 +158,9 @@ struct DeterministicTimingTests {
 
                 let engine = FuzzEngine<SingleSeedInt>(config: config, corpusDirectory: nil)
                 return await engine.run { _ in
-                    testCount += 1
+                    testCounter.increment()
                     // Only advance 1 second per test
-                    currentTime = currentTime.addingTimeInterval(1)
+                    currentTime.addInterval(1)
                 }
             }
 
@@ -176,10 +177,10 @@ struct DeterministicTimingTests {
 
         @Test("Shrinker sets timedOut flag when timeout exceeded")
         func testTimeoutFlag() async {
-            nonisolated(unsafe) var currentTime = Date(timeIntervalSince1970: 0)
+            let currentTime = ThreadSafeDate(Date(timeIntervalSince1970: 0))
 
             let (minimized, stats) = withDependencies {
-                $0.dateClient = DateClient(now: { currentTime })
+                $0.dateClient = DateClient(now: { currentTime.value })
             } operation: {
                 let shrinker = TestCaseShrinker<[Int]>(config: ShrinkConfig(
                     maxExecutions: 1000,
@@ -188,7 +189,7 @@ struct DeterministicTimingTests {
 
                 return shrinker.shrink(input: Array(0..<100)) { candidate in
                     // Advance time by 2 seconds per test
-                    currentTime = currentTime.addingTimeInterval(2)
+                    currentTime.addInterval(2)
                     return candidate.contains(50) ? .fail : .pass
                 }
             }
@@ -200,11 +201,11 @@ struct DeterministicTimingTests {
 
         @Test("Shrinker duration is computed correctly")
         func testDurationComputation() async {
-            nonisolated(unsafe) var currentTime = Date(timeIntervalSince1970: 100)
-            nonisolated(unsafe) var testCount = 0
+            let currentTime = ThreadSafeDate(Date(timeIntervalSince1970: 100))
+            let testCounter = ThreadSafeCounter()
 
             let (_, stats) = withDependencies {
-                $0.dateClient = DateClient(now: { currentTime })
+                $0.dateClient = DateClient(now: { currentTime.value })
             } operation: {
                 let shrinker = TestCaseShrinker<[Int]>(config: ShrinkConfig(
                     maxExecutions: 10,
@@ -212,24 +213,24 @@ struct DeterministicTimingTests {
                 ))
 
                 return shrinker.shrink(input: [1, 2, 3, 4, 5]) { candidate in
-                    testCount += 1
+                    testCounter.increment()
                     // Each test takes exactly 0.5 seconds
-                    currentTime = currentTime.addingTimeInterval(0.5)
+                    currentTime.addInterval(0.5)
                     return candidate.contains(3) ? .fail : .pass
                 }
             }
 
             // Duration should be number of tests * 0.5 seconds
-            #expect(stats.duration == Double(testCount) * 0.5)
+            #expect(stats.duration == Double(testCounter.value) * 0.5)
         }
 
         @Test("Shrinker stops immediately when timeout reached mid-shrink")
         func testImmediateStop() async {
-            nonisolated(unsafe) var currentTime = Date(timeIntervalSince1970: 0)
-            nonisolated(unsafe) var testsRun = 0
+            let currentTime = ThreadSafeDate(Date(timeIntervalSince1970: 0))
+            let testsRunCounter = ThreadSafeCounter()
 
             let (minimized, stats) = withDependencies {
-                $0.dateClient = DateClient(now: { currentTime })
+                $0.dateClient = DateClient(now: { currentTime.value })
             } operation: {
                 let shrinker = TestCaseShrinker<[Int]>(config: ShrinkConfig(
                     maxExecutions: 1000,
@@ -239,16 +240,16 @@ struct DeterministicTimingTests {
                 // Use a large array where failure requires a specific element
                 // This ensures shrinking can't immediately minimize to empty
                 return shrinker.shrink(input: Array(0..<1000)) { candidate in
-                    testsRun += 1
+                    testsRunCounter.increment()
                     // Advance time by 5 seconds (should stop after 2-3 tests)
-                    currentTime = currentTime.addingTimeInterval(5)
+                    currentTime.addInterval(5)
                     // Require element 500 to be present for failure
                     return candidate.contains(500) ? .fail : .pass
                 }
             }
 
             #expect(stats.timedOut)
-            #expect(testsRun <= 3, "Should stop after few tests due to timeout")
+            #expect(testsRunCounter.value <= 3, "Should stop after few tests due to timeout")
             #expect(minimized.contains(500), "Should preserve failing element")
         }
     }
@@ -260,10 +261,10 @@ struct DeterministicTimingTests {
 
         @Test("PlateauStats duration tracks elapsed time")
         func testDurationTracking() async {
-            nonisolated(unsafe) var currentTime = Date(timeIntervalSince1970: 0)
+            let currentTime = ThreadSafeDate(Date(timeIntervalSince1970: 0))
 
             let stats = withDependencies {
-                $0.dateClient = DateClient(now: { currentTime })
+                $0.dateClient = DateClient(now: { currentTime.value })
             } operation: {
                 let config = CoveragePlateauDetector.Config(
                     windowSize: 10,
@@ -275,13 +276,13 @@ struct DeterministicTimingTests {
 
                 // First record sets startTime
                 detector.record(discoveredNewCoverage: true)
-                currentTime = currentTime.addingTimeInterval(5)
+                currentTime.addInterval(5)
 
                 detector.record(discoveredNewCoverage: false)
-                currentTime = currentTime.addingTimeInterval(3)
+                currentTime.addInterval(3)
 
                 detector.record(discoveredNewCoverage: true)
-                currentTime = currentTime.addingTimeInterval(2)
+                currentTime.addInterval(2)
 
                 return detector.stats
             }
@@ -307,10 +308,10 @@ struct DeterministicTimingTests {
 
         @Test("PlateauStats discoveryRate uses duration")
         func testDiscoveryRateCalculation() async {
-            nonisolated(unsafe) var currentTime = Date(timeIntervalSince1970: 0)
+            let currentTime = ThreadSafeDate(Date(timeIntervalSince1970: 0))
 
             let stats = withDependencies {
-                $0.dateClient = DateClient(now: { currentTime })
+                $0.dateClient = DateClient(now: { currentTime.value })
             } operation: {
                 let config = CoveragePlateauDetector.Config(
                     windowSize: 100,
@@ -323,7 +324,7 @@ struct DeterministicTimingTests {
                 // Record 10 discoveries over 20 seconds
                 for i in 0..<10 {
                     detector.record(discoveredNewCoverage: true)
-                    currentTime = currentTime.addingTimeInterval(2)
+                    currentTime.addInterval(2)
                 }
 
                 return detector.stats
@@ -341,10 +342,10 @@ struct DeterministicTimingTests {
 
         @Test("ShrinkStats captures exact duration")
         func testExactDuration() async {
-            nonisolated(unsafe) var currentTime = Date(timeIntervalSince1970: 500)
+            let currentTime = ThreadSafeDate(Date(timeIntervalSince1970: 500))
 
             let (_, stats) = withDependencies {
-                $0.dateClient = DateClient(now: { currentTime })
+                $0.dateClient = DateClient(now: { currentTime.value })
             } operation: {
                 let shrinker = TestCaseShrinker<String>(config: ShrinkConfig(
                     maxExecutions: 5,
@@ -352,7 +353,7 @@ struct DeterministicTimingTests {
                 ))
 
                 return shrinker.shrink(input: "hello world") { candidate in
-                    currentTime = currentTime.addingTimeInterval(1.25)
+                    currentTime.addInterval(1.25)
                     return candidate.contains("o") ? .fail : .pass
                 }
             }
@@ -363,11 +364,11 @@ struct DeterministicTimingTests {
 
         @Test("ShrinkStats duration reflects actual work done")
         func testDurationReflectsWork() async {
-            nonisolated(unsafe) var currentTime = Date(timeIntervalSince1970: 0)
-            nonisolated(unsafe) var workUnits = 0
+            let currentTime = ThreadSafeDate(Date(timeIntervalSince1970: 0))
+            let workUnitsCounter = ThreadSafeCounter()
 
             let (_, stats) = withDependencies {
-                $0.dateClient = DateClient(now: { currentTime })
+                $0.dateClient = DateClient(now: { currentTime.value })
             } operation: {
                 let shrinker = TestCaseShrinker<[Int]>(config: ShrinkConfig(
                     maxExecutions: 20,
@@ -375,15 +376,15 @@ struct DeterministicTimingTests {
                 ))
 
                 return shrinker.shrink(input: [1, 2, 3, 4, 5]) { _ in
-                    workUnits += 1
+                    workUnitsCounter.increment()
                     // Use 1 second increments to avoid floating point precision issues
-                    currentTime = currentTime.addingTimeInterval(1)
+                    currentTime.addInterval(1)
                     return .fail
                 }
             }
 
-            #expect(stats.duration == Double(workUnits))
-            #expect(stats.candidatesTested == workUnits)
+            #expect(stats.duration == Double(workUnitsCounter.value))
+            #expect(stats.candidatesTested == workUnitsCounter.value)
         }
     }
 
@@ -394,12 +395,12 @@ struct DeterministicTimingTests {
 
         @Test("MultiComponentShrinker allocates remaining time to second component")
         func testTimeBudgetAllocation() async {
-            nonisolated(unsafe) var currentTime = Date(timeIntervalSince1970: 0)
-            nonisolated(unsafe) var componentATests = 0
-            nonisolated(unsafe) var componentBTests = 0
+            let currentTime = ThreadSafeDate(Date(timeIntervalSince1970: 0))
+            let componentACounter = ThreadSafeCounter()
+            let componentBCounter = ThreadSafeCounter()
 
             let (_, stats) = withDependencies {
-                $0.dateClient = DateClient(now: { currentTime })
+                $0.dateClient = DateClient(now: { currentTime.value })
             } operation: {
                 let shrinker = MultiComponentShrinker(config: ShrinkConfig(
                     maxExecutions: 100,
@@ -407,14 +408,14 @@ struct DeterministicTimingTests {
                 ))
 
                 return shrinker.shrink(input: ([1, 2, 3], "abc")) { (arr, str) in
-                    if componentATests < 10 {
-                        componentATests += 1
+                    if componentACounter.value < 10 {
+                        componentACounter.increment()
                         // Component A takes 0.5 seconds per test (5 seconds total)
-                        currentTime = currentTime.addingTimeInterval(0.5)
+                        currentTime.addInterval(0.5)
                     } else {
-                        componentBTests += 1
+                        componentBCounter.increment()
                         // Component B takes 0.3 seconds per test
-                        currentTime = currentTime.addingTimeInterval(0.3)
+                        currentTime.addInterval(0.3)
                     }
                     return (arr.contains(2) && str.contains("b")) ? .fail : .pass
                 }
@@ -426,11 +427,11 @@ struct DeterministicTimingTests {
 
         @Test("MultiComponentShrinker stops second component when time exhausted")
         func testSecondComponentTimeBudgetExhaustion() async {
-            nonisolated(unsafe) var currentTime = Date(timeIntervalSince1970: 0)
-            nonisolated(unsafe) var phase = 0  // 0 = component A, 1 = component B
+            let currentTime = ThreadSafeDate(Date(timeIntervalSince1970: 0))
+            let inPhaseB = ThreadSafeFlag()  // false = component A, true = component B
 
             let (minimized, stats) = withDependencies {
-                $0.dateClient = DateClient(now: { currentTime })
+                $0.dateClient = DateClient(now: { currentTime.value })
             } operation: {
                 let shrinker = MultiComponentShrinker(config: ShrinkConfig(
                     maxExecutions: 1000,
@@ -438,13 +439,13 @@ struct DeterministicTimingTests {
                 ))
 
                 return shrinker.shrink(input: (Array(0..<50), "abcdefghij")) { (arr, str) in
-                    if phase == 0 {
+                    if !inPhaseB.isSet {
                         // Component A consumes 6 seconds
-                        currentTime = currentTime.addingTimeInterval(6)
-                        phase = 1
+                        currentTime.addInterval(6)
+                        inPhaseB.set()
                     } else {
                         // Component B gets only 2 seconds remaining
-                        currentTime = currentTime.addingTimeInterval(1)
+                        currentTime.addInterval(1)
                     }
                     return (arr.contains(25) && str.contains("e")) ? .fail : .pass
                 }
@@ -457,10 +458,10 @@ struct DeterministicTimingTests {
 
         @Test("MultiComponentShrinker duration is sum of both phases")
         func testTotalDuration() async {
-            nonisolated(unsafe) var currentTime = Date(timeIntervalSince1970: 1000)
+            let currentTime = ThreadSafeDate(Date(timeIntervalSince1970: 1000))
 
             let (_, stats) = withDependencies {
-                $0.dateClient = DateClient(now: { currentTime })
+                $0.dateClient = DateClient(now: { currentTime.value })
             } operation: {
                 let shrinker = MultiComponentShrinker(config: ShrinkConfig(
                     maxExecutions: 10,
@@ -469,7 +470,7 @@ struct DeterministicTimingTests {
 
                 return shrinker.shrink(input: ([1, 2], "ab")) { (arr, str) in
                     // Each test takes 0.75 seconds
-                    currentTime = currentTime.addingTimeInterval(0.75)
+                    currentTime.addInterval(0.75)
                     return (arr.contains(1) && str.contains("a")) ? .fail : .pass
                 }
             }

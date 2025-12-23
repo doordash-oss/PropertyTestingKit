@@ -9,34 +9,6 @@ import Dependencies
 import Foundation
 import Testing
 
-// MARK: - Seed Task Result
-
-/// Result type for parallel seed execution.
-/// Defined at file scope because Swift doesn't allow nested types in generic functions.
-struct SeedTaskResult: Sendable {
-    let index: Int
-    let signature: CoverageSignature?
-    let error: (any Error)?
-    let timedOut: Bool
-    let timeout: TimeInterval
-}
-
-/// Metadata for a batch entry (input stored separately due to generic constraints).
-struct BatchEntryMeta: Sendable {
-    let index: Int
-    let parentIndex: Int?
-    let strategy: MutationStrategy?
-    let isMutation: Bool
-}
-
-/// Result type for parallel mutation testing.
-struct BatchTestResult: Sendable {
-    let index: Int
-    let signature: CoverageSignature?
-    let error: (any Error)?
-    let timedOut: Bool
-}
-
 // MARK: - FuzzEngine
 
 /// A coverage-guided fuzzing engine.
@@ -79,6 +51,24 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
     public typealias MutatorMutate = ((repeat each Input)) -> [(repeat each Input)]
 
     @Dependency(\.dateClient) var dateClient
+    @Dependency(\.random) var random
+    @Dependency(\.corpusPersistence) var corpusPersistenceClient
+
+    // MARK: - Random Helpers (use injected RNG for determinism)
+
+    /// Generate a random Double in the given range using the injected RNG.
+    private func randomDouble(in range: Range<Double>) -> Double {
+        random { rng in
+            Double.random(in: range, using: &rng)
+        }
+    }
+
+    /// Select a random element from a collection using the injected RNG.
+    private func randomElement<C: Collection & Sendable>(from collection: C) -> C.Element? where C.Element: Sendable {
+        random { rng in
+            collection.randomElement(using: &rng)
+        }
+    }
 
     private let config: Config
     private let corpusDirectory: URL?
@@ -321,7 +311,7 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
     /// - Returns: The fuzz result with corpus and any failures.
     public func run(
         additionalSeeds: [(repeat each Input)] = [],
-        test: @escaping @Sendable ((repeat each Input)) throws -> Void
+        test: @escaping @Sendable ((repeat each Input)) async throws -> Void
     ) async -> FuzzResult<repeat each Input> {
         // No lock needed - SanitizerCoverage uses task-keyed maps that provide
         // true per-task isolation, even when tasks share threads.
@@ -331,9 +321,9 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
     /// Internal dispatch based on corpus mode.
     private func runWithMode(
         additionalSeeds: [(repeat each Input)],
-        test: @escaping @Sendable ((repeat each Input)) throws -> Void
+        test: @escaping @Sendable ((repeat each Input)) async throws -> Void
     ) async -> FuzzResult<repeat each Input> {
-        let corpusExists = corpusDirectory.map { Corpus<repeat each Input>.exists(at: $0) } ?? false
+        let corpusExists = corpusDirectory.map { corpusPersistenceClient.exists($0) } ?? false
 
         // Handle refuzzReplace: delete corpus and fuzz fresh
         if config.corpusMode == .refuzzReplace {
@@ -341,7 +331,7 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
                 if config.verbose {
                     print("[Fuzz] Mode: refuzzReplace - deleting existing corpus")
                 }
-                try? Corpus<repeat each Input>.delete(from: directory)
+                try? corpusPersistenceClient.delete(directory)
             }
             return await runFuzzing(additionalSeeds: additionalSeeds, test: test)
         }
@@ -351,7 +341,7 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
             var allSeeds = additionalSeeds
             if corpusExists, let directory = corpusDirectory {
                 do {
-                    let savedCorpus = try Corpus<repeat each Input>.load(from: directory)
+                    let savedCorpus: Corpus<repeat each Input> = try corpusPersistenceClient.load(from: directory)
                     if config.verbose {
                         print("[Fuzz] Mode: refuzzExtend - loaded \(savedCorpus.count) existing corpus entries as seeds")
                     }
@@ -374,24 +364,24 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
                 if config.verbose {
                     print("[Fuzz] Mode: regressionOnly - no corpus found, nothing to regress")
                 }
-                return makeEmptyRegressionResult()
+                return await makeEmptyRegressionResult()
             }
             do {
-                let savedCorpus = try Corpus<repeat each Input>.load(from: directory)
+                let savedCorpus: Corpus<repeat each Input> = try corpusPersistenceClient.load(from: directory)
                 return await runRegression(corpus: savedCorpus, test: test)
             } catch {
                 if config.verbose {
                     print("[Fuzz] Mode: regressionOnly - failed to load corpus: \(error)")
                 }
-                return makeEmptyRegressionResult()
+                return await makeEmptyRegressionResult()
             }
         }
 
         // Default (auto): regression if corpus exists
         if corpusExists, let directory = corpusDirectory {
             do {
-                let savedCorpus = try Corpus<repeat each Input>.load(from: directory)
-                if CorpusSchema.isCompatible(savedCorpus.schemaVersion) {
+                let savedCorpus: Corpus<repeat each Input> = try corpusPersistenceClient.load(from: directory)
+                if await CorpusSchema.isCompatible(savedCorpus.schemaVersion) {
                     return await runRegression(corpus: savedCorpus, test: test)
                 } else {
                     if config.verbose {
@@ -409,8 +399,8 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
     }
 
     /// Create an empty result for regression-only mode when no corpus exists.
-    private func makeEmptyRegressionResult() -> FuzzResult<repeat each Input> {
-        let emptyCorpus = Corpus<repeat each Input>(schemaVersion: CorpusSchema.currentVersion())
+    private func makeEmptyRegressionResult() async -> FuzzResult<repeat each Input> {
+        let emptyCorpus = Corpus<repeat each Input>(schemaVersion: await CorpusSchema.currentVersion())
         let emptyStats = FuzzStats(
             totalInputs: 0,
             newPaths: 0,
@@ -434,12 +424,12 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
 
     private func runFuzzing(
         additionalSeeds: [(repeat each Input)] = [],
-        test: @escaping @Sendable ((repeat each Input)) throws -> Void
+        test: @escaping @Sendable ((repeat each Input)) async throws -> Void
     ) async -> FuzzResult<repeat each Input> {
         @Dependency(\.coverageCounters) var coverageCounters
 
         let startTime = dateClient.now()
-        var corpus = Corpus<repeat each Input>(schemaVersion: CorpusSchema.currentVersion())
+        var corpus = Corpus<repeat each Input>(schemaVersion: await CorpusSchema.currentVersion())
         var failures: [(input: (repeat each Input), error: Error)] = []
         var hangs: [(input: (repeat each Input), timeout: TimeInterval)] = []
         var iterationsSinceNewCoverage = 0
@@ -448,16 +438,6 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
 
         // Initialize plateau detector for adaptive early stopping
         var plateauDetector = CoveragePlateauDetector(config: config.plateauConfig)
-
-        // Initialize rare branch tracker for FairFuzz-style targeting
-        var rareBranchTracker = config.enableRareBranchTargeting
-            ? RareBranchTracker(config: .init(enabled: true))
-            : nil
-
-        // Initialize swarm scheduler for mutator subset selection
-        var swarmScheduler = config.swarmConfig.enabled
-            ? SwarmScheduler(config: config.swarmConfig)
-            : nil
 
         // Initialize adaptive mutation scheduler (MOPT-style)
         var adaptiveMutationScheduler = config.adaptiveMutationConfig.enabled
@@ -502,7 +482,7 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
                         do {
                             try await withThrowingTaskGroup(of: Void.self) { timeoutGroup in
                                 timeoutGroup.addTask {
-                                    try test(input)
+                                    try await test(input)
                                 }
                                 timeoutGroup.addTask {
                                     try await Task.sleep(nanoseconds: UInt64(timeout * 1_000_000_000))
@@ -519,7 +499,7 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
                     } else {
                         // No timeout - run directly
                         do {
-                            try test(input)
+                            try await test(input)
                         } catch {
                             testError = error
                         }
@@ -527,7 +507,7 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
 
                     // Get coverage snapshot for this task
                     let signature: CoverageSignature?
-                    if let sparseCoverage = coverageClient.snapshotCoveredOnly() {
+                    if let sparseCoverage = await coverageClient.snapshotCoveredOnly() {
                         signature = CoverageSignature(sparseCoverage: sparseCoverage)
                     } else {
                         signature = nil
@@ -651,16 +631,6 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
                 break
             }
 
-            // Update swarm configuration if window elapsed
-            if let scheduler = swarmScheduler {
-                var mutableScheduler = scheduler
-                let changed = mutableScheduler.updateConfiguration()
-                swarmScheduler = mutableScheduler
-                if changed && config.verbose {
-                    print("[Fuzz] Swarm: new configuration \(mutableScheduler.summary())")
-                }
-            }
-
             // Generate batch of inputs from current corpus state
             // Inputs and metadata stored in parallel arrays (structs can't contain parameter packs)
             let remainingIterations = config.maxIterations - iteration
@@ -676,10 +646,10 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
                 var usedStrategy: MutationStrategy?
                 var isMutation = false
 
-                if corpus.isEmpty || Double.random(in: 0..<1) < config.generationRatio {
+                if corpus.isEmpty || randomDouble(in: 0..<1) < config.generationRatio {
                     // Generate fresh input
                     let fuzzValues = mutatorSeeds?() ?? cartesianProductFuzz()
-                    guard let fuzzValue = fuzzValues.randomElement() else {
+                    guard let fuzzValue = randomElement(from: fuzzValues) else {
                         continue
                     }
                     input = fuzzValue
@@ -694,15 +664,6 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
                     if let priorityIdx = priorityMutationIndex, priorityIdx < corpus.count {
                         selectedIndex = priorityIdx
                         usingPriority = true
-                    } else if let tracker = rareBranchTracker,
-                              config.enableRareBranchTargeting,
-                              !tracker.rareIndices.isEmpty {
-                        let rareIndices = tracker.rareIndices
-                        selectedIndex = corpus.selectForMutation(
-                            preferring: rareIndices,
-                            probability: config.rareBranchSelectionProbability
-                        )!
-                        usingPriority = false
                     } else {
                         selectedIndex = corpus.selectForMutation()!
                         usingPriority = false
@@ -722,7 +683,7 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
                     }
 
                     if usingPriority && !targetMutations.isEmpty {
-                        input = targetMutations.randomElement()!
+                        input = randomElement(from: targetMutations)!
                         if targetMutations.count <= 1 {
                             priorityMutationIndex = nil
                             savedTargets = []
@@ -730,7 +691,7 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
                         parentIndex = selectedIndex
                         totalMutations += 1
                         isMutation = true
-                    } else if let m = mutations.randomElement() {
+                    } else if let m = randomElement(from: mutations) {
                         input = m
                         priorityMutationIndex = nil
                         savedTargets = []
@@ -740,7 +701,7 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
                     } else {
                         // Mutations exhausted - fall back to generation
                         let fuzzValues = mutatorSeeds?() ?? cartesianProductFuzz()
-                        guard let fuzzValue = fuzzValues.randomElement() else {
+                        guard let fuzzValue = randomElement(from: fuzzValues) else {
                             continue
                         }
                         input = fuzzValue
@@ -789,7 +750,7 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
                             do {
                                 try await withThrowingTaskGroup(of: Void.self) { timeoutGroup in
                                     timeoutGroup.addTask {
-                                        try test(input)
+                                        try await test(input)
                                     }
                                     timeoutGroup.addTask {
                                         try await Task.sleep(nanoseconds: UInt64(timeout * 1_000_000_000))
@@ -805,7 +766,7 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
                             }
                         } else {
                             do {
-                                try test(input)
+                                try await test(input)
                             } catch {
                                 testError = error
                             }
@@ -813,7 +774,7 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
 
                         // Get coverage snapshot
                         let signature: CoverageSignature?
-                        if let sparseCoverage = coverageClient.snapshotCoveredOnly() {
+                        if let sparseCoverage = await coverageClient.snapshotCoveredOnly() {
                             signature = CoverageSignature(sparseCoverage: sparseCoverage)
                         } else {
                             signature = nil
@@ -872,17 +833,10 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
                     }
 
                     if addedForCoverage {
-                        rareBranchTracker?.recordEntry(signature)
-                        if corpus.count % 50 == 0 {
-                            rareBranchTracker?.recomputeThreshold()
-                        }
-                        swarmScheduler?.recordCoverageHit()
                         iterationsSinceNewCoverage = 0
 
                         if verbose {
-                            let rareInfo = rareBranchTracker.map { " (\($0.summary()))" } ?? ""
-                            let swarmInfo = swarmScheduler.map { " \($0.summary())" } ?? ""
-                            print("[Fuzz] New coverage! \(corpus.count) entries, iteration \(iteration)\(rareInfo)\(swarmInfo)")
+                            print("[Fuzz] New coverage! \(corpus.count) entries, iteration \(iteration)")
                         }
                     }
                 } else {
@@ -903,29 +857,11 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
             }
         }
 
-        // Report rare branch stats
-        if config.enableRareBranchTargeting, let tracker = rareBranchTracker {
-            // Final recomputation for accurate stats
-            var finalTracker = tracker
-            finalTracker.update(from: corpus.signatures)
-            if config.verbose {
-                let stats = finalTracker.stats
-                print("[Fuzz] Rare branch targeting: \(stats.rareBranches)/\(stats.totalBranches) rare (threshold: \(stats.threshold))")
-            }
-        }
-
         let fuzzLoopEnd = CFAbsoluteTimeGetCurrent()
         print("[Timing] Fuzz loop: \(String(format: "%.3f", fuzzLoopEnd - fuzzLoopStart))s (\(iteration) iterations)")
         print("[Timing]   - Mutation: \(String(format: "%.3f", timeInMutation))s")
         print("[Timing]   - Test execution: \(String(format: "%.3f", timeInTest))s")
         print("[Timing]   - Coverage processing: \(String(format: "%.3f", timeInCoverage))s")
-
-        // Report swarm testing stats
-        if config.swarmConfig.enabled, let scheduler = swarmScheduler {
-            if config.verbose {
-                print("[Fuzz] \(scheduler.stats.report())")
-            }
-        }
 
         // Report adaptive mutation scheduler stats
         if config.adaptiveMutationConfig.enabled, let scheduler = adaptiveMutationScheduler {
@@ -950,7 +886,7 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
         let saveStart = CFAbsoluteTimeGetCurrent()
         if let directory = corpusDirectory {
             do {
-                try finalCorpus.save(to: directory)
+                try corpusPersistenceClient.save(finalCorpus, to: directory)
                 if config.verbose {
                     print("[Fuzz] Saved corpus to \(directory.path)")
                 }
@@ -1023,7 +959,7 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
 
     private func runRegression(
         corpus: Corpus<repeat each Input>,
-        test: @escaping @Sendable ((repeat each Input)) throws -> Void
+        test: @escaping @Sendable ((repeat each Input)) async throws -> Void
     ) async -> FuzzResult<repeat each Input> {
         @Dependency(\.coverageCounters) var coverageCounters
 
@@ -1042,7 +978,7 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
 
             var testError: Error?
             do {
-                try test(entry.input)
+                try await test(entry.input)
             } catch {
                 testError = error
             }
@@ -1053,7 +989,7 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
 
             // Get coverage snapshot (task-isolated, no diff needed)
             // Use sparse snapshot for efficiency - only iterates non-zero counters
-            if let sparseCoverage = coverageCounters.snapshotCoveredOnly() {
+            if let sparseCoverage = await coverageCounters.snapshotCoveredOnly() {
                 let actualSignature = CoverageSignature(sparseCoverage: sparseCoverage)
                 if actualSignature != entry.signature {
                     coverageChanges.append((
@@ -1073,7 +1009,7 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
             }
             // Delete old corpus and re-fuzz
             if let directory = corpusDirectory {
-                try? Corpus<repeat each Input>.delete(from: directory)
+                try? corpusPersistenceClient.delete(directory)
             }
             return await runFuzzing(test: test)
         }

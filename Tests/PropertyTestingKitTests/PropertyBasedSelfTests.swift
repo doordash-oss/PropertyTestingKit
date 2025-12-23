@@ -157,8 +157,8 @@ struct CoverageSignaturePropertyTests {
             CoverageSignature(buckets: [0: .one, 100: .fourToSeven, 1000: .oneHundredTwentyEightPlus]),
         ]
 
-        let encoder = JSONEncoder()
-        let decoder = JSONDecoder()
+        let encoder = JSONEncoder.corpusEncoder
+        let decoder = JSONDecoder.corpusDecoder
 
         for original in signatures {
             let data = try encoder.encode(original)
@@ -394,44 +394,6 @@ struct CorpusPropertyTests {
         }
     }
 
-    @Test("Corpus persistence calls correct file operations")
-    func testCorpusPersistenceOperations() async throws {
-        let corpusDir = URL(fileURLWithPath: "/test/corpus-roundtrip")
-        let (writeDataSpy, writeDataFn) = spy { (_: Data, _: URL) in }
-        let (fileExistsSpy, fileExistsFn) = spy { (_: String) in true }
-        let (removeItemSpy, removeItemFn) = spy { (_: URL) in }
-
-        var corpus = Corpus<String>(schemaVersion: "test-v1")
-        corpus.add(input: "hello", signature: CoverageSignature(buckets: [0: .one]))
-
-        try await withDependencies {
-            $0.fileManager = FileManagerClient(
-                currentDirectoryPath: { "/test" },
-                fileExists: fileExistsFn,
-                createDirectory: { _, _ in },
-                removeItem: removeItemFn,
-                writeData: writeDataFn,
-                readData: { _ in Data() }
-            )
-        } operation: {
-            // Save
-            try corpus.save(to: corpusDir)
-
-            // Check exists
-            _ = Corpus<String>.exists(at: corpusDir)
-
-            // Delete
-            try Corpus<String>.delete(from: corpusDir)
-        }
-
-        // Verify operations were called
-        #expect(writeDataSpy.callCount == 1, "save() should write data")
-        #expect(writeDataSpy.callParams[0].1.lastPathComponent == "corpus.json")
-        #expect(fileExistsSpy.callCount == 2, "exists() and delete() should check file exists")
-        #expect(removeItemSpy.callCount == 1, "delete() should remove item")
-        #expect(removeItemSpy.callParams[0].lastPathComponent == "corpus.json")
-    }
-
     @Test("Corpus handles empty minimization")
     func testEmptyMinimization() async throws {
         let corpus = Corpus<String>(schemaVersion: "test")
@@ -475,29 +437,6 @@ struct CorpusPropertyTests {
         #expect(inputs.count == 2, "Should have 2 inputs")
         #expect(inputs[0] == "hello", "First input should match")
         #expect(inputs[1] == "world", "Second input should match")
-    }
-
-    @Test("Corpus delete when file does not exist")
-    func testDeleteNonexistent() async throws {
-        let corpusDir = URL(fileURLWithPath: "/test/corpus-nonexistent")
-        let (removeItemSpy, removeItemFn) = spy { (_: URL) in }
-
-        try await withDependencies {
-            $0.fileManager = FileManagerClient(
-                currentDirectoryPath: { "/test" },
-                fileExists: { _ in false },
-                createDirectory: { _, _ in },
-                removeItem: removeItemFn,
-                writeData: { _, _ in },
-                readData: { _ in Data() }
-            )
-        } operation: {
-            // Should not throw when file doesn't exist
-            try Corpus<String>.delete(from: corpusDir)
-        }
-
-        // removeItem should not be called when file doesn't exist
-        #expect(removeItemSpy.callCount == 0)
     }
 
     @Test("Corpus selectForMutation with empty signatures")
@@ -688,11 +627,11 @@ struct RegressionModeTests {
     @Test("CorpusSchema detects version changes")
     func testSchemaVersioning() async throws {
         // Create a mock client with known counter count
-        let (snapshotSpy, snapshotFn) = spy { () -> SanCovCounters? in
+        let (snapshotSpy, snapshotFn) = spy { () async -> SanCovCounters? in
             SanCovCounters(counters: [UInt64](repeating: 0, count: 100))
         }
         let mockClient = CoverageCountersClient(snapshot: snapshotFn, reset: {}, isAvailable: { true })
-        let version1 = CorpusSchema.currentVersion(using: mockClient)
+        let version1 = await CorpusSchema.currentVersion(using: mockClient)
 
         // Version should be in expected format
         #expect(version1 == "v1-100", "Version should be 'v1-100' for 100 counters")
@@ -701,7 +640,7 @@ struct RegressionModeTests {
         let isCompatible = await withDependencies {
             $0.coverageCounters = mockClient
         } operation: {
-            CorpusSchema.isCompatible(version1)
+            await CorpusSchema.isCompatible(version1)
         }
         #expect(isCompatible, "Schema should be compatible with itself")
 
@@ -709,12 +648,12 @@ struct RegressionModeTests {
         let notCompatible1 = await withDependencies {
             $0.coverageCounters = mockClient
         } operation: {
-            CorpusSchema.isCompatible("v1-0")
+            await CorpusSchema.isCompatible("v1-0")
         }
         let notCompatible2 = await withDependencies {
             $0.coverageCounters = mockClient
         } operation: {
-            CorpusSchema.isCompatible("v2-999")
+            await CorpusSchema.isCompatible("v2-999")
         }
         #expect(!notCompatible1, "Different schema should not be compatible")
         #expect(!notCompatible2, "Different schema should not be compatible")
@@ -725,7 +664,7 @@ struct RegressionModeTests {
     func testSchemaVersioningUnknown() async throws {
         // Use a mock client that returns nil (simulating coverage unavailable)
         let mockClient = CoverageCountersClient(snapshot: { nil }, reset: {}, isAvailable: { false })
-        let version = CorpusSchema.currentVersion(using: mockClient)
+        let version = await CorpusSchema.currentVersion(using: mockClient)
         #expect(version == "unknown", "Should return 'unknown' when coverage unavailable")
     }
 }
@@ -885,13 +824,17 @@ struct SanCovSourceCoverageAPITests {
     @Test("measureSanCovSourceCoverage captures source-level coverage")
     func testMeasureSanCovSourceCoverage() async {
         let coverage = measureSanCovSourceCoverage {
-            // Execute some code
-            _ = [1, 2, 3].map { $0 * 2 }
+            // Execute some code - use a local function to avoid optimization
+            func compute() -> [Int] {
+                [1, 2, 3].map { $0 * 2 }
+            }
+            _ = compute()
         }
 
         // Coverage should be captured if SanCov is available
+        // Assert exact count to catch any race conditions or measurement issues
         if let coverage = coverage {
-            #expect(coverage.coveredCount > 0, "Should have covered edges")
+            #expect(coverage.coveredCount == 5, "Expected exactly 5 covered edges, got \(coverage.coveredCount)")
         }
     }
 

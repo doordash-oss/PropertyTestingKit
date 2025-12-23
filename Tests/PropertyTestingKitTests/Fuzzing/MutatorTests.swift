@@ -598,12 +598,12 @@ struct MutatorPublicAPITests {
 
     @Test("fuzz(using:) with composed mutator strategies for single input")
     func fuzzWithComposedStrategies() async throws {
-        nonisolated(unsafe) var testedInputs: [String] = []
-        nonisolated(unsafe) var callCount = 0
+        let testedInputs = ThreadSafeCollector<String>()
+        let callCounter = ThreadSafeCounter()
 
         let (snapshotSpy, snapshotFn) = spy { () -> SanCovCounters? in
-            callCount += 1
-            return Self.makeCounters(callCount)
+            let count = callCounter.increment()
+            return Self.makeCounters(count)
         }
 
         try await withDependencies {
@@ -616,6 +616,8 @@ struct MutatorPublicAPITests {
                 writeData: { _, _ in },
                 readData: { _ in Data() }
             )
+            // Use a seeded RNG for deterministic test behavior
+            $0.random = RandomNumberGeneratorClient(SeededRandomNumberGenerator(seed: 42))
         } operation: {
             // Compose multiple strategies for a single String input
             try await fuzz(
@@ -623,27 +625,30 @@ struct MutatorPublicAPITests {
                 iterations: 500,
                 duration: 5
             ) { (input: String) in
-                testedInputs.append(input)
+                await testedInputs.append(input)
             }
         }
 
         #expect(snapshotSpy.callCount > 0)
 
+        // Get all values for assertions
+        let inputs = await testedInputs.values
+
         // Should have seeds from all three strategies
         // Empty strategy
-        #expect(testedInputs.contains(""))
+        #expect(inputs.contains(""))
 
         // SQL strategy seeds - look for SQL injection patterns
-        #expect(testedInputs.contains(where: { $0.contains("DROP TABLE") || $0.contains("OR") }))
+        #expect(inputs.contains(where: { $0.contains("DROP TABLE") || $0.contains("OR") }))
 
         // XSS strategy seeds - look for script tags
-        #expect(testedInputs.contains(where: { $0.contains("<script>") || $0.contains("onerror") }))
+        #expect(inputs.contains(where: { $0.contains("<script>") || $0.contains("onerror") }))
 
         // Cross-strategy mutations: SQL mutations applied to XSS seeds
         // SQL mutator adds "'" prefix/suffix, SQL keywords, or comment suffixes
         // Applied to XSS seeds
         #expect(
-            testedInputs.contains(where: {
+            inputs.contains(where: {
                 // XSS seed with SQL quote prefix (any XSS pattern)
                 ($0.hasPrefix("'") && ($0.contains("<") || $0.contains("javascript:") || $0.contains("alert") || $0.contains("onerror"))) ||
                 // XSS seed with SQL keyword/pattern suffix
@@ -657,7 +662,7 @@ struct MutatorPublicAPITests {
         // XSS mutator wraps in <script> tags or adds event handlers
         // Applied to SQL seeds
         #expect(
-            testedInputs.contains(where: {
+            inputs.contains(where: {
                 // SQL content wrapped in script tags (any SQL keyword/pattern)
                 ($0.contains("<script>") && ($0.contains("DROP") || $0.contains("SELECT") || $0.contains("EXEC") || $0.contains("OR ") || $0.contains("OR(") || $0.contains("SLEEP") || $0.contains("WAITFOR") || $0.contains("'--"))) ||
                 // SQL content in img onerror

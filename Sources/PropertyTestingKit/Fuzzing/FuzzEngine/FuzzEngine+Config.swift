@@ -56,29 +56,6 @@ extension FuzzEngine {
         /// Default: 8 (balanced parallelism with reasonable guidance accuracy).
         public var mutationBatchSize: Int
 
-        /// Enable FairFuzz-style rare branch targeting.
-        /// When enabled, preferentially selects and mutates inputs that hit
-        /// rarely-covered branches, improving coverage uniformity.
-        ///
-        /// Based on Lemieux & Sen 2018 "FairFuzz" - achieved 10.6% more branch coverage.
-        public var enableRareBranchTargeting: Bool
-
-        /// Probability of selecting rare-branch-hitting inputs (0.0-1.0).
-        /// Higher values focus more on rare branches; lower values maintain diversity.
-        /// Default: 0.8 (80% chance of rare branch selection when available).
-        public var rareBranchSelectionProbability: Double
-
-        /// Number of mutations to test when targeting rare branches.
-        /// Higher values explore more from rare-branch seeds.
-        /// Default: 3 (test 3 mutations vs 1 normally).
-        public var rareBranchMutationAmplification: Int
-
-        /// Swarm testing configuration for mutator subset selection.
-        /// When enabled, randomly enables/disables mutation strategies per time window.
-        ///
-        /// Based on Groce et al. 2012 "Swarm Testing" - found 42% more bugs.
-        public var swarmConfig: SwarmConfig
-
         /// Adaptive mutation scheduling configuration (MOPT-style).
         /// When enabled, tracks which mutation strategies discover new coverage
         /// and dynamically adjusts selection probabilities.
@@ -111,10 +88,6 @@ extension FuzzEngine {
             corpusMode: CorpusMode? = nil,
             perInputTimeout: TimeInterval? = nil,
             mutationBatchSize: Int = 8,
-            enableRareBranchTargeting: Bool = false,
-            rareBranchSelectionProbability: Double = 0.8,
-            rareBranchMutationAmplification: Int = 3,
-            swarmConfig: SwarmConfig = SwarmConfig(),
             adaptiveMutationConfig: AdaptiveMutationConfig = AdaptiveMutationConfig(),
             detectCoverageGaps: Bool = false,
             coverageGapConfig: CoverageGapDetector.Config = CoverageGapDetector.Config(),
@@ -138,10 +111,6 @@ extension FuzzEngine {
             self.corpusMode = corpusMode ?? CorpusMode.fromEnvironment()
             self.perInputTimeout = perInputTimeout
             self.mutationBatchSize = max(1, mutationBatchSize)  // Ensure at least 1
-            self.enableRareBranchTargeting = enableRareBranchTargeting
-            self.rareBranchSelectionProbability = rareBranchSelectionProbability
-            self.rareBranchMutationAmplification = rareBranchMutationAmplification
-            self.swarmConfig = swarmConfig
             self.adaptiveMutationConfig = adaptiveMutationConfig
             self.detectCoverageGaps = detectCoverageGaps
             self.coverageGapConfig = coverageGapConfig

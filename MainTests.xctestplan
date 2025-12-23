@@ -1,0 +1,24 @@
+{
+  "configurations" : [
+    {
+      "id" : "3FA8B161-07B1-4D83-B9DB-0F96CB377E93",
+      "name" : "Configuration 1",
+      "options" : {
+
+      }
+    }
+  ],
+  "defaultOptions" : {
+    "testTimeoutsEnabled" : true
+  },
+  "testTargets" : [
+    {
+      "target" : {
+        "containerPath" : "container:",
+        "identifier" : "PropertyTestingKitTests",
+        "name" : "PropertyTestingKitTests"
+      }
+    }
+  ],
+  "version" : 1
+}

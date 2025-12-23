@@ -249,18 +249,15 @@ struct FuzzEngineTests {
             callCount += 1
             return FuzzEngineTests.makeCounters(callCount % 10)
         }
-        let (writeDataSpy, writeDataFn) = spy { (_: Data, _: URL) in }
-        let (createDirSpy, createDirFn) = spy { (_: URL, _: Bool) in }
+        let (saveSpy, saveFn) = spy { (_: Data, _: URL) in }
 
         let result = await withDependencies {
             $0.coverageCounters = CoverageCountersClient(snapshot: snapshotFn, reset: {}, isAvailable: { true })
-            $0.fileManager = FileManagerClient(
-                currentDirectoryPath: { "/test" },
-                fileExists: { _ in false },
-                createDirectory: createDirFn,
-                removeItem: { _ in },
-                writeData: writeDataFn,
-                readData: { _ in Data() }
+            $0.corpusPersistence = CorpusPersistenceClient(
+                save: saveFn,
+                load: { _ in Data() },
+                exists: { _ in false },
+                delete: { _ in }
             )
         } operation: {
             let config = FuzzEngine<Int>.Config(
@@ -276,9 +273,7 @@ struct FuzzEngineTests {
 
         #expect(snapshotSpy.callCount > 1, "Should have called snapshot multiple times")
         #expect(result.corpus.count > 0, "Should have corpus entries")
-        #expect(writeDataSpy.callCount == 1, "Corpus should be saved")
-        #expect(writeDataSpy.callParams[0].1.lastPathComponent == "corpus.json")
-        #expect(createDirSpy.callCount == 1, "Should create directory")
+        #expect(saveSpy.callCount == 1, "Corpus should be saved")
     }
 
     @Test("FuzzEngine loads existing corpus and runs regression")
@@ -338,20 +333,16 @@ struct FuzzEngineTests {
         print("DEBUG: Parsed corpus signature=\(parsedCorpus.entries[0].signature.buckets)")
         print("DEBUG: Signatures equal? \(sigTest == parsedCorpus.entries[0].signature)")
 
-        let (readDataSpy, readDataFn) = spy { (_: URL) -> Data in corpusData }
-        let (fileExistsSpy, fileExistsFn) = spy { (path: String) -> Bool in
-            path.contains("corpus.json")
-        }
+        let (loadSpy, loadFn) = spy { (_: URL) -> Data in corpusData }
+        let (existsSpy, existsFn) = spy { (_: URL) -> Bool in true }
 
         let result = await withDependencies {
             $0.coverageCounters = CoverageCountersClient(snapshot: snapshotFn, reset: {}, isAvailable: { true })
-            $0.fileManager = FileManagerClient(
-                currentDirectoryPath: { "/test" },
-                fileExists: fileExistsFn,
-                createDirectory: { _, _ in },
-                removeItem: { _ in },
-                writeData: { _, _ in },
-                readData: readDataFn
+            $0.corpusPersistence = CorpusPersistenceClient(
+                save: { _, _ in },
+                load: loadFn,
+                exists: existsFn,
+                delete: { _ in }
             )
         } operation: {
             // Prime the dependency context
@@ -368,8 +359,8 @@ struct FuzzEngineTests {
             return await engine.run { _ in }
         }
 
-        #expect(fileExistsSpy.callCount >= 1, "Should check if corpus exists")
-        #expect(readDataSpy.callCount == 1, "Should have loaded corpus")
+        #expect(existsSpy.callCount >= 1, "Should check if corpus exists")
+        #expect(loadSpy.callCount == 1, "Should have loaded corpus")
         #expect(callCount > 0, "Should have taken snapshots")
         #expect(result.corpus.count > 0)
         #expect(result.wasRegression, "Should be regression mode - callCount=\(callCount)")
@@ -393,20 +384,16 @@ struct FuzzEngineTests {
         let (snapshotSpy, snapshotFn) = spy { () -> SanCovCounters? in
             FuzzEngineTests.makeCounters(1)
         }
-        let (readDataSpy, readDataFn) = spy { (_: URL) -> Data in corpusData }
-        let (fileExistsSpy, fileExistsFn) = spy { (path: String) -> Bool in
-            path.contains("corpus.json")
-        }
+        let (loadSpy, loadFn) = spy { (_: URL) -> Data in corpusData }
+        let (existsSpy, existsFn) = spy { (_: URL) -> Bool in true }
 
         let result = await withDependencies {
             $0.coverageCounters = CoverageCountersClient(snapshot: snapshotFn, reset: {}, isAvailable: { true })
-            $0.fileManager = FileManagerClient(
-                currentDirectoryPath: { "/test" },
-                fileExists: fileExistsFn,
-                createDirectory: { _, _ in },
-                removeItem: { _ in },
-                writeData: { _, _ in },
-                readData: readDataFn
+            $0.corpusPersistence = CorpusPersistenceClient(
+                save: { _, _ in },
+                load: loadFn,
+                exists: existsFn,
+                delete: { _ in }
             )
         } operation: {
             let config = FuzzEngine<Int>.Config(
@@ -419,8 +406,8 @@ struct FuzzEngineTests {
             return await engine.run { _ in }
         }
 
-        #expect(fileExistsSpy.callCount >= 1)
-        #expect(readDataSpy.callCount == 1, "Should have attempted to load corpus")
+        #expect(existsSpy.callCount >= 1)
+        #expect(loadSpy.callCount == 1, "Should have attempted to load corpus")
         #expect(snapshotSpy.callCount > 0)
         #expect(!result.wasRegression, "Should re-fuzz due to schema incompatibility")
     }
@@ -433,20 +420,16 @@ struct FuzzEngineTests {
         let (snapshotSpy, snapshotFn) = spy { () -> SanCovCounters? in
             FuzzEngineTests.makeCounters(1)
         }
-        let (readDataSpy, readDataFn) = spy { (_: URL) -> Data in invalidJSON }
-        let (fileExistsSpy, fileExistsFn) = spy { (path: String) -> Bool in
-            path.contains("corpus.json")
-        }
+        let (loadSpy, loadFn) = spy { (_: URL) -> Data in invalidJSON }
+        let (existsSpy, existsFn) = spy { (_: URL) -> Bool in true }
 
         let result = await withDependencies {
             $0.coverageCounters = CoverageCountersClient(snapshot: snapshotFn, reset: {}, isAvailable: { true })
-            $0.fileManager = FileManagerClient(
-                currentDirectoryPath: { "/test" },
-                fileExists: fileExistsFn,
-                createDirectory: { _, _ in },
-                removeItem: { _ in },
-                writeData: { _, _ in },
-                readData: readDataFn
+            $0.corpusPersistence = CorpusPersistenceClient(
+                save: { _, _ in },
+                load: loadFn,
+                exists: existsFn,
+                delete: { _ in }
             )
         } operation: {
             let config = FuzzEngine<Int>.Config(
@@ -459,8 +442,8 @@ struct FuzzEngineTests {
             return await engine.run { _ in }
         }
 
-        #expect(fileExistsSpy.callCount >= 1)
-        #expect(readDataSpy.callCount == 1, "Should have attempted to load corpus")
+        #expect(existsSpy.callCount >= 1)
+        #expect(loadSpy.callCount == 1, "Should have attempted to load corpus")
         #expect(snapshotSpy.callCount > 0)
         #expect(!result.wasRegression, "Should fall back to fuzzing mode")
     }
@@ -507,20 +490,17 @@ struct FuzzEngineTests {
             callCount += 1
             return FuzzEngineTests.makeCounters(callCount / 2)
         }
-        let (writeDataSpy, writeDataFn) = spy { (_: Data, _: URL) throws -> Void in
+        let (saveSpy, saveFn) = spy { (_: Data, _: URL) throws -> Void in
             throw SaveError()
         }
-        let (createDirSpy, createDirFn) = spy { (_: URL, _: Bool) in }
 
         let result = await withDependencies {
             $0.coverageCounters = CoverageCountersClient(snapshot: snapshotFn, reset: {}, isAvailable: { true })
-            $0.fileManager = FileManagerClient(
-                currentDirectoryPath: { "/test" },
-                fileExists: { _ in false },
-                createDirectory: createDirFn,
-                removeItem: { _ in },
-                writeData: writeDataFn,
-                readData: { _ in Data() }
+            $0.corpusPersistence = CorpusPersistenceClient(
+                save: saveFn,
+                load: { _ in Data() },
+                exists: { _ in false },
+                delete: { _ in }
             )
         } operation: {
             let config = FuzzEngine<Int>.Config(
@@ -534,8 +514,7 @@ struct FuzzEngineTests {
         }
 
         #expect(snapshotSpy.callCount > 0)
-        #expect(createDirSpy.callCount == 1, "Should create directory")
-        #expect(writeDataSpy.callCount == 1, "Should have attempted to save corpus")
+        #expect(saveSpy.callCount == 1, "Should have attempted to save corpus")
         #expect(!result.wasRegression)
     }
 
@@ -560,20 +539,16 @@ struct FuzzEngineTests {
         """
         let corpusData = Data(corpusJSON.utf8)
 
-        let (readDataSpy, readDataFn) = spy { (_: URL) -> Data in corpusData }
-        let (fileExistsSpy, fileExistsFn) = spy { (path: String) -> Bool in
-            path.contains("corpus.json")
-        }
+        let (loadSpy, loadFn) = spy { (_: URL) -> Data in corpusData }
+        let (existsSpy, existsFn) = spy { (_: URL) -> Bool in true }
 
         let result = await withDependencies {
             $0.coverageCounters = CoverageCountersClient(snapshot: snapshotFn, reset: {}, isAvailable: { true })
-            $0.fileManager = FileManagerClient(
-                currentDirectoryPath: { "/test" },
-                fileExists: fileExistsFn,
-                createDirectory: { _, _ in },
-                removeItem: { _ in },
-                writeData: { _, _ in },
-                readData: readDataFn
+            $0.corpusPersistence = CorpusPersistenceClient(
+                save: { _, _ in },
+                load: loadFn,
+                exists: existsFn,
+                delete: { _ in }
             )
         } operation: {
             let config = FuzzEngine<Int>.Config(
@@ -586,8 +561,8 @@ struct FuzzEngineTests {
             return await engine.run { _ in }
         }
 
-        #expect(fileExistsSpy.callCount >= 1)
-        #expect(readDataSpy.callCount == 1, "Should have loaded corpus")
+        #expect(existsSpy.callCount >= 1)
+        #expect(loadSpy.callCount == 1, "Should have loaded corpus")
         #expect(snapshotSpy.callCount >= 0)  // May or may not be called with empty corpus
         #expect(result.wasRegression, "Should be regression mode with empty corpus")
     }
@@ -712,22 +687,16 @@ struct FuzzEngineTests {
         """
         let corpusData = Data(corpusJSON.utf8)
 
-        let (readDataSpy, readDataFn) = spy { (_: URL) -> Data in corpusData }
-        nonisolated(unsafe) var fileExistsCallCount = 0
-        let fileExistsFn: @Sendable (String) -> Bool = { path in
-            fileExistsCallCount += 1
-            return path.contains("corpus.json")
-        }
+        let (loadSpy, loadFn) = spy { (_: URL) -> Data in corpusData }
+        let (existsSpy, existsFn) = spy { (_: URL) -> Bool in true }
 
         let result = await withDependencies {
             $0.coverageCounters = CoverageCountersClient(snapshot: snapshotFn, reset: {}, isAvailable: { true })
-            $0.fileManager = FileManagerClient(
-                currentDirectoryPath: { "/test" },
-                fileExists: fileExistsFn,
-                createDirectory: { _, _ in },
-                removeItem: { _ in },
-                writeData: { _, _ in },
-                readData: readDataFn
+            $0.corpusPersistence = CorpusPersistenceClient(
+                save: { _, _ in },
+                load: loadFn,
+                exists: existsFn,
+                delete: { _ in }
             )
         } operation: {
             let config = FuzzEngine<Int>.Config(
@@ -740,8 +709,8 @@ struct FuzzEngineTests {
             return await engine.run { _ in }
         }
 
-        #expect(fileExistsCallCount >= 1)
-        #expect(readDataSpy.callCount == 1, "Should have loaded corpus")
+        #expect(existsSpy.callCount >= 1)
+        #expect(loadSpy.callCount == 1, "Should have loaded corpus")
         #expect(callCount > 0)
         #expect(!result.wasRegression, "Should re-fuzz after coverage change")
     }
@@ -818,22 +787,17 @@ struct FuzzEngineTests {
         """
         let corpusData = Data(corpusJSON.utf8)
 
-        let (_, readDataFn) = spy { (_: URL) -> Data in corpusData }
-        let (_, fileExistsFn) = spy { (path: String) -> Bool in
-            path.contains("corpus.json")
-        }
+        let (_, loadFn) = spy { (_: URL) -> Data in corpusData }
 
         struct RegressionError: Error {}
 
         let result = await withDependencies {
             $0.coverageCounters = CoverageCountersClient(snapshot: snapshotFn, reset: {}, isAvailable: { true })
-            $0.fileManager = FileManagerClient(
-                currentDirectoryPath: { "/test" },
-                fileExists: fileExistsFn,
-                createDirectory: { _, _ in },
-                removeItem: { _ in },
-                writeData: { _, _ in },
-                readData: readDataFn
+            $0.corpusPersistence = CorpusPersistenceClient(
+                save: { _, _ in },
+                load: loadFn,
+                exists: { _ in true },
+                delete: { _ in }
             )
         } operation: {
             let config = FuzzEngine<Int>.Config(

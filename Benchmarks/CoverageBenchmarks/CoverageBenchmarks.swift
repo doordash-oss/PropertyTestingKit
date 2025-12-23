@@ -176,7 +176,7 @@ let benchmarks: @Sendable () -> Void = {
     Benchmark(
         "CoverageSignature(sparse) - 10 edges",
         configuration: .init(
-            metrics: [.cpuTotal, .wallClock, .mallocCountTotal],
+            metrics: [.wallClock],
             warmupIterations: 100,
             scalingFactor: .kilo
         )
@@ -189,7 +189,7 @@ let benchmarks: @Sendable () -> Void = {
     Benchmark(
         "CoverageSignature(sparse) - 100 edges",
         configuration: .init(
-            metrics: [.cpuTotal, .wallClock, .mallocCountTotal],
+            metrics: [.wallClock],
             warmupIterations: 100,
             scalingFactor: .kilo
         )
@@ -202,7 +202,7 @@ let benchmarks: @Sendable () -> Void = {
     Benchmark(
         "CoverageSignature(full) - 10 edges in 26K",
         configuration: .init(
-            metrics: [.cpuTotal, .wallClock, .mallocCountTotal],
+            metrics: [.wallClock],
             warmupIterations: 10,
             scalingFactor: .one
         )
@@ -216,7 +216,7 @@ let benchmarks: @Sendable () -> Void = {
     Benchmark(
         "CoverageSignature(full) - 100 edges in 26K",
         configuration: .init(
-            metrics: [.cpuTotal, .wallClock, .mallocCountTotal],
+            metrics: [.wallClock],
             warmupIterations: 10,
             scalingFactor: .one
         )
@@ -239,7 +239,7 @@ let benchmarks: @Sendable () -> Void = {
     Benchmark(
         "parseAndValidate(Int) - single call",
         configuration: .init(
-            metrics: [.cpuTotal, .wallClock, .mallocCountTotal],
+            metrics: [.wallClock],
             warmupIterations: 100,
             scalingFactor: .kilo
         )
@@ -252,7 +252,7 @@ let benchmarks: @Sendable () -> Void = {
     Benchmark(
         "parseAndValidate(Int) - 100 calls (raw baseline)",
         configuration: .init(
-            metrics: [.cpuTotal, .wallClock, .mallocCountTotal],
+            metrics: [.wallClock],
             warmupIterations: 10,
             scalingFactor: .kilo
         )
@@ -267,7 +267,7 @@ let benchmarks: @Sendable () -> Void = {
     Benchmark(
         "parseAndValidate(Int) - 1000 calls (raw baseline)",
         configuration: .init(
-            metrics: [.cpuTotal, .wallClock, .mallocCountTotal],
+            metrics: [.wallClock],
             warmupIterations: 5,
             scalingFactor: .one,
             maxDuration: .seconds(5),
@@ -286,7 +286,7 @@ let benchmarks: @Sendable () -> Void = {
     Benchmark(
         "fuzz(Int) - 100 iterations, refuzzReplace",
         configuration: .init(
-            metrics: [.cpuTotal, .wallClock, .mallocCountTotal],
+            metrics: [.wallClock],
             warmupIterations: 1,
             scalingFactor: .one,
             maxDuration: .seconds(30),
@@ -308,7 +308,7 @@ let benchmarks: @Sendable () -> Void = {
     Benchmark(
         "fuzz(Int) - 100 iterations, no value profile",
         configuration: .init(
-            metrics: [.cpuTotal, .wallClock, .mallocCountTotal],
+            metrics: [.wallClock],
             warmupIterations: 1,
             scalingFactor: .one,
             maxDuration: .seconds(30),
@@ -332,7 +332,7 @@ let benchmarks: @Sendable () -> Void = {
     Benchmark(
         "fuzz(Int) - 100 iterations, refuzzReplace, with gap detection",
         configuration: .init(
-            metrics: [.cpuTotal, .wallClock, .mallocCountTotal],
+            metrics: [.wallClock],
             warmupIterations: 1,
             scalingFactor: .one,
             maxDuration: .seconds(60),
@@ -354,7 +354,7 @@ let benchmarks: @Sendable () -> Void = {
     Benchmark(
         "fuzz(String) - 100 iterations, refuzzReplace",
         configuration: .init(
-            metrics: [.cpuTotal, .wallClock, .mallocCountTotal],
+            metrics: [.wallClock],
             warmupIterations: 1,
             scalingFactor: .one,
             maxDuration: .seconds(30),
@@ -376,7 +376,7 @@ let benchmarks: @Sendable () -> Void = {
     Benchmark(
         "fuzz(Int) - 1000 iterations, refuzzReplace",
         configuration: .init(
-            metrics: [.cpuTotal, .wallClock, .mallocCountTotal],
+            metrics: [.wallClock],
             warmupIterations: 1,
             scalingFactor: .one,
             maxDuration: .seconds(60),
@@ -398,7 +398,7 @@ let benchmarks: @Sendable () -> Void = {
     Benchmark(
         "fuzz(Int) - 1000 iterations, with gap detection",
         configuration: .init(
-            metrics: [.cpuTotal, .wallClock, .mallocCountTotal],
+            metrics: [.wallClock],
             warmupIterations: 1,
             scalingFactor: .one,
             maxDuration: .seconds(60),
@@ -420,7 +420,7 @@ let benchmarks: @Sendable () -> Void = {
     Benchmark(
         "fuzz(Int) - realistic coverage gap, with gap detection",
         configuration: .init(
-            metrics: [.cpuTotal, .wallClock, .mallocCountTotal],
+            metrics: [.wallClock],
             warmupIterations: 1,
             scalingFactor: .one,
             maxDuration: .seconds(60),
@@ -442,7 +442,7 @@ let benchmarks: @Sendable () -> Void = {
     Benchmark(
         "fuzz(EmptyFuzzable) - empty fuzz array",
         configuration: .init(
-            metrics: [.cpuTotal, .wallClock, .mallocCountTotal],
+            metrics: [.wallClock],
             warmupIterations: 1,
             scalingFactor: .one,
             maxDuration: .seconds(30),
@@ -465,7 +465,7 @@ let benchmarks: @Sendable () -> Void = {
     Benchmark(
         "Corpus.addIfInteresting - empty corpus",
         configuration: .init(
-            metrics: [.cpuTotal, .wallClock, .mallocCountTotal],
+            metrics: [.wallClock],
             warmupIterations: 5,
             scalingFactor: .kilo
         )
@@ -480,7 +480,7 @@ let benchmarks: @Sendable () -> Void = {
     Benchmark(
         "Corpus.addIfInteresting - 100 entries",
         configuration: .init(
-            metrics: [.cpuTotal, .wallClock, .mallocCountTotal],
+            metrics: [.wallClock],
             warmupIterations: 5,
             scalingFactor: .kilo
         )
@@ -505,7 +505,7 @@ let benchmarks: @Sendable () -> Void = {
     Benchmark(
         "CoverageSignature.hasUniqueCoverage",
         configuration: .init(
-            metrics: [.cpuTotal, .wallClock],
+            metrics: [.wallClock],
             warmupIterations: 100,
             scalingFactor: .kilo
         )
@@ -521,7 +521,7 @@ let benchmarks: @Sendable () -> Void = {
     Benchmark(
         "CoverageSignature.union",
         configuration: .init(
-            metrics: [.cpuTotal, .wallClock, .mallocCountTotal],
+            metrics: [.wallClock],
             warmupIterations: 100,
             scalingFactor: .kilo
         )
@@ -539,7 +539,7 @@ let benchmarks: @Sendable () -> Void = {
     Benchmark(
         "SanCovCounters.totalEdgeCount",
         configuration: .init(
-            metrics: [.cpuTotal, .wallClock],
+            metrics: [.wallClock],
             warmupIterations: 100,
             scalingFactor: .kilo
         )
@@ -552,7 +552,7 @@ let benchmarks: @Sendable () -> Void = {
     Benchmark(
         "SanCovCounters.currentCoveredCount",
         configuration: .init(
-            metrics: [.cpuTotal, .wallClock],
+            metrics: [.wallClock],
             warmupIterations: 100,
             scalingFactor: .kilo
         )
@@ -570,7 +570,7 @@ let benchmarks: @Sendable () -> Void = {
     Benchmark(
         "SanCovCounters.reset()",
         configuration: .init(
-            metrics: [.cpuTotal, .wallClock],
+            metrics: [.wallClock],
             warmupIterations: 100,
             scalingFactor: .kilo
         )
@@ -585,7 +585,7 @@ let benchmarks: @Sendable () -> Void = {
     Benchmark(
         "Int.mutate() - single value",
         configuration: .init(
-            metrics: [.cpuTotal, .wallClock, .mallocCountTotal],
+            metrics: [.wallClock],
             warmupIterations: 100,
             scalingFactor: .kilo
         )
@@ -599,7 +599,7 @@ let benchmarks: @Sendable () -> Void = {
     Benchmark(
         "String.mutate() - short string",
         configuration: .init(
-            metrics: [.cpuTotal, .wallClock, .mallocCountTotal],
+            metrics: [.wallClock],
             warmupIterations: 100,
             scalingFactor: .kilo
         )
@@ -613,7 +613,7 @@ let benchmarks: @Sendable () -> Void = {
     Benchmark(
         "String.mutate() - medium string",
         configuration: .init(
-            metrics: [.cpuTotal, .wallClock, .mallocCountTotal],
+            metrics: [.wallClock],
             warmupIterations: 100,
             scalingFactor: .kilo
         )
@@ -627,7 +627,7 @@ let benchmarks: @Sendable () -> Void = {
     Benchmark(
         "[Int].mutate() - small array",
         configuration: .init(
-            metrics: [.cpuTotal, .wallClock, .mallocCountTotal],
+            metrics: [.wallClock],
             warmupIterations: 100,
             scalingFactor: .kilo
         )
@@ -641,7 +641,7 @@ let benchmarks: @Sendable () -> Void = {
     Benchmark(
         "[Int].mutate() - medium array",
         configuration: .init(
-            metrics: [.cpuTotal, .wallClock, .mallocCountTotal],
+            metrics: [.wallClock],
             warmupIterations: 100,
             scalingFactor: .kilo
         )
@@ -657,7 +657,7 @@ let benchmarks: @Sendable () -> Void = {
     Benchmark(
         "CoveragePlateauDetector.record - no discovery",
         configuration: .init(
-            metrics: [.cpuTotal, .wallClock],
+            metrics: [.wallClock],
             warmupIterations: 100,
             scalingFactor: .kilo
         )
@@ -674,7 +674,7 @@ let benchmarks: @Sendable () -> Void = {
     Benchmark(
         "CoveragePlateauDetector.record - mixed discovery",
         configuration: .init(
-            metrics: [.cpuTotal, .wallClock],
+            metrics: [.wallClock],
             warmupIterations: 100,
             scalingFactor: .kilo
         )
@@ -693,7 +693,7 @@ let benchmarks: @Sendable () -> Void = {
     Benchmark(
         "Corpus growth - 100 entries",
         configuration: .init(
-            metrics: [.cpuTotal, .wallClock, .mallocCountTotal],
+            metrics: [.wallClock],
             warmupIterations: 5,
             scalingFactor: .one
         )
@@ -714,7 +714,7 @@ let benchmarks: @Sendable () -> Void = {
     Benchmark(
         "Corpus.selectForMutation - 100 entries",
         configuration: .init(
-            metrics: [.cpuTotal, .wallClock],
+            metrics: [.wallClock],
             warmupIterations: 100,
             scalingFactor: .kilo
         )
@@ -736,7 +736,7 @@ let benchmarks: @Sendable () -> Void = {
     Benchmark(
         "Corpus.minimized - 100 entries",
         configuration: .init(
-            metrics: [.cpuTotal, .wallClock, .mallocCountTotal],
+            metrics: [.wallClock],
             warmupIterations: 1,
             scalingFactor: .one
         )
@@ -759,7 +759,7 @@ let benchmarks: @Sendable () -> Void = {
     Benchmark(
         "Int.fuzz generation",
         configuration: .init(
-            metrics: [.cpuTotal, .wallClock, .mallocCountTotal],
+            metrics: [.wallClock],
             warmupIterations: 100,
             scalingFactor: .kilo
         )
@@ -772,7 +772,7 @@ let benchmarks: @Sendable () -> Void = {
     Benchmark(
         "String.fuzz generation",
         configuration: .init(
-            metrics: [.cpuTotal, .wallClock, .mallocCountTotal],
+            metrics: [.wallClock],
             warmupIterations: 100,
             scalingFactor: .kilo
         )
@@ -785,7 +785,7 @@ let benchmarks: @Sendable () -> Void = {
     Benchmark(
         "[Int].fuzz generation",
         configuration: .init(
-            metrics: [.cpuTotal, .wallClock, .mallocCountTotal],
+            metrics: [.wallClock],
             warmupIterations: 100,
             scalingFactor: .kilo
         )
@@ -799,7 +799,7 @@ let benchmarks: @Sendable () -> Void = {
     Benchmark(
         "fuzz(Int) - 10 iterations only (minimal)",
         configuration: .init(
-            metrics: [.cpuTotal, .wallClock, .mallocCountTotal],
+            metrics: [.wallClock],
             warmupIterations: 5,
             scalingFactor: .one,
             maxDuration: .seconds(30),
@@ -822,7 +822,7 @@ let benchmarks: @Sendable () -> Void = {
     Benchmark(
         "fuzz(Int) - 50 iterations only",
         configuration: .init(
-            metrics: [.cpuTotal, .wallClock, .mallocCountTotal],
+            metrics: [.wallClock],
             warmupIterations: 3,
             scalingFactor: .one,
             maxDuration: .seconds(30),
@@ -847,7 +847,7 @@ let benchmarks: @Sendable () -> Void = {
     Benchmark(
         "Seed iteration: reset + test + snapshot + signature + corpus",
         configuration: .init(
-            metrics: [.cpuTotal, .wallClock, .mallocCountTotal],
+            metrics: [.wallClock],
             warmupIterations: 10,
             scalingFactor: .one,
             maxDuration: .seconds(10),
@@ -881,7 +881,7 @@ let benchmarks: @Sendable () -> Void = {
     Benchmark(
         "Single seed iteration: reset + test + snapshot + signature + corpus",
         configuration: .init(
-            metrics: [.cpuTotal, .wallClock, .mallocCountTotal],
+            metrics: [.wallClock],
             warmupIterations: 100,
             scalingFactor: .kilo
         )
@@ -911,7 +911,7 @@ let benchmarks: @Sendable () -> Void = {
     Benchmark(
         "SanCovCounters.snapshotCoveredOnly()",
         configuration: .init(
-            metrics: [.cpuTotal, .wallClock, .mallocCountTotal],
+            metrics: [.wallClock],
             warmupIterations: 10,
             scalingFactor: .kilo
         )
@@ -924,7 +924,7 @@ let benchmarks: @Sendable () -> Void = {
     Benchmark(
         "SanCovCounters.snapshot() - full",
         configuration: .init(
-            metrics: [.cpuTotal, .wallClock, .mallocCountTotal],
+            metrics: [.wallClock],
             warmupIterations: 10,
             scalingFactor: .one
         )
@@ -939,7 +939,7 @@ let benchmarks: @Sendable () -> Void = {
     Benchmark(
         "BenchHuman.fuzz generation",
         configuration: .init(
-            metrics: [.cpuTotal, .wallClock, .mallocCountTotal],
+            metrics: [.wallClock],
             warmupIterations: 10,
             scalingFactor: .one
         )
@@ -952,7 +952,7 @@ let benchmarks: @Sendable () -> Void = {
     Benchmark(
         "BenchDog.fuzz generation",
         configuration: .init(
-            metrics: [.cpuTotal, .wallClock, .mallocCountTotal],
+            metrics: [.wallClock],
             warmupIterations: 10,
             scalingFactor: .kilo
         )
@@ -965,7 +965,7 @@ let benchmarks: @Sendable () -> Void = {
     Benchmark(
         "Nested fuzzable contains all combinations (O(n²) check)",
         configuration: .init(
-            metrics: [.cpuTotal, .wallClock, .mallocCountTotal],
+            metrics: [.wallClock],
             warmupIterations: 1,
             scalingFactor: .one,
             maxDuration: .seconds(30),
@@ -991,7 +991,7 @@ let benchmarks: @Sendable () -> Void = {
     Benchmark(
         "Nested fuzzable O(n) check using Set",
         configuration: .init(
-            metrics: [.cpuTotal, .wallClock, .mallocCountTotal],
+            metrics: [.wallClock],
             warmupIterations: 10,
             scalingFactor: .one,
             maxDuration: .seconds(30),
@@ -1021,7 +1021,7 @@ let benchmarks: @Sendable () -> Void = {
     Benchmark(
         "fuzz(Int) - 100 iterations, expensive test (real coverage)",
         configuration: .init(
-            metrics: [.cpuTotal, .wallClock, .mallocCountTotal],
+            metrics: [.wallClock],
             warmupIterations: 1,
             scalingFactor: .one,
             maxDuration: .seconds(60),
@@ -1043,7 +1043,7 @@ let benchmarks: @Sendable () -> Void = {
     Benchmark(
         "fuzz(Int) - 100 iterations, expensive test, batchSize=1 (sequential)",
         configuration: .init(
-            metrics: [.cpuTotal, .wallClock, .mallocCountTotal],
+            metrics: [.wallClock],
             warmupIterations: 1,
             scalingFactor: .one,
             maxDuration: .seconds(60),
@@ -1067,7 +1067,7 @@ let benchmarks: @Sendable () -> Void = {
     Benchmark(
         "fuzz(Int) - 100 iterations, expensive test, batchSize=16",
         configuration: .init(
-            metrics: [.cpuTotal, .wallClock, .mallocCountTotal],
+            metrics: [.wallClock],
             warmupIterations: 1,
             scalingFactor: .one,
             maxDuration: .seconds(60),

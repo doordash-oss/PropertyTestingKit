@@ -128,7 +128,8 @@ void __sanitizer_cov_trace_switch(uint64_t val, uint64_t *cases) {
 // we fall back to thread-local storage for compatibility with non-async code.
 
 #include <stdlib.h>
-#include <pthread.h>
+#include <stdatomic.h>
+#include <pthread.h>  // For measurement context registry (not in hot path)
 
 // Forward declare Swift runtime function
 // Returns the current Swift Task pointer, or NULL if not in an async context
@@ -139,142 +140,257 @@ static uint32_t *g_guards_start = NULL;
 static uint32_t *g_guards_end = NULL;
 static size_t g_guard_count = 0;
 
-// MARK: - Task-Keyed Coverage Registry
+// MARK: - Task-Keyed Coverage Registry (Lock-Free)
 
 #define MAX_TASK_ENTRIES 512
 
 typedef struct {
-    void* task_id;          // Swift task pointer
-    uint8_t* coverage_map;  // Coverage bitmap for this task
+    _Atomic(void*) task_id;          // Swift task pointer (atomic for lock-free access)
+    _Atomic(uint8_t*) coverage_map;  // Coverage bitmap for this task (atomic)
 } TaskCoverageEntry;
 
-// Registry of per-task coverage maps
+// Registry of per-task coverage maps (lock-free)
 static TaskCoverageEntry g_task_registry[MAX_TASK_ENTRIES];
-static size_t g_task_registry_count = 0;
-static pthread_mutex_t g_registry_lock = PTHREAD_MUTEX_INITIALIZER;
+static _Atomic(size_t) g_task_registry_count = 0;
 
 // Thread-local fallback for non-async contexts
 static _Thread_local uint8_t *tls_coverage_map = NULL;
 static _Thread_local size_t tls_coverage_map_size = 0;
 
-// Thread-local measurement context for sync isolation
-// When set, this takes priority over swift_task_getCurrent()
-static _Thread_local void* tls_measurement_context = NULL;
+// MARK: - Per-Task Measurement Context Registry
+// Measurement contexts are now tracked per-task to avoid TLS interference
+// when multiple Swift tasks run on the same thread.
+
+typedef struct {
+    void* task_id;              // Swift task pointer (or pseudo-task for sync code)
+    void* measurement_context;  // The measurement context ID
+} TaskMeasurementEntry;
+
+#define MAX_TASK_MEASUREMENT_ENTRIES 512
+
+static TaskMeasurementEntry g_task_measurement_registry[MAX_TASK_MEASUREMENT_ENTRIES];
+static size_t g_task_measurement_count = 0;
+static pthread_mutex_t g_task_measurement_lock = PTHREAD_MUTEX_INITIALIZER;
+
+// Thread-local pseudo-task ID for synchronous code outside async contexts
+static _Thread_local void* tls_sync_pseudo_task = NULL;
 
 // Thread-local cache for coverage map lookup.
-// Since tasks stay on the same thread within synchronous code blocks,
-// we can cache the last-used task's coverage map per-thread.
-// This avoids the registry lookup on every edge hit.
-static _Thread_local void* tls_cached_context_id = NULL;
+// Only used for measurement contexts (not Swift tasks) because we can
+// invalidate the cache when the measurement ends.
+// Swift task pointers can be reused after a task completes, so caching
+// those would be unsafe.
+static _Thread_local void* tls_cached_measurement_context = NULL;
 static _Thread_local uint8_t* tls_cached_coverage_map = NULL;
 
-// Lock-free lookup for existing task map.
-// Returns NULL if not found (caller should use create_task_map_locked).
-//
-// Safety: This is safe because entries are append-only during normal operation.
-// The memory ordering ensures that when we read count=N, all entries 0..N-1
-// are fully initialized (map pointer and task_id both valid).
-static uint8_t* find_task_map_lockfree(void* task_id) {
-    // Read count with acquire semantics - synchronizes with release in creation
-    size_t count = __atomic_load_n(&g_task_registry_count, __ATOMIC_ACQUIRE);
+// Get or create a pseudo-task ID for synchronous code
+static void* get_sync_pseudo_task(void) {
+    if (tls_sync_pseudo_task == NULL) {
+        // Use a unique heap address as pseudo-task ID
+        tls_sync_pseudo_task = malloc(1);
+    }
+    return tls_sync_pseudo_task;
+}
 
-    // Search existing entries (all guaranteed fully initialized)
-    for (size_t i = 0; i < count; i++) {
-        if (g_task_registry[i].task_id == task_id) {
-            return g_task_registry[i].coverage_map;
+// Get the current task (Swift task or sync pseudo-task)
+static void* get_current_task_for_measurement(void) {
+    if (swift_task_getCurrent != NULL) {
+        void* task = swift_task_getCurrent();
+        if (task != NULL) {
+            return task;
         }
     }
+    return get_sync_pseudo_task();
+}
 
+// Get measurement context for a task
+static void* get_measurement_context_for_task(void* task_id) {
+    if (task_id == NULL) return NULL;
+
+    pthread_mutex_lock(&g_task_measurement_lock);
+    for (size_t i = 0; i < g_task_measurement_count; i++) {
+        if (g_task_measurement_registry[i].task_id == task_id) {
+            void* ctx = g_task_measurement_registry[i].measurement_context;
+            pthread_mutex_unlock(&g_task_measurement_lock);
+            return ctx;
+        }
+    }
+    pthread_mutex_unlock(&g_task_measurement_lock);
     return NULL;
 }
 
-// Locked creation of new task map.
-// Called when find_task_map_lockfree returns NULL.
-static uint8_t* create_task_map_locked(void* task_id) {
-    pthread_mutex_lock(&g_registry_lock);
+// Set measurement context for a task
+static void set_measurement_context_for_task(void* task_id, void* context) {
+    if (task_id == NULL) return;
 
-    // Double-check: another thread might have created it while we waited
-    size_t count = g_task_registry_count;
-    for (size_t i = 0; i < count; i++) {
-        if (g_task_registry[i].task_id == task_id) {
-            uint8_t* map = g_task_registry[i].coverage_map;
-            pthread_mutex_unlock(&g_registry_lock);
-            return map;
+    pthread_mutex_lock(&g_task_measurement_lock);
+
+    // Check if entry already exists
+    for (size_t i = 0; i < g_task_measurement_count; i++) {
+        if (g_task_measurement_registry[i].task_id == task_id) {
+            g_task_measurement_registry[i].measurement_context = context;
+            pthread_mutex_unlock(&g_task_measurement_lock);
+            return;
         }
     }
 
-    // Create new entry if space available
-    if (count < MAX_TASK_ENTRIES && g_guard_count > 0) {
-        uint8_t* map = (uint8_t*)calloc(g_guard_count, 1);
-        if (map) {
-            // Write order matters for lock-free readers:
-            // 1. Store map pointer first (entry not yet visible)
-            g_task_registry[count].coverage_map = map;
-            // 2. Store task_id (entry still not visible, count unchanged)
-            g_task_registry[count].task_id = task_id;
-            // 3. Increment count with release - makes entry visible to readers
-            //    The release ensures steps 1 and 2 are visible before count changes
-            __atomic_store_n(&g_task_registry_count, count + 1, __ATOMIC_RELEASE);
-        }
-        pthread_mutex_unlock(&g_registry_lock);
-        return map;
+    // Add new entry
+    if (g_task_measurement_count < MAX_TASK_MEASUREMENT_ENTRIES) {
+        g_task_measurement_registry[g_task_measurement_count].task_id = task_id;
+        g_task_measurement_registry[g_task_measurement_count].measurement_context = context;
+        g_task_measurement_count++;
     }
 
-    pthread_mutex_unlock(&g_registry_lock);
-    return NULL;
+    pthread_mutex_unlock(&g_task_measurement_lock);
 }
 
-// Find or create a coverage map for the given task.
-// Uses lock-free lookup on the hot path, only takes lock for creation.
-static uint8_t* find_or_create_task_map(void* task_id) {
-    // Fast path: lock-free lookup
-    uint8_t* map = find_task_map_lockfree(task_id);
-    if (map) return map;
+// Remove measurement context for a task
+static void remove_measurement_context_for_task(void* task_id) {
+    if (task_id == NULL) return;
 
-    // Slow path: locked creation
-    return create_task_map_locked(task_id);
-}
+    pthread_mutex_lock(&g_task_measurement_lock);
 
-// Remove a task map entry and free its memory
-static void cleanup_task_map(void* task_id) {
-    pthread_mutex_lock(&g_registry_lock);
-
-    for (size_t i = 0; i < g_task_registry_count; i++) {
-        if (g_task_registry[i].task_id == task_id) {
-            // Free the coverage map
-            free(g_task_registry[i].coverage_map);
-
-            // Move last entry to this slot (swap-remove)
-            if (i < g_task_registry_count - 1) {
-                g_task_registry[i] = g_task_registry[g_task_registry_count - 1];
+    for (size_t i = 0; i < g_task_measurement_count; i++) {
+        if (g_task_measurement_registry[i].task_id == task_id) {
+            // Swap-remove
+            if (i < g_task_measurement_count - 1) {
+                g_task_measurement_registry[i] = g_task_measurement_registry[g_task_measurement_count - 1];
             }
-            g_task_registry_count--;
+            g_task_measurement_count--;
             break;
         }
     }
 
-    pthread_mutex_unlock(&g_registry_lock);
+    pthread_mutex_unlock(&g_task_measurement_lock);
+}
+
+// Find or create a coverage map for the given task (lock-free).
+// Uses atomic operations to ensure thread safety without locks.
+//
+// Memory safety: Coverage maps are never freed during runtime to prevent
+// use-after-free races. Maps are reused when slots are reclaimed, and all
+// memory is freed on process exit. This bounds memory usage to
+// MAX_TASK_ENTRIES * g_guard_count bytes (~50MB worst case).
+static uint8_t* find_or_create_task_map(void* task_id) {
+    if (task_id == NULL || g_guard_count == 0) return NULL;
+
+    // Search all slots for existing entry
+    for (size_t i = 0; i < MAX_TASK_ENTRIES; i++) {
+        void* stored_task = atomic_load_explicit(&g_task_registry[i].task_id, memory_order_acquire);
+        if (stored_task == task_id) {
+            // Found existing entry, return its coverage map
+            uint8_t* map = atomic_load_explicit(&g_task_registry[i].coverage_map, memory_order_acquire);
+            if (map != NULL) {
+                return map;
+            }
+            // Map not set yet (shouldn't happen), fall through to claim a slot
+        }
+    }
+
+    // Not found, try to claim a free slot
+    for (size_t i = 0; i < MAX_TASK_ENTRIES; i++) {
+        void* expected = NULL;
+        if (atomic_compare_exchange_strong_explicit(
+                &g_task_registry[i].task_id,
+                &expected,
+                task_id,
+                memory_order_acq_rel,
+                memory_order_acquire)) {
+            // Successfully claimed this slot
+            // Check if there's an existing map we can reuse (from a previous task)
+            uint8_t* existing_map = atomic_load_explicit(&g_task_registry[i].coverage_map, memory_order_acquire);
+            if (existing_map != NULL) {
+                // Reuse existing map - just clear it
+                memset(existing_map, 0, g_guard_count);
+                return existing_map;
+            }
+
+            // No existing map, allocate a new one
+            uint8_t* new_map = (uint8_t*)calloc(g_guard_count, 1);
+            if (new_map == NULL) {
+                // Allocation failed, release the slot
+                atomic_store_explicit(&g_task_registry[i].task_id, NULL, memory_order_release);
+                return NULL;
+            }
+            atomic_store_explicit(&g_task_registry[i].coverage_map, new_map, memory_order_release);
+
+            // Update hint counter
+            size_t count = atomic_load_explicit(&g_task_registry_count, memory_order_relaxed);
+            if (i >= count) {
+                atomic_store_explicit(&g_task_registry_count, i + 1, memory_order_relaxed);
+            }
+            return new_map;
+        }
+
+        // CAS failed - check if another thread added our task_id
+        if (expected == task_id) {
+            // Another thread added an entry for our task, use their map
+            uint8_t* map = atomic_load_explicit(&g_task_registry[i].coverage_map, memory_order_acquire);
+            // Spin-wait briefly if map isn't set yet (another thread is setting it)
+            int spin_count = 0;
+            while (map == NULL && spin_count < 1000) {
+                map = atomic_load_explicit(&g_task_registry[i].coverage_map, memory_order_acquire);
+                spin_count++;
+            }
+            if (map != NULL) {
+                return map;
+            }
+            // Spin limit reached, fall through to try another slot
+        }
+    }
+
+    // No free slots available
+    return NULL;
+}
+
+// Mark a task map entry as available for reuse (lock-free).
+// The coverage map memory is NOT freed - it will be reused by the next task
+// that claims this slot. This prevents use-after-free races.
+static void cleanup_task_map(void* task_id) {
+    if (task_id == NULL) return;
+
+    for (size_t i = 0; i < MAX_TASK_ENTRIES; i++) {
+        void* stored_task = atomic_load_explicit(&g_task_registry[i].task_id, memory_order_acquire);
+        if (stored_task == task_id) {
+            // Found the entry - atomically clear the task_id to mark slot as available
+            // Note: We intentionally do NOT free or clear the coverage_map pointer.
+            // The map will be reused by the next task that claims this slot.
+            atomic_compare_exchange_strong_explicit(
+                    &g_task_registry[i].task_id,
+                    &stored_task,
+                    NULL,
+                    memory_order_acq_rel,
+                    memory_order_acquire);
+            // If CAS failed, another thread already cleaned up - that's fine
+            return;
+        }
+    }
 }
 
 // MARK: - Measurement Context API
-// These functions provide isolation for synchronous measurements
+// These functions provide isolation for measurements.
+// Measurement contexts are now tracked per-task to avoid TLS interference
+// when multiple Swift tasks run on the same thread.
 
 void* sancov_begin_measurement(void) {
     // Use a unique address as the context ID
-    // We allocate a small amount to get a unique heap address
     void* context = malloc(1);
-    tls_measurement_context = context;
+
+    // Associate this measurement context with the current task
+    void* task = get_current_task_for_measurement();
+    set_measurement_context_for_task(task, context);
+
     return context;
 }
 
 void sancov_end_measurement(void* context) {
-    if (tls_measurement_context == context) {
-        tls_measurement_context = NULL;
-    }
+    // Remove the measurement context from the current task
+    void* task = get_current_task_for_measurement();
+    remove_measurement_context_for_task(task);
+
     // Invalidate cache if it was using this context
-    // (The context pointer could be reused by a future malloc)
-    if (tls_cached_context_id == context) {
-        tls_cached_context_id = NULL;
+    if (tls_cached_measurement_context == context) {
+        tls_cached_measurement_context = NULL;
         tls_cached_coverage_map = NULL;
     }
     // Clean up the task registry entry for this context
@@ -291,36 +407,44 @@ static void ensure_tls_coverage_map(void) {
 }
 
 // Get the coverage map for the current execution context
-// Priority: measurement context > Swift async task > thread-local
+// Priority: measurement context (per-task) > Swift async task > thread-local
 //
-// Uses thread-local caching to avoid registry lookup on every edge hit.
-// Since tasks stay on the same thread within synchronous code blocks,
-// the cache hit rate is very high during test execution.
+// Measurement contexts are looked up per-task to avoid TLS interference when
+// multiple Swift tasks run on the same thread.
+//
+// Uses thread-local caching ONLY for measurement contexts (not Swift tasks).
+// Measurement contexts have explicit begin/end calls so we can safely
+// invalidate the cache. Swift task pointers can be reused after completion,
+// making caching unsafe without explicit lifecycle management.
 static uint8_t* get_current_coverage_map(void) {
-    // Determine the current context ID (measurement context or task)
-    void* context_id = tls_measurement_context;
-    if (context_id == NULL && swift_task_getCurrent != NULL) {
-        context_id = swift_task_getCurrent();
-    }
+    // Get the current task (Swift task or sync pseudo-task)
+    void* task = get_current_task_for_measurement();
 
-    // Fast path: check thread-local cache
-    if (context_id != NULL && context_id == tls_cached_context_id && tls_cached_coverage_map != NULL) {
-        return tls_cached_coverage_map;
-    }
-
-    // Slow path: lookup or create, then cache
-    if (context_id != NULL) {
-        uint8_t* map = find_or_create_task_map(context_id);
+    // Check for measurement context for this task (highest priority)
+    void* measurement_ctx = get_measurement_context_for_task(task);
+    if (measurement_ctx != NULL) {
+        // Fast path: check cache for measurement context
+        if (measurement_ctx == tls_cached_measurement_context && tls_cached_coverage_map != NULL) {
+            return tls_cached_coverage_map;
+        }
+        // Slow path: lookup or create, then cache
+        uint8_t* map = find_or_create_task_map(measurement_ctx);
         if (map != NULL) {
-            // Update cache for next call
-            tls_cached_context_id = context_id;
+            tls_cached_measurement_context = measurement_ctx;
             tls_cached_coverage_map = map;
             return map;
         }
-        // Registry full - fall through to thread-local fallback
     }
 
-    // Fallback to thread-local storage for non-async contexts or when registry is full
+    // No measurement context - use the task's map directly
+    if (task != NULL) {
+        uint8_t* map = find_or_create_task_map(task);
+        if (map != NULL) {
+            return map;
+        }
+    }
+
+    // Fallback to thread-local storage when registry is full
     ensure_tls_coverage_map();
     return tls_coverage_map;
 }

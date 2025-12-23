@@ -25,11 +25,17 @@ struct CustomFuzzableTests {
 
     @Test("FuzzEngine works with custom types")
     func testFuzzEngineWithCustomType() async {
-        nonisolated(unsafe) var callCount = 0
-        let (snapshotSpy, snapshotFn) = spy { () -> SanCovCounters? in
-            callCount += 1
+        let seenTimeouts = Synchronized(Set<Int>())
+        let seenRetries = Synchronized(Set<Int>())
+        let callCount = Synchronized(0)
+
+        let (snapshotSpy, snapshotFn) = spy { () async -> SanCovCounters? in
+            let count = await callCount.update {
+                $0 += 1
+                return $0
+            }
             var counters = [UInt64](repeating: 0, count: 100)
-            counters[callCount % 100] = UInt64(callCount + 1)
+            counters[count % 100] = UInt64(count + 1)
             return SanCovCounters(counters: counters)
         }
 
@@ -44,16 +50,19 @@ struct CustomFuzzableTests {
 
             let engine = FuzzEngine<TestConfig>(config: config, corpusDirectory: nil)
 
-            return await engine.run { _ in
-                // Note: Cannot access input properties due to compiler limitation with variadic generics
-                // This test validates that the engine runs with custom types
+            return await engine.run { input in
+                await seenTimeouts.update { $0.insert(input.timeout) }
+                await seenRetries.update { $0.insert(input.retries) }
             }
         }
 
-        // Note: Cannot verify specific input values due to compiler limitations with variadic generics
-        // seenTimeouts and seenRetries remain empty since we can't access input properties
+        let timeoutCount = await seenTimeouts.value.count
+        let retryCount = await seenRetries.value.count
+
         #expect(result.failures.isEmpty)
         #expect(snapshotSpy.callCount > 0, "Should have called snapshot")
+        #expect(timeoutCount > 1, "Should have seen multiple timeout values, got \(timeoutCount)")
+        #expect(retryCount > 1, "Should have seen multiple retry values, got \(retryCount)")
     }
 }
 

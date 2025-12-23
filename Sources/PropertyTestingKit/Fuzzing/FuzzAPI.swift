@@ -82,6 +82,8 @@ import Dependencies
 ///   - detectCoverageGaps: Enable coverage gap detection to identify partially-covered
 ///     functions. When enabled, the result includes a report of functions that have
 ///     some coverage but not complete coverage. Default: false.
+///   - mutationBatchSize: Number of mutations to run in parallel per batch (default: 8).
+///     Set to 1 for sequential execution when test closures capture mutable shared state.
 ///   - filePath: Source file path (auto-filled).
 ///   - function: Test function name (auto-filled).
 ///   - test: The test closure receiving fuzzed inputs.
@@ -96,10 +98,11 @@ public func fuzz<each Input: Fuzzable & Codable & Sendable, each M: Mutator>(
     perInputTimeout: TimeInterval? = nil,
     corpusMode: CorpusMode? = nil,
     detectCoverageGaps: Bool = false,
+    mutationBatchSize: Int = 8,
     filePath: StaticString = #filePath,
     function: StaticString = #function,
     line: Int = #line,
-    test: @escaping @Sendable ((repeat each Input)) throws -> Void
+    test: @escaping @Sendable ((repeat each Input)) async throws -> Void
 ) async throws -> FuzzResult<repeat each Input> where (repeat (each M).Value) == (repeat each Input) {
     @Dependency(\.environment) var environment
 
@@ -109,6 +112,7 @@ public func fuzz<each Input: Fuzzable & Codable & Sendable, each M: Mutator>(
         verbose: environment.environment()["FUZZ_VERBOSE"] != nil,
         corpusMode: corpusMode,
         perInputTimeout: perInputTimeout,
+        mutationBatchSize: mutationBatchSize,
         detectCoverageGaps: detectCoverageGaps,
         projectPath: projectPath(from: filePath)
     )
@@ -143,6 +147,8 @@ public func fuzz<each Input: Fuzzable & Codable & Sendable, each M: Mutator>(
 ///   - detectCoverageGaps: Enable coverage gap detection to identify partially-covered
 ///     functions. When enabled, the result includes a report of functions that have
 ///     some coverage but not complete coverage. Default: false.
+///   - mutationBatchSize: Number of mutations to run in parallel per batch (default: 8).
+///     Set to 1 for sequential execution when test closures capture mutable shared state.
 ///   - filePath: Source file path (auto-filled).
 ///   - function: Test function name (auto-filled).
 ///   - test: The test closure receiving fuzzed inputs.
@@ -156,10 +162,11 @@ public func fuzz<each Input: Fuzzable & Codable & Sendable>(
     perInputTimeout: TimeInterval? = nil,
     corpusMode: CorpusMode? = nil,
     detectCoverageGaps: Bool = false,
+    mutationBatchSize: Int = 8,
     filePath: StaticString = #filePath,
     function: StaticString = #function,
     line: Int = #line,
-    test: @escaping @Sendable ((repeat each Input)) throws -> Void
+    test: @escaping @Sendable ((repeat each Input)) async throws -> Void
 ) async throws -> FuzzResult<repeat each Input> {
     @Dependency(\.environment) var environment
 
@@ -169,6 +176,7 @@ public func fuzz<each Input: Fuzzable & Codable & Sendable>(
         verbose: environment.environment()["FUZZ_VERBOSE"] != nil,
         corpusMode: corpusMode,
         perInputTimeout: perInputTimeout,
+        mutationBatchSize: mutationBatchSize,
         detectCoverageGaps: detectCoverageGaps,
         projectPath: projectPath(from: filePath)
     )

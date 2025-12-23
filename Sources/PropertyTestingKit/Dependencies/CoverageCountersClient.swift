@@ -26,11 +26,11 @@ import IssueReporting
 /// ```
 public struct CoverageCountersClient: Sendable {
     /// Get a snapshot of current coverage counters for this task.
-    public var snapshot: @Sendable () -> SanCovCounters?
+    public var snapshot: @Sendable () async -> SanCovCounters?
 
     /// Get only the covered (non-zero) edge indices with their hit counts.
     /// More efficient than `snapshot()` when coverage is sparse.
-    public var snapshotCoveredOnly: @Sendable () -> [Int: UInt8]?
+    public var snapshotCoveredOnly: @Sendable () async -> [Int: UInt8]?
 
     /// Reset coverage counters for the current task only.
     /// Other concurrent tasks are not affected.
@@ -40,11 +40,11 @@ public struct CoverageCountersClient: Sendable {
     public var isAvailable: @Sendable () -> Bool
 
     public init(
-        snapshot: @escaping @Sendable () -> SanCovCounters? = unimplemented(
+        snapshot: @escaping @Sendable () async -> SanCovCounters? = unimplemented(
             "snapshot",
             placeholder: nil
         ),
-        snapshotCoveredOnly: @escaping @Sendable () -> [Int: UInt8]? = unimplemented(
+        snapshotCoveredOnly: @escaping @Sendable () async -> [Int: UInt8]? = unimplemented(
             "snapshotCoveredOnly",
             placeholder: nil
         ),
@@ -64,13 +64,13 @@ public struct CoverageCountersClient: Sendable {
     ///
     /// Use this when mocking in tests to avoid having to implement both methods.
     public init(
-        snapshot: @escaping @Sendable () -> SanCovCounters?,
+        snapshot: @escaping @Sendable () async -> SanCovCounters?,
         reset: @escaping @Sendable () -> Void,
         isAvailable: @escaping @Sendable () -> Bool
     ) {
         self.snapshot = snapshot
         self.snapshotCoveredOnly = {
-            guard let counters = snapshot() else { return nil }
+            guard let counters = await snapshot() else { return nil }
             var result: [Int: UInt8] = [:]
             for (index, count) in counters.counters.enumerated() where count > 0 {
                 result[index] = count
