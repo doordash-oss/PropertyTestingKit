@@ -15,7 +15,7 @@ public struct FileManagerClient: Sendable {
     public var currentDirectoryPath: @Sendable () -> String
 
     /// Check if a file exists at the given path.
-    public var fileExists: @Sendable (String) -> Bool
+    let _fileExists: @Sendable (String) -> Bool
 
     /// Create a directory at the given URL, optionally creating intermediate directories.
     public var createDirectory: @Sendable (URL, Bool) throws -> Void
@@ -53,11 +53,15 @@ public struct FileManagerClient: Sendable {
         )
     ) {
         self.currentDirectoryPath = currentDirectoryPath
-        self.fileExists = fileExists
+        self._fileExists = fileExists
         self.createDirectory = createDirectory
         self.removeItem = removeItem
         self.writeData = writeData
         self.readData = readData
+    }
+
+    public func fileExists(atPath: String) -> Bool {
+        self._fileExists(atPath)
     }
 }
 

@@ -70,11 +70,11 @@ struct CorpusPersistenceClientKey: DependencyKey {
             },
             exists: { directory in
                 let fileURL = directory.appendingPathComponent(corpusFilename)
-                return fileManager.fileExists(fileURL.path)
+                return fileManager.fileExists(atPath: fileURL.path)
             },
             delete: { directory in
                 let fileURL = directory.appendingPathComponent(corpusFilename)
-                if fileManager.fileExists(fileURL.path) {
+                if fileManager.fileExists(atPath: fileURL.path) {
                     try fileManager.removeItem(fileURL)
                 }
             }

@@ -7,36 +7,7 @@
 
 import Foundation
 import CLLVMSymbolizer
-
-/// A source location resolved from DWARF debug information.
-public struct DWARFSourceLocation: Sendable, Equatable {
-    /// The source file path.
-    public let file: String
-
-    /// The line number (1-indexed).
-    public let line: Int
-
-    /// The column number (1-indexed, 0 if unknown).
-    public let column: Int
-
-    /// The function name (if available).
-    public let function: String?
-}
-
-/// Errors that can occur during DWARF symbolication.
-public enum DWARFSymbolizerError: Error, LocalizedError {
-    case initFailed(String)
-    case lookupFailed(String)
-    case noDWARFInfo
-
-    public var errorDescription: String? {
-        switch self {
-        case .initFailed(let msg): return "Failed to initialize DWARF reader: \(msg)"
-        case .lookupFailed(let msg): return "DWARF lookup failed: \(msg)"
-        case .noDWARFInfo: return "No DWARF debug information found"
-        }
-    }
-}
+import Dependencies
 
 /// Symbolizer that uses LLVM to resolve addresses to source locations.
 ///
@@ -86,8 +57,9 @@ public final class DWARFSymbolizer: @unchecked Sendable {
     /// - Adjacent to .xctest/.app/.framework bundle
     /// - Adjacent to standalone binary (non-bundle case)
     private static func findDebugInfoPaths(for binaryPath: String) -> [String] {
+        @Dependency(\.fileManager) var fm
+
         var paths: [String] = []
-        let fm = FileManager.default
 
         // Get binary name
         let binaryURL = URL(fileURLWithPath: binaryPath)
@@ -195,30 +167,5 @@ public final class DWARFSymbolizer: @unchecked Sendable {
         }
 
         return results
-    }
-
-    /// Find the closest source location for an address.
-    ///
-    /// Unlike `lookup(address:)` which requires debug info at the exact address,
-    /// this attempts to find info for the given address which may map to
-    /// nearby source locations.
-    ///
-    /// - Parameter address: The address to find.
-    /// - Returns: The source location, or nil if not found.
-    public func findClosest(address: UInt64) -> DWARFSourceLocation? {
-        // LLVM's symbolizer already handles finding the closest match
-        return lookup(address: address)
-    }
-}
-
-// MARK: - Convenience Extensions
-
-extension DWARFSymbolizer {
-    /// Symbolicate addresses from SanCov PC table entries.
-    ///
-    /// - Parameter pcAddresses: Array of PC addresses from sanitizer coverage.
-    /// - Returns: Dictionary mapping addresses to source locations.
-    public func symbolicateSanCovAddresses(_ pcAddresses: [UInt64]) -> [UInt64: DWARFSourceLocation] {
-        lookup(addresses: pcAddresses)
     }
 }

@@ -34,6 +34,8 @@
 		5A314ACEB5F304A91A20681E /* CoveragePlateauDetector.swift in Sources */ = {isa = PBXBuildFile; fileRef = 98DBDB0EC1AABC42503C90F2 /* CoveragePlateauDetector.swift */; };
 		60F4B0B951427866AB7380DC /* CorpusEntry.swift in Sources */ = {isa = PBXBuildFile; fileRef = D708E6A5A1B65DA927AFEA9E /* CorpusEntry.swift */; };
 		628A204B2EFA6A1C0022644D /* TaskResults.swift in Sources */ = {isa = PBXBuildFile; fileRef = 628A204A2EFA6A1C0022644D /* TaskResults.swift */; };
+		628A204E2EFA75A00022644D /* DWARFSourceLocation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 628A204D2EFA75A00022644D /* DWARFSourceLocation.swift */; };
+		628A20502EFA75B60022644D /* DWARFSymbolizerError.swift in Sources */ = {isa = PBXBuildFile; fileRef = 628A204F2EFA75B60022644D /* DWARFSymbolizerError.swift */; };
 		6A740B41AAC5C975B6E33B2B /* Fuzzable.swift in Sources */ = {isa = PBXBuildFile; fileRef = A66767AE7FB6E54944E7BCD8 /* Fuzzable.swift */; };
 		721B918F0C92F521E1CD4FC3 /* TestCaseShrinkerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F58C560D0D81EBCA41AC8282 /* TestCaseShrinkerTests.swift */; };
 		72D386A1E29FDC2E0CF6F18B /* ValueProfile.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6DA5AF860EEEC7534E7669AD /* ValueProfile.swift */; };
@@ -150,6 +152,8 @@
 		5DE9A7DAD99528274ED05439 /* DeterministicTimingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeterministicTimingTests.swift; sourceTree = "<group>"; };
 		62173A687BDDBD123182804F /* AdaptiveMutationSchedulerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdaptiveMutationSchedulerTests.swift; sourceTree = "<group>"; };
 		628A204A2EFA6A1C0022644D /* TaskResults.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskResults.swift; sourceTree = "<group>"; };
+		628A204D2EFA75A00022644D /* DWARFSourceLocation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DWARFSourceLocation.swift; sourceTree = "<group>"; };
+		628A204F2EFA75B60022644D /* DWARFSymbolizerError.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DWARFSymbolizerError.swift; sourceTree = "<group>"; };
 		683A330BCB90F626B21D2422 /* CustomFuzzableTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CustomFuzzableTests.swift; sourceTree = "<group>"; };
 		6B4DC0FA0EFB0DDF25E4C353 /* CLLVMSymbolizer.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = CLLVMSymbolizer.cpp; sourceTree = "<group>"; };
 		6B7DA3E55A8132FE210D8EAF /* CoverageCountersClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoverageCountersClient.swift; sourceTree = "<group>"; };
@@ -283,6 +287,16 @@
 			name = Frameworks;
 			sourceTree = "<group>";
 		};
+		628A204C2EFA75860022644D /* DWARF */ = {
+			isa = PBXGroup;
+			children = (
+				2A478C899840EDE4C0696E69 /* DWARFSymbolizer.swift */,
+				628A204F2EFA75B60022644D /* DWARFSymbolizerError.swift */,
+				628A204D2EFA75A00022644D /* DWARFSourceLocation.swift */,
+			);
+			path = DWARF;
+			sourceTree = "<group>";
+		};
 		74D7DFE6A4AE677D39C4DD8C /* Corpus */ = {
 			isa = PBXGroup;
 			children = (
@@ -332,7 +346,7 @@
 		9389B3080515AB75B3627EE4 /* Coverage */ = {
 			isa = PBXGroup;
 			children = (
-				2A478C899840EDE4C0696E69 /* DWARFSymbolizer.swift */,
+				628A204C2EFA75860022644D /* DWARF */,
 			);
 			path = Coverage;
 			sourceTree = "<group>";
@@ -602,6 +616,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				FD6BCF86C2997F8A2E4232CB /* AdaptiveMutationScheduler.swift in Sources */,
+				628A20502EFA75B60022644D /* DWARFSymbolizerError.swift in Sources */,
 				A37D8BF967DDC59F6674C589 /* CartesianProduct.swift in Sources */,
 				F997A4DDB225D63D65B476AA /* Corpus.swift in Sources */,
 				A8AB88E38D9F9BBE8CCCD77B /* CorpusCoder.swift in Sources */,
@@ -619,6 +634,7 @@
 				5118F45702A081DEB42B60AA /* DateClient.swift in Sources */,
 				A11656F32C1DA89DAC5AE4B1 /* EnvironmentClient.swift in Sources */,
 				995888DFC95845A88625B91A /* FailureInfo.swift in Sources */,
+				628A204E2EFA75A00022644D /* DWARFSourceLocation.swift in Sources */,
 				D3BBDD6471BDB998F4979E48 /* FileManagerClient.swift in Sources */,
 				413720205EA64C2558BD9F04 /* FuzzAPI.swift in Sources */,
 				8B77076135753B47C626A029 /* FuzzEngine+Config.swift in Sources */,

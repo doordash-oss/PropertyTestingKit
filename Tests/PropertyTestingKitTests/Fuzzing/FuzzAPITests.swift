@@ -9,96 +9,6 @@ import Dependencies
 import FunctionSpy
 @testable import PropertyTestingKit
 
-/// A number parser with multiple code paths to exercise.
-///
-/// Code paths:
-/// 1. Empty string → nil
-/// 2. "0" special case → 0
-/// 3. Negative with "-" prefix:
-///    a. Valid negative → negative Int
-///    b. Invalid after "-" → nil
-/// 4. Positive number → Int or nil
-enum NumberParser {
-    static func parse(_ s: String) -> Int? {
-        // Path 1: Empty
-        if s.isEmpty { return nil }
-
-        // Path 2: Zero special case
-        if s == "0" { return 0 }
-
-        // Path 3: Negative numbers
-        if s.hasPrefix("-") {
-            let rest = String(s.dropFirst())
-            // Path 3a/3b: Valid or invalid negative
-            guard let n = Int(rest), n >= 0 else { return nil }
-            // Use wrapping negation since we proved n >= 0, so -n cannot overflow.
-            // This avoids an unreachable compiler-generated overflow trap.
-            return 0 &- n
-        }
-
-        // Path 4: Positive numbers
-        return Int(s)
-    }
-
-    /// Property: If parse succeeds, converting back to string should match
-    /// (modulo leading zeros and whitespace)
-    static func roundTripProperty(_ input: String) -> Bool {
-        guard let parsed = parse(input) else {
-            // nil is valid for unparseable input
-            return true
-        }
-
-        // Round-trip: parse then format should give canonical form
-        let formatted = String(parsed)
-        let reparsed = parse(formatted)
-        return reparsed == parsed
-    }
-
-}
-
-// MARK: - Domain-Specific Seeds for Number Parsing
-
-/// Seeds that target NumberParser's code paths.
-/// Using String directly with custom seeds instead of a custom type.
-let numberParserSeeds: [String] = [
-    // Empty
-    "",
-
-    // Zero variants
-    "0",
-    "00",
-    "-0",
-
-    // Small positives
-    "1",
-    "42",
-    "123",
-
-    // Small negatives
-    "-1",
-    "-42",
-    "-123",
-
-    // Edge cases
-    String(Int.max),
-    String(Int.min),
-    String(Int.max / 2),
-
-    // Invalid inputs
-    "abc",
-    "-",
-    "--1",
-    "1.5",
-    " 42",
-    "42 ",
-    "+1",
-
-    // Mixed
-    "123abc",
-    "-abc",
-    "12-34",
-]
-
 // MARK: - Fuzz API Tests
 
 @Suite("Fuzz API")
@@ -492,3 +402,93 @@ struct FuzzAPITests {
         )
     }
 }
+
+/// A number parser with multiple code paths to exercise.
+///
+/// Code paths:
+/// 1. Empty string → nil
+/// 2. "0" special case → 0
+/// 3. Negative with "-" prefix:
+///    a. Valid negative → negative Int
+///    b. Invalid after "-" → nil
+/// 4. Positive number → Int or nil
+enum NumberParser {
+    static func parse(_ s: String) -> Int? {
+        // Path 1: Empty
+        if s.isEmpty { return nil }
+
+        // Path 2: Zero special case
+        if s == "0" { return 0 }
+
+        // Path 3: Negative numbers
+        if s.hasPrefix("-") {
+            let rest = String(s.dropFirst())
+            // Path 3a/3b: Valid or invalid negative
+            guard let n = Int(rest), n >= 0 else { return nil }
+            // Use wrapping negation since we proved n >= 0, so -n cannot overflow.
+            // This avoids an unreachable compiler-generated overflow trap.
+            return 0 &- n
+        }
+
+        // Path 4: Positive numbers
+        return Int(s)
+    }
+
+    /// Property: If parse succeeds, converting back to string should match
+    /// (modulo leading zeros and whitespace)
+    static func roundTripProperty(_ input: String) -> Bool {
+        guard let parsed = parse(input) else {
+            // nil is valid for unparseable input
+            return true
+        }
+
+        // Round-trip: parse then format should give canonical form
+        let formatted = String(parsed)
+        let reparsed = parse(formatted)
+        return reparsed == parsed
+    }
+
+}
+
+// MARK: - Domain-Specific Seeds for Number Parsing
+
+/// Seeds that target NumberParser's code paths.
+/// Using String directly with custom seeds instead of a custom type.
+let numberParserSeeds: [String] = [
+    // Empty
+    "",
+
+    // Zero variants
+    "0",
+    "00",
+    "-0",
+
+    // Small positives
+    "1",
+    "42",
+    "123",
+
+    // Small negatives
+    "-1",
+    "-42",
+    "-123",
+
+    // Edge cases
+    String(Int.max),
+    String(Int.min),
+    String(Int.max / 2),
+
+    // Invalid inputs
+    "abc",
+    "-",
+    "--1",
+    "1.5",
+    " 42",
+    "42 ",
+    "+1",
+
+    // Mixed
+    "123abc",
+    "-abc",
+    "12-34",
+]

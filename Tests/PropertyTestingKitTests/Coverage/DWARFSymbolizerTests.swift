@@ -133,7 +133,7 @@ struct DWARFSymbolizerTests {
     @Test("DWARFSymbolizer looks up real source location")
     func testLookupRealFunction() throws {
         // Use dlsym to get a known function by name
-        // DWARFSymbolizer.findClosest mangled name
+        // DWARFSymbolizer.lookup mangled name
         let mangledName = "$s18PropertyTestingKit15DWARFSymbolizerC11findClosest7addressAA19DWARFSourceLocationVSgs6UInt64V_tF"
 
         guard let funcAddr = dlsym(UnsafeMutableRawPointer(bitPattern: -2)!, mangledName) else {
@@ -192,7 +192,7 @@ struct DWARFSymbolizerTests {
         let fileOffset = runtimeAddressToFileOffset(runtimeAddress, binaryPath: path)
 
         // Look for an address slightly after the function start
-        let location = symbolizer.findClosest(address: fileOffset + 10)
+        let location = symbolizer.lookup(address: fileOffset + 10)
 
         if let loc = location {
             print("Closest location: \(loc.file):\(loc.line)")
