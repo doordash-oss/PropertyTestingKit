@@ -323,7 +323,7 @@ struct FuzzAPITests {
             return corpusData
         }
 
-        let seenInputs = ThreadSafeCollector<String>()
+        let seenInputs = Synchronized<[String]>([])
 
         try await withDependencies {
             $0.corpusRegistry = alwaysInterestingRegistry
@@ -337,12 +337,12 @@ struct FuzzAPITests {
         } operation: {
             // Use seeds that include the corpus entry so it gets tested
             try await fuzz(seeds: ["from_corpus"], iterations: 20, duration: 5) { input in
-                await seenInputs.append(input)
+                await seenInputs.update { $0.append(input) }
             }
         }
 
         #expect(loadSpy.callCount > 0, "Should have read corpus from filesystem")
-        let inputs = await seenInputs.values
+        let inputs = await seenInputs.value
         #expect(inputs.contains("from_corpus"), "Should have tested input from seeds/corpus")
     }
 

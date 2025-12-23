@@ -567,7 +567,7 @@ struct MutatorPublicAPITests {
 
     @Test("fuzz(using:) with composed mutator strategies for single input")
     func fuzzWithComposedStrategies() async throws {
-        let testedInputs = ThreadSafeCollector<String>()
+        let testedInputs = Synchronized<[String]>([])
 
         // Use AlwaysInterestingCorpusRegistry to bypass coverage data requirements
         let alwaysInterestingRegistry = AlwaysInterestingCorpusRegistry()
@@ -591,12 +591,12 @@ struct MutatorPublicAPITests {
                 iterations: 500,
                 duration: 5
             ) { (input: String) in
-                await testedInputs.append(input)
+                await testedInputs.update { $0.append(input) }
             }
         }
 
         // Get all values for assertions
-        let inputs = await testedInputs.values
+        let inputs = await testedInputs.value
 
         // Should have seeds from all three strategies
         // Empty strategy

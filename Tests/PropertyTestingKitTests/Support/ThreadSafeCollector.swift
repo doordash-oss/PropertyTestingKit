@@ -7,66 +7,6 @@
 
 import Foundation
 
-/// A thread-safe collector for gathering test inputs during concurrent fuzz testing.
-///
-/// Use this instead of `nonisolated(unsafe)` arrays when test closures need to
-/// collect inputs that will be verified after fuzzing completes.
-///
-/// Example:
-/// ```swift
-/// let collector = ThreadSafeCollector<String>()
-/// try await fuzz { (input: String) in
-///     await collector.append(input)
-/// }
-/// let inputs = await collector.values
-/// #expect(inputs.contains("expected"))
-/// ```
-actor ThreadSafeCollector<T: Sendable> {
-    private var storage: [T] = []
-
-    init() {}
-
-    /// Append a value to the collection.
-    func append(_ value: T) {
-        storage.append(value)
-    }
-
-    /// Append multiple values to the collection.
-    func append(contentsOf values: [T]) {
-        storage.append(contentsOf: values)
-    }
-
-    /// Get all collected values.
-    var values: [T] {
-        storage
-    }
-
-    /// Get the count of collected values.
-    var count: Int {
-        storage.count
-    }
-
-    /// Check if the collection is empty.
-    var isEmpty: Bool {
-        storage.isEmpty
-    }
-
-    /// Check if collection contains an element (requires Equatable).
-    func contains(_ element: T) -> Bool where T: Equatable {
-        storage.contains(element)
-    }
-
-    /// Check if collection contains an element matching a predicate.
-    func contains(where predicate: (T) -> Bool) -> Bool {
-        storage.contains(where: predicate)
-    }
-
-    /// Clear all collected values.
-    func clear() {
-        storage.removeAll()
-    }
-}
-
 /// A thread-safe wrapper for Date values in concurrent tests.
 ///
 /// Example:
