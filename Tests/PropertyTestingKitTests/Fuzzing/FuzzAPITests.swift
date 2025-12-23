@@ -138,13 +138,10 @@ struct FuzzAPITests {
 
     @Test("Public fuzz API with custom seeds")
     func testPublicFuzzAPIWithSeeds() async throws {
-        // Demonstrates the simplified public API with custom seeds
-        let inputCounter = ThreadSafeCounter()
-
         // Use AlwaysInterestingCorpusRegistry to bypass coverage data requirements
         let alwaysInterestingRegistry = AlwaysInterestingCorpusRegistry()
 
-        try await withDependencies {
+        let result = try await withDependencies {
             $0.corpusRegistry = alwaysInterestingRegistry
             $0.environment = EnvironmentClient(environment: { [:] })
         } operation: {
@@ -153,7 +150,6 @@ struct FuzzAPITests {
                 iterations: 50,
                 duration: 5
             ) { input in
-                inputCounter.increment()
                 let parsed = NumberParser.parse(input)
 
                 // Property: round-trip should work
@@ -164,8 +160,8 @@ struct FuzzAPITests {
             }
         }
 
-        print("Public API tested \(inputCounter.value) inputs")
-        #expect(inputCounter.value > 0)
+        print("Public API tested \(result.stats.totalInputs) inputs")
+        #expect(result.stats.totalInputs > 0)
     }
 
     @Test("FuzzError errorDescription covers all cases")

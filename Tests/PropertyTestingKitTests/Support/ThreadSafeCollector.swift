@@ -67,51 +67,6 @@ actor ThreadSafeCollector<T: Sendable> {
     }
 }
 
-/// A thread-safe counter for tracking call counts in concurrent fuzz tests.
-///
-/// This is a lock-based implementation that doesn't require `await`, making it
-/// suitable for use in synchronous closures like dependency injection spies.
-///
-/// Example:
-/// ```swift
-/// let counter = ThreadSafeCounter()
-/// let (spy, fn) = spy { () -> SanCovCounters? in
-///     counter.increment()
-///     return makeCounters(counter.value)
-/// }
-/// ```
-final class ThreadSafeCounter: @unchecked Sendable {
-    private var count: Int
-    private let lock = NSLock()
-
-    init(_ initialValue: Int = 0) {
-        count = initialValue
-    }
-
-    /// Increment the counter and return the new value.
-    @discardableResult
-    func increment() -> Int {
-        lock.lock()
-        defer { lock.unlock() }
-        count += 1
-        return count
-    }
-
-    /// Get the current count.
-    var value: Int {
-        lock.lock()
-        defer { lock.unlock() }
-        return count
-    }
-
-    /// Reset the counter to zero.
-    func reset() {
-        lock.lock()
-        defer { lock.unlock() }
-        count = 0
-    }
-}
-
 /// A thread-safe flag for tracking boolean state in concurrent fuzz tests.
 ///
 /// Example:
@@ -278,5 +233,13 @@ actor Synchronized<T: Sendable>: Sendable {
     @discardableResult
     func update<Result: Sendable>(_ transform: (inout T) throws -> Result) rethrows -> Result {
         try transform(&storage)
+    }
+}
+
+extension Synchronized where T == Int {
+    @discardableResult
+    func increment() -> Int {
+        storage += 1
+        return storage
     }
 }

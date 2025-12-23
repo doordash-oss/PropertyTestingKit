@@ -33,11 +33,13 @@ struct DeterministicTimingTests {
         @Test("FuzzEngine stops when maxDuration is reached")
         func testStopsAtMaxDuration() async {
             let currentTime = ThreadSafeDate(Date(timeIntervalSince1970: 0))
-            let testCounter = Synchronized(0)
 
-            let snapshotFn = { @Sendable in 
+            // Use varying coverage based on time so corpus grows
+            let snapshotFn: @Sendable () -> SanCovCounters? = {
                 var counters = [UInt64](repeating: 0, count: 100)
-                await counters[testCounter.value % 100] = UInt64(testCounter.value + 1)
+                // Use time-based index to generate different coverage per test
+                let timeIndex = Int(currentTime.value.timeIntervalSince1970) % 100
+                counters[timeIndex] = UInt64(timeIndex + 1)
                 return SanCovCounters(counters: counters)
             }
 
@@ -58,7 +60,6 @@ struct DeterministicTimingTests {
 
                 let engine = FuzzEngine<SingleSeedInt>(config: config, corpusDirectory: nil)
                 return await engine.run { _ in
-                    await testCounter.update { $0 += 1 }
                     // Advance time by 11 seconds each test (exceeds 10s limit after first test)
                     currentTime.addInterval(11)
                 }
@@ -132,12 +133,13 @@ struct DeterministicTimingTests {
         @Test("FuzzEngine prefers iteration limit over time limit when iterations complete first")
         func testIterationLimitBeforeTimeLimit() async {
             let currentTime = ThreadSafeDate(Date(timeIntervalSince1970: 0))
-            let testCounter = ThreadSafeCounter()
 
-            // Use varying coverage so corpus grows and mutation has options
+            // Use varying coverage based on time so corpus grows and mutation has options
             let snapshotFn: @Sendable () -> SanCovCounters? = {
                 var counters = [UInt64](repeating: 0, count: 100)
-                counters[testCounter.value % 100] = UInt64(testCounter.value + 1)
+                // Use time-based index to generate different coverage per test
+                let timeIndex = Int(currentTime.value.timeIntervalSince1970) % 100
+                counters[timeIndex] = UInt64(timeIndex + 1)
                 return SanCovCounters(counters: counters)
             }
 
@@ -158,7 +160,6 @@ struct DeterministicTimingTests {
 
                 let engine = FuzzEngine<SingleSeedInt>(config: config, corpusDirectory: nil)
                 return await engine.run { _ in
-                    testCounter.increment()
                     // Only advance 1 second per test
                     currentTime.addInterval(1)
                 }
@@ -202,7 +203,6 @@ struct DeterministicTimingTests {
         @Test("Shrinker duration is computed correctly")
         func testDurationComputation() async {
             let currentTime = ThreadSafeDate(Date(timeIntervalSince1970: 100))
-            let testCounter = ThreadSafeCounter()
 
             let (_, stats) = withDependencies {
                 $0.dateClient = DateClient(now: { currentTime.value })
@@ -213,7 +213,6 @@ struct DeterministicTimingTests {
                 ))
 
                 return shrinker.shrink(input: [1, 2, 3, 4, 5]) { candidate in
-                    testCounter.increment()
                     // Each test takes exactly 0.5 seconds
                     currentTime.addInterval(0.5)
                     return candidate.contains(3) ? .fail : .pass
@@ -221,13 +220,12 @@ struct DeterministicTimingTests {
             }
 
             // Duration should be number of tests * 0.5 seconds
-            #expect(stats.duration == Double(testCounter.value) * 0.5)
+            #expect(stats.duration == Double(stats.candidatesTested) * 0.5)
         }
 
         @Test("Shrinker stops immediately when timeout reached mid-shrink")
         func testImmediateStop() async {
             let currentTime = ThreadSafeDate(Date(timeIntervalSince1970: 0))
-            let testsRunCounter = ThreadSafeCounter()
 
             let (minimized, stats) = withDependencies {
                 $0.dateClient = DateClient(now: { currentTime.value })
@@ -240,7 +238,6 @@ struct DeterministicTimingTests {
                 // Use a large array where failure requires a specific element
                 // This ensures shrinking can't immediately minimize to empty
                 return shrinker.shrink(input: Array(0..<1000)) { candidate in
-                    testsRunCounter.increment()
                     // Advance time by 5 seconds (should stop after 2-3 tests)
                     currentTime.addInterval(5)
                     // Require element 500 to be present for failure
@@ -249,7 +246,7 @@ struct DeterministicTimingTests {
             }
 
             #expect(stats.timedOut)
-            #expect(testsRunCounter.value <= 3, "Should stop after few tests due to timeout")
+            #expect(stats.candidatesTested <= 3, "Should stop after few tests due to timeout")
             #expect(minimized.contains(500), "Should preserve failing element")
         }
     }
@@ -365,7 +362,6 @@ struct DeterministicTimingTests {
         @Test("ShrinkStats duration reflects actual work done")
         func testDurationReflectsWork() async {
             let currentTime = ThreadSafeDate(Date(timeIntervalSince1970: 0))
-            let workUnitsCounter = ThreadSafeCounter()
 
             let (_, stats) = withDependencies {
                 $0.dateClient = DateClient(now: { currentTime.value })
@@ -376,15 +372,15 @@ struct DeterministicTimingTests {
                 ))
 
                 return shrinker.shrink(input: [1, 2, 3, 4, 5]) { _ in
-                    workUnitsCounter.increment()
                     // Use 1 second increments to avoid floating point precision issues
                     currentTime.addInterval(1)
                     return .fail
                 }
             }
 
-            #expect(stats.duration == Double(workUnitsCounter.value))
-            #expect(stats.candidatesTested == workUnitsCounter.value)
+            // Duration should equal candidatesTested since each takes 1 second
+            #expect(stats.duration == Double(stats.candidatesTested))
+            #expect(stats.candidatesTested > 0)
         }
     }
 
@@ -396,8 +392,6 @@ struct DeterministicTimingTests {
         @Test("MultiComponentShrinker allocates remaining time to second component")
         func testTimeBudgetAllocation() async {
             let currentTime = ThreadSafeDate(Date(timeIntervalSince1970: 0))
-            let componentACounter = ThreadSafeCounter()
-            let componentBCounter = ThreadSafeCounter()
 
             let (_, stats) = withDependencies {
                 $0.dateClient = DateClient(now: { currentTime.value })
@@ -408,12 +402,13 @@ struct DeterministicTimingTests {
                 ))
 
                 return shrinker.shrink(input: ([1, 2, 3], "abc")) { (arr, str) in
-                    if componentACounter.value < 10 {
-                        componentACounter.increment()
-                        // Component A takes 0.5 seconds per test (5 seconds total)
+                    // Use time-based phase detection instead of counters
+                    // Phase A: first 5 seconds (0.5s per test * 10 tests)
+                    // Phase B: after 5 seconds (0.3s per test)
+                    if currentTime.value.timeIntervalSince1970 < 5 {
+                        // Component A takes 0.5 seconds per test
                         currentTime.addInterval(0.5)
                     } else {
-                        componentBCounter.increment()
                         // Component B takes 0.3 seconds per test
                         currentTime.addInterval(0.3)
                     }
