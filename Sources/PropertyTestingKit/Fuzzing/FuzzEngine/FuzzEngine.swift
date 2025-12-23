@@ -53,6 +53,7 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
     @Dependency(\.dateClient) var dateClient
     @Dependency(\.random) var random
     @Dependency(\.corpusPersistence) var corpusPersistenceClient
+    @Dependency(\.corpusRegistry) var corpusRegistry
 
     // MARK: - Random Helpers (use injected RNG for determinism)
 
@@ -439,11 +440,6 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
         // Initialize plateau detector for adaptive early stopping
         var plateauDetector = CoveragePlateauDetector(config: config.plateauConfig)
 
-        // Initialize adaptive mutation scheduler (MOPT-style)
-        var adaptiveMutationScheduler = config.adaptiveMutationConfig.enabled
-            ? AdaptiveMutationScheduler(config: config.adaptiveMutationConfig)
-            : nil
-
         // Enable value profile tracking if configured
         if config.enableValueProfile {
             valueProfileTracker.enable()
@@ -643,7 +639,6 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
             for batchIdx in 0..<currentBatchSize {
                 let input: (repeat each Input)
                 let parentIndex: Int?
-                var usedStrategy: MutationStrategy?
                 var isMutation = false
 
                 if corpus.isEmpty || randomDouble(in: 0..<1) < config.generationRatio {
@@ -655,7 +650,6 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
                     input = fuzzValue
                     parentIndex = nil
                     totalGenerations += 1
-                    usedStrategy = .freshGeneration
                 } else {
                     // Mutate existing corpus entry
                     let selectedIndex: Int
@@ -707,7 +701,6 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
                         input = fuzzValue
                         parentIndex = nil
                         totalGenerations += 1
-                        usedStrategy = .freshGeneration
                         priorityMutationIndex = nil
                         savedTargets = []
                     }
@@ -717,7 +710,6 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
                 batchMeta.append(BatchEntryMeta(
                     index: batchIdx,
                     parentIndex: parentIndex,
-                    strategy: usedStrategy,
                     isMutation: isMutation
                 ))
             }
@@ -826,12 +818,6 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
                     // Record discovery status for plateau detection
                     plateauDetector.record(discoveredNewCoverage: addedForCoverage)
 
-                    // Record strategy effectiveness for adaptive mutation scheduler
-                    if let strategy = meta.strategy, var scheduler = adaptiveMutationScheduler {
-                        scheduler.recordAttempt(strategy, discoveredNewCoverage: addedForCoverage)
-                        adaptiveMutationScheduler = scheduler
-                    }
-
                     if addedForCoverage {
                         iterationsSinceNewCoverage = 0
 
@@ -862,13 +848,6 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
         print("[Timing]   - Mutation: \(String(format: "%.3f", timeInMutation))s")
         print("[Timing]   - Test execution: \(String(format: "%.3f", timeInTest))s")
         print("[Timing]   - Coverage processing: \(String(format: "%.3f", timeInCoverage))s")
-
-        // Report adaptive mutation scheduler stats
-        if config.adaptiveMutationConfig.enabled, let scheduler = adaptiveMutationScheduler {
-            if config.verbose {
-                print("[Fuzz] \(scheduler.stats.report())")
-            }
-        }
 
         // Phase 3: Minimize corpus
         let minimizeStart = CFAbsoluteTimeGetCurrent()
@@ -1199,35 +1178,6 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
         }
 
         return results
-    }
-
-    /// Mutate using a specific strategy selected by the adaptive mutation scheduler.
-    ///
-    /// - Parameters:
-    ///   - input: The input to mutate.
-    ///   - strategy: The strategy to use for mutation.
-    /// - Returns: Array of mutated inputs.
-    private func mutateWithStrategy(_ input: (repeat each Input), strategy: MutationStrategy) -> [(repeat each Input)] {
-        switch strategy {
-        case .singleComponent:
-            return singleComponentMutations(input)
-        case .multiComponent:
-            return multiComponentMutations(input)
-        case .arithmetic:
-            return arithmeticRelationshipMutations(input)
-        case .stringDictionary:
-            return []  // String dictionary capture is disabled
-        case .valueProfileDirected:
-            // Value profile mutations need targets, so return empty if not available
-            return []
-        case .customMutator:
-            // Use custom mutator if provided
-            return mutatorMutate?(input) ?? []
-        case .freshGeneration:
-            // Generate fresh values
-            let fuzzValues = mutatorSeeds?() ?? cartesianProductFuzz()
-            return fuzzValues
-        }
     }
 
     /// Generate single-component mutations (mutate one input field at a time).

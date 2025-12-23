@@ -7,11 +7,11 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		0469AB3AB668C05713B4CEEC /* CorpusClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = FFF4F63E42A1153F798F4A15 /* CorpusClient.swift */; };
 		04F603A50F9051E3053336BD /* TestCaseShrinker.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA720B45CA762CCCFFA439C0 /* TestCaseShrinker.swift */; };
 		0A0B966D3B103DDD9ADC457C /* CoverageCountersClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B7DA3E55A8132FE210D8EAF /* CoverageCountersClient.swift */; };
 		0AEA251D3FF9432F04D9FC04 /* CoverageGapDetectorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5A7DD272E538B8E8CFE5C75 /* CoverageGapDetectorTests.swift */; };
 		0B82B2744A9AC8F212B41E35 /* libValueProfileHooks.a in Frameworks */ = {isa = PBXBuildFile; fileRef = CB305AEAB5B3C5055EC92BEF /* libValueProfileHooks.a */; };
-		0E884754375E4E67EB62FEE4 /* DWARFSymbolizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A478C899840EDE4C0696E69 /* DWARFSymbolizer.swift */; };
 		125D3FB66141B63E3542572E /* FuzzResult.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7769DE997855D0C94C1C405F /* FuzzResult.swift */; };
 		14CE5AF65788D0ED532C423D /* PropertyBasedSelfTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F7B5F39FFCE93451B38B3FBA /* PropertyBasedSelfTests.swift */; };
 		154F79A2EEDDE650511A586D /* CustomFuzzableTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 683A330BCB90F626B21D2422 /* CustomFuzzableTests.swift */; };
@@ -27,16 +27,15 @@
 		413720205EA64C2558BD9F04 /* FuzzAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = A18400D950AE2D1D13443E9A /* FuzzAPI.swift */; };
 		42C4BFE77C04A3D5F816B531 /* AdaptiveMutationSchedulerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 62173A687BDDBD123182804F /* AdaptiveMutationSchedulerTests.swift */; };
 		432A7C1997D44CD9561448F1 /* CorpusMode.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7F23079959F6B89989AD2EB /* CorpusMode.swift */; };
+		4B46C972C1518B04075D7EED /* DWARFSymbolizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3F1917814603DE56511E5F24 /* DWARFSymbolizer.swift */; };
 		4EB9436B27158A5C6839F9BA /* DWARFSymbolizerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1E97A029218EB361C14F01D /* DWARFSymbolizerTests.swift */; };
 		5118F45702A081DEB42B60AA /* DateClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8DCFCD27F236B21539FDC070 /* DateClient.swift */; };
 		52C260E19A743BA5BCADC703 /* CoverageSignature.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BD8E7DDBFB1256A08DEBE05 /* CoverageSignature.swift */; };
 		5605B6F68948A32A75666D62 /* SanCovCounters.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E3F60C1EA2AF5369E9B330B /* SanCovCounters.swift */; };
 		5A314ACEB5F304A91A20681E /* CoveragePlateauDetector.swift in Sources */ = {isa = PBXBuildFile; fileRef = 98DBDB0EC1AABC42503C90F2 /* CoveragePlateauDetector.swift */; };
 		60F4B0B951427866AB7380DC /* CorpusEntry.swift in Sources */ = {isa = PBXBuildFile; fileRef = D708E6A5A1B65DA927AFEA9E /* CorpusEntry.swift */; };
-		628A204B2EFA6A1C0022644D /* TaskResults.swift in Sources */ = {isa = PBXBuildFile; fileRef = 628A204A2EFA6A1C0022644D /* TaskResults.swift */; };
-		628A204E2EFA75A00022644D /* DWARFSourceLocation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 628A204D2EFA75A00022644D /* DWARFSourceLocation.swift */; };
-		628A20502EFA75B60022644D /* DWARFSymbolizerError.swift in Sources */ = {isa = PBXBuildFile; fileRef = 628A204F2EFA75B60022644D /* DWARFSymbolizerError.swift */; };
 		6A740B41AAC5C975B6E33B2B /* Fuzzable.swift in Sources */ = {isa = PBXBuildFile; fileRef = A66767AE7FB6E54944E7BCD8 /* Fuzzable.swift */; };
+		6B81F710C9EAE2B9786DFD16 /* TaskResults.swift in Sources */ = {isa = PBXBuildFile; fileRef = B155EAF0286844D09A5709EC /* TaskResults.swift */; };
 		721B918F0C92F521E1CD4FC3 /* TestCaseShrinkerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F58C560D0D81EBCA41AC8282 /* TestCaseShrinkerTests.swift */; };
 		72D386A1E29FDC2E0CF6F18B /* ValueProfile.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6DA5AF860EEEC7534E7669AD /* ValueProfile.swift */; };
 		7955EABD630334B017A724C3 /* ThreadSafeCollector.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86F90EA4EE013ACDE29A8869 /* ThreadSafeCollector.swift */; };
@@ -62,17 +61,18 @@
 		C6BD19DBD991F706DF3597D2 /* Dependencies in Frameworks */ = {isa = PBXBuildFile; productRef = A493D2B71CD03B3B9D34DA14 /* Dependencies */; };
 		CD4CF90D44574C94590CCE3F /* DeterministicTimingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5DE9A7DAD99528274ED05439 /* DeterministicTimingTests.swift */; };
 		CFEE279397531A3509632FAA /* FunctionSpy in Frameworks */ = {isa = PBXBuildFile; productRef = F0BEB91D5B04B84629BA665A /* FunctionSpy */; };
+		D0C65F0813EFB9C22E7A24EC /* DWARFSymbolizerError.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2671C4A43D9243DDBC246A9 /* DWARFSymbolizerError.swift */; };
 		D304EFC84705417D212EA91D /* CoverageSignatureTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09F9A66C1671353C4CCF4F16 /* CoverageSignatureTests.swift */; };
 		D3BBDD6471BDB998F4979E48 /* FileManagerClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A5FD30F272F4610F9D0637A /* FileManagerClient.swift */; };
 		DB3B9AFA08DCD50172E473CB /* CLLVMSymbolizer.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 6B4DC0FA0EFB0DDF25E4C353 /* CLLVMSymbolizer.cpp */; };
 		DB71EBF35575DA1DEA31C0F0 /* Macros.swift in Sources */ = {isa = PBXBuildFile; fileRef = D9AB1FE9A26A576DB0D5550E /* Macros.swift */; };
+		E22FD5BA11720007BFEC6E1E /* DWARFSourceLocation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 801978DFD141E3190DC8219D /* DWARFSourceLocation.swift */; };
 		EDA4F3DF2A8772887434F792 /* Testing.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 3F5DD8CB2128FA92846AA71F /* Testing.framework */; };
 		F4E3D1DF382DCAC750307163 /* UserService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5305591133199EC528A0A92D /* UserService.swift */; };
 		F8CA279E1D5C86F49E55C093 /* RandomNumberGeneratorClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = C6B7D375C4052AA3BFE8E32A /* RandomNumberGeneratorClient.swift */; };
 		F90AAA32E041831DC6EEF916 /* CorpusPersistenceClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8FED37BAA14224125F5AD7CA /* CorpusPersistenceClient.swift */; };
 		F997A4DDB225D63D65B476AA /* Corpus.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA3C0B16540F4626B5B88CD7 /* Corpus.swift */; };
 		FAE454D657D928B2962AB47B /* SeededRandomNumberGenerator.swift in Sources */ = {isa = PBXBuildFile; fileRef = CBD2703ECFC03CDB4AF0A1EC /* SeededRandomNumberGenerator.swift */; };
-		FD6BCF86C2997F8A2E4232CB /* AdaptiveMutationScheduler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D10363B6BA8350AB5B8ACDA /* AdaptiveMutationScheduler.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -138,10 +138,10 @@
 		0CC4577F89B7571C6C25476F /* StringDictionary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StringDictionary.swift; sourceTree = "<group>"; };
 		16717757B35F9126487449B9 /* fishhook.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = fishhook.h; sourceTree = "<group>"; };
 		2595E9AD80DBFC77F241A7E7 /* PropertyTestingKit.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = PropertyTestingKit.framework; sourceTree = BUILT_PRODUCTS_DIR; };
-		2A478C899840EDE4C0696E69 /* DWARFSymbolizer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DWARFSymbolizer.swift; sourceTree = "<group>"; };
 		2C2AB425C1886E9C43DA056F /* MutatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MutatorTests.swift; sourceTree = "<group>"; };
 		2CF3A4D9068E7899D99B8C01 /* FailureInfo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FailureInfo.swift; sourceTree = "<group>"; };
 		33C118D96475FC9BA6942643 /* CoveragePlateauDetectorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoveragePlateauDetectorTests.swift; sourceTree = "<group>"; };
+		3F1917814603DE56511E5F24 /* DWARFSymbolizer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DWARFSymbolizer.swift; sourceTree = "<group>"; };
 		3F5DD8CB2128FA92846AA71F /* Testing.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; path = Testing.framework; sourceTree = "<group>"; };
 		3FFCEA0CB033829BFBAEFA52 /* CorpusCoder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CorpusCoder.swift; sourceTree = "<group>"; };
 		4401B1A5DC7E001073C6D2B1 /* FuzzEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FuzzEngine.swift; sourceTree = "<group>"; };
@@ -151,17 +151,14 @@
 		56014C3390FA66A80668E987 /* CoverageGapDetector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoverageGapDetector.swift; sourceTree = "<group>"; };
 		5DE9A7DAD99528274ED05439 /* DeterministicTimingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeterministicTimingTests.swift; sourceTree = "<group>"; };
 		62173A687BDDBD123182804F /* AdaptiveMutationSchedulerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdaptiveMutationSchedulerTests.swift; sourceTree = "<group>"; };
-		628A204A2EFA6A1C0022644D /* TaskResults.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskResults.swift; sourceTree = "<group>"; };
-		628A204D2EFA75A00022644D /* DWARFSourceLocation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DWARFSourceLocation.swift; sourceTree = "<group>"; };
-		628A204F2EFA75B60022644D /* DWARFSymbolizerError.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DWARFSymbolizerError.swift; sourceTree = "<group>"; };
 		683A330BCB90F626B21D2422 /* CustomFuzzableTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CustomFuzzableTests.swift; sourceTree = "<group>"; };
 		6B4DC0FA0EFB0DDF25E4C353 /* CLLVMSymbolizer.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = CLLVMSymbolizer.cpp; sourceTree = "<group>"; };
 		6B7DA3E55A8132FE210D8EAF /* CoverageCountersClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoverageCountersClient.swift; sourceTree = "<group>"; };
 		6DA5AF860EEEC7534E7669AD /* ValueProfile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ValueProfile.swift; sourceTree = "<group>"; };
 		6E3F60C1EA2AF5369E9B330B /* SanCovCounters.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SanCovCounters.swift; sourceTree = "<group>"; };
 		7769DE997855D0C94C1C405F /* FuzzResult.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FuzzResult.swift; sourceTree = "<group>"; };
+		801978DFD141E3190DC8219D /* DWARFSourceLocation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DWARFSourceLocation.swift; sourceTree = "<group>"; };
 		86F90EA4EE013ACDE29A8869 /* ThreadSafeCollector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThreadSafeCollector.swift; sourceTree = "<group>"; };
-		8D10363B6BA8350AB5B8ACDA /* AdaptiveMutationScheduler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdaptiveMutationScheduler.swift; sourceTree = "<group>"; };
 		8D5B1DD3570EBB6E7D12F912 /* FuzzableProtocolTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FuzzableProtocolTests.swift; sourceTree = "<group>"; };
 		8DCFCD27F236B21539FDC070 /* DateClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DateClient.swift; sourceTree = "<group>"; };
 		8FED37BAA14224125F5AD7CA /* CorpusPersistenceClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CorpusPersistenceClient.swift; sourceTree = "<group>"; };
@@ -174,6 +171,7 @@
 		A5A7DD272E538B8E8CFE5C75 /* CoverageGapDetectorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoverageGapDetectorTests.swift; sourceTree = "<group>"; };
 		A66767AE7FB6E54944E7BCD8 /* Fuzzable.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Fuzzable.swift; sourceTree = "<group>"; };
 		ACE4D8AA0A411B9988FA7E7C /* FuzzEngine+Config.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "FuzzEngine+Config.swift"; sourceTree = "<group>"; };
+		B155EAF0286844D09A5709EC /* TaskResults.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskResults.swift; sourceTree = "<group>"; };
 		B407BAEF5644661355ECEBC5 /* libStringAllocationHooks.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = libStringAllocationHooks.a; sourceTree = BUILT_PRODUCTS_DIR; };
 		B64D06718A05E1272E84861D /* MockDatabase.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockDatabase.swift; sourceTree = "<group>"; };
 		C4C33B33085A4DB5D1981F0A /* CoverageCountersTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoverageCountersTests.swift; sourceTree = "<group>"; };
@@ -184,6 +182,7 @@
 		CE4B6FB209C7202BDDCB1D70 /* fishhook.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = fishhook.c; sourceTree = "<group>"; };
 		CF7909559B042C15C36EAABE /* PropertyTestingKitTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = PropertyTestingKitTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		D1F5931FF8E7123C141A0043 /* ValueProfileHooks.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = ValueProfileHooks.c; sourceTree = "<group>"; };
+		D2671C4A43D9243DDBC246A9 /* DWARFSymbolizerError.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DWARFSymbolizerError.swift; sourceTree = "<group>"; };
 		D51DB081E26BBC926EBD26BD /* Mutator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Mutator.swift; sourceTree = "<group>"; };
 		D708E6A5A1B65DA927AFEA9E /* CorpusEntry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CorpusEntry.swift; sourceTree = "<group>"; };
 		D9AB1FE9A26A576DB0D5550E /* Macros.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Macros.swift; sourceTree = "<group>"; };
@@ -195,6 +194,7 @@
 		F46057CB7F84DA3671178057 /* EnvironmentClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EnvironmentClient.swift; sourceTree = "<group>"; };
 		F58C560D0D81EBCA41AC8282 /* TestCaseShrinkerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TestCaseShrinkerTests.swift; sourceTree = "<group>"; };
 		F7B5F39FFCE93451B38B3FBA /* PropertyBasedSelfTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PropertyBasedSelfTests.swift; sourceTree = "<group>"; };
+		FFF4F63E42A1153F798F4A15 /* CorpusClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CorpusClient.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -236,6 +236,7 @@
 		1030A957868366F4FD9125D1 /* Dependencies */ = {
 			isa = PBXGroup;
 			children = (
+				FFF4F63E42A1153F798F4A15 /* CorpusClient.swift */,
 				8FED37BAA14224125F5AD7CA /* CorpusPersistenceClient.swift */,
 				6B7DA3E55A8132FE210D8EAF /* CoverageCountersClient.swift */,
 				8DCFCD27F236B21539FDC070 /* DateClient.swift */,
@@ -287,12 +288,12 @@
 			name = Frameworks;
 			sourceTree = "<group>";
 		};
-		628A204C2EFA75860022644D /* DWARF */ = {
+		7397170BA7D821E3A51C70A8 /* DWARF */ = {
 			isa = PBXGroup;
 			children = (
-				2A478C899840EDE4C0696E69 /* DWARFSymbolizer.swift */,
-				628A204F2EFA75B60022644D /* DWARFSymbolizerError.swift */,
-				628A204D2EFA75A00022644D /* DWARFSourceLocation.swift */,
+				801978DFD141E3190DC8219D /* DWARFSourceLocation.swift */,
+				3F1917814603DE56511E5F24 /* DWARFSymbolizer.swift */,
+				D2671C4A43D9243DDBC246A9 /* DWARFSymbolizerError.swift */,
 			);
 			path = DWARF;
 			sourceTree = "<group>";
@@ -327,7 +328,6 @@
 		8E0551F1E322C33BFF09CCAE /* Fuzzing */ = {
 			isa = PBXGroup;
 			children = (
-				8D10363B6BA8350AB5B8ACDA /* AdaptiveMutationScheduler.swift */,
 				56014C3390FA66A80668E987 /* CoverageGapDetector.swift */,
 				98DBDB0EC1AABC42503C90F2 /* CoveragePlateauDetector.swift */,
 				9BD8E7DDBFB1256A08DEBE05 /* CoverageSignature.swift */,
@@ -346,7 +346,7 @@
 		9389B3080515AB75B3627EE4 /* Coverage */ = {
 			isa = PBXGroup;
 			children = (
-				628A204C2EFA75860022644D /* DWARF */,
+				7397170BA7D821E3A51C70A8 /* DWARF */,
 			);
 			path = Coverage;
 			sourceTree = "<group>";
@@ -409,9 +409,9 @@
 			children = (
 				C7F23079959F6B89989AD2EB /* CorpusMode.swift */,
 				4401B1A5DC7E001073C6D2B1 /* FuzzEngine.swift */,
-				628A204A2EFA6A1C0022644D /* TaskResults.swift */,
 				ACE4D8AA0A411B9988FA7E7C /* FuzzEngine+Config.swift */,
 				7769DE997855D0C94C1C405F /* FuzzResult.swift */,
+				B155EAF0286844D09A5709EC /* TaskResults.swift */,
 			);
 			path = FuzzEngine;
 			sourceTree = "<group>";
@@ -615,13 +615,11 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				FD6BCF86C2997F8A2E4232CB /* AdaptiveMutationScheduler.swift in Sources */,
-				628A20502EFA75B60022644D /* DWARFSymbolizerError.swift in Sources */,
 				A37D8BF967DDC59F6674C589 /* CartesianProduct.swift in Sources */,
 				F997A4DDB225D63D65B476AA /* Corpus.swift in Sources */,
+				0469AB3AB668C05713B4CEEC /* CorpusClient.swift in Sources */,
 				A8AB88E38D9F9BBE8CCCD77B /* CorpusCoder.swift in Sources */,
 				60F4B0B951427866AB7380DC /* CorpusEntry.swift in Sources */,
-				628A204B2EFA6A1C0022644D /* TaskResults.swift in Sources */,
 				29AD704E75D749B097C95BAA /* CorpusEntryType.swift in Sources */,
 				432A7C1997D44CD9561448F1 /* CorpusMode.swift in Sources */,
 				F90AAA32E041831DC6EEF916 /* CorpusPersistenceClient.swift in Sources */,
@@ -630,11 +628,12 @@
 				2D13E3F40413B09CF072BD8E /* CoverageGapDetector.swift in Sources */,
 				5A314ACEB5F304A91A20681E /* CoveragePlateauDetector.swift in Sources */,
 				52C260E19A743BA5BCADC703 /* CoverageSignature.swift in Sources */,
-				0E884754375E4E67EB62FEE4 /* DWARFSymbolizer.swift in Sources */,
+				E22FD5BA11720007BFEC6E1E /* DWARFSourceLocation.swift in Sources */,
+				4B46C972C1518B04075D7EED /* DWARFSymbolizer.swift in Sources */,
+				D0C65F0813EFB9C22E7A24EC /* DWARFSymbolizerError.swift in Sources */,
 				5118F45702A081DEB42B60AA /* DateClient.swift in Sources */,
 				A11656F32C1DA89DAC5AE4B1 /* EnvironmentClient.swift in Sources */,
 				995888DFC95845A88625B91A /* FailureInfo.swift in Sources */,
-				628A204E2EFA75A00022644D /* DWARFSourceLocation.swift in Sources */,
 				D3BBDD6471BDB998F4979E48 /* FileManagerClient.swift in Sources */,
 				413720205EA64C2558BD9F04 /* FuzzAPI.swift in Sources */,
 				8B77076135753B47C626A029 /* FuzzEngine+Config.swift in Sources */,
@@ -646,6 +645,7 @@
 				F8CA279E1D5C86F49E55C093 /* RandomNumberGeneratorClient.swift in Sources */,
 				5605B6F68948A32A75666D62 /* SanCovCounters.swift in Sources */,
 				79CE160E3616E81F22B5DB8E /* StringDictionary.swift in Sources */,
+				6B81F710C9EAE2B9786DFD16 /* TaskResults.swift in Sources */,
 				04F603A50F9051E3053336BD /* TestCaseShrinker.swift in Sources */,
 				72D386A1E29FDC2E0CF6F18B /* ValueProfile.swift in Sources */,
 			);

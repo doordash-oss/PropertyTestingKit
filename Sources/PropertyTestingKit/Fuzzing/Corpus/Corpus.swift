@@ -129,7 +129,7 @@ public struct Corpus<each Input: Codable & Sendable>: Sendable, Codable {
     }
 
     /// Add an entry unconditionally.
-    mutating func add(
+    public mutating func add(
         input: repeat each Input,
         signature: CoverageSignature,
         parentIndex: Int? = nil,
