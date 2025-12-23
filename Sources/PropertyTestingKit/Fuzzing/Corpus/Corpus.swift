@@ -40,9 +40,9 @@ public actor Corpus<each Input: Codable & Sendable>: Sendable {
         self.totalCoverage = totalCoverage
     }
 
-    public init(schemaVersion: String) {
+    public init(schemaVersion: String) async {
         @Dependency(\.dateClient) var dateClient
-        let now = dateClient.now()
+        let now = await dateClient.now()
         self.entries = []
         self.schemaVersion = schemaVersion
         self.createdAt = now
@@ -101,8 +101,8 @@ public actor Corpus<each Input: Codable & Sendable>: Sendable {
         input: repeat each Input,
         signature: CoverageSignature,
         parentIndex: Int? = nil
-    ) -> Bool {
-        return addIfInteresting(
+    ) async -> Bool {
+        return await addIfInteresting(
             input: (repeat each input),
             signature: signature,
             parentIndex: parentIndex
@@ -114,20 +114,20 @@ public actor Corpus<each Input: Codable & Sendable>: Sendable {
         input: (repeat each Input),
         signature: CoverageSignature,
         parentIndex: Int? = nil
-    ) -> Bool {
+    ) async -> Bool {
         // Check if this signature adds new coverage
         guard signature.hasUniqueCoverage(comparedTo: totalCoverage) else {
             return false
         }
 
-        let entry = CorpusEntry(
+        let entry = await CorpusEntry(
             input: repeat each input,
             signature: signature,
             parentIndex: parentIndex
         )
         entries.append(entry)
         totalCoverage = totalCoverage.union(with: signature)
-        updatedAt = dateClient.now()
+        updatedAt = await dateClient.now()
         return true
     }
 
@@ -138,8 +138,8 @@ public actor Corpus<each Input: Codable & Sendable>: Sendable {
         parentIndex: Int? = nil,
         entryType: CorpusEntryType = .coverage,
         failure: FailureInfo? = nil
-    ) {
-        add(
+    ) async {
+        await add(
             input: (repeat each input),
             signature: signature,
             parentIndex: parentIndex,
@@ -155,8 +155,8 @@ public actor Corpus<each Input: Codable & Sendable>: Sendable {
         parentIndex: Int? = nil,
         entryType: CorpusEntryType = .coverage,
         failure: FailureInfo? = nil
-    ) {
-        let entry = CorpusEntry(
+    ) async {
+        let entry = await CorpusEntry(
             input: repeat each input,
             signature: signature,
             parentIndex: parentIndex,
@@ -165,7 +165,7 @@ public actor Corpus<each Input: Codable & Sendable>: Sendable {
         )
         entries.append(entry)
         totalCoverage = totalCoverage.union(with: signature)
-        updatedAt = dateClient.now()
+        updatedAt = await dateClient.now()
     }
 
     // MARK: - Failure Statistics
@@ -202,7 +202,7 @@ public actor Corpus<each Input: Codable & Sendable>: Sendable {
     /// that "previously-failing cases must be preserved during minimization."
     ///
     /// - Returns: A snapshot of the minimized corpus.
-    public func minimized() -> CorpusSnapshot<repeat each Input> {
+    public func minimized() async -> CorpusSnapshot<repeat each Input> {
         guard !entries.isEmpty else { return snapshot() }
 
         var minimizedEntries: [CorpusEntry<repeat each Input>] = []
@@ -261,7 +261,7 @@ public actor Corpus<each Input: Codable & Sendable>: Sendable {
             entries: minimizedEntries,
             schemaVersion: schemaVersion,
             createdAt: createdAt,
-            updatedAt: dateClient.now(),
+            updatedAt: await dateClient.now(),
             totalCoverage: minimizedCoverage
         )
     }

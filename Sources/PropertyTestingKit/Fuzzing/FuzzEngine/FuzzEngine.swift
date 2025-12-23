@@ -405,8 +405,8 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
         let emptySnapshot = CorpusSnapshot<repeat each Input>(
             entries: [],
             schemaVersion: await CorpusSchema.currentVersion(),
-            createdAt: dateClient.now(),
-            updatedAt: dateClient.now(),
+            createdAt: await dateClient.now(),
+            updatedAt: await dateClient.now(),
             totalCoverage: CoverageSignature(buckets: [:])
         )
         let emptyStats = FuzzStats(
@@ -434,7 +434,7 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
         additionalSeeds: [(repeat each Input)] = [],
         test: @escaping @Sendable ((repeat each Input)) async throws -> Void
     ) async -> FuzzResult<repeat each Input> {
-        let startTime = dateClient.now()
+        let startTime = await dateClient.now()
         let corpus: CorpusClient<repeat each Input> = await corpusRegistry.get(schemaVersion: CorpusSchema.currentVersion())
         var failures: [(input: (repeat each Input), error: Error)] = []
         var hangs: [(input: (repeat each Input), timeout: TimeInterval)] = []
@@ -571,7 +571,7 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
             if config.verbose {
                 print("[Fuzz] No seeds and no mutations possible - exiting early")
             }
-            let duration = dateClient.now().timeIntervalSince(startTime)
+            let duration = await dateClient.now().timeIntervalSince(startTime)
             let stats = FuzzStats(
                 totalInputs: 0,
                 newPaths: 0,
@@ -609,7 +609,7 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
             let batchStart = CFAbsoluteTimeGetCurrent()
 
             // Check stopping conditions before generating batch
-            if dateClient.now().timeIntervalSince(startTime) >= config.maxDuration {
+            if await dateClient.now().timeIntervalSince(startTime) >= config.maxDuration {
                 if config.verbose {
                     print("[Fuzz] Time limit reached after \(iteration) iterations")
                 }
@@ -619,7 +619,7 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
 
             if plateauDetector.hasPlateaued {
                 if config.verbose {
-                    print("[Fuzz] Coverage plateau detected: \(plateauDetector.summary(includeDetails: true))")
+                    print("[Fuzz] Coverage plateau detected: \(await plateauDetector.summary(includeDetails: true))")
                     print("[Fuzz] Stopping early at iteration \(iteration) (saved \(config.maxIterations - iteration) iterations)")
                 }
                 stopReason = .coveragePlateau
@@ -826,7 +826,7 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
                     let addedForCoverage = await corpus.addIfInteresting(input, signature, meta.parentIndex)
 
                     // Record discovery status for plateau detection
-                    plateauDetector.record(discoveredNewCoverage: addedForCoverage)
+                    await plateauDetector.record(discoveredNewCoverage: addedForCoverage)
 
                     if addedForCoverage {
                         iterationsSinceNewCoverage = 0
@@ -837,7 +837,7 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
                         }
                     }
                 } else {
-                    plateauDetector.record(discoveredNewCoverage: false)
+                    await plateauDetector.record(discoveredNewCoverage: false)
                 }
             }
 
@@ -893,11 +893,11 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
         let saveEnd = CFAbsoluteTimeGetCurrent()
         print("[Timing] Save corpus: \(String(format: "%.3f", saveEnd - saveStart))s")
 
-        let duration = dateClient.now().timeIntervalSince(startTime)
+        let duration = await dateClient.now().timeIntervalSince(startTime)
 
         // Report plateau detector statistics if verbose
         if config.verbose && config.plateauConfig.enabled {
-            let pStats = plateauDetector.stats
+            let pStats = await plateauDetector.stats()
             print("[Fuzz] Plateau detector: \(pStats.totalDiscoveries) discoveries in \(pStats.totalIterations) iterations")
             print("[Fuzz] Discovery rate: \(String(format: "%.4f", pStats.overallRate)) overall, \(String(format: "%.4f", pStats.windowRate)) recent")
         }
@@ -908,6 +908,7 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
         }
 
         let finalCorpusCount = await finalCorpus.count()
+        let plateauStats = config.plateauConfig.enabled ? await plateauDetector.stats() : nil
         let stats = FuzzStats(
             totalInputs: iteration,
             newPaths: finalCorpusCount,
@@ -915,7 +916,7 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
             generations: totalGenerations,
             duration: duration,
             stopReason: stopReason,
-            plateauStats: config.plateauConfig.enabled ? plateauDetector.stats : nil,
+            plateauStats: plateauStats,
             failures: failures.count,
             hangs: hangs.count
         )
@@ -960,7 +961,7 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
     ) async -> FuzzResult<repeat each Input> {
         @Dependency(\.coverageCounters) var coverageCounters
 
-        let startTime = dateClient.now()
+        let startTime = await dateClient.now()
         var failures: [(input: (repeat each Input), error: Error)] = []
         var coverageChanges: [(input: (repeat each Input), expected: CoverageSignature, actual: CoverageSignature)] = []
         var needsRefuzz = false
@@ -1011,7 +1012,7 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
             return await runFuzzing(test: test)
         }
 
-        let duration = dateClient.now().timeIntervalSince(startTime)
+        let duration = await dateClient.now().timeIntervalSince(startTime)
         let stats = FuzzStats(
             totalInputs: snapshot.count,
             newPaths: 0,

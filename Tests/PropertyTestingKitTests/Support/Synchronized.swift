@@ -7,46 +7,6 @@
 
 import Foundation
 
-/// A thread-safe wrapper for Date values in concurrent tests.
-///
-/// Example:
-/// ```swift
-/// let currentTime = ThreadSafeDate(Date(timeIntervalSince1970: 0))
-/// try await fuzz { (input: String) in
-///     currentTime.addInterval(1.0)
-/// }
-/// print(currentTime.value)
-/// ```
-final class ThreadSafeDate: @unchecked Sendable {
-    private var date: Date
-    private let lock = NSLock()
-
-    init(_ date: Date = Date()) {
-        self.date = date
-    }
-
-    /// Get the current date value.
-    var value: Date {
-        lock.lock()
-        defer { lock.unlock() }
-        return date
-    }
-
-    /// Add a time interval to the current date.
-    func addInterval(_ interval: TimeInterval) {
-        lock.lock()
-        defer { lock.unlock() }
-        date = date.addingTimeInterval(interval)
-    }
-
-    /// Set the date to a new value.
-    func set(_ newDate: Date) {
-        lock.lock()
-        defer { lock.unlock() }
-        date = newDate
-    }
-}
-
 /// An actor-based wrapper for thread-safe access to values.
 ///
 /// Use this when you need actor-isolated access to a value with atomic compound operations.

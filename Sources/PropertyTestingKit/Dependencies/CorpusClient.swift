@@ -93,8 +93,8 @@ public struct CorpusClient<each Input: Codable & Sendable>: Sendable {
     }
 
     /// Create a live client backed by a Corpus actor.
-    public static func live(schemaVersion: String) -> CorpusClient<repeat each Input> {
-        let corpus = Corpus<repeat each Input>(schemaVersion: schemaVersion)
+    public static func live(schemaVersion: String) async -> CorpusClient<repeat each Input> {
+        let corpus = await Corpus<repeat each Input>(schemaVersion: schemaVersion)
         return CorpusClient<repeat each Input>(
             count: { await corpus.count },
             isEmpty: { await corpus.isEmpty },
@@ -153,8 +153,8 @@ public struct CorpusClient<each Input: Codable & Sendable>: Sendable {
     ///
     /// This is useful for tests that want to verify mutation/generation
     /// without needing to mock coverage data.
-    public static func alwaysInteresting(schemaVersion: String = "test") -> CorpusClient<repeat each Input> {
-        let corpus = Corpus<repeat each Input>(schemaVersion: schemaVersion)
+    public static func alwaysInteresting(schemaVersion: String = "test") async -> CorpusClient<repeat each Input> {
+        let corpus = await Corpus<repeat each Input>(schemaVersion: schemaVersion)
         return CorpusClient<repeat each Input>(
             count: { await corpus.count },
             isEmpty: { await corpus.isEmpty },
@@ -197,8 +197,8 @@ public struct CorpusClient<each Input: Codable & Sendable>: Sendable {
 /// Provides a factory for creating corpus clients with the appropriate type.
 public struct CorpusRegistry: Sendable {
     /// Create a corpus client for the given input types.
-    public func get<each Input: Codable & Sendable>(schemaVersion: String) -> CorpusClient<repeat each Input> {
-        return CorpusClient.live(schemaVersion: schemaVersion)
+    public func get<each Input: Codable & Sendable>(schemaVersion: String) async -> CorpusClient<repeat each Input> {
+        return await CorpusClient.live(schemaVersion: schemaVersion)
     }
 
     /// Create a corpus client from an existing corpus.
@@ -210,7 +210,7 @@ public struct CorpusRegistry: Sendable {
 extension CorpusRegistry: CorpusRegistryProtocol {}
 
 public protocol CorpusRegistryProtocol: Sendable {
-    func get<each T: Codable & Sendable>(schemaVersion: String) -> CorpusClient<repeat each T>
+    func get<each T: Codable & Sendable>(schemaVersion: String) async -> CorpusClient<repeat each T>
     func get<each T: Codable & Sendable>(corpus: Corpus<repeat each T>) -> CorpusClient<repeat each T>
 }
 
