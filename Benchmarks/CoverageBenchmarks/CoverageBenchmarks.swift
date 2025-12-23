@@ -469,11 +469,11 @@ let benchmarks: @Sendable () -> Void = {
             warmupIterations: 5,
             scalingFactor: .kilo
         )
-    ) { benchmark in
+    ) { benchmark async in
         for _ in benchmark.scaledIterations {
-            var corpus = Corpus<Int>(schemaVersion: "bench-v1")
+            let corpus = Corpus<Int>(schemaVersion: "bench-v1")
             let sig = CoverageSignature(sparseCoverage: sparseSmall)
-            blackHole(corpus.addIfInteresting(input: 42, signature: sig))
+            blackHole(await corpus.addIfInteresting(input: 42, signature: sig))
         }
     }
 
@@ -484,19 +484,19 @@ let benchmarks: @Sendable () -> Void = {
             warmupIterations: 5,
             scalingFactor: .kilo
         )
-    ) { benchmark in
-        var corpus = Corpus<Int>(schemaVersion: "bench-v1")
+    ) { benchmark async in
+        let corpus = Corpus<Int>(schemaVersion: "bench-v1")
         for i in 0..<100 {
             let sig = CoverageSignature(sparseCoverage: makeSparseCoverage(
                 coveredCount: typicalCoveredEdges,
                 totalEdges: totalEdges
             ))
-            corpus.add(input: i, signature: sig)
+            await corpus.add(input: i, signature: sig)
         }
 
         for _ in benchmark.scaledIterations {
             let sig = CoverageSignature(sparseCoverage: sparseSmall)
-            blackHole(corpus.addIfInteresting(input: 999, signature: sig))
+            blackHole(await corpus.addIfInteresting(input: 999, signature: sig))
         }
     }
 
@@ -697,17 +697,17 @@ let benchmarks: @Sendable () -> Void = {
             warmupIterations: 5,
             scalingFactor: .one
         )
-    ) { benchmark in
+    ) { benchmark async in
         for _ in benchmark.scaledIterations {
-            var corpus = Corpus<Int>(schemaVersion: "bench-v1")
+            let corpus = Corpus<Int>(schemaVersion: "bench-v1")
             for i in 0..<100 {
                 let sig = CoverageSignature(sparseCoverage: makeSparseCoverage(
                     coveredCount: typicalCoveredEdges + i,
                     totalEdges: totalEdges
                 ))
-                corpus.add(input: i, signature: sig)
+                await corpus.add(input: i, signature: sig)
             }
-            blackHole(corpus.count)
+            blackHole(await corpus.count)
         }
     }
 
@@ -718,18 +718,18 @@ let benchmarks: @Sendable () -> Void = {
             warmupIterations: 100,
             scalingFactor: .kilo
         )
-    ) { benchmark in
-        var corpus = Corpus<Int>(schemaVersion: "bench-v1")
+    ) { benchmark async in
+        let corpus = Corpus<Int>(schemaVersion: "bench-v1")
         for i in 0..<100 {
             let sig = CoverageSignature(sparseCoverage: makeSparseCoverage(
                 coveredCount: typicalCoveredEdges,
                 totalEdges: totalEdges
             ))
-            corpus.add(input: i, signature: sig)
+            await corpus.add(input: i, signature: sig)
         }
 
         for _ in benchmark.scaledIterations {
-            blackHole(corpus.selectForMutation())
+            blackHole(await corpus.selectForMutation())
         }
     }
 
@@ -740,19 +740,19 @@ let benchmarks: @Sendable () -> Void = {
             warmupIterations: 1,
             scalingFactor: .one
         )
-    ) { benchmark in
-        var corpus = Corpus<Int>(schemaVersion: "bench-v1")
+    ) { benchmark async in
+        let corpus = Corpus<Int>(schemaVersion: "bench-v1")
         for i in 0..<100 {
             // Create overlapping signatures to test minimization
             let sig = CoverageSignature(sparseCoverage: makeSparseCoverage(
                 coveredCount: typicalCoveredEdges,
                 totalEdges: totalEdges
             ))
-            corpus.add(input: i, signature: sig)
+            await corpus.add(input: i, signature: sig)
         }
 
         for _ in benchmark.scaledIterations {
-            blackHole(corpus.minimized())
+            blackHole(await corpus.minimized())
         }
     }
 
@@ -853,10 +853,10 @@ let benchmarks: @Sendable () -> Void = {
             maxDuration: .seconds(10),
             maxIterations: 100
         )
-    ) { benchmark in
+    ) { benchmark async in
         for _ in benchmark.scaledIterations {
             // This simulates one seed iteration in the fuzz loop
-            var corpus = Corpus<Int>(schemaVersion: "bench-v1")
+            let corpus = Corpus<Int>(schemaVersion: "bench-v1")
 
             // Process all Int.fuzz seeds (21 values)
             for input in Int.fuzz {
@@ -872,7 +872,7 @@ let benchmarks: @Sendable () -> Void = {
                     let sig = CoverageSignature(sparseCoverage: sparse)
 
                     // 5. Add to corpus if interesting
-                    blackHole(corpus.addIfInteresting(input: input, signature: sig))
+                    blackHole(await corpus.addIfInteresting(input: input, signature: sig))
                 }
             }
         }
@@ -885,8 +885,8 @@ let benchmarks: @Sendable () -> Void = {
             warmupIterations: 100,
             scalingFactor: .kilo
         )
-    ) { benchmark in
-        var corpus = Corpus<Int>(schemaVersion: "bench-v1")
+    ) { benchmark async in
+        let corpus = Corpus<Int>(schemaVersion: "bench-v1")
 
         for _ in benchmark.scaledIterations {
             // 1. Reset coverage
@@ -901,7 +901,7 @@ let benchmarks: @Sendable () -> Void = {
                 let sig = CoverageSignature(sparseCoverage: sparse)
 
                 // 5. Add to corpus if interesting
-                blackHole(corpus.addIfInteresting(input: 42, signature: sig))
+                blackHole(await corpus.addIfInteresting(input: 42, signature: sig))
             }
         }
     }

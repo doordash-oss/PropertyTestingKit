@@ -332,37 +332,38 @@ struct CorpusPropertyTests {
 
     @Test("Corpus addIfInteresting rejects redundant coverage")
     func testAddIfInterestingRejectsRedundant() async throws {
-        var corpus = Corpus<String>(schemaVersion: "test")
+        let corpus = Corpus<String>(schemaVersion: "test")
 
         let sig1 = CoverageSignature(buckets: [0: .one, 1: .two, 2: .three])
 
         // First add should succeed
-        let added1 = corpus.addIfInteresting(input: "first", signature: sig1)
+        let added1 = await corpus.addIfInteresting(input: "first", signature: sig1)
         #expect(added1 == true, "First entry should be added")
 
         // Subset signature should be rejected
         let sigSubset = CoverageSignature(buckets: [0: .one, 1: .two])
-        let added2 = corpus.addIfInteresting(input: "subset", signature: sigSubset)
+        let added2 = await corpus.addIfInteresting(input: "subset", signature: sigSubset)
         #expect(added2 == false, "Subset coverage should be rejected")
 
         // New coverage should be accepted
         let sigNew = CoverageSignature(buckets: [3: .fourToSeven])
-        let added3 = corpus.addIfInteresting(input: "new", signature: sigNew)
+        let added3 = await corpus.addIfInteresting(input: "new", signature: sigNew)
         #expect(added3 == true, "New coverage should be accepted")
     }
 
     @Test("Corpus minimization preserves total coverage")
     func testMinimizationPreservesCoverage() async throws {
-        var corpus = Corpus<String>(schemaVersion: "test")
+        let corpus = Corpus<String>(schemaVersion: "test")
 
         // Add entries with overlapping coverage
-        corpus.add(input: "a", signature: CoverageSignature(buckets: [0: .one, 1: .two]))
-        corpus.add(input: "b", signature: CoverageSignature(buckets: [1: .three, 2: .one]))
-        corpus.add(input: "c", signature: CoverageSignature(buckets: [2: .two, 3: .three]))
-        corpus.add(input: "d", signature: CoverageSignature(buckets: [0: .two, 1: .one]))  // Redundant
+        await corpus.add(input: "a", signature: CoverageSignature(buckets: [0: .one, 1: .two]))
+        await corpus.add(input: "b", signature: CoverageSignature(buckets: [1: .three, 2: .one]))
+        await corpus.add(input: "c", signature: CoverageSignature(buckets: [2: .two, 3: .three]))
+        await corpus.add(input: "d", signature: CoverageSignature(buckets: [0: .two, 1: .one]))  // Redundant
 
-        let originalCoverage = corpus.totalCoverage
-        let minimized = corpus.minimized()
+        let originalCoverage = await corpus.totalCoverage
+        let minimized = await corpus.minimized()
+        let count = await corpus.count
 
         // Property: minimized coverage equals original coverage
         #expect(
@@ -371,25 +372,27 @@ struct CorpusPropertyTests {
         )
 
         // Property: minimized should have fewer or equal entries
-        #expect(minimized.count <= corpus.count, "Minimized should not be larger")
+        #expect(minimized.count <= count, "Minimized should not be larger")
     }
 
     @Test("Corpus selectForMutation returns valid indices")
     func testSelectForMutationValidIndex() async throws {
-        var corpus = Corpus<String>(schemaVersion: "test")
+        let corpus = Corpus<String>(schemaVersion: "test")
 
         // Empty corpus should return nil
-        #expect(corpus.selectForMutation() == nil, "Empty corpus should return nil")
+        let emptySelection = await corpus.selectForMutation()
+        #expect(emptySelection == nil, "Empty corpus should return nil")
 
         // Add some entries
-        corpus.add(input: "a", signature: CoverageSignature(buckets: [0: .one]))
-        corpus.add(input: "b", signature: CoverageSignature(buckets: [1: .two]))
-        corpus.add(input: "c", signature: CoverageSignature(buckets: [2: .three]))
+        await corpus.add(input: "a", signature: CoverageSignature(buckets: [0: .one]))
+        await corpus.add(input: "b", signature: CoverageSignature(buckets: [1: .two]))
+        await corpus.add(input: "c", signature: CoverageSignature(buckets: [2: .three]))
 
         // Selection should be valid index
+        let entries = await corpus.entries
         for _ in 0..<10 {
-            if let index = corpus.selectForMutation() {
-                #expect(corpus.entries.indices.contains(index), "Selected index should be valid")
+            if let index = await corpus.selectForMutation() {
+                #expect(entries.indices.contains(index), "Selected index should be valid")
             }
         }
     }
@@ -397,30 +400,32 @@ struct CorpusPropertyTests {
     @Test("Corpus handles empty minimization")
     func testEmptyMinimization() async throws {
         let corpus = Corpus<String>(schemaVersion: "test")
-        let minimized = corpus.minimized()
+        let minimized = await corpus.minimized()
         #expect(minimized.isEmpty, "Minimized empty corpus should be empty")
     }
 
     @Test("Corpus isEmpty property")
     func testCorpusIsEmpty() async throws {
-        var corpus = Corpus<String>(schemaVersion: "test")
-        #expect(corpus.isEmpty, "New corpus should be empty")
+        let corpus = Corpus<String>(schemaVersion: "test")
+        var isEmpty = await corpus.isEmpty
+        #expect(isEmpty, "New corpus should be empty")
 
-        corpus.add(input: "a", signature: CoverageSignature(buckets: [0: .one]))
-        #expect(!corpus.isEmpty, "Corpus with entry should not be empty")
+        await corpus.add(input: "a", signature: CoverageSignature(buckets: [0: .one]))
+        isEmpty = await corpus.isEmpty
+        #expect(!isEmpty, "Corpus with entry should not be empty")
     }
 
     @Test("Corpus signatures property")
     func testCorpusSignatures() async throws {
-        var corpus = Corpus<String>(schemaVersion: "test")
+        let corpus = Corpus<String>(schemaVersion: "test")
 
         let sig1 = CoverageSignature(buckets: [0: .one])
         let sig2 = CoverageSignature(buckets: [1: .two])
 
-        corpus.add(input: "a", signature: sig1)
-        corpus.add(input: "b", signature: sig2)
+        await corpus.add(input: "a", signature: sig1)
+        await corpus.add(input: "b", signature: sig2)
 
-        let signatures = corpus.signatures
+        let signatures = await corpus.signatures
         #expect(signatures.count == 2, "Should have 2 signatures")
         #expect(signatures[0] == sig1, "First signature should match")
         #expect(signatures[1] == sig2, "Second signature should match")
@@ -428,12 +433,12 @@ struct CorpusPropertyTests {
 
     @Test("Corpus inputs property")
     func testCorpusInputs() async throws {
-        var corpus = Corpus<String>(schemaVersion: "test")
+        let corpus = Corpus<String>(schemaVersion: "test")
 
-        corpus.add(input: "hello", signature: CoverageSignature(buckets: [0: .one]))
-        corpus.add(input: "world", signature: CoverageSignature(buckets: [1: .two]))
+        await corpus.add(input: "hello", signature: CoverageSignature(buckets: [0: .one]))
+        await corpus.add(input: "world", signature: CoverageSignature(buckets: [1: .two]))
 
-        let inputs = corpus.inputs
+        let inputs = await corpus.inputs
         #expect(inputs.count == 2, "Should have 2 inputs")
         #expect(inputs[0] == "hello", "First input should match")
         #expect(inputs[1] == "world", "Second input should match")
@@ -441,36 +446,38 @@ struct CorpusPropertyTests {
 
     @Test("Corpus selectForMutation with empty signatures")
     func testSelectForMutationEmptySignatures() async throws {
-        var corpus = Corpus<String>(schemaVersion: "test")
+        let corpus = Corpus<String>(schemaVersion: "test")
 
         // Add entries with empty signatures (totalScore will be 0)
         let emptySig = CoverageSignature(buckets: [:])
-        corpus.add(input: "a", signature: emptySig)
-        corpus.add(input: "b", signature: emptySig)
+        await corpus.add(input: "a", signature: emptySig)
+        await corpus.add(input: "b", signature: emptySig)
 
         // Should still return a valid index (random selection fallback)
-        let index = corpus.selectForMutation()
+        let index = await corpus.selectForMutation()
+        let entries = await corpus.entries
         #expect(index != nil, "Should return an index")
-        #expect(corpus.entries.indices.contains(index!), "Index should be valid")
+        #expect(entries.indices.contains(index!), "Index should be valid")
     }
 
     @Test("Corpus minimization with no new coverage")
     func testMinimizationNoNewCoverage() async throws {
-        var corpus = Corpus<String>(schemaVersion: "test")
+        let corpus = Corpus<String>(schemaVersion: "test")
 
         // Add one entry that covers everything
-        corpus.add(input: "all", signature: CoverageSignature(buckets: [0: .one, 1: .two, 2: .three]))
+        await corpus.add(input: "all", signature: CoverageSignature(buckets: [0: .one, 1: .two, 2: .three]))
 
         // Add more entries that cover subsets (will have bestCoverage = 0 after first)
-        corpus.add(input: "sub1", signature: CoverageSignature(buckets: [0: .one]))
-        corpus.add(input: "sub2", signature: CoverageSignature(buckets: [1: .two]))
+        await corpus.add(input: "sub1", signature: CoverageSignature(buckets: [0: .one]))
+        await corpus.add(input: "sub2", signature: CoverageSignature(buckets: [1: .two]))
 
-        let minimized = corpus.minimized()
+        let minimized = await corpus.minimized()
+        let totalCoverage = await corpus.totalCoverage
 
         // The first entry should cover everything, so minimization should pick just that one
         #expect(minimized.count >= 1, "Should have at least one entry")
         #expect(
-            minimized.totalCoverage.executedIndices == corpus.totalCoverage.executedIndices,
+            minimized.totalCoverage.executedIndices == totalCoverage.executedIndices,
             "Coverage should be preserved"
         )
     }
@@ -698,26 +705,27 @@ struct EdgeCaseTests {
 
     @Test("Corpus with complex input types")
     func testCorpusComplexTypes() async throws {
-        var corpus = Corpus<[String]>(schemaVersion: "test")
+        let corpus = Corpus<[String]>(schemaVersion: "test")
 
-        corpus.add(
+        await corpus.add(
             input: ["a", "b", "c"],
             signature: CoverageSignature(buckets: [0: .one])
         )
-        corpus.add(
+        await corpus.add(
             input: [],
             signature: CoverageSignature(buckets: [1: .two])
         )
-        corpus.add(
+        await corpus.add(
             input: ["single"],
             signature: CoverageSignature(buckets: [2: .three])
         )
 
-        #expect(corpus.count == 3)
+        let count = await corpus.count
+        #expect(count == 3)
 
         // Test minimization
-        let minimized = corpus.minimized()
-        #expect(minimized.count <= corpus.count)
+        let minimized = await corpus.minimized()
+        #expect(minimized.count <= count)
     }
 
     @Test("Bucket description strings")

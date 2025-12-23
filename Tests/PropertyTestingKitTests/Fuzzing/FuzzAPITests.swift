@@ -14,15 +14,6 @@ import FunctionSpy
 @Suite("Fuzz API")
 struct FuzzAPITests {
 
-    // MARK: - Helpers
-
-    /// Creates a SanCovCounters with a specific signature pattern.
-    static func makeCounters(_ seed: Int) -> SanCovCounters {
-        var counters = [UInt64](repeating: 0, count: 100)
-        counters[seed % 100] = UInt64(seed + 1)
-        return SanCovCounters(counters: counters)
-    }
-
     @Test("Coverage-guided fuzzing finds all code paths in NumberParser")
     func testNumberParserCoverage() async throws {
         let corpusDir = URL(fileURLWithPath: "/test/fuzz-numberparser")
@@ -111,20 +102,17 @@ struct FuzzAPITests {
         let corpusDir = URL(fileURLWithPath: "/test/fuzz-persist")
         let (saveSpy, saveFn) = spy { (_: Data, _: URL) in }
 
-        let callCounter = ThreadSafeCounter()
-        let (snapshotSpy, snapshotFn) = spy { () -> SanCovCounters? in
-            callCounter.increment()
-            return FuzzAPITests.makeCounters(callCounter.value % 10)
-        }
+        // Create a registry that always returns "always interesting" corpus clients
+        let alwaysInterestingRegistry = AlwaysInterestingCorpusRegistry()
 
         await withDependencies {
-            $0.coverageCounters = CoverageCountersClient(snapshot: snapshotFn, reset: {}, isAvailable: { true })
             $0.corpusPersistence = CorpusPersistenceClient(
                 save: saveFn,
                 load: { _ in Data() },
                 exists: { _ in false },
                 delete: { _ in }
             )
+            $0.corpusRegistry = alwaysInterestingRegistry
         } operation: {
             let config = FuzzEngine<String>.Config(
                 maxIterations: 50,
@@ -146,7 +134,6 @@ struct FuzzAPITests {
         // Verify corpus was saved
         #expect(saveSpy.callCount == 1, "Corpus should be saved")
         #expect(saveSpy.callParams[0].1.path == "/test/fuzz-persist")
-        #expect(snapshotSpy.callCount > 0, "Should have called snapshot")
     }
 
     @Test("Public fuzz API with custom seeds")
@@ -154,14 +141,11 @@ struct FuzzAPITests {
         // Demonstrates the simplified public API with custom seeds
         let inputCounter = ThreadSafeCounter()
 
-        let callCounter = ThreadSafeCounter()
-        let (snapshotSpy, snapshotFn) = spy { () -> SanCovCounters? in
-            callCounter.increment()
-            return FuzzAPITests.makeCounters(callCounter.value % 10)
-        }
+        // Use AlwaysInterestingCorpusRegistry to bypass coverage data requirements
+        let alwaysInterestingRegistry = AlwaysInterestingCorpusRegistry()
 
         try await withDependencies {
-            $0.coverageCounters = CoverageCountersClient(snapshot: snapshotFn, reset: {}, isAvailable: { true })
+            $0.corpusRegistry = alwaysInterestingRegistry
             $0.environment = EnvironmentClient(environment: { [:] })
         } operation: {
             try await fuzz(
@@ -182,7 +166,6 @@ struct FuzzAPITests {
 
         print("Public API tested \(inputCounter.value) inputs")
         #expect(inputCounter.value > 0)
-        #expect(snapshotSpy.callCount > 0, "Should have called snapshot")
     }
 
     @Test("FuzzError errorDescription covers all cases")
@@ -243,15 +226,12 @@ struct FuzzAPITests {
         // Create an error to throw
         struct TestFailure: Error {}
 
-        let callCounter = ThreadSafeCounter()
-        let (snapshotSpy, snapshotFn) = spy { () -> SanCovCounters? in
-            callCounter.increment()
-            return FuzzAPITests.makeCounters(callCounter.value)
-        }
+        // Use AlwaysInterestingCorpusRegistry to bypass coverage data requirements
+        let alwaysInterestingRegistry = AlwaysInterestingCorpusRegistry()
 
         // Test FuzzEngine directly to verify failure capture without Issue.record noise
         let result = await withDependencies {
-            $0.coverageCounters = CoverageCountersClient(snapshot: snapshotFn, reset: {}, isAvailable: { true })
+            $0.corpusRegistry = alwaysInterestingRegistry
         } operation: {
             let config = FuzzEngine<Bool>.Config(
                 maxIterations: 10,
@@ -268,7 +248,6 @@ struct FuzzAPITests {
 
         // Verify failures were captured
         #expect(!result.failures.isEmpty, "Should have captured failures")
-        #expect(snapshotSpy.callCount > 0, "Should have called snapshot")
 
         // Verify the error type
         if let (_, error) = result.failures.first {
@@ -280,16 +259,13 @@ struct FuzzAPITests {
     func testFuzzRecordsIssuesOnFailure() async throws {
         struct TestFailure: Error {}
 
-        let callCounter = ThreadSafeCounter()
-        let (_, snapshotFn) = spy { () -> SanCovCounters? in
-            callCounter.increment()
-            return FuzzAPITests.makeCounters(callCounter.value)
-        }
+        // Use AlwaysInterestingCorpusRegistry to bypass coverage data requirements
+        let alwaysInterestingRegistry = AlwaysInterestingCorpusRegistry()
 
         // Use withKnownIssue to expect the recorded issues from fuzz()
         await withKnownIssue {
             try await withDependencies {
-                $0.coverageCounters = CoverageCountersClient(snapshot: snapshotFn, reset: {}, isAvailable: { true })
+                $0.corpusRegistry = alwaysInterestingRegistry
                 $0.fileManager = FileManagerClient(
                     currentDirectoryPath: { "/test" },
                     fileExists: { _ in false },
@@ -310,16 +286,13 @@ struct FuzzAPITests {
 
     @Test("fuzz writes corpus to filesystem")
     func testFuzzWritesCorpus() async throws {
-        let callCounter = ThreadSafeCounter()
-        let (snapshotSpy, snapshotFn) = spy { () -> SanCovCounters? in
-            callCounter.increment()
-            return FuzzAPITests.makeCounters(callCounter.value % 10)
-        }
+        // Use AlwaysInterestingCorpusRegistry to bypass coverage data requirements
+        let alwaysInterestingRegistry = AlwaysInterestingCorpusRegistry()
 
         let (saveSpy, saveFn) = spy { (_: Data, _: URL) in }
 
         try await withDependencies {
-            $0.coverageCounters = CoverageCountersClient(snapshot: snapshotFn, reset: {}, isAvailable: { true })
+            $0.corpusRegistry = alwaysInterestingRegistry
             $0.environment = EnvironmentClient(environment: { [:] })
             $0.corpusPersistence = CorpusPersistenceClient(
                 save: saveFn,
@@ -333,25 +306,22 @@ struct FuzzAPITests {
             }
         }
 
-        #expect(snapshotSpy.callCount > 0, "Should have called snapshot")
         #expect(saveSpy.callCount > 0, "Should have written corpus to filesystem")
     }
 
     @Test("fuzz reads existing corpus from filesystem")
     func testFuzzReadsCorpus() async throws {
-        let callCounter = ThreadSafeCounter()
-        let (snapshotSpy, snapshotFn) = spy { () async -> SanCovCounters? in
-            callCounter.increment()
-            return FuzzAPITests.makeCounters(callCounter.value % 10)
-        }
+        // Use AlwaysInterestingCorpusRegistry to bypass coverage data requirements
+        let alwaysInterestingRegistry = AlwaysInterestingCorpusRegistry()
 
         // Create a mock corpus with known entries
-        var existingCorpus = Corpus<String>(schemaVersion: await CorpusSchema.currentVersion())
-        existingCorpus.add(
+        let existingCorpus = Corpus<String>(schemaVersion: await CorpusSchema.currentVersion())
+        await existingCorpus.add(
             input: "from_corpus",
             signature: CoverageSignature(buckets: [1: .one])
         )
-        let corpusData = try JSONEncoder().encode(existingCorpus)
+        let corpusSnapshot = await existingCorpus.snapshot()
+        let corpusData = try JSONEncoder.corpusEncoder.encode(corpusSnapshot)
 
         let (loadSpy, loadFn) = spy { (_: URL) -> Data in
             return corpusData
@@ -360,7 +330,7 @@ struct FuzzAPITests {
         let seenInputs = ThreadSafeCollector<String>()
 
         try await withDependencies {
-            $0.coverageCounters = CoverageCountersClient(snapshot: snapshotFn, reset: {}, isAvailable: { true })
+            $0.corpusRegistry = alwaysInterestingRegistry
             $0.environment = EnvironmentClient(environment: { [:] })
             $0.corpusPersistence = CorpusPersistenceClient(
                 save: { _, _ in },
@@ -375,7 +345,6 @@ struct FuzzAPITests {
             }
         }
 
-        #expect(snapshotSpy.callCount > 0, "Should have called snapshot")
         #expect(loadSpy.callCount > 0, "Should have read corpus from filesystem")
         let inputs = await seenInputs.values
         #expect(inputs.contains("from_corpus"), "Should have tested input from seeds/corpus")
@@ -492,3 +461,17 @@ let numberParserSeeds: [String] = [
     "-abc",
     "12-34",
 ]
+
+// MARK: - Test Support
+
+/// A corpus registry that always returns "always interesting" corpus clients.
+/// This is useful for tests that want to verify corpus saving without depending on coverage data.
+struct AlwaysInterestingCorpusRegistry: CorpusRegistryProtocol {
+    func get<each T: Codable & Sendable>(schemaVersion: String) -> CorpusClient<repeat each T> {
+        return CorpusClient.alwaysInteresting(schemaVersion: schemaVersion)
+    }
+
+    func get<each T: Codable & Sendable>(corpus: Corpus<repeat each T>) -> CorpusClient<repeat each T> {
+        return CorpusClient.alwaysInteresting(schemaVersion: "test")
+    }
+}

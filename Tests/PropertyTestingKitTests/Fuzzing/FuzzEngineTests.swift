@@ -37,6 +37,7 @@ struct FuzzEngineTests {
 
     /// Creates a SanCovCounters with a specific signature pattern.
     /// Different counter values produce different CoverageSignatures.
+    /// Used only for tests that specifically test coverage behavior.
     static func makeCounters(_ seed: Int) -> SanCovCounters {
         var counters = [UInt64](repeating: 0, count: 100)
         counters[seed % 100] = UInt64(seed + 1)
@@ -113,12 +114,11 @@ struct FuzzEngineTests {
 
     @Test("FuzzEngine respects iteration limit")
     func testIterationLimit() async {
-        let (snapshotSpy, snapshotFn) = spy { () -> SanCovCounters? in
-            FuzzEngineTests.makeCounters(1)
-        }
+        // Use AlwaysInterestingCorpusRegistry to bypass coverage data requirements
+        let alwaysInterestingRegistry = AlwaysInterestingCorpusRegistry()
 
         let result = await withDependencies {
-            $0.coverageCounters = CoverageCountersClient(snapshot: snapshotFn, reset: {}, isAvailable: { true })
+            $0.corpusRegistry = alwaysInterestingRegistry
         } operation: {
             let config = FuzzEngine<Int>.Config(
                 maxIterations: 50,  // Higher than Int.fuzz count (21) to allow some fuzzing
@@ -132,18 +132,16 @@ struct FuzzEngineTests {
             return await engine.run { _ in }
         }
 
-        #expect(snapshotSpy.callCount > 0)
         #expect(result.stats.totalInputs <= 50)
     }
 
     @Test("FuzzStats.inputsPerSecond computes correctly")
     func testInputsPerSecond() async {
-        let (_, snapshotFn) = spy { () -> SanCovCounters? in
-            FuzzEngineTests.makeCounters(1)
-        }
+        // Use AlwaysInterestingCorpusRegistry to bypass coverage data requirements
+        let alwaysInterestingRegistry = AlwaysInterestingCorpusRegistry()
 
         let result = await withDependencies {
-            $0.coverageCounters = CoverageCountersClient(snapshot: snapshotFn, reset: {}, isAvailable: { true })
+            $0.corpusRegistry = alwaysInterestingRegistry
         } operation: {
             let config = FuzzEngine<Int>.Config(
                 maxIterations: 20,
@@ -162,14 +160,11 @@ struct FuzzEngineTests {
 
     @Test("FuzzEngine verbose mode logs messages")
     func testVerboseMode() async {
-        nonisolated(unsafe) var callCount = 0
-        let (snapshotSpy, snapshotFn) = spy { () -> SanCovCounters? in
-            callCount += 1
-            return FuzzEngineTests.makeCounters(callCount / 2)
-        }
+        // Use AlwaysInterestingCorpusRegistry to bypass coverage data requirements
+        let alwaysInterestingRegistry = AlwaysInterestingCorpusRegistry()
 
         let result = await withDependencies {
-            $0.coverageCounters = CoverageCountersClient(snapshot: snapshotFn, reset: {}, isAvailable: { true })
+            $0.corpusRegistry = alwaysInterestingRegistry
         } operation: {
             let config = FuzzEngine<Int>.Config(
                 maxIterations: 50,
@@ -182,18 +177,16 @@ struct FuzzEngineTests {
             return await engine.run { _ in }
         }
 
-        #expect(snapshotSpy.callCount > 0)
         #expect(result.stats.totalInputs > 0)
     }
 
     @Test("FuzzEngine reaches time limit")
     func testTimeLimit() async {
-        let (snapshotSpy, snapshotFn) = spy { () -> SanCovCounters? in
-            FuzzEngineTests.makeCounters(1)
-        }
+        // Use AlwaysInterestingCorpusRegistry to bypass coverage data requirements
+        let alwaysInterestingRegistry = AlwaysInterestingCorpusRegistry()
 
         let result = await withDependencies {
-            $0.coverageCounters = CoverageCountersClient(snapshot: snapshotFn, reset: {}, isAvailable: { true })
+            $0.corpusRegistry = alwaysInterestingRegistry
         } operation: {
             let config = FuzzEngine<Int>.Config(
                 maxIterations: 1_000_000,
@@ -206,7 +199,6 @@ struct FuzzEngineTests {
             return await engine.run { _ in }
         }
 
-        #expect(snapshotSpy.callCount > 0)
         #expect(result.stats.totalInputs < 1_000_000)
     }
 
@@ -214,12 +206,11 @@ struct FuzzEngineTests {
     func testErrorsDuringFuzzing() async {
         struct FuzzError: Error {}
 
-        let (snapshotSpy, snapshotFn) = spy { () -> SanCovCounters? in
-            FuzzEngineTests.makeCounters(1)
-        }
+        // Use AlwaysInterestingCorpusRegistry to bypass coverage data requirements
+        let alwaysInterestingRegistry = AlwaysInterestingCorpusRegistry()
 
         let result = await withDependencies {
-            $0.coverageCounters = CoverageCountersClient(snapshot: snapshotFn, reset: {}, isAvailable: { true })
+            $0.corpusRegistry = alwaysInterestingRegistry
         } operation: {
             let config = FuzzEngine<Int>.Config(
                 maxIterations: 50,
@@ -235,24 +226,19 @@ struct FuzzEngineTests {
             }
         }
 
-        #expect(snapshotSpy.callCount > 0)
         #expect(!result.failures.isEmpty, "Should have captured failures")
     }
 
     @Test("FuzzEngine saves corpus to directory")
     func testCorpusSaveToDirectory() async throws {
         let corpusDir = URL(fileURLWithPath: "/test/fuzz-corpus")
-        nonisolated(unsafe) var callCount = 0
 
-        // Use varying coverage values so difference between before/after produces new paths
-        let (snapshotSpy, snapshotFn) = spy { () -> SanCovCounters? in
-            callCount += 1
-            return FuzzEngineTests.makeCounters(callCount % 10)
-        }
+        // Use AlwaysInterestingCorpusRegistry to bypass coverage data requirements
+        let alwaysInterestingRegistry = AlwaysInterestingCorpusRegistry()
         let (saveSpy, saveFn) = spy { (_: Data, _: URL) in }
 
         let result = await withDependencies {
-            $0.coverageCounters = CoverageCountersClient(snapshot: snapshotFn, reset: {}, isAvailable: { true })
+            $0.corpusRegistry = alwaysInterestingRegistry
             $0.corpusPersistence = CorpusPersistenceClient(
                 save: saveFn,
                 load: { _ in Data() },
@@ -271,7 +257,6 @@ struct FuzzEngineTests {
             return await engine.run { _ in }
         }
 
-        #expect(snapshotSpy.callCount > 1, "Should have called snapshot multiple times")
         #expect(result.corpus.count > 0, "Should have corpus entries")
         #expect(saveSpy.callCount == 1, "Corpus should be saved")
     }
@@ -327,11 +312,9 @@ struct FuzzEngineTests {
         let corpusData = Data(corpusJSON.utf8)
 
         // Parse corpus to verify the signature
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
-        let parsedCorpus = try decoder.decode(Corpus<Int>.self, from: corpusData)
-        print("DEBUG: Parsed corpus signature=\(parsedCorpus.entries[0].signature.buckets)")
-        print("DEBUG: Signatures equal? \(sigTest == parsedCorpus.entries[0].signature)")
+        let parsedCorpusSnapshot = try JSONDecoder.corpusDecoder.decode(CorpusSnapshot<Int>.self, from: corpusData)
+        print("DEBUG: Parsed corpus signature=\(parsedCorpusSnapshot.entries[0].signature.buckets)")
+        print("DEBUG: Signatures equal? \(sigTest == parsedCorpusSnapshot.entries[0].signature)")
 
         let (loadSpy, loadFn) = spy { (_: URL) -> Data in corpusData }
         let (existsSpy, existsFn) = spy { (_: URL) -> Bool in true }
@@ -417,14 +400,13 @@ struct FuzzEngineTests {
         let corpusDir = URL(fileURLWithPath: "/test/fuzz-loadfail")
         let invalidJSON = Data("{ invalid json }".utf8)
 
-        let (snapshotSpy, snapshotFn) = spy { () -> SanCovCounters? in
-            FuzzEngineTests.makeCounters(1)
-        }
+        // Use AlwaysInterestingCorpusRegistry to bypass coverage data requirements
+        let alwaysInterestingRegistry = AlwaysInterestingCorpusRegistry()
         let (loadSpy, loadFn) = spy { (_: URL) -> Data in invalidJSON }
         let (existsSpy, existsFn) = spy { (_: URL) -> Bool in true }
 
         let result = await withDependencies {
-            $0.coverageCounters = CoverageCountersClient(snapshot: snapshotFn, reset: {}, isAvailable: { true })
+            $0.corpusRegistry = alwaysInterestingRegistry
             $0.corpusPersistence = CorpusPersistenceClient(
                 save: { _, _ in },
                 load: loadFn,
@@ -444,7 +426,6 @@ struct FuzzEngineTests {
 
         #expect(existsSpy.callCount >= 1)
         #expect(loadSpy.callCount == 1, "Should have attempted to load corpus")
-        #expect(snapshotSpy.callCount > 0)
         #expect(!result.wasRegression, "Should fall back to fuzzing mode")
     }
 
@@ -485,17 +466,14 @@ struct FuzzEngineTests {
 
         struct SaveError: Error {}
 
-        nonisolated(unsafe) var callCount = 0
-        let (snapshotSpy, snapshotFn) = spy { () -> SanCovCounters? in
-            callCount += 1
-            return FuzzEngineTests.makeCounters(callCount / 2)
-        }
+        // Use AlwaysInterestingCorpusRegistry to bypass coverage data requirements
+        let alwaysInterestingRegistry = AlwaysInterestingCorpusRegistry()
         let (saveSpy, saveFn) = spy { (_: Data, _: URL) throws -> Void in
             throw SaveError()
         }
 
         let result = await withDependencies {
-            $0.coverageCounters = CoverageCountersClient(snapshot: snapshotFn, reset: {}, isAvailable: { true })
+            $0.corpusRegistry = alwaysInterestingRegistry
             $0.corpusPersistence = CorpusPersistenceClient(
                 save: saveFn,
                 load: { _ in Data() },
@@ -513,7 +491,6 @@ struct FuzzEngineTests {
             return await engine.run { _ in }
         }
 
-        #expect(snapshotSpy.callCount > 0)
         #expect(saveSpy.callCount == 1, "Should have attempted to save corpus")
         #expect(!result.wasRegression)
     }
@@ -821,14 +798,11 @@ struct FuzzEngineTests {
 
     @Test("FuzzEngine handles empty fuzz array gracefully")
     func testEmptyFuzzArray() async {
-        nonisolated(unsafe) var callCount = 0
-        let (snapshotSpy, snapshotFn) = spy { () -> SanCovCounters? in
-            callCount += 1
-            return FuzzEngineTests.makeCounters(callCount)
-        }
+        // Use AlwaysInterestingCorpusRegistry to bypass coverage data requirements
+        let alwaysInterestingRegistry = AlwaysInterestingCorpusRegistry()
 
         let result = await withDependencies {
-            $0.coverageCounters = CoverageCountersClient(snapshot: snapshotFn, reset: {}, isAvailable: { true })
+            $0.corpusRegistry = alwaysInterestingRegistry
         } operation: {
             let config = FuzzEngine<EmptyFuzzable>.Config(
                 maxIterations: 10,
@@ -849,14 +823,11 @@ struct FuzzEngineTests {
 
     @Test("FuzzEngine handles empty mutations array gracefully")
     func testEmptyMutationsArray() async {
-        nonisolated(unsafe) var callCount = 0
-        let (snapshotSpy, snapshotFn) = spy { () -> SanCovCounters? in
-            callCount += 1
-            return FuzzEngineTests.makeCounters(callCount)
-        }
+        // Use AlwaysInterestingCorpusRegistry to bypass coverage data requirements
+        let alwaysInterestingRegistry = AlwaysInterestingCorpusRegistry()
 
         let result = await withDependencies {
-            $0.coverageCounters = CoverageCountersClient(snapshot: snapshotFn, reset: {}, isAvailable: { true })
+            $0.corpusRegistry = alwaysInterestingRegistry
         } operation: {
             let config = FuzzEngine<EmptyMutationsFuzzable>.Config(
                 maxIterations: 20,
@@ -871,7 +842,6 @@ struct FuzzEngineTests {
         }
 
         // With one seed value, corpus gets one entry, then mutations fail
-        #expect(snapshotSpy.callCount > 0)
         #expect(result.corpus.count >= 0)  // May have seed entry
     }
 }

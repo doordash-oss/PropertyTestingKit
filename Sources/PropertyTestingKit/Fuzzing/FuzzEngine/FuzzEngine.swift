@@ -53,6 +53,7 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
     @Dependency(\.dateClient) var dateClient
     @Dependency(\.random) var random
     @Dependency(\.corpusPersistence) var corpusPersistenceClient
+    @Dependency(\.coverageCounters) var coverageCounters
     @Dependency(\.corpusRegistry) var corpusRegistry
 
     // MARK: - Random Helpers (use injected RNG for determinism)
@@ -342,12 +343,12 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
             var allSeeds = additionalSeeds
             if corpusExists, let directory = corpusDirectory {
                 do {
-                    let savedCorpus: Corpus<repeat each Input> = try corpusPersistenceClient.load(from: directory)
+                    let savedSnapshot: CorpusSnapshot<repeat each Input> = try corpusPersistenceClient.loadSnapshot(from: directory)
                     if config.verbose {
-                        print("[Fuzz] Mode: refuzzExtend - loaded \(savedCorpus.count) existing corpus entries as seeds")
+                        print("[Fuzz] Mode: refuzzExtend - loaded \(savedSnapshot.count) existing corpus entries as seeds")
                     }
                     // Add existing corpus entries as seeds (avoid keypath due to compiler bug)
-                    for entry in savedCorpus.entries {
+                    for entry in savedSnapshot.entries {
                         allSeeds.append(entry.input)
                     }
                 } catch {
@@ -368,8 +369,8 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
                 return await makeEmptyRegressionResult()
             }
             do {
-                let savedCorpus: Corpus<repeat each Input> = try corpusPersistenceClient.load(from: directory)
-                return await runRegression(corpus: savedCorpus, test: test)
+                let savedSnapshot: CorpusSnapshot<repeat each Input> = try corpusPersistenceClient.loadSnapshot(from: directory)
+                return await runRegression(snapshot: savedSnapshot, test: test)
             } catch {
                 if config.verbose {
                     print("[Fuzz] Mode: regressionOnly - failed to load corpus: \(error)")
@@ -381,9 +382,9 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
         // Default (auto): regression if corpus exists
         if corpusExists, let directory = corpusDirectory {
             do {
-                let savedCorpus: Corpus<repeat each Input> = try corpusPersistenceClient.load(from: directory)
-                if await CorpusSchema.isCompatible(savedCorpus.schemaVersion) {
-                    return await runRegression(corpus: savedCorpus, test: test)
+                let savedSnapshot: CorpusSnapshot<repeat each Input> = try corpusPersistenceClient.loadSnapshot(from: directory)
+                if await CorpusSchema.isCompatible(savedSnapshot.schemaVersion) {
+                    return await runRegression(snapshot: savedSnapshot, test: test)
                 } else {
                     if config.verbose {
                         print("[Fuzz] Schema changed, re-fuzzing...")
@@ -401,7 +402,13 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
 
     /// Create an empty result for regression-only mode when no corpus exists.
     private func makeEmptyRegressionResult() async -> FuzzResult<repeat each Input> {
-        let emptyCorpus = Corpus<repeat each Input>(schemaVersion: await CorpusSchema.currentVersion())
+        let emptySnapshot = CorpusSnapshot<repeat each Input>(
+            entries: [],
+            schemaVersion: await CorpusSchema.currentVersion(),
+            createdAt: dateClient.now(),
+            updatedAt: dateClient.now(),
+            totalCoverage: CoverageSignature(buckets: [:])
+        )
         let emptyStats = FuzzStats(
             totalInputs: 0,
             newPaths: 0,
@@ -412,7 +419,7 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
             plateauStats: nil
         )
         return FuzzResult(
-            corpus: emptyCorpus,
+            corpus: emptySnapshot,
             failures: [],
             stats: emptyStats,
             wasRegression: true,
@@ -427,10 +434,8 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
         additionalSeeds: [(repeat each Input)] = [],
         test: @escaping @Sendable ((repeat each Input)) async throws -> Void
     ) async -> FuzzResult<repeat each Input> {
-        @Dependency(\.coverageCounters) var coverageCounters
-
         let startTime = dateClient.now()
-        var corpus = Corpus<repeat each Input>(schemaVersion: await CorpusSchema.currentVersion())
+        let corpus: CorpusClient<repeat each Input> = await corpusRegistry.get(schemaVersion: CorpusSchema.currentVersion())
         var failures: [(input: (repeat each Input), error: Error)] = []
         var hangs: [(input: (repeat each Input), timeout: TimeInterval)] = []
         var iterationsSinceNewCoverage = 0
@@ -544,12 +549,13 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
 
             // Add to corpus if we have coverage (using tuple overload)
             if let signature = result.signature {
-                let addedForCoverage = corpus.addIfInteresting(input: input, signature: signature)
+                let addedForCoverage = await corpus.addIfInteresting(input, signature, nil)
 
                 if addedForCoverage {
                     iterationsSinceNewCoverage = 0
                     if verbose {
-                        print("[Fuzz] New coverage from seed: \(corpus.count) entries")
+                        let count = await corpus.count()
+                        print("[Fuzz] New coverage from seed: \(count) entries")
                     }
                 }
             }
@@ -561,7 +567,7 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
         // Early exit if no seeds were processed and no mutations are possible
         // This prevents spinning until time limit when fuzz array is empty
         let canGenerateFresh = !(mutatorSeeds?() ?? cartesianProductFuzz()).isEmpty
-        if corpus.isEmpty && !canGenerateFresh {
+        if await corpus.isEmpty() && !canGenerateFresh {
             if config.verbose {
                 print("[Fuzz] No seeds and no mutations possible - exiting early")
             }
@@ -576,8 +582,9 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
                 failures: failures.count,
                 hangs: hangs.count
             )
+            let emptySnapshot = await corpus.snapshot()
             return FuzzResult(
-                corpus: corpus,
+                corpus: emptySnapshot,
                 failures: failures,
                 stats: stats,
                 wasRegression: false,
@@ -641,7 +648,8 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
                 let parentIndex: Int?
                 var isMutation = false
 
-                if corpus.isEmpty || randomDouble(in: 0..<1) < config.generationRatio {
+                let corpusIsEmpty = await corpus.isEmpty()
+                if corpusIsEmpty || randomDouble(in: 0..<1) < config.generationRatio {
                     // Generate fresh input
                     let fuzzValues = mutatorSeeds?() ?? cartesianProductFuzz()
                     guard let fuzzValue = randomElement(from: fuzzValues) else {
@@ -655,15 +663,17 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
                     let selectedIndex: Int
                     let usingPriority: Bool
 
-                    if let priorityIdx = priorityMutationIndex, priorityIdx < corpus.count {
+                    let corpusCount = await corpus.count()
+                    if let priorityIdx = priorityMutationIndex, priorityIdx < corpusCount {
                         selectedIndex = priorityIdx
                         usingPriority = true
                     } else {
-                        selectedIndex = corpus.selectForMutation()!
+                        selectedIndex = await corpus.selectForMutation()!
                         usingPriority = false
                     }
 
-                    let parent = corpus.entries[selectedIndex].input
+                    let entries = await corpus.entries()
+                    let parent = entries[selectedIndex].input
                     var mutations = mutatorMutate?(parent) ?? mutateInput(parent)
 
                     // Add target-directed mutations from value profile
@@ -813,7 +823,7 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
 
                 // Process coverage
                 if let signature = result.signature {
-                    let addedForCoverage = corpus.addIfInteresting(input: input, signature: signature, parentIndex: meta.parentIndex)
+                    let addedForCoverage = await corpus.addIfInteresting(input, signature, meta.parentIndex)
 
                     // Record discovery status for plateau detection
                     plateauDetector.record(discoveredNewCoverage: addedForCoverage)
@@ -822,7 +832,8 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
                         iterationsSinceNewCoverage = 0
 
                         if verbose {
-                            print("[Fuzz] New coverage! \(corpus.count) entries, iteration \(iteration)")
+                            let count = await corpus.count()
+                            print("[Fuzz] New coverage! \(count) entries, iteration \(iteration)")
                         }
                     }
                 } else {
@@ -852,10 +863,13 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
         // Phase 3: Minimize corpus
         let minimizeStart = CFAbsoluteTimeGetCurrent()
         var finalCorpus = corpus
-        if config.minimizeCorpus && corpus.count > 1 {
-            finalCorpus = corpus.minimized()
+        let corpusCountBeforeMinimize = await corpus.count()
+        if config.minimizeCorpus && corpusCountBeforeMinimize > 1 {
+            let minimizedSnapshot = await corpus.minimized()
+            finalCorpus = CorpusClient.live(corpus: Corpus(from: minimizedSnapshot))
             if config.verbose {
-                print("[Fuzz] Minimized corpus: \(corpus.count) -> \(finalCorpus.count)")
+                let finalCount = await finalCorpus.count()
+                print("[Fuzz] Minimized corpus: \(corpusCountBeforeMinimize) -> \(finalCount)")
             }
         }
         let minimizeEnd = CFAbsoluteTimeGetCurrent()
@@ -865,7 +879,8 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
         let saveStart = CFAbsoluteTimeGetCurrent()
         if let directory = corpusDirectory {
             do {
-                try corpusPersistenceClient.save(finalCorpus, to: directory)
+                let snapshotToSave = await finalCorpus.snapshot()
+                try corpusPersistenceClient.save(snapshotToSave, to: directory)
                 if config.verbose {
                     print("[Fuzz] Saved corpus to \(directory.path)")
                 }
@@ -892,9 +907,10 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
             print("[Fuzz] Hang statistics: \(hangs.count) inputs caused timeouts")
         }
 
+        let finalCorpusCount = await finalCorpus.count()
         let stats = FuzzStats(
             totalInputs: iteration,
-            newPaths: finalCorpus.count,
+            newPaths: finalCorpusCount,
             mutations: totalMutations,
             generations: totalGenerations,
             duration: duration,
@@ -908,7 +924,8 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
         let gapStart = CFAbsoluteTimeGetCurrent()
         var coverageGapReport: CoverageGapReport?
         if config.detectCoverageGaps {
-            let totalCoveredIndices = finalCorpus.totalCoverage.executedIndices
+            let totalCoverage = await finalCorpus.totalCoverage()
+            let totalCoveredIndices = totalCoverage.executedIndices
             let detector = CoverageGapDetector(config: config.coverageGapConfig)
 
             if config.verbose {
@@ -924,8 +941,9 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
         let gapEnd = CFAbsoluteTimeGetCurrent()
         print("[Timing] Gap detection: \(String(format: "%.3f", gapEnd - gapStart))s")
 
+        let finalSnapshot = await finalCorpus.snapshot()
         return FuzzResult(
-            corpus: finalCorpus,
+            corpus: finalSnapshot,
             failures: failures,
             stats: stats,
             wasRegression: false,
@@ -937,7 +955,7 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
     // MARK: - Regression Mode
 
     private func runRegression(
-        corpus: Corpus<repeat each Input>,
+        snapshot: CorpusSnapshot<repeat each Input>,
         test: @escaping @Sendable ((repeat each Input)) async throws -> Void
     ) async -> FuzzResult<repeat each Input> {
         @Dependency(\.coverageCounters) var coverageCounters
@@ -948,10 +966,10 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
         var needsRefuzz = false
 
         if config.verbose {
-            print("[Regression] Running \(corpus.count) saved inputs...")
+            print("[Regression] Running \(snapshot.count) saved inputs...")
         }
 
-        for entry in corpus.entries {
+        for entry in snapshot.entries {
             // Reset coverage for this test (task-isolated)
             coverageCounters.reset()
 
@@ -995,7 +1013,7 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
 
         let duration = dateClient.now().timeIntervalSince(startTime)
         let stats = FuzzStats(
-            totalInputs: corpus.count,
+            totalInputs: snapshot.count,
             newPaths: 0,
             mutations: 0,
             generations: 0,
@@ -1007,7 +1025,7 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
         // Detect coverage gaps if enabled
         var coverageGapReport: CoverageGapReport?
         if config.detectCoverageGaps {
-            let totalCoveredIndices = corpus.totalCoverage.executedIndices
+            let totalCoveredIndices = snapshot.totalCoverage.executedIndices
             let detector = CoverageGapDetector(config: config.coverageGapConfig)
 
             if config.verbose {
@@ -1021,8 +1039,9 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
             }
         }
 
+        // Return the snapshot directly for the result
         return FuzzResult(
-            corpus: corpus,
+            corpus: snapshot,
             failures: failures,
             stats: stats,
             wasRegression: true,

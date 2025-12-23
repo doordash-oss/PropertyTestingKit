@@ -10,6 +10,7 @@
 - Use LLDB interactively instead of print debugging when it will speed up the process.
 
 ## Testing
+- When testing, write the full output to a file and then analyze it. Do not use `head` or `tail` during the test run. You will lose information that may be useful for debugging.
 - We do not care about logic in our mock dependencies. Most of the time methods should be replaced with spies.
 - You can test with `./scripts/build-local-toolchain.sh test` and if you want to run the main test suite, use `./scripts/build-local-toolchain.sh --filter "PropertyTestingKitTests"`
 - You can try to find flaky tests by running `./scripts/test-until-failure.sh PropertyTestingKitTests 100` which will run the `PropertyTestingKitTests` target 100 times until it fails.
