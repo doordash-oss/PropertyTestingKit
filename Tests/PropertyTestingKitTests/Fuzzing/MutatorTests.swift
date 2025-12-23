@@ -336,7 +336,7 @@ struct MutatorFuzzEngineTests {
 
     @Test("FuzzEngine uses mutator seeds")
     func engineUsesMutatorSeeds() async {
-        nonisolated(unsafe) var testedInputs: [String] = []
+        let testedInputs = Synchronized([String]())
 
         // Use AlwaysInterestingCorpusRegistry to bypass coverage data requirements
         let alwaysInterestingRegistry = AlwaysInterestingCorpusRegistry()
@@ -357,17 +357,18 @@ struct MutatorFuzzEngineTests {
 
             let engine = FuzzEngine<String>(mutators: mutator, config: config)
             _ = await engine.run { input in
-                testedInputs.append(input)
+                await testedInputs.update { $0.append(input) }
             }
         }
 
-        #expect(testedInputs.contains("custom1"))
-        #expect(testedInputs.contains("custom2"))
+        let inputs = await testedInputs.value
+        #expect(inputs.contains("custom1"))
+        #expect(inputs.contains("custom2"))
     }
 
     @Test("FuzzEngine uses mutator with multiple seeds")
     func engineUsesMutatorWithMultipleSeeds() async {
-        nonisolated(unsafe) var testedInputs: [String] = []
+        let testedInputs = Synchronized([String]())
 
         // Use AlwaysInterestingCorpusRegistry to bypass coverage data requirements
         let alwaysInterestingRegistry = AlwaysInterestingCorpusRegistry()
@@ -389,14 +390,15 @@ struct MutatorFuzzEngineTests {
 
             let engine = FuzzEngine<String>(mutators: mutator, config: config)
             _ = await engine.run { input in
-                testedInputs.append(input)
+                await testedInputs.update { $0.append(input) }
             }
         }
 
         // Should have tested all seeds
-        #expect(testedInputs.contains("first"))
-        #expect(testedInputs.contains("second"))
-        #expect(testedInputs.contains("third"))
+        let inputs = await testedInputs.value
+        #expect(inputs.contains("first"))
+        #expect(inputs.contains("second"))
+        #expect(inputs.contains("third"))
     }
 }
 
@@ -407,7 +409,7 @@ struct MutatorPublicAPITests {
 
     @Test("fuzz(using:) accepts single mutator")
     func fuzzWithSingleMutator() async throws {
-        nonisolated(unsafe) var testedInputs: [String] = []
+        let testedInputs = Synchronized([String]())
 
         // Use AlwaysInterestingCorpusRegistry to bypass coverage data requirements
         let alwaysInterestingRegistry = AlwaysInterestingCorpusRegistry()
@@ -434,17 +436,18 @@ struct MutatorPublicAPITests {
                 iterations: 10,
                 duration: 1
             ) { (input: String) in
-                testedInputs.append(input)
+                await testedInputs.update { $0.append(input) }
             }
         }
 
-        #expect(testedInputs.contains("test1"))
-        #expect(testedInputs.contains("test2"))
+        let inputs = await testedInputs.value
+        #expect(inputs.contains("test1"))
+        #expect(inputs.contains("test2"))
     }
 
     @Test("fuzz(using:) accepts built-in mutators")
     func fuzzWithBuiltInMutators() async throws {
-        nonisolated(unsafe) var testedInputs: [String] = []
+        let testedInputs = Synchronized([String]())
 
         // Use AlwaysInterestingCorpusRegistry to bypass coverage data requirements
         let alwaysInterestingRegistry = AlwaysInterestingCorpusRegistry()
@@ -466,16 +469,17 @@ struct MutatorPublicAPITests {
                 iterations: 10,
                 duration: 1
             ) { (input: String) in
-                testedInputs.append(input)
+                await testedInputs.update { $0.append(input) }
             }
         }
 
-        #expect(testedInputs.contains(""))
+        let inputs = await testedInputs.value
+        #expect(inputs.contains(""))
     }
 
     @Test("fuzz(using:) accepts multiple mutators for multiple inputs")
     func fuzzWithMultipleMutators() async throws {
-        nonisolated(unsafe) var testedInputs: [(String, Int)] = []
+        let testedInputs = Synchronized([(String, Int)]())
 
         // Use AlwaysInterestingCorpusRegistry to bypass coverage data requirements
         let alwaysInterestingRegistry = AlwaysInterestingCorpusRegistry()
@@ -505,13 +509,14 @@ struct MutatorPublicAPITests {
                 iterations: 20,
                 duration: 2
             ) { (str: String, num: Int) in
-                testedInputs.append((str, num))
+                await testedInputs.update { $0.append((str, num)) }
             }
         }
 
         // Should have cartesian product of seeds: hello/world × 1/2/3
-        let strings = Set(testedInputs.map(\.0))
-        let ints = Set(testedInputs.map(\.1))
+        let inputs = await testedInputs.value
+        let strings = Set(inputs.map(\.0))
+        let ints = Set(inputs.map(\.1))
 
         #expect(strings.contains("hello"))
         #expect(strings.contains("world"))
@@ -522,7 +527,7 @@ struct MutatorPublicAPITests {
 
     @Test("fuzz(using:) with built-in mutators for multiple inputs")
     func fuzzWithMultipleBuiltInMutators() async throws {
-        nonisolated(unsafe) var testedInputs: [(String, Int)] = []
+        let testedInputs = Synchronized([(String, Int)]())
 
         // Use AlwaysInterestingCorpusRegistry to bypass coverage data requirements
         let alwaysInterestingRegistry = AlwaysInterestingCorpusRegistry()
@@ -543,12 +548,13 @@ struct MutatorPublicAPITests {
                 iterations: 50,
                 duration: 3
             ) { (str: String, num: Int) in
-                testedInputs.append((str, num))
+                await testedInputs.update { $0.append((str, num)) }
             }
         }
 
-        let strings = Set(testedInputs.map(\.0))
-        let ints = Set(testedInputs.map(\.1))
+        let inputs = await testedInputs.value
+        let strings = Set(inputs.map(\.0))
+        let ints = Set(inputs.map(\.1))
 
         // Empty mutator should include empty string
         #expect(strings.contains(""))

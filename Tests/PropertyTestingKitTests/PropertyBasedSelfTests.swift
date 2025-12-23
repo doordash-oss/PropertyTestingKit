@@ -764,17 +764,10 @@ struct FuzzAPIPropertyTests {
 
     @Test("fuzz function runs with default configuration")
     func testFuzzDefaultConfig() async throws {
-        nonisolated(unsafe) var callCount = 0
-        let (snapshotSpy, snapshotFn) = spy { () -> SanCovCounters? in
-            callCount += 1
-            var counters = [UInt64](repeating: 0, count: 100)
-            counters[callCount % 100] = UInt64(callCount + 1)
-            return SanCovCounters(counters: counters)
-        }
-
         // Use a simple test that won't fail
         let result = try await withDependencies {
-            $0.coverageCounters = CoverageCountersClient(snapshot: snapshotFn, reset: {}, isAvailable: { true })
+            // Use AlwaysInterestingCorpusRegistry to bypass coverage data requirements
+            $0.corpusRegistry = AlwaysInterestingCorpusRegistry()
             $0.fileManager = FileManagerClient(
                 currentDirectoryPath: { "/test" },
                 fileExists: { _ in false },
@@ -792,34 +785,30 @@ struct FuzzAPIPropertyTests {
 
         #expect(result.stats.totalInputs > 0)
         #expect(result.failures.isEmpty)
-        #expect(snapshotSpy.callCount > 0, "Should have called snapshot")
     }
 
     @Test("fuzz function accepts custom seeds")
     func testFuzzWithCustomSeeds() async throws {
-        nonisolated(unsafe) var seenInputs: [String] = []
-
-        nonisolated(unsafe) var callCount = 0
-        let (snapshotSpy, snapshotFn) = spy { () -> SanCovCounters? in
-            callCount += 1
-            var counters = [UInt64](repeating: 0, count: 100)
-            counters[callCount % 100] = UInt64(callCount + 1)
-            return SanCovCounters(counters: counters)
-        }
+        // Use AlwaysInterestingCorpusRegistry to bypass coverage data requirements
+        let alwaysInterestingRegistry = AlwaysInterestingCorpusRegistry()
 
         let result = try await withDependencies {
-            $0.coverageCounters = CoverageCountersClient(snapshot: snapshotFn, reset: {}, isAvailable: { true })
+            $0.corpusRegistry = alwaysInterestingRegistry
             $0.environment = EnvironmentClient(environment: { [:] })
         } operation: {
-            try await fuzz(seeds: ["custom1", "custom2", "custom3"], iterations: 30, duration: 5) { (input: String) in
-                seenInputs.append(input)
+            // Use refuzzReplace to always start fresh (ignore any saved corpus)
+            try await fuzz(seeds: ["custom1", "custom2", "custom3"], iterations: 50, duration: 5, corpusMode: .refuzzReplace) { (input: String) in
+                // Just exercise the input - no actor involvement
                 _ = input.count
             }
         }
 
-        // Custom seeds should be tested
-        #expect(seenInputs.contains("custom1") || result.stats.totalInputs > 0)
-        #expect(snapshotSpy.callCount > 0, "Should have called snapshot")
+        // Check that fuzz ran and processed seeds via stats
+        // String.fuzz has 21 values + 3 custom = 24 seeds minimum
+        #expect(result.stats.totalInputs >= 24, "Should process all seeds (got \(result.stats.totalInputs))")
+
+        // Also check corpus has entries (since AlwaysInterestingCorpusRegistry adds everything)
+        #expect(result.corpus.count > 0, "Corpus should have entries")
     }
 
 }
