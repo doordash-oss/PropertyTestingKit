@@ -147,59 +147,6 @@ final class ThreadSafeDate: @unchecked Sendable {
     }
 }
 
-/// A thread-safe set for tracking unique values in concurrent fuzz tests.
-///
-/// Example:
-/// ```swift
-/// let seenValues = ThreadSafeSet<Int>()
-/// try await fuzz { (input: Int) in
-///     seenValues.insert(input)
-/// }
-/// #expect(seenValues.count > 10)
-/// ```
-final class ThreadSafeSet<T: Hashable & Sendable>: @unchecked Sendable {
-    private var storage: Set<T> = []
-    private let lock = NSLock()
-
-    init() {}
-
-    /// Insert a value into the set.
-    @discardableResult
-    func insert(_ value: T) -> Bool {
-        lock.lock()
-        defer { lock.unlock() }
-        return storage.insert(value).inserted
-    }
-
-    /// Check if the set contains a value.
-    func contains(_ value: T) -> Bool {
-        lock.lock()
-        defer { lock.unlock() }
-        return storage.contains(value)
-    }
-
-    /// Get the count of unique values.
-    var count: Int {
-        lock.lock()
-        defer { lock.unlock() }
-        return storage.count
-    }
-
-    /// Get all values as an array.
-    var values: [T] {
-        lock.lock()
-        defer { lock.unlock() }
-        return Array(storage)
-    }
-
-    /// Clear all values.
-    func clear() {
-        lock.lock()
-        defer { lock.unlock() }
-        storage.removeAll()
-    }
-}
-
 /// An actor-based wrapper for thread-safe access to values.
 ///
 /// Use this when you need actor-isolated access to a value with atomic compound operations.
