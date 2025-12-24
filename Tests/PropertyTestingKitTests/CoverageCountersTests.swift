@@ -106,10 +106,10 @@ struct SanCovCoverageTests {
     }
 
     @Test("measureSanCovSourceCoverage captures function names")
-    func testSourceCoverage() {
+    func testSourceCoverage() async {
         let db = MockDatabase()
 
-        guard let coverage = measureSanCovSourceCoverage({
+        guard let coverage = await measureSanCovSourceCoverage({
             db.write(key: "test", value: "value")
             _ = db.read(key: "test")
         }) else {

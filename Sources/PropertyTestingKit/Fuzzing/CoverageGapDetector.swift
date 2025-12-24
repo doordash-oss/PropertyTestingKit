@@ -173,7 +173,7 @@ public struct CoverageGapReport: Sendable, Equatable {
 /// Usage:
 /// ```swift
 /// let detector = CoverageGapDetector()
-/// let report = detector.detect(from: coveredIndices)
+/// let report = await detector.detect(from: coveredIndices)
 /// print(report.detailedSummary)
 /// ```
 public struct CoverageGapDetector: Sendable {
@@ -212,7 +212,7 @@ public struct CoverageGapDetector: Sendable {
     ///   - coveredIndices: Set of edge indices that were executed during fuzzing.
     ///   - projectPath: Optional project root path to filter to project files only.
     /// - Returns: A report of detected coverage gaps.
-    public func detect(from coveredIndices: Set<Int>, projectPath: String? = nil) -> CoverageGapReport {
+    public func detect(from coveredIndices: Set<Int>, projectPath: String? = nil) async -> CoverageGapReport {
         guard SanCovCounters.isAvailable else {
             return CoverageGapReport(
                 gaps: [],
@@ -244,7 +244,7 @@ public struct CoverageGapDetector: Sendable {
         // Mark functions that have covered edges as "tested"
         for edgeIndex in coveredIndices {
             guard edgeIndex < totalEdges else { continue }
-            guard let location = SanCovCounters.getSourceLocation(for: edgeIndex, includeDWARF: false) else {
+            guard let location = await SanCovCounters.getSourceLocation(for: edgeIndex, includeDWARF: false) else {
                 continue
             }
 
@@ -312,7 +312,7 @@ public struct CoverageGapDetector: Sendable {
                 continue
             }
 
-            guard let location = SanCovCounters.getSourceLocation(for: edgeIndex, includeDWARF: false) else {
+            guard let location = await SanCovCounters.getSourceLocation(for: edgeIndex, includeDWARF: false) else {
                 continue
             }
 
@@ -329,7 +329,7 @@ public struct CoverageGapDetector: Sendable {
             }
 
             // Now get the full location with DWARF for line numbers
-            let fullLocation = SanCovCounters.getSourceLocation(for: edgeIndex, includeDWARF: true)
+            let fullLocation = await SanCovCounters.getSourceLocation(for: edgeIndex, includeDWARF: true)
 
             if var info = functionEdges[key] {
                 info.totalEdges += 1

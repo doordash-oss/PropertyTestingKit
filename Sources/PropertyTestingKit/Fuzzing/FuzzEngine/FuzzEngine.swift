@@ -933,7 +933,7 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
                 print("[Fuzz] Gap detection: corpus covered \(totalCoveredIndices.count) edges, total edges: \(SanCovCounters.totalEdgeCount)")
             }
 
-            coverageGapReport = detector.detect(from: totalCoveredIndices, projectPath: config.projectPath)
+            coverageGapReport = await detector.detect(from: totalCoveredIndices, projectPath: config.projectPath)
 
             if config.verbose, let report = coverageGapReport {
                 print("[Fuzz] \(report.detailedSummary)")
@@ -1033,7 +1033,7 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
                 print("[Regression] Gap detection: corpus covered \(totalCoveredIndices.count) edges, total edges: \(SanCovCounters.totalEdgeCount)")
             }
 
-            coverageGapReport = detector.detect(from: totalCoveredIndices, projectPath: config.projectPath)
+            coverageGapReport = await detector.detect(from: totalCoveredIndices, projectPath: config.projectPath)
 
             if config.verbose, let report = coverageGapReport {
                 print("[Regression] \(report.detailedSummary)")

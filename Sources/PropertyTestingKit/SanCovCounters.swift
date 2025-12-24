@@ -352,19 +352,15 @@ import MachO
 
 /// Helper for DWARF-based line number resolution.
 /// Lazily initializes the symbolizer on first use.
-private enum DWARFSymbolizerHelper {
-    private static let lock = NSLock()
-    // These are protected by `lock` - safe for concurrent access
-    nonisolated(unsafe) private static var _symbolizer: DWARFSymbolizer?
-    nonisolated(unsafe) private static var _binaryPath: String?
-    nonisolated(unsafe) private static var _slide: Int = 0
-    nonisolated(unsafe) private static var _initialized = false
+/// Actor-isolated to provide thread-safe access without locks.
+private actor DWARFSymbolizerActor {
+    private var _symbolizer: DWARFSymbolizer?
+    private var _binaryPath: String?
+    private var _slide: Int = 0
+    private var _initialized = false
 
     /// Get or create the shared symbolizer for the current process.
-    static var shared: DWARFSymbolizer? {
-        lock.lock()
-        defer { lock.unlock() }
-
+    var shared: DWARFSymbolizer? {
         if !_initialized {
             _initialized = true
             initializeSymbolizer()
@@ -373,10 +369,7 @@ private enum DWARFSymbolizerHelper {
     }
 
     /// Get the ASLR slide for converting runtime addresses to file offsets.
-    static var slide: Int {
-        lock.lock()
-        defer { lock.unlock() }
-
+    var slide: Int {
         if !_initialized {
             _initialized = true
             initializeSymbolizer()
@@ -384,7 +377,7 @@ private enum DWARFSymbolizerHelper {
         return _slide
     }
 
-    private static func initializeSymbolizer() {
+    private func initializeSymbolizer() {
         // Find the main executable path
         guard let path = findMainBinaryPath() else {
             #if DEBUG
@@ -416,7 +409,7 @@ private enum DWARFSymbolizerHelper {
         }
     }
 
-    private static func findMainBinaryPath() -> String? {
+    private func findMainBinaryPath() -> String? {
         // Find the test binary by looking for .xctest bundle
         // The first image is often swiftpm-testing-helper, not the actual tests
         for i in 0..<_dyld_image_count() {
@@ -437,7 +430,7 @@ private enum DWARFSymbolizerHelper {
         return String(cString: name)
     }
 
-    private static func findSlide(for path: String) -> Int {
+    private func findSlide(for path: String) -> Int {
         for i in 0..<_dyld_image_count() {
             guard let name = _dyld_get_image_name(i) else { continue }
             if String(cString: name) == path {
@@ -448,19 +441,27 @@ private enum DWARFSymbolizerHelper {
     }
 
     /// Convert a runtime PC address to a file offset.
-    static func runtimeToFileOffset(_ pc: UInt) -> UInt64 {
+    func runtimeToFileOffset(_ pc: UInt) -> UInt64 {
         UInt64(pc) - UInt64(bitPattern: Int64(slide))
     }
 
     /// Look up DWARF info for a PC address.
-    static func lookup(pc: UInt) -> DWARFSourceLocation? {
+    func lookup(pc: UInt) -> DWARFSourceLocation? {
         guard let symbolizer = shared else {
             return nil
         }
         let fileOffset = runtimeToFileOffset(pc)
         return symbolizer.lookup(address: fileOffset)
     }
+
+    /// Check if the symbolizer is available.
+    var isAvailable: Bool {
+        shared != nil
+    }
 }
+
+/// Global actor instance for DWARF symbolization.
+private let dwarfSymbolizerHelper = DWARFSymbolizerActor()
 
 extension SanCovCounters {
     /// Check if PC-to-source mapping is available.
@@ -519,14 +520,14 @@ extension SanCovCounters {
     ///   - edgeIndex: The edge index to look up.
     ///   - includeDWARF: Whether to include DWARF debug info (slower but has line numbers).
     /// - Returns: Source location info, or nil if unavailable.
-    public static func getSourceLocation(for edgeIndex: Int, includeDWARF: Bool = true) -> SanCovSourceLocation? {
+    public static func getSourceLocation(for edgeIndex: Int, includeDWARF: Bool = true) async -> SanCovSourceLocation? {
         var cLocation = SanCovSourceLocation_C()
         guard sancov_get_source_location(edgeIndex, &cLocation) else {
             return nil
         }
 
         // Try to get DWARF line info (expensive - skip if not needed)
-        let dwarfLocation = includeDWARF ? DWARFSymbolizerHelper.lookup(pc: UInt(cLocation.pc)) : nil
+        let dwarfLocation = includeDWARF ? await dwarfSymbolizerHelper.lookup(pc: UInt(cLocation.pc)) : nil
         return SanCovSourceLocation(from: cLocation, dwarfLocation: dwarfLocation)
     }
 
@@ -537,7 +538,7 @@ extension SanCovCounters {
     /// Otherwise falls back to function-level info.
     ///
     /// - Returns: Array of source locations for covered edges.
-    public static func getCoveredLocations() -> [SanCovSourceLocation] {
+    public static func getCoveredLocations() async -> [SanCovSourceLocation] {
         // First, get the count
         let count = sancov_get_covered_locations(nil, 0)
         guard count > 0 else { return [] }
@@ -547,18 +548,21 @@ extension SanCovCounters {
         let filled = sancov_get_covered_locations(&cLocations, count)
 
         // Convert to Swift types with DWARF line info when available
-        return cLocations.prefix(filled).map { cLoc in
-            let dwarfLocation = DWARFSymbolizerHelper.lookup(pc: UInt(cLoc.pc))
-            return SanCovSourceLocation(from: cLoc, dwarfLocation: dwarfLocation)
+        var results: [SanCovSourceLocation] = []
+        results.reserveCapacity(filled)
+        for cLoc in cLocations.prefix(filled) {
+            let dwarfLocation = await dwarfSymbolizerHelper.lookup(pc: UInt(cLoc.pc))
+            results.append(SanCovSourceLocation(from: cLoc, dwarfLocation: dwarfLocation))
         }
+        return results
     }
 
     /// Check if DWARF line-level symbolication is available.
     ///
     /// When `true`, `getSourceLocation` and `getCoveredLocations` will include
     /// line and column numbers. When `false`, only function-level info is available.
-    public static var lineNumbersAvailable: Bool {
-        DWARFSymbolizerHelper.shared != nil
+    public static func lineNumbersAvailable() async -> Bool {
+        await dwarfSymbolizerHelper.isAvailable
     }
 }
 
@@ -677,7 +681,7 @@ private func collapseToRanges(_ sorted: [Int]) -> [ClosedRange<Int>] {
 /// - Parameter body: The code to measure.
 /// - Returns: Source-mapped coverage, or nil if SanCov unavailable.
 @discardableResult
-public func measureSanCovSourceCoverage(_ body: () throws -> Void) rethrows -> SanCovSourceCoverage? {
+public func measureSanCovSourceCoverage(_ body: () throws -> Void) async rethrows -> SanCovSourceCoverage? {
     guard SanCovCounters.isAvailable else { return nil }
     guard let context = SanCovCounters.beginMeasurement() else { return nil }
     defer { SanCovCounters.endMeasurement(context) }
@@ -689,11 +693,11 @@ public func measureSanCovSourceCoverage(_ body: () throws -> Void) rethrows -> S
     try body()
 
     // Get source-mapped coverage
-    let locations = SanCovCounters.getCoveredLocations()
+    let locations = await SanCovCounters.getCoveredLocations()
     return SanCovSourceCoverage(coveredLocations: locations)
 }
 
-/// Measure coverage with source location mapping (context-isolated, async).
+/// Measure coverage with source location mapping (context-isolated, async body).
 @discardableResult
 public func measureSanCovSourceCoverage(_ body: () async throws -> Void) async rethrows -> SanCovSourceCoverage? {
     guard SanCovCounters.isAvailable else { return nil }
@@ -707,6 +711,6 @@ public func measureSanCovSourceCoverage(_ body: () async throws -> Void) async r
     try await body()
 
     // Get source-mapped coverage
-    let locations = SanCovCounters.getCoveredLocations()
+    let locations = await SanCovCounters.getCoveredLocations()
     return SanCovSourceCoverage(coveredLocations: locations)
 }

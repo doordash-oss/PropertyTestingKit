@@ -203,11 +203,11 @@ struct CoverageGapDetectorTests {
     // MARK: - CoverageGapDetector Tests
 
     @Test("CoverageGapDetector returns empty when SanCov unavailable")
-    func detectorWhenUnavailable() {
+    func detectorWhenUnavailable() async {
         // This test will check behavior when SanCov is available or not
         // In a test without SanCov instrumentation, this should return empty
         let detector = CoverageGapDetector()
-        let report = detector.detect(from: Set())
+        let report = await detector.detect(from: Set())
 
         // Either SanCov is available and we get a real report,
         // or it's not and we get an empty report
@@ -215,34 +215,34 @@ struct CoverageGapDetectorTests {
     }
 
     @Test("CoverageGapDetector with empty covered indices")
-    func detectorEmptyCoverage() {
+    func detectorEmptyCoverage() async {
         let detector = CoverageGapDetector()
-        let report = detector.detect(from: Set())
+        let report = await detector.detect(from: Set())
 
         // With no coverage, all functions should be "uncovered" (not gaps)
         #expect(report.gaps.isEmpty || report.uncoveredFunctionCount > 0)
     }
 
     @Test("CoverageGapDetector excludes system paths")
-    func detectorExcludesSystemPaths() {
+    func detectorExcludesSystemPaths() async {
         let config = CoverageGapDetector.Config()
         let detector = CoverageGapDetector(config: config)
 
         // System paths should be excluded
         // This is implicitly tested - we just verify the detector works
-        let report = detector.detect(from: Set([0, 1, 2]))
+        let report = await detector.detect(from: Set([0, 1, 2]))
         #expect(report.gaps.allSatisfy { !$0.filename.contains("/usr/") })
         #expect(report.gaps.allSatisfy { !$0.filename.contains("/System/") })
     }
 
     @Test("CoverageGapDetector excludes custom paths")
-    func detectorExcludesCustomPaths() {
+    func detectorExcludesCustomPaths() async {
         let config = CoverageGapDetector.Config(
             excludedPathPrefixes: ["/custom/exclude/"]
         )
         let detector = CoverageGapDetector(config: config)
 
-        let report = detector.detect(from: Set([0, 1, 2]))
+        let report = await detector.detect(from: Set([0, 1, 2]))
         #expect(report.gaps.allSatisfy { !$0.filename.contains("/custom/exclude/") })
     }
 

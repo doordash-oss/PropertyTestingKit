@@ -820,7 +820,7 @@ struct SanCovSourceCoverageAPITests {
 
     @Test("measureSanCovSourceCoverage captures source-level coverage")
     func testMeasureSanCovSourceCoverage() async {
-        let coverage = measureSanCovSourceCoverage {
+        let coverage = await measureSanCovSourceCoverage {
             // Execute some code - use a local function to avoid optimization
             func compute() -> [Int] {
                 [1, 2, 3].map { $0 * 2 }
@@ -837,7 +837,7 @@ struct SanCovSourceCoverageAPITests {
 
     @Test("measureSanCovSourceCoverage provides function coverage")
     func testMeasureSanCovSourceCoverageProvidesFunctions() async {
-        let coverage = measureSanCovSourceCoverage {
+        let coverage = await measureSanCovSourceCoverage {
             _ = "test".uppercased()
         }
 
@@ -850,7 +850,7 @@ struct SanCovSourceCoverageAPITests {
     @Test("measureSanCovSourceCoverage captures result value")
     func testMeasureSanCovSourceCoverageWithResult() async {
         var result: Int = 0
-        let coverage = measureSanCovSourceCoverage {
+        let coverage = await measureSanCovSourceCoverage {
             result = 42
         }
 

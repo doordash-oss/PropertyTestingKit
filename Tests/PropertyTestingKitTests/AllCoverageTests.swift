@@ -44,7 +44,7 @@ class SimpleClass {
 struct SanCovSourceCoverageTests {
 
     @Test("measureSanCovSourceCoverage captures function coverage")
-    func capturesFunctionCoverage() {
+    func capturesFunctionCoverage() async {
         // First verify SanCov basics are working
         #expect(SanCovCounters.isAvailable, "SanCov should be available")
 
@@ -63,7 +63,7 @@ struct SanCovSourceCoverageTests {
         let pcsAvailable = SanCovCounters.pcsAvailable
 
         // Now test the source coverage API
-        let coverage = measureSanCovSourceCoverage {
+        let coverage = await measureSanCovSourceCoverage {
             var obj2 = TestStruct()
             obj2.increment()
             obj2.decrement()
@@ -91,8 +91,8 @@ struct SanCovSourceCoverageTests {
     }
 
     @Test("SimpleClass methods have coverage via SanCov")
-    func simpleClassCoverage() {
-        let coverage = measureSanCovSourceCoverage {
+    func simpleClassCoverage() async {
+        let coverage = await measureSanCovSourceCoverage {
             let obj = SimpleClass()
             obj.increment()
             obj.decrement()
@@ -114,8 +114,8 @@ struct SanCovSourceCoverageTests {
     }
 
     @Test("struct methods have coverage via SanCov")
-    func structMethods() {
-        let coverage = measureSanCovSourceCoverage {
+    func structMethods() async {
+        let coverage = await measureSanCovSourceCoverage {
             var obj = TestStruct()
             obj.increment()
             obj.decrement()
@@ -141,7 +141,7 @@ struct SanCovSourceCoverageTests {
         // Run two coverage measurements in parallel - they should not interfere
         await withTaskGroup(of: SanCovSourceCoverage?.self) { group in
             group.addTask {
-                measureSanCovSourceCoverage {
+                await measureSanCovSourceCoverage {
                     var obj = TestStruct()
                     obj.increment()
                     // Only increment, no decrement
@@ -149,7 +149,7 @@ struct SanCovSourceCoverageTests {
             }
 
             group.addTask {
-                measureSanCovSourceCoverage {
+                await measureSanCovSourceCoverage {
                     var obj = TestStruct()
                     obj.decrement()
                     // Only decrement, no increment
@@ -178,8 +178,8 @@ struct SanCovSourceCoverageTests {
     }
 
     @Test("coverage grouped by file works")
-    func groupedByFile() {
-        let coverage = measureSanCovSourceCoverage {
+    func groupedByFile() async {
+        let coverage = await measureSanCovSourceCoverage {
             var obj = TestStruct()
             obj.increment()
         }
@@ -193,12 +193,12 @@ struct SanCovSourceCoverageTests {
     }
 
     @Test("DWARF symbolizer provides line numbers when available")
-    func lineNumbersAvailable() {
+    func lineNumbersAvailable() async {
         // Check if line numbers are available
-        let lineNumbersAvailable = SanCovCounters.lineNumbersAvailable
+        let lineNumbersAvailable = await SanCovCounters.lineNumbersAvailable()
         print("Line numbers available: \(lineNumbersAvailable)")
 
-        let coverage = measureSanCovSourceCoverage {
+        let coverage = await measureSanCovSourceCoverage {
             let obj = SimpleClass()
             obj.increment()
         }
