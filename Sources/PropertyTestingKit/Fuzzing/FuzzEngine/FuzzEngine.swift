@@ -44,17 +44,17 @@ import Testing
 /// the engine also tracks comparison operand distances. Inputs that get "closer"
 /// to satisfying comparisons (e.g., `x == 12345`) are prioritized for mutation,
 /// even if they don't discover new edge coverage.
-public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unchecked Sendable {
+public actor FuzzEngine<each Input: Fuzzable & Codable & Sendable> {
     /// Type-erased mutator functions for each input component.
     /// When nil, uses the type's Fuzzable conformance.
-    public typealias MutatorSeeds = () -> [(repeat each Input)]
-    public typealias MutatorMutate = ((repeat each Input)) -> [(repeat each Input)]
+    public typealias MutatorSeeds = @Sendable () -> [(repeat each Input)]
+    public typealias MutatorMutate = @Sendable ((repeat each Input)) -> [(repeat each Input)]
 
-    @Dependency(\.dateClient) var dateClient
-    @Dependency(\.random) var random
-    @Dependency(\.corpusPersistence) var corpusPersistenceClient
-    @Dependency(\.coverageCounters) var coverageCounters
-    @Dependency(\.corpusRegistry) var corpusRegistry
+    @Dependency(\.dateClient) private var dateClient
+    @Dependency(\.random) private var random
+    @Dependency(\.corpusPersistence) private var corpusPersistenceClient
+    @Dependency(\.coverageCounters) private var coverageCounters
+    @Dependency(\.corpusRegistry) private var corpusRegistry
 
     // MARK: - Random Helpers (use injected RNG for determinism)
 
@@ -80,19 +80,18 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
     /// Tracks comparison operand distances for value profile guidance.
     private let valueProfileTracker = ValueProfileTracker()
 
-    /// Index of corpus entry that most recently made value profile progress.
-    /// We prioritize mutating this entry to continue the chain of progress.
-    private var priorityMutationIndex: Int?
-
-    /// Saved targets from the test that made value profile progress.
-    /// Used to continue the chain when mutating the priority entry.
-    private var savedTargets: [ValueProfileTracker.ComparisonTarget] = []
-
     public init(config: Config = Config(), corpusDirectory: URL? = nil) {
         self.config = config
         self.corpusDirectory = corpusDirectory
         self.mutatorSeeds = nil
         self.mutatorMutate = nil
+    }
+
+    /// Wrapper for type-erased mutators that enforces Sendable.
+    /// The mutators inside are actually Sendable (Mutator protocol requires it),
+    /// but [Any] erases this type information.
+    private struct SendableMutatorStorage: @unchecked Sendable {
+        let mutators: [Any]
     }
 
     /// Initialize with custom mutators.
@@ -114,17 +113,19 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
         // due to a Swift compiler bug with parameter pack capture in closures).
         let eagerlyCapturedSeeds = Self.extractMutatorSeeds(mutators: mutators)
 
-        // Type-erase mutators into an array that can be safely stored
+        // Type-erase mutators into an array that can be safely stored.
+        // Wrapped in SendableMutatorStorage since Mutator requires Sendable,
+        // but [Any] erases this type information.
         var typeErasedMutators: [Any] = []
         (repeat typeErasedMutators.append(each mutators))
-        let capturedMutators = typeErasedMutators
+        let capturedMutators = SendableMutatorStorage(mutators: typeErasedMutators)
 
         self.mutatorSeeds = {
             eagerlyCapturedSeeds
         }
 
         self.mutatorMutate = { input in
-            Self.mutateWithTypeErasedMutators(input: input, mutators: capturedMutators)
+            Self.mutateWithTypeErasedMutators(input: input, mutators: capturedMutators.mutators)
         }
     }
 
@@ -441,6 +442,10 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
         var iterationsSinceNewCoverage = 0
         var totalMutations = 0
         var totalGenerations = 0
+
+        // Value profile tracking state (local to this run)
+        var priorityMutationIndex: Int?
+        var savedTargets: [ValueProfileTracker.ComparisonTarget] = []
 
         // Initialize plateau detector for adaptive early stopping
         var plateauDetector = CoveragePlateauDetector(config: config.plateauConfig)
