@@ -2,7 +2,7 @@ name: PropertyTestingKit
 options:
   bundleIdPrefix: com.propertytestingkit
   deploymentTarget:
-    macOS: "14.0"
+    macOS: "26.0"
   xcodeVersion: "16.0"
 
 settings:

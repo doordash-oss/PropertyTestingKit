@@ -11,16 +11,17 @@ import Dependencies
 
 /// Symbolizer that uses LLVM to resolve addresses to source locations.
 ///
+/// This actor provides thread-safe access to LLVM symbolization.
+///
 /// Usage:
 /// ```swift
 /// let symbolizer = try DWARFSymbolizer(path: "/path/to/binary")
-/// if let location = symbolizer.lookup(address: 0x100003f40) {
+/// if let location = await symbolizer.lookup(address: 0x100003f40) {
 ///     print("\(location.file):\(location.line)")
 /// }
 /// ```
-public final class DWARFSymbolizer: @unchecked Sendable {
-    private let symbolizerRef: LLVMSymbolizerRef
-    private let lock = NSLock()
+public actor DWARFSymbolizer: Sendable {
+    private let ref: LLVMSymbolizerRef
 
     /// Initialize a symbolizer for the given binary path.
     ///
@@ -35,8 +36,8 @@ public final class DWARFSymbolizer: @unchecked Sendable {
 
         var lastError: String = "unknown error"
         for tryPath in pathsToTry {
-            if let ref = llvm_symbolizer_create(tryPath) {
-                self.symbolizerRef = ref
+            if let symbolizerRef = llvm_symbolizer_create(tryPath) {
+                self.ref = symbolizerRef
                 return
             }
             lastError = llvm_symbolizer_get_error().map { String(cString: $0) } ?? "unknown error"
@@ -46,7 +47,7 @@ public final class DWARFSymbolizer: @unchecked Sendable {
     }
 
     /// Initialize a symbolizer for the current process executable.
-    public convenience init() throws {
+    public init() throws {
         let path = ProcessInfo.processInfo.arguments[0]
         try self.init(path: path)
     }
@@ -109,8 +110,8 @@ public final class DWARFSymbolizer: @unchecked Sendable {
         return paths
     }
 
-    deinit {
-        llvm_symbolizer_destroy(symbolizerRef)
+    isolated deinit {
+        llvm_symbolizer_destroy(ref)
     }
 
     /// Look up source location for a given address.
@@ -118,10 +119,7 @@ public final class DWARFSymbolizer: @unchecked Sendable {
     /// - Parameter address: The program counter address to look up.
     /// - Returns: The source location, or nil if not found.
     public func lookup(address: UInt64) -> DWARFSourceLocation? {
-        lock.lock()
-        defer { lock.unlock() }
-
-        var result = llvm_symbolizer_lookup(symbolizerRef, address)
+        var result = llvm_symbolizer_lookup(ref, address)
         defer { llvm_symbolizer_free_result(&result) }
 
         guard result.success else {
@@ -144,13 +142,10 @@ public final class DWARFSymbolizer: @unchecked Sendable {
     /// - Parameter addresses: The addresses to look up.
     /// - Returns: Dictionary mapping addresses to their source locations.
     public func lookup(addresses: [UInt64]) -> [UInt64: DWARFSourceLocation] {
-        lock.lock()
-        defer { lock.unlock() }
-
         var results: [UInt64: DWARFSourceLocation] = [:]
 
         for addr in addresses {
-            var result = llvm_symbolizer_lookup(symbolizerRef, addr)
+            var result = llvm_symbolizer_lookup(ref, addr)
             defer { llvm_symbolizer_free_result(&result) }
 
             if result.success {

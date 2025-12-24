@@ -451,12 +451,12 @@ private actor DWARFSymbolizerActor {
     }
 
     /// Look up DWARF info for a PC address.
-    func lookup(pc: UInt) -> DWARFSourceLocation? {
+    func lookup(pc: UInt) async -> DWARFSourceLocation? {
         guard let symbolizer = shared else {
             return nil
         }
         let fileOffset = runtimeToFileOffset(pc)
-        return symbolizer.lookup(address: fileOffset)
+        return await symbolizer.lookup(address: fileOffset)
     }
 
     /// Check if the symbolizer is available.

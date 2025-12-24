@@ -7,8 +7,8 @@ import CompilerPluginSupport
 let package = Package(
     name: "PropertyTestingKit",
     platforms: [
-        .iOS(.v18),
-        .macOS(.v15)
+        .iOS(.v26),
+        .macOS(.v26)
     ],
     products: [
         .library(

@@ -54,34 +54,30 @@ public struct ComparisonRecord: Hashable, Sendable {
 ///
 /// Used for value profile guidance: inputs that get "closer" to satisfying
 /// comparisons are prioritized for further mutation.
-public final class ValueProfileTracker: @unchecked Sendable {
-    /// Minimum distance seen for each (location, constant) pair.
-    /// Key: (pc, constant_value), Value: minimum distance seen
-    private var minimumDistances: [LocationKey: UInt64] = [:]
-
-    /// Lock for thread safety.
-    private let lock = NSLock()
-
+public actor ValueProfileTracker {
     /// Key for tracking minimum distances.
-    private struct LocationKey: Hashable {
+    private struct LocationKey: Hashable, Sendable {
         let pc: UInt64
         let constantValue: UInt64
     }
 
+    /// Minimum distance seen for each (location, constant) pair.
+    private var minimumDistances: [LocationKey: UInt64] = [:]
+
     public init() {}
 
     /// Enable comparison recording.
-    public func enable() {
+    nonisolated public func enable() {
         vp_set_enabled(true)
     }
 
     /// Disable comparison recording.
-    public func disable() {
+    nonisolated public func disable() {
         vp_set_enabled(false)
     }
 
     /// Reset the comparison log. Call before each test execution.
-    public func reset() {
+    nonisolated public func reset() {
         vp_reset()
     }
 
@@ -95,9 +91,6 @@ public final class ValueProfileTracker: @unchecked Sendable {
         }
 
         var improvements: [ComparisonRecord] = []
-
-        lock.lock()
-        defer { lock.unlock() }
 
         for i in 0..<count {
             let record = records[i]
@@ -135,9 +128,6 @@ public final class ValueProfileTracker: @unchecked Sendable {
 
     /// Get statistics about tracked comparisons.
     public func stats() -> (trackedLocations: Int, solvedComparisons: Int) {
-        lock.lock()
-        defer { lock.unlock() }
-
         let tracked = minimumDistances.count
         let solved = minimumDistances.values.filter { $0 == 0 }.count
         return (tracked, solved)
@@ -145,14 +135,12 @@ public final class ValueProfileTracker: @unchecked Sendable {
 
     /// Clear all tracking state.
     public func clearState() {
-        lock.lock()
         minimumDistances.removeAll()
-        lock.unlock()
         vp_reset()
     }
 
     /// Debug: dump all comparisons from the last test execution.
-    public static func dumpComparisons() {
+    nonisolated public static func dumpComparisons() {
         let count = vp_get_count()
         print("[VP Dump] \(count) comparisons recorded")
         guard count > 0, let records = vp_get_records() else {
@@ -208,7 +196,7 @@ extension ValueProfileTracker {
 
 extension ValueProfileTracker {
     /// Represents a comparison target we're trying to reach.
-    public struct ComparisonTarget: Hashable {
+    public struct ComparisonTarget: Hashable, Sendable {
         /// The constant value we're comparing against.
         public let target: UInt64
         /// The current input value.

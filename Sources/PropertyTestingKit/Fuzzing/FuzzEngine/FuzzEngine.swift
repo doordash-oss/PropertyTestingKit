@@ -448,7 +448,7 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
         // Enable value profile tracking if configured
         if config.enableValueProfile {
             valueProfileTracker.enable()
-            valueProfileTracker.clearState()
+            await valueProfileTracker.clearState()
         }
 
         // Phase 1: Seed with boundary values (defaults + user-provided)
@@ -679,9 +679,12 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
                     // Add target-directed mutations from value profile
                     var targetMutations: [(repeat each Input)] = []
                     if config.enableValueProfile {
-                        let targets = usingPriority && !savedTargets.isEmpty
-                            ? savedTargets
-                            : valueProfileTracker.extractTargets()
+                        let targets: [ValueProfileTracker.ComparisonTarget]
+                        if usingPriority && !savedTargets.isEmpty {
+                            targets = savedTargets
+                        } else {
+                            targets = await valueProfileTracker.extractTargets()
+                        }
                         targetMutations = generateTargetDirectedMutations(from: parent, targets: targets)
                         mutations.append(contentsOf: targetMutations)
                     }
@@ -849,7 +852,7 @@ public final class FuzzEngine<each Input: Fuzzable & Codable & Sendable>: @unche
         if config.enableValueProfile {
             valueProfileTracker.disable()
             if config.verbose {
-                let (tracked, solved) = valueProfileTracker.stats()
+                let (tracked, solved) = await valueProfileTracker.stats()
                 print("[Fuzz] Value profile: \(tracked) comparisons tracked, \(solved) solved")
             }
         }

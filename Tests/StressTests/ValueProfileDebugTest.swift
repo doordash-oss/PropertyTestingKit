@@ -72,7 +72,7 @@ struct ValueProfileDebugTest {
             tracker.reset()
             let arr = Array(repeating: 0, count: size)
             _ = checkSize(arr)
-            let improvements = tracker.processComparisons()
+            let improvements = await tracker.processComparisons()
             print("Size \(size): \(improvements.count) improvements")
             if !improvements.isEmpty {
                 for imp in improvements {
@@ -127,7 +127,7 @@ struct ValueProfileDebugTest {
         ValueProfileTracker.dumpComparisons()
 
         // Now check improvements
-        let improvements = tracker.processComparisons()
+        let improvements = await tracker.processComparisons()
         print("Improvements detected: \(improvements.count)")
 
         tracker.disable()
