@@ -281,10 +281,7 @@ public actor FuzzEngine<each Input: Fuzzable & Codable & Sendable> {
                     if config.verbose {
                         print("[Fuzz] Mode: refuzzExtend - loaded \(savedSnapshot.count) existing corpus entries as seeds")
                     }
-                    // Add existing corpus entries as seeds (avoid keypath due to compiler bug)
-                    for entry in savedSnapshot.entries {
-                        allSeeds.append(entry.input)
-                    }
+                    allSeeds.append(contentsOf: savedSnapshot.entries.map(\.input))
                 } catch {
                     if config.verbose {
                         print("[Fuzz] Failed to load corpus for extension: \(error)")

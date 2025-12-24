@@ -73,22 +73,12 @@ public actor Corpus<each Input: Codable & Sendable>: Sendable {
 
     /// All inputs in the corpus.
     public var inputs: [(repeat each Input)] {
-        // Note: Can't use map(\.input) due to keypath limitations with parameter packs
-        var result: [(repeat each Input)] = []
-        for entry in entries {
-            result.append(entry.input)
-        }
-        return result
+        entries.map(\.input)
     }
 
     /// All signatures in the corpus.
     public var signatures: [CoverageSignature] {
-        // Note: Can't use map(\.signature) consistently, using explicit loop
-        var result: [CoverageSignature] = []
-        for entry in entries {
-            result.append(entry.signature)
-        }
-        return result
+        entries.map(\.signature)
     }
 
     // MARK: - Adding Entries
@@ -322,11 +312,7 @@ public struct CorpusSnapshot<each Input: Codable & Sendable>: Sendable, Codable 
 
     /// All inputs in the snapshot.
     public var inputs: [(repeat each Input)] {
-        var result: [(repeat each Input)] = []
-        for entry in entries {
-            result.append(entry.input)
-        }
-        return result
+        entries.map(\.input)
     }
 
     // MARK: - Codable

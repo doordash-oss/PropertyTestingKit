@@ -117,11 +117,8 @@ public func fuzz<each Input: Fuzzable & Codable & Sendable, each M: Mutator>(
         projectPath: projectPath(from: filePath)
     )
 
-    // WORKAROUND: Create engine inline to avoid parameter pack forwarding issues.
-    // Capture mutators tuple to a local before passing to init.
-    let capturedMutators: (repeat each M) = (repeat each mutators)
     let engine = FuzzEngine<repeat each Input>(
-        mutators: capturedMutators,
+        mutators: (repeat each mutators),
         config: config,
         corpusDirectory: corpusDirectory(filePath: filePath, function: function)
     )
