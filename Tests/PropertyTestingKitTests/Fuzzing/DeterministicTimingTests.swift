@@ -32,25 +32,18 @@ struct DeterministicTimingTests {
 
         @Test("FuzzEngine stops when maxDuration is reached")
         func testStopsAtMaxDuration() async {
-            final class TestState: @unchecked Sendable {
+            actor TestState {
                 var currentTime = Date(timeIntervalSince1970: 0)
-                let lock = NSLock()
 
                 func advanceTime(by interval: TimeInterval) {
-                    lock.lock()
                     currentTime = currentTime.addingTimeInterval(interval)
-                    lock.unlock()
                 }
 
                 func now() -> Date {
-                    lock.lock()
-                    defer { lock.unlock() }
-                    return currentTime
+                    currentTime
                 }
 
                 func makeCounters() -> SanCovCounters {
-                    lock.lock()
-                    defer { lock.unlock() }
                     var counters = [UInt64](repeating: 0, count: 100)
                     let timeIndex = Int(currentTime.timeIntervalSince1970) % 100
                     counters[timeIndex] = UInt64(timeIndex + 1)
@@ -61,9 +54,9 @@ struct DeterministicTimingTests {
             let state = TestState()
 
             let result = await withDependencies {
-                $0.dateClient = DateClient(now: { state.now() })
+                $0.dateClient = DateClient(now: { await state.now() })
                 $0.coverageCounters = CoverageCountersClient(
-                    snapshot: { state.makeCounters() },
+                    snapshot: { await state.makeCounters() },
                     reset: {},
                     isAvailable: { true }
                 )
@@ -78,7 +71,7 @@ struct DeterministicTimingTests {
                 let engine = FuzzEngine<SingleSeedInt>(config: config, corpusDirectory: nil)
                 return await engine.run { _ in
                     // Advance time by 11 seconds each test (exceeds 10s limit after first test)
-                    state.advanceTime(by: 11)
+                    await state.advanceTime(by: 11)
                 }
             }
 
@@ -90,28 +83,20 @@ struct DeterministicTimingTests {
 
         @Test("FuzzEngine duration is computed correctly")
         func testDurationComputation() async {
-            // Use actor to safely manage mutable state
-            final class TestState: @unchecked Sendable {
+            actor TestState {
                 var currentTime = Date(timeIntervalSince1970: 1000)
                 var testCount = 0
-                let lock = NSLock()
 
                 func advanceTime(by interval: TimeInterval) {
-                    lock.lock()
                     testCount += 1
                     currentTime = currentTime.addingTimeInterval(interval)
-                    lock.unlock()
                 }
 
                 func now() -> Date {
-                    lock.lock()
-                    defer { lock.unlock() }
-                    return currentTime
+                    currentTime
                 }
 
                 func makeCounters() -> SanCovCounters {
-                    lock.lock()
-                    defer { lock.unlock() }
                     var counters = [UInt64](repeating: 0, count: 100)
                     counters[testCount % 100] = UInt64(testCount + 1)
                     return SanCovCounters(counters: counters)
@@ -121,9 +106,9 @@ struct DeterministicTimingTests {
             let state = TestState()
 
             let result = await withDependencies {
-                $0.dateClient = DateClient(now: { state.now() })
+                $0.dateClient = DateClient(now: { await state.now() })
                 $0.coverageCounters = CoverageCountersClient(
-                    snapshot: { state.makeCounters() },
+                    snapshot: { await state.makeCounters() },
                     reset: {},
                     isAvailable: { true }
                 )
@@ -138,7 +123,7 @@ struct DeterministicTimingTests {
                 let engine = FuzzEngine<SingleSeedInt>(config: config, corpusDirectory: nil)
                 return await engine.run { _ in
                     // Advance time by exactly 2.5 seconds each test
-                    state.advanceTime(by: 2.5)
+                    await state.advanceTime(by: 2.5)
                 }
             }
 
@@ -149,25 +134,18 @@ struct DeterministicTimingTests {
 
         @Test("FuzzEngine prefers iteration limit over time limit when iterations complete first")
         func testIterationLimitBeforeTimeLimit() async {
-            final class TestState: @unchecked Sendable {
+            actor TestState {
                 var currentTime = Date(timeIntervalSince1970: 0)
-                let lock = NSLock()
 
                 func advanceTime(by interval: TimeInterval) {
-                    lock.lock()
                     currentTime = currentTime.addingTimeInterval(interval)
-                    lock.unlock()
                 }
 
                 func now() -> Date {
-                    lock.lock()
-                    defer { lock.unlock() }
-                    return currentTime
+                    currentTime
                 }
 
                 func makeCounters() -> SanCovCounters {
-                    lock.lock()
-                    defer { lock.unlock() }
                     var counters = [UInt64](repeating: 0, count: 100)
                     let timeIndex = Int(currentTime.timeIntervalSince1970) % 100
                     counters[timeIndex] = UInt64(timeIndex + 1)
@@ -178,9 +156,9 @@ struct DeterministicTimingTests {
             let state = TestState()
 
             let result = await withDependencies {
-                $0.dateClient = DateClient(now: { state.now() })
+                $0.dateClient = DateClient(now: { await state.now() })
                 $0.coverageCounters = CoverageCountersClient(
-                    snapshot: { state.makeCounters() },
+                    snapshot: { await state.makeCounters() },
                     reset: {},
                     isAvailable: { true }
                 )
@@ -195,7 +173,7 @@ struct DeterministicTimingTests {
                 let engine = FuzzEngine<SingleSeedInt>(config: config, corpusDirectory: nil)
                 return await engine.run { _ in
                     // Only advance 1 second per test
-                    state.advanceTime(by: 1)
+                    await state.advanceTime(by: 1)
                 }
             }
 

@@ -481,7 +481,11 @@ extension SanCovCounters {
     /// Measurement contexts provide per-call isolation for synchronous code.
     /// When a context is active, coverage is keyed by the context rather than
     /// the Swift task or thread, enabling parallel sync tests without contamination.
-    public struct MeasurementContext: @unchecked Sendable {
+    ///
+    /// - Important: Measurement contexts are task-bound. You must call
+    ///   `endMeasurement(_:)` from the same task that called `beginMeasurement()`.
+    ///   The context is intentionally non-Sendable to enforce this requirement.
+    public struct MeasurementContext {
         fileprivate let rawContext: UnsafeMutableRawPointer
 
         fileprivate init(_ raw: UnsafeMutableRawPointer) {
