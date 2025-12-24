@@ -15,9 +15,9 @@ import Foundation
 /// to control timing when needed.
 public struct DateClient: Sendable {
     /// Generate the current date.
-    public var now: @Sendable () -> Date
+    public var now: @Sendable () async -> Date
 
-    public init(now: @escaping @Sendable () -> Date) {
+    public init(now: @escaping @Sendable () async -> Date) {
         self.now = now
     }
 }

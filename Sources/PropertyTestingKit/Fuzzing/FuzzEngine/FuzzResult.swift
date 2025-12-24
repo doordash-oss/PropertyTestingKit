@@ -6,8 +6,8 @@ import Foundation
 
 /// The result of a fuzz test run.
 public struct FuzzResult<each Input: Codable & Sendable>: Sendable {
-    /// The final corpus after fuzzing/regression.
-    public let corpus: Corpus<repeat each Input>
+    /// The final corpus after fuzzing/regression (as a snapshot for serialization).
+    public let corpus: CorpusSnapshot<repeat each Input>
 
     /// Inputs that caused test failures.
     public let failures: [(input: (repeat each Input), error: Error)]

@@ -2,7 +2,7 @@ name: PropertyTestingKit
 options:
   bundleIdPrefix: com.propertytestingkit
   deploymentTarget:
-    macOS: "14.0"
+    macOS: "26.0"
   xcodeVersion: "16.0"
 
 settings:
@@ -171,13 +171,77 @@ targets:
         PRODUCT_NAME: PropertyTestingKitTests
         PRODUCT_BUNDLE_IDENTIFIER: com.propertytestingkit.tests
 
+  # SanCov isolation tests
+  SanCovTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - path: Tests/SanCovTests
+    dependencies:
+      - target: PropertyTestingKit
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        OTHER_SWIFT_FLAGS: >-
+          $(inherited)
+          -g
+          -sanitize=undefined
+          -sanitize-coverage=edge,trace-cmp,pc-table
+        SWIFT_INCLUDE_PATHS:
+          - $(SRCROOT)/Sources/CLLVMSymbolizer/include
+          - $(SRCROOT)/Sources/StringAllocationHooks/include
+          - $(SRCROOT)/Sources/ValueProfileHooks/include
+        OTHER_LDFLAGS: >-
+          $(inherited)
+          -L$(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin
+          -lclang_rt.ubsan_osx_dynamic
+        LD_RUNPATH_SEARCH_PATHS: >-
+          $(inherited)
+          $(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin
+        PRODUCT_NAME: SanCovTests
+        PRODUCT_BUNDLE_IDENTIFIER: com.propertytestingkit.sancovtests
+
+  # Thread Sanitizer tests for race condition detection
+  TSanTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - path: Tests/TSanTests
+    dependencies:
+      - target: PropertyTestingKit
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        OTHER_SWIFT_FLAGS: >-
+          $(inherited)
+          -g
+          -sanitize=thread
+          -sanitize-coverage=edge,trace-cmp,pc-table
+        SWIFT_INCLUDE_PATHS:
+          - $(SRCROOT)/Sources/CLLVMSymbolizer/include
+          - $(SRCROOT)/Sources/StringAllocationHooks/include
+          - $(SRCROOT)/Sources/ValueProfileHooks/include
+        OTHER_LDFLAGS: >-
+          $(inherited)
+          -L$(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin
+          -lclang_rt.tsan_osx_dynamic
+        LD_RUNPATH_SEARCH_PATHS: >-
+          $(inherited)
+          $(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin
+        PRODUCT_NAME: TSanTests
+        PRODUCT_BUNDLE_IDENTIFIER: com.propertytestingkit.tsantests
+
 schemes:
   PropertyTestingKit:
     build:
       targets:
         PropertyTestingKit: all
         PropertyTestingKitTests: [test]
+        SanCovTests: [test]
+        TSanTests: [test]
     test:
       targets:
         - PropertyTestingKitTests
+        - SanCovTests
+        - TSanTests
       gatherCoverageData: false

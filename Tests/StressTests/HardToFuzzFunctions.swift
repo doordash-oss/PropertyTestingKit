@@ -496,32 +496,24 @@ public func veryLargeArray(_ values: [Int]) -> String {
 // MARK: - Coverage Tracking Helpers
 
 /// Tracks which branches have been covered in a test run
-public final class CoverageTracker: @unchecked Sendable {
+public actor CoverageTracker {
     private var covered: Set<String> = []
-    private let lock = NSLock()
 
     public init() {}
 
     public func record(_ branch: String) {
-        lock.lock()
         covered.insert(branch)
-        lock.unlock()
     }
 
     public func coveredBranches() -> Set<String> {
-        lock.lock()
-        defer { lock.unlock() }
-        return covered
+        covered
     }
 
     public func reset() {
-        lock.lock()
         covered.removeAll()
-        lock.unlock()
     }
 
     public func coverageRatio(of expected: Set<String>) -> Double {
-        let covered = coveredBranches()
         guard !expected.isEmpty else { return 1.0 }
         return Double(covered.intersection(expected).count) / Double(expected.count)
     }

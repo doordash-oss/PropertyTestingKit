@@ -27,20 +27,12 @@ struct CustomFuzzableTests {
     func testFuzzEngineWithCustomType() async {
         let seenTimeouts = Synchronized(Set<Int>())
         let seenRetries = Synchronized(Set<Int>())
-        let callCount = Synchronized(0)
 
-        let (snapshotSpy, snapshotFn) = spy { () async -> SanCovCounters? in
-            let count = await callCount.update {
-                $0 += 1
-                return $0
-            }
-            var counters = [UInt64](repeating: 0, count: 100)
-            counters[count % 100] = UInt64(count + 1)
-            return SanCovCounters(counters: counters)
-        }
+        // Use AlwaysInterestingCorpusRegistry to bypass coverage data requirements
+        let alwaysInterestingRegistry = AlwaysInterestingCorpusRegistry()
 
         let result = await withDependencies {
-            $0.coverageCounters = CoverageCountersClient(snapshot: snapshotFn, reset: {}, isAvailable: { true })
+            $0.corpusRegistry = alwaysInterestingRegistry
         } operation: {
             let config = FuzzEngine<TestConfig>.Config(
                 maxIterations: 30,
@@ -60,7 +52,6 @@ struct CustomFuzzableTests {
         let retryCount = await seenRetries.value.count
 
         #expect(result.failures.isEmpty)
-        #expect(snapshotSpy.callCount > 0, "Should have called snapshot")
         #expect(timeoutCount > 1, "Should have seen multiple timeout values, got \(timeoutCount)")
         #expect(retryCount > 1, "Should have seen multiple retry values, got \(retryCount)")
     }

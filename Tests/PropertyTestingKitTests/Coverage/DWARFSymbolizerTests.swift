@@ -94,7 +94,7 @@ struct DWARFSymbolizerTests {
     }
 
     @Test("DWARFSymbolizer looks up addresses")
-    func testLookup() throws {
+    func testLookup() async throws {
         guard let path = getBinaryPath() else {
             Issue.record("Could not determine binary path")
             return
@@ -118,7 +118,7 @@ struct DWARFSymbolizerTests {
         print("File offset: 0x\(String(fileOffset, radix: 16))")
 
         // Try to look up - may return nil if this is metadata rather than code
-        let location = symbolizer.lookup(address: fileOffset)
+        let location = await symbolizer.lookup(address: fileOffset)
 
         if let loc = location {
             print("Found location: \(loc.file):\(loc.line)")
@@ -131,7 +131,7 @@ struct DWARFSymbolizerTests {
     }
 
     @Test("DWARFSymbolizer looks up real source location")
-    func testLookupRealFunction() throws {
+    func testLookupRealFunction() async throws {
         // Use dlsym to get a known function by name
         // DWARFSymbolizer.lookup mangled name
         let mangledName = "$s18PropertyTestingKit15DWARFSymbolizerC11findClosest7addressAA19DWARFSourceLocationVSgs6UInt64V_tF"
@@ -161,7 +161,7 @@ struct DWARFSymbolizerTests {
         print("findClosest runtime address: 0x\(String(runtimeAddress, radix: 16))")
         print("findClosest file offset: 0x\(String(fileOffset, radix: 16))")
 
-        if let loc = symbolizer.lookup(address: fileOffset) {
+        if let loc = await symbolizer.lookup(address: fileOffset) {
             print("Found: \(loc.file):\(loc.line) - \(loc.function ?? "?")")
             #expect(loc.line > 0, "Line number should be positive")
             #expect(loc.file.contains("DWARFSymbolizer.swift"), "Should be in DWARFSymbolizer.swift, got: \(loc.file)")
@@ -171,7 +171,7 @@ struct DWARFSymbolizerTests {
     }
 
     @Test("DWARFSymbolizer findClosest returns nearest entry")
-    func testFindClosest() throws {
+    func testFindClosest() async throws {
         guard let path = getBinaryPath() else {
             Issue.record("Could not determine binary path")
             return
@@ -192,7 +192,7 @@ struct DWARFSymbolizerTests {
         let fileOffset = runtimeAddressToFileOffset(runtimeAddress, binaryPath: path)
 
         // Look for an address slightly after the function start
-        let location = symbolizer.lookup(address: fileOffset + 10)
+        let location = await symbolizer.lookup(address: fileOffset + 10)
 
         if let loc = location {
             print("Closest location: \(loc.file):\(loc.line)")
@@ -201,7 +201,7 @@ struct DWARFSymbolizerTests {
     }
 
     @Test("DWARFSymbolizer batch lookup")
-    func testBatchLookup() throws {
+    func testBatchLookup() async throws {
         guard let path = getBinaryPath() else {
             Issue.record("Could not determine binary path")
             return
@@ -225,7 +225,7 @@ struct DWARFSymbolizerTests {
             addresses.append(runtimeAddressToFileOffset(runtimeAddr, binaryPath: path))
         }
 
-        let results = symbolizer.lookup(addresses: addresses)
+        let results = await symbolizer.lookup(addresses: addresses)
         print("Batch lookup found \(results.count) locations for \(addresses.count) addresses")
     }
 }

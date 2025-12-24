@@ -56,13 +56,6 @@ extension FuzzEngine {
         /// Default: 8 (balanced parallelism with reasonable guidance accuracy).
         public var mutationBatchSize: Int
 
-        /// Adaptive mutation scheduling configuration (MOPT-style).
-        /// When enabled, tracks which mutation strategies discover new coverage
-        /// and dynamically adjusts selection probabilities.
-        ///
-        /// Based on Lyu et al. 2019 "MOPT" - found 170% more unique crashes than AFL.
-        public var adaptiveMutationConfig: AdaptiveMutationConfig
-
         /// Enable coverage gap detection to identify partially-covered functions.
         /// When enabled, the fuzzer will report functions that have some coverage
         /// but not complete coverage, helping identify missing seeds or mutation strategies.
@@ -88,7 +81,6 @@ extension FuzzEngine {
             corpusMode: CorpusMode? = nil,
             perInputTimeout: TimeInterval? = nil,
             mutationBatchSize: Int = 8,
-            adaptiveMutationConfig: AdaptiveMutationConfig = AdaptiveMutationConfig(),
             detectCoverageGaps: Bool = false,
             coverageGapConfig: CoverageGapDetector.Config = CoverageGapDetector.Config(),
             projectPath: String? = nil
@@ -111,7 +103,6 @@ extension FuzzEngine {
             self.corpusMode = corpusMode ?? CorpusMode.fromEnvironment()
             self.perInputTimeout = perInputTimeout
             self.mutationBatchSize = max(1, mutationBatchSize)  // Ensure at least 1
-            self.adaptiveMutationConfig = adaptiveMutationConfig
             self.detectCoverageGaps = detectCoverageGaps
             self.coverageGapConfig = coverageGapConfig
             self.projectPath = projectPath

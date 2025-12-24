@@ -305,9 +305,9 @@ public struct TestCaseShrinker<T: Shrinkable & Sendable>: Sendable {
     /// - Returns: A tuple of (minimized input, statistics).
     public func shrink(
         input: T,
-        test: @escaping (T) -> ShrinkResult
-    ) -> (minimized: T, stats: ShrinkStats) {
-        let startTime = dateClient.now()
+        test: @escaping (T) async -> ShrinkResult
+    ) async -> (minimized: T, stats: ShrinkStats) {
+        let startTime = await dateClient.now()
         var current = input
         var candidatesTested = 0
         var timedOut = false
@@ -329,7 +329,7 @@ public struct TestCaseShrinker<T: Shrinkable & Sendable>: Sendable {
 
             while offset < current.shrinkableElementCount {
                 // Check stopping conditions
-                if dateClient.now().timeIntervalSince(startTime) >= config.timeout {
+                if await dateClient.now().timeIntervalSince(startTime) >= config.timeout {
                     timedOut = true
                     break
                 }
@@ -344,7 +344,7 @@ public struct TestCaseShrinker<T: Shrinkable & Sendable>: Sendable {
 
                 if let candidate = current.candidateRemovingRange(range) {
                     candidatesTested += 1
-                    let result = test(candidate)
+                    let result = await test(candidate)
 
                     if result == .fail {
                         // Candidate preserves failure - accept it
@@ -377,13 +377,13 @@ public struct TestCaseShrinker<T: Shrinkable & Sendable>: Sendable {
                     maxExecutionsReached = true
                     break
                 }
-                if dateClient.now().timeIntervalSince(startTime) >= config.timeout {
+                if await dateClient.now().timeIntervalSince(startTime) >= config.timeout {
                     timedOut = true
                     break
                 }
 
                 candidatesTested += 1
-                if test(candidate) == .fail {
+                if await test(candidate) == .fail {
                     current = candidate
                     if config.verbose {
                         print("[Shrink] Simplified to size: \(current.shrinkableElementCount)")
@@ -392,7 +392,7 @@ public struct TestCaseShrinker<T: Shrinkable & Sendable>: Sendable {
             }
         }
 
-        let duration = dateClient.now().timeIntervalSince(startTime)
+        let duration = await dateClient.now().timeIntervalSince(startTime)
         let stats = ShrinkStats(
             candidatesTested: candidatesTested,
             originalSize: input.shrinkableElementCount,
@@ -423,9 +423,9 @@ public struct MultiComponentShrinker: Sendable {
     /// Shrink a two-component input.
     public func shrink<A: Shrinkable & Sendable, B: Shrinkable & Sendable>(
         input: (A, B),
-        test: @escaping ((A, B)) -> ShrinkResult
-    ) -> (minimized: (A, B), stats: ShrinkStats) {
-        let startTime = dateClient.now()
+        test: @escaping ((A, B)) async -> ShrinkResult
+    ) async -> (minimized: (A, B), stats: ShrinkStats) {
+        let startTime = await dateClient.now()
         var current = input
         var candidatesTested = 0
         var timedOut = false
@@ -433,8 +433,8 @@ public struct MultiComponentShrinker: Sendable {
 
         // Shrink first component
         let shrinkerA = TestCaseShrinker<A>(config: config)
-        let (shrunkA, statsA) = shrinkerA.shrink(input: current.0) { candidate in
-            test((candidate, current.1))
+        let (shrunkA, statsA) = await shrinkerA.shrink(input: current.0) { candidate in
+            await test((candidate, current.1))
         }
         current.0 = shrunkA
         candidatesTested += statsA.candidatesTested
@@ -449,8 +449,8 @@ public struct MultiComponentShrinker: Sendable {
                 minGranularity: config.minGranularity
             )
             let shrinkerB = TestCaseShrinker<B>(config: remainingConfig)
-            let (shrunkB, statsB) = shrinkerB.shrink(input: current.1) { candidate in
-                test((current.0, candidate))
+            let (shrunkB, statsB) = await shrinkerB.shrink(input: current.1) { candidate in
+                await test((current.0, candidate))
             }
             current.1 = shrunkB
             candidatesTested += statsB.candidatesTested
@@ -461,7 +461,7 @@ public struct MultiComponentShrinker: Sendable {
             maxExecutionsReached = statsA.maxExecutionsReached
         }
 
-        let duration = dateClient.now().timeIntervalSince(startTime)
+        let duration = await dateClient.now().timeIntervalSince(startTime)
         let stats = ShrinkStats(
             candidatesTested: candidatesTested,
             originalSize: input.0.shrinkableElementCount + input.1.shrinkableElementCount,
@@ -486,10 +486,10 @@ extension Fuzzable where Self: Shrinkable & Sendable {
     /// - Returns: A minimized value that still triggers the failure.
     public func shrink(
         config: ShrinkConfig = ShrinkConfig(),
-        test: @escaping (Self) -> ShrinkResult
-    ) -> (minimized: Self, stats: ShrinkStats) {
+        test: @escaping (Self) async -> ShrinkResult
+    ) async -> (minimized: Self, stats: ShrinkStats) {
         let shrinker = TestCaseShrinker<Self>(config: config)
-        return shrinker.shrink(input: self, test: test)
+        return await shrinker.shrink(input: self, test: test)
     }
 }
 
@@ -532,8 +532,8 @@ public struct ShrinkableInt: Shrinkable, Sendable {
 public func shrinkFailingInput<T: Shrinkable & Sendable>(
     _ input: T,
     config: ShrinkConfig = ShrinkConfig(),
-    test: @escaping (T) -> ShrinkResult
-) -> (minimized: T, stats: ShrinkStats) {
+    test: @escaping (T) async -> ShrinkResult
+) async -> (minimized: T, stats: ShrinkStats) {
     let shrinker = TestCaseShrinker<T>(config: config)
-    return shrinker.shrink(input: input, test: test)
+    return await shrinker.shrink(input: input, test: test)
 }

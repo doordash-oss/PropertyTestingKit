@@ -36,19 +36,31 @@ public struct CorpusPersistenceClient: Sendable {
     }
 
     // Generic public API - specializes at call site
+
+    /// Save a corpus snapshot to the given directory.
     public func save<each Input: Codable & Sendable>(
-        _ corpus: Corpus<repeat each Input>,
+        _ snapshot: CorpusSnapshot<repeat each Input>,
         to url: URL
     ) throws {
-        let data = try JSONEncoder.corpusEncoder.encode(corpus)
+        let data = try JSONEncoder.corpusEncoder.encode(snapshot)
         try _save(data, url)
     }
 
+    /// Load a corpus from the given directory.
     public func load<each Input: Codable & Sendable>(
         from url: URL
     ) throws -> Corpus<repeat each Input> {
         let data = try _load(url)
-        return try JSONDecoder.corpusDecoder.decode(Corpus<repeat each Input>.self, from: data)
+        let snapshot = try JSONDecoder.corpusDecoder.decode(CorpusSnapshot<repeat each Input>.self, from: data)
+        return Corpus(from: snapshot)
+    }
+
+    /// Load a corpus snapshot from the given directory.
+    public func loadSnapshot<each Input: Codable & Sendable>(
+        from url: URL
+    ) throws -> CorpusSnapshot<repeat each Input> {
+        let data = try _load(url)
+        return try JSONDecoder.corpusDecoder.decode(CorpusSnapshot<repeat each Input>.self, from: data)
     }
 }
 

@@ -113,9 +113,9 @@ public struct CoveragePlateauDetector: Sendable {
     /// Record an iteration and whether it discovered new coverage.
     ///
     /// - Parameter discoveredNewCoverage: true if this iteration found new paths.
-    public mutating func record(discoveredNewCoverage: Bool) {
+    public mutating func record(discoveredNewCoverage: Bool) async {
         if startTime == nil {
-            startTime = dateClient.now()
+            startTime = await dateClient.now()
         }
 
         // Update ring buffer
@@ -195,8 +195,9 @@ public struct CoveragePlateauDetector: Sendable {
     }
 
     /// Statistics about the plateau detector state.
-    public var stats: PlateauStats {
-        PlateauStats(
+    public func stats() async -> PlateauStats {
+        let now = await dateClient.now()
+        return PlateauStats(
             totalIterations: totalIterations,
             totalDiscoveries: totalDiscoveries,
             windowRate: currentRate,
@@ -204,13 +205,13 @@ public struct CoveragePlateauDetector: Sendable {
             rateEMA: rateEMA,
             lowRateWindowCount: lowRateWindowCount,
             hasPlateaued: hasPlateaued,
-            duration: startTime.map { dateClient.now().timeIntervalSince($0) } ?? 0
+            duration: startTime.map { now.timeIntervalSince($0) } ?? 0
         )
     }
 
     /// Generate a summary string for logging.
-    public func summary(includeDetails: Bool = false) -> String {
-        let stats = self.stats
+    public func summary(includeDetails: Bool = false) async -> String {
+        let stats = await self.stats()
 
         var parts: [String] = []
 

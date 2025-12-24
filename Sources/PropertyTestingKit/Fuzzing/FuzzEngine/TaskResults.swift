@@ -19,7 +19,6 @@ struct SeedTaskResult: Sendable {
 struct BatchEntryMeta: Sendable {
     let index: Int
     let parentIndex: Int?
-    let strategy: MutationStrategy?
     let isMutation: Bool
 }
 

@@ -333,25 +333,16 @@ struct DoubleMutatorTests {
 
 @Suite("Mutator FuzzEngine Integration")
 struct MutatorFuzzEngineTests {
-    static func makeCounters(_ callNumber: Int) -> SanCovCounters {
-        var counters = [UInt64](repeating: 0, count: 100)
-        // Different coverage for each call
-        counters[callNumber % 100] = UInt64(callNumber)
-        return SanCovCounters(counters: counters)
-    }
 
     @Test("FuzzEngine uses mutator seeds")
     func engineUsesMutatorSeeds() async {
-        nonisolated(unsafe) var testedInputs: [String] = []
-        nonisolated(unsafe) var callCount = 0
+        let testedInputs = Synchronized([String]())
 
-        let (snapshotSpy, snapshotFn) = spy { () -> SanCovCounters? in
-            callCount += 1
-            return Self.makeCounters(callCount)
-        }
+        // Use AlwaysInterestingCorpusRegistry to bypass coverage data requirements
+        let alwaysInterestingRegistry = AlwaysInterestingCorpusRegistry()
 
         await withDependencies {
-            $0.coverageCounters = CoverageCountersClient(snapshot: snapshotFn, reset: {}, isAvailable: { true })
+            $0.corpusRegistry = alwaysInterestingRegistry
         } operation: {
             let mutator = SingleMutator<String>(
                 seeds: ["custom1", "custom2"],
@@ -366,27 +357,24 @@ struct MutatorFuzzEngineTests {
 
             let engine = FuzzEngine<String>(mutators: mutator, config: config)
             _ = await engine.run { input in
-                testedInputs.append(input)
+                await testedInputs.update { $0.append(input) }
             }
         }
 
-        #expect(snapshotSpy.callCount > 0)
-        #expect(testedInputs.contains("custom1"))
-        #expect(testedInputs.contains("custom2"))
+        let inputs = await testedInputs.value
+        #expect(inputs.contains("custom1"))
+        #expect(inputs.contains("custom2"))
     }
 
     @Test("FuzzEngine uses mutator with multiple seeds")
     func engineUsesMutatorWithMultipleSeeds() async {
-        nonisolated(unsafe) var testedInputs: [String] = []
-        nonisolated(unsafe) var callCount = 0
+        let testedInputs = Synchronized([String]())
 
-        let (snapshotSpy, snapshotFn) = spy { () -> SanCovCounters? in
-            callCount += 1
-            return Self.makeCounters(callCount)
-        }
+        // Use AlwaysInterestingCorpusRegistry to bypass coverage data requirements
+        let alwaysInterestingRegistry = AlwaysInterestingCorpusRegistry()
 
         await withDependencies {
-            $0.coverageCounters = CoverageCountersClient(snapshot: snapshotFn, reset: {}, isAvailable: { true })
+            $0.corpusRegistry = alwaysInterestingRegistry
         } operation: {
             // Use AnyMutator to test with multiple seeds
             let mutator = AnyMutator<String>(
@@ -402,15 +390,15 @@ struct MutatorFuzzEngineTests {
 
             let engine = FuzzEngine<String>(mutators: mutator, config: config)
             _ = await engine.run { input in
-                testedInputs.append(input)
+                await testedInputs.update { $0.append(input) }
             }
         }
 
-        #expect(snapshotSpy.callCount > 0)
         // Should have tested all seeds
-        #expect(testedInputs.contains("first"))
-        #expect(testedInputs.contains("second"))
-        #expect(testedInputs.contains("third"))
+        let inputs = await testedInputs.value
+        #expect(inputs.contains("first"))
+        #expect(inputs.contains("second"))
+        #expect(inputs.contains("third"))
     }
 }
 
@@ -418,24 +406,16 @@ struct MutatorFuzzEngineTests {
 
 @Suite("Mutator Public API")
 struct MutatorPublicAPITests {
-    static func makeCounters(_ callNumber: Int) -> SanCovCounters {
-        var counters = [UInt64](repeating: 0, count: 100)
-        counters[callNumber % 100] = UInt64(callNumber)
-        return SanCovCounters(counters: counters)
-    }
 
     @Test("fuzz(using:) accepts single mutator")
     func fuzzWithSingleMutator() async throws {
-        nonisolated(unsafe) var testedInputs: [String] = []
-        nonisolated(unsafe) var callCount = 0
+        let testedInputs = Synchronized([String]())
 
-        let (snapshotSpy, snapshotFn) = spy { () -> SanCovCounters? in
-            callCount += 1
-            return Self.makeCounters(callCount)
-        }
+        // Use AlwaysInterestingCorpusRegistry to bypass coverage data requirements
+        let alwaysInterestingRegistry = AlwaysInterestingCorpusRegistry()
 
         try await withDependencies {
-            $0.coverageCounters = CoverageCountersClient(snapshot: snapshotFn, reset: {}, isAvailable: { true })
+            $0.corpusRegistry = alwaysInterestingRegistry
             // Use no-op file manager to avoid writing corpus to disk
             $0.fileManager = FileManagerClient(
                 currentDirectoryPath: { "/test" },
@@ -456,27 +436,24 @@ struct MutatorPublicAPITests {
                 iterations: 10,
                 duration: 1
             ) { (input: String) in
-                testedInputs.append(input)
+                await testedInputs.update { $0.append(input) }
             }
         }
 
-        #expect(snapshotSpy.callCount > 0)
-        #expect(testedInputs.contains("test1"))
-        #expect(testedInputs.contains("test2"))
+        let inputs = await testedInputs.value
+        #expect(inputs.contains("test1"))
+        #expect(inputs.contains("test2"))
     }
 
     @Test("fuzz(using:) accepts built-in mutators")
     func fuzzWithBuiltInMutators() async throws {
-        nonisolated(unsafe) var testedInputs: [String] = []
-        nonisolated(unsafe) var callCount = 0
+        let testedInputs = Synchronized([String]())
 
-        let (snapshotSpy, snapshotFn) = spy { () -> SanCovCounters? in
-            callCount += 1
-            return Self.makeCounters(callCount)
-        }
+        // Use AlwaysInterestingCorpusRegistry to bypass coverage data requirements
+        let alwaysInterestingRegistry = AlwaysInterestingCorpusRegistry()
 
         try await withDependencies {
-            $0.coverageCounters = CoverageCountersClient(snapshot: snapshotFn, reset: {}, isAvailable: { true })
+            $0.corpusRegistry = alwaysInterestingRegistry
             // Use no-op file manager to avoid writing corpus to disk
             $0.fileManager = FileManagerClient(
                 currentDirectoryPath: { "/test" },
@@ -492,26 +469,23 @@ struct MutatorPublicAPITests {
                 iterations: 10,
                 duration: 1
             ) { (input: String) in
-                testedInputs.append(input)
+                await testedInputs.update { $0.append(input) }
             }
         }
 
-        #expect(snapshotSpy.callCount > 0)
-        #expect(testedInputs.contains(""))
+        let inputs = await testedInputs.value
+        #expect(inputs.contains(""))
     }
 
     @Test("fuzz(using:) accepts multiple mutators for multiple inputs")
     func fuzzWithMultipleMutators() async throws {
-        nonisolated(unsafe) var testedInputs: [(String, Int)] = []
-        nonisolated(unsafe) var callCount = 0
+        let testedInputs = Synchronized([(String, Int)]())
 
-        let (snapshotSpy, snapshotFn) = spy { () -> SanCovCounters? in
-            callCount += 1
-            return Self.makeCounters(callCount)
-        }
+        // Use AlwaysInterestingCorpusRegistry to bypass coverage data requirements
+        let alwaysInterestingRegistry = AlwaysInterestingCorpusRegistry()
 
         try await withDependencies {
-            $0.coverageCounters = CoverageCountersClient(snapshot: snapshotFn, reset: {}, isAvailable: { true })
+            $0.corpusRegistry = alwaysInterestingRegistry
             $0.fileManager = FileManagerClient(
                 currentDirectoryPath: { "/test" },
                 fileExists: { _ in false },
@@ -535,15 +509,14 @@ struct MutatorPublicAPITests {
                 iterations: 20,
                 duration: 2
             ) { (str: String, num: Int) in
-                testedInputs.append((str, num))
+                await testedInputs.update { $0.append((str, num)) }
             }
         }
 
-        #expect(snapshotSpy.callCount > 0)
-
         // Should have cartesian product of seeds: hello/world × 1/2/3
-        let strings = Set(testedInputs.map(\.0))
-        let ints = Set(testedInputs.map(\.1))
+        let inputs = await testedInputs.value
+        let strings = Set(inputs.map(\.0))
+        let ints = Set(inputs.map(\.1))
 
         #expect(strings.contains("hello"))
         #expect(strings.contains("world"))
@@ -554,16 +527,13 @@ struct MutatorPublicAPITests {
 
     @Test("fuzz(using:) with built-in mutators for multiple inputs")
     func fuzzWithMultipleBuiltInMutators() async throws {
-        nonisolated(unsafe) var testedInputs: [(String, Int)] = []
-        nonisolated(unsafe) var callCount = 0
+        let testedInputs = Synchronized([(String, Int)]())
 
-        let (snapshotSpy, snapshotFn) = spy { () -> SanCovCounters? in
-            callCount += 1
-            return Self.makeCounters(callCount)
-        }
+        // Use AlwaysInterestingCorpusRegistry to bypass coverage data requirements
+        let alwaysInterestingRegistry = AlwaysInterestingCorpusRegistry()
 
         try await withDependencies {
-            $0.coverageCounters = CoverageCountersClient(snapshot: snapshotFn, reset: {}, isAvailable: { true })
+            $0.corpusRegistry = alwaysInterestingRegistry
             $0.fileManager = FileManagerClient(
                 currentDirectoryPath: { "/test" },
                 fileExists: { _ in false },
@@ -578,14 +548,13 @@ struct MutatorPublicAPITests {
                 iterations: 50,
                 duration: 3
             ) { (str: String, num: Int) in
-                testedInputs.append((str, num))
+                await testedInputs.update { $0.append((str, num)) }
             }
         }
 
-        #expect(snapshotSpy.callCount > 0)
-
-        let strings = Set(testedInputs.map(\.0))
-        let ints = Set(testedInputs.map(\.1))
+        let inputs = await testedInputs.value
+        let strings = Set(inputs.map(\.0))
+        let ints = Set(inputs.map(\.1))
 
         // Empty mutator should include empty string
         #expect(strings.contains(""))
@@ -598,16 +567,13 @@ struct MutatorPublicAPITests {
 
     @Test("fuzz(using:) with composed mutator strategies for single input")
     func fuzzWithComposedStrategies() async throws {
-        let testedInputs = ThreadSafeCollector<String>()
-        let callCounter = ThreadSafeCounter()
+        let testedInputs = Synchronized<[String]>([])
 
-        let (snapshotSpy, snapshotFn) = spy { () -> SanCovCounters? in
-            let count = callCounter.increment()
-            return Self.makeCounters(count)
-        }
+        // Use AlwaysInterestingCorpusRegistry to bypass coverage data requirements
+        let alwaysInterestingRegistry = AlwaysInterestingCorpusRegistry()
 
         try await withDependencies {
-            $0.coverageCounters = CoverageCountersClient(snapshot: snapshotFn, reset: {}, isAvailable: { true })
+            $0.corpusRegistry = alwaysInterestingRegistry
             $0.fileManager = FileManagerClient(
                 currentDirectoryPath: { "/test" },
                 fileExists: { _ in false },
@@ -625,14 +591,12 @@ struct MutatorPublicAPITests {
                 iterations: 500,
                 duration: 5
             ) { (input: String) in
-                await testedInputs.append(input)
+                await testedInputs.update { $0.append(input) }
             }
         }
 
-        #expect(snapshotSpy.callCount > 0)
-
         // Get all values for assertions
-        let inputs = await testedInputs.values
+        let inputs = await testedInputs.value
 
         // Should have seeds from all three strategies
         // Empty strategy

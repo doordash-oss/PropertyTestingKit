@@ -23,12 +23,12 @@ public struct FailureInfo: Codable, Sendable {
     /// When this failure was first discovered.
     public let discoveredAt: Date
 
-    public init(error: Error, stackTrace: String? = nil) {
+    public init(error: Error, stackTrace: String? = nil) async {
         @Dependency(\.dateClient) var dateClient
         self.errorType = String(describing: type(of: error))
         self.message = error.localizedDescription
         self.stackTrace = stackTrace
-        self.discoveredAt = dateClient.now()
+        self.discoveredAt = await dateClient.now()
     }
 
     public init(
@@ -36,11 +36,15 @@ public struct FailureInfo: Codable, Sendable {
         message: String,
         stackTrace: String? = nil,
         discoveredAt: Date? = nil
-    ) {
+    ) async {
         @Dependency(\.dateClient) var dateClient
         self.errorType = errorType
         self.message = message
         self.stackTrace = stackTrace
-        self.discoveredAt = discoveredAt ?? dateClient.now()
+        if let discoveredAt = discoveredAt {
+            self.discoveredAt = discoveredAt
+        } else {
+            self.discoveredAt = await dateClient.now()
+        }
     }
 }

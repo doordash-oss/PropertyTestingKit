@@ -103,14 +103,14 @@ struct TestCaseShrinkerTests {
     // MARK: - TestCaseShrinker Array Tests
 
     @Test("Shrinker reduces array to minimal failing element")
-    func testShrinkerReducesArray() {
+    func testShrinkerReducesArray() async {
         let shrinker = TestCaseShrinker<[Int]>(config: ShrinkConfig(
             maxExecutions: 100,
             timeout: 10
         ))
 
         // Failure condition: array contains 42
-        let (minimized, stats) = shrinker.shrink(input: [1, 2, 42, 3, 4, 5]) { candidate in
+        let (minimized, stats) = await shrinker.shrink(input: [1, 2, 42, 3, 4, 5]) { candidate in
             candidate.contains(42) ? .fail : .pass
         }
 
@@ -120,24 +120,24 @@ struct TestCaseShrinkerTests {
     }
 
     @Test("Shrinker handles empty array")
-    func testShrinkerEmptyArray() {
+    func testShrinkerEmptyArray() async {
         let shrinker = TestCaseShrinker<[Int]>(config: ShrinkConfig())
 
-        let (minimized, stats) = shrinker.shrink(input: []) { _ in .fail }
+        let (minimized, stats) = await shrinker.shrink(input: []) { _ in .fail }
 
         #expect(minimized.isEmpty)
         #expect(stats.minimizedSize == 0)
     }
 
     @Test("Shrinker respects max executions")
-    func testShrinkerMaxExecutions() {
+    func testShrinkerMaxExecutions() async {
         let shrinker = TestCaseShrinker<[Int]>(config: ShrinkConfig(
             maxExecutions: 5
         ))
 
         // Create array where failure requires specific element
         let largeArray = Array(0..<100) + [999] + Array(100..<200)
-        let (minimized, stats) = shrinker.shrink(input: largeArray) { candidate in
+        let (minimized, stats) = await shrinker.shrink(input: largeArray) { candidate in
             // Failure requires 999 to be present
             candidate.contains(999) ? .fail : .pass
         }
@@ -148,16 +148,16 @@ struct TestCaseShrinkerTests {
     }
 
     @Test("Shrinker respects timeout")
-    func testShrinkerTimeout() {
+    func testShrinkerTimeout() async {
         let shrinker = TestCaseShrinker<[Int]>(config: ShrinkConfig(
             timeout: 0.05 // Very short timeout
         ))
 
         // Create array where failure requires specific element
         let largeArray = Array(0..<500) + [999]
-        let (minimized, stats) = shrinker.shrink(input: largeArray) { candidate in
+        let (minimized, stats) = await shrinker.shrink(input: largeArray) { candidate in
             // Slow test that requires 999
-            Thread.sleep(forTimeInterval: 0.02)
+            try? await Task.sleep(for: .milliseconds(20))
             return candidate.contains(999) ? .fail : .pass
         }
 
@@ -169,13 +169,13 @@ struct TestCaseShrinkerTests {
     // MARK: - TestCaseShrinker String Tests
 
     @Test("Shrinker reduces string")
-    func testShrinkerReducesString() {
+    func testShrinkerReducesString() async {
         let shrinker = TestCaseShrinker<String>(config: ShrinkConfig(
             maxExecutions: 100
         ))
 
         // Failure condition: string contains "error"
-        let (minimized, stats) = shrinker.shrink(
+        let (minimized, stats) = await shrinker.shrink(
             input: "This is an error message with lots of extra text"
         ) { candidate in
             candidate.contains("error") ? .fail : .pass
@@ -236,14 +236,14 @@ struct TestCaseShrinkerTests {
     // MARK: - MultiComponentShrinker Tests
 
     @Test("MultiComponentShrinker shrinks both components")
-    func testMultiComponentShrinker() {
+    func testMultiComponentShrinker() async {
         let shrinker = MultiComponentShrinker(config: ShrinkConfig(
             maxExecutions: 100
         ))
 
         // Failure: first array contains 5 AND second string contains "x"
         let input = ([1, 2, 3, 4, 5, 6, 7], "abcxdef")
-        let (minimized, stats) = shrinker.shrink(input: input) { (arr, str) in
+        let (minimized, stats) = await shrinker.shrink(input: input) { (arr, str) in
             (arr.contains(5) && str.contains("x")) ? .fail : .pass
         }
 
@@ -275,8 +275,8 @@ struct TestCaseShrinkerTests {
     // MARK: - Helper Function Tests
 
     @Test("shrinkFailingInput helper works")
-    func testShrinkFailingInputHelper() {
-        let (minimized, stats) = shrinkFailingInput([1, 2, 3, 42, 5, 6]) { candidate in
+    func testShrinkFailingInputHelper() async {
+        let (minimized, stats) = await shrinkFailingInput([1, 2, 3, 42, 5, 6]) { candidate in
             candidate.contains(42) ? .fail : .pass
         }
 
