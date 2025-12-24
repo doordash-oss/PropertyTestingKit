@@ -1,6 +1,7 @@
 ## General
 - `nonisolated(unsafe)` should not be used.
 - Force unwrapping should not be used.
+- If you believe something about the development environment (OS, tools, compiler, etc.) is blocking you, then double check that assumption. Explain what the issue is and why you believe that to be the case.
 
 ## Building
 - Do not build this project with system swift. Use the build script found in the scripts directory. It builds this project using a patched swift toolchain that fixes issues with parameter packs.
@@ -18,6 +19,7 @@
 - When targeting 100% coverage, target 100% branch coverage. If branches are difficult or impossible to reach, either rework code to remove the need for them, or use dependency injection to achieve the necessary state.
 
 ### Benchmarks
+- To benchmark, run `./scripts/run-benchmarks.sh`.
 - The filter flag for benchmarks requires that you match the entire name of the benchmark you want to run. Partial matches will not work, and may appear to hang.
 
 ## Scripts

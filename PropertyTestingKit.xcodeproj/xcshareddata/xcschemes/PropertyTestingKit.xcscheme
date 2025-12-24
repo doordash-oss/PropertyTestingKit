@@ -49,6 +49,20 @@
                ReferencedContainer = "container:PropertyTestingKit.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
+         <BuildActionEntry
+            buildForTesting = "YES"
+            buildForRunning = "NO"
+            buildForProfiling = "NO"
+            buildForArchiving = "NO"
+            buildForAnalyzing = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "B0BE09FFE9F586EDF3FC5EB9"
+               BuildableName = "TSanTests.xctest"
+               BlueprintName = "TSanTests"
+               ReferencedContainer = "container:PropertyTestingKit.xcodeproj">
+            </BuildableReference>
+         </BuildActionEntry>
       </BuildActionEntries>
    </BuildAction>
    <TestAction
@@ -86,6 +100,17 @@
                BlueprintIdentifier = "00E9596C140254811771B723"
                BuildableName = "SanCovTests.xctest"
                BlueprintName = "SanCovTests"
+               ReferencedContainer = "container:PropertyTestingKit.xcodeproj">
+            </BuildableReference>
+         </TestableReference>
+         <TestableReference
+            skipped = "NO"
+            parallelizable = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "B0BE09FFE9F586EDF3FC5EB9"
+               BuildableName = "TSanTests.xctest"
+               BlueprintName = "TSanTests"
                ReferencedContainer = "container:PropertyTestingKit.xcodeproj">
             </BuildableReference>
          </TestableReference>

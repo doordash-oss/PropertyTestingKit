@@ -112,6 +112,16 @@ let package = Package(
                 ])
             ]
         ),
+        // TSanTests: Race condition tests that exercise concurrent code paths.
+        // To actually run with ThreadSanitizer, use: ./scripts/run-tsan-tests.sh
+        // The script handles DYLD_INSERT_LIBRARIES which is required for TSan on macOS.
+        // These tests can also run without TSan to verify concurrent code doesn't crash.
+        .testTarget(
+            name: "TSanTests",
+            dependencies: [
+                "PropertyTestingKit",
+            ]
+        ),
         .macro(
             name: "PropertyTestingKitMacros",
             dependencies: [

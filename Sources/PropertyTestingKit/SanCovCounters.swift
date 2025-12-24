@@ -441,8 +441,13 @@ private actor DWARFSymbolizerActor {
     }
 
     /// Convert a runtime PC address to a file offset.
+    /// Uses overflow-safe arithmetic since TSan can change memory layout
+    /// in ways that make address calculations overflow.
     func runtimeToFileOffset(_ pc: UInt) -> UInt64 {
-        UInt64(pc) - UInt64(bitPattern: Int64(slide))
+        let pcValue = UInt64(pc)
+        let slideValue = UInt64(bitPattern: Int64(slide))
+        // Use wrapping subtraction to avoid overflow trap
+        return pcValue &- slideValue
     }
 
     /// Look up DWARF info for a PC address.
