@@ -701,6 +701,17 @@ uintptr_t sancov_get_pc(size_t edge_index) {
     return g_pcs_start[edge_index * 2];
 }
 
+// Counter for dladdr calls (for profiling)
+static _Atomic size_t g_dladdr_call_count = 0;
+
+size_t sancov_get_dladdr_call_count(void) {
+    return atomic_load(&g_dladdr_call_count);
+}
+
+void sancov_reset_dladdr_call_count(void) {
+    atomic_store(&g_dladdr_call_count, 0);
+}
+
 bool sancov_get_source_location(size_t edge_index, SanCovSourceLocation* location) {
     if (!location) return false;
 
@@ -714,6 +725,7 @@ bool sancov_get_source_location(size_t edge_index, SanCovSourceLocation* locatio
 
     // Use dladdr to get symbol info
     Dl_info info;
+    atomic_fetch_add(&g_dladdr_call_count, 1);
     if (dladdr((void*)pc, &info)) {
         location->filename = info.dli_fname;
         location->function_name = info.dli_sname;

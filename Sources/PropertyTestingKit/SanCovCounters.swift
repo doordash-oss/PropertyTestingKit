@@ -136,6 +136,16 @@ public struct SanCovCounters: Sendable {
         sancov_get_counter_count()
     }
 
+    /// Get the number of dladdr calls made (for profiling gap detection).
+    public static var dlAddrCallCount: Int {
+        Int(sancov_get_dladdr_call_count())
+    }
+
+    /// Reset the dladdr call counter.
+    public static func resetDlAddrCallCount() {
+        sancov_reset_dladdr_call_count()
+    }
+
     /// Reset coverage counters for the current task.
     ///
     /// This only affects the current Swift task's coverage map.
