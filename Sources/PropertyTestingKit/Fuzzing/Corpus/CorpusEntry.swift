@@ -33,14 +33,14 @@ public struct CorpusEntry<each Input: Codable & Sendable>: Sendable, Codable {
         parentIndex: Int? = nil,
         entryType: CorpusEntryType = .coverage,
         failure: FailureInfo? = nil
-    ) async {
+    ) {
         @Dependency(\.dateClient) var dateClient
         self.input = (repeat each input)
         self.signature = signature
         if let discoveredAt = discoveredAt {
             self.discoveredAt = discoveredAt
         } else {
-            self.discoveredAt = await dateClient.now()
+            self.discoveredAt = dateClient.now()
         }
         self.parentIndex = parentIndex
         self.entryType = entryType

@@ -14,7 +14,7 @@ struct CorpusTests {
 
     @Test("Corpus adds interesting entries")
     func testCorpusAddsInteresting() async {
-        let corpus = await Corpus<Int>(schemaVersion: "test")
+        let corpus = Corpus<Int>(schemaVersion: "test")
 
         let sig1 = CoverageSignature(buckets: [0: .one])
         let sig2 = CoverageSignature(buckets: [1: .one])
@@ -34,7 +34,7 @@ struct CorpusTests {
 
     @Test("Corpus minimization keeps essential entries")
     func testCorpusMinimization() async {
-        let corpus = await Corpus<Int>(schemaVersion: "test")
+        let corpus = Corpus<Int>(schemaVersion: "test")
 
         // Entry 1 covers indices 0, 1
         await corpus.add(input: 1, signature: CoverageSignature(buckets: [0: .one, 1: .one]))

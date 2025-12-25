@@ -144,7 +144,7 @@ struct CorpusRaceTests {
 
     @Test("Concurrent corpus operations")
     func concurrentCorpusOperations() async {
-        let corpus = await Corpus<Int>(schemaVersion: "1.0.0")
+        let corpus = Corpus<Int>(schemaVersion: "1.0.0")
 
         await withTaskGroup(of: Void.self) { group in
             // Concurrent adds
@@ -172,7 +172,7 @@ struct CorpusRaceTests {
 
     @Test("Concurrent corpus selectForMutation")
     func concurrentSelectForMutation() async {
-        let corpus = await Corpus<Int>(schemaVersion: "1.0.0")
+        let corpus = Corpus<Int>(schemaVersion: "1.0.0")
 
         // Add some entries first
         for i in 0..<20 {
@@ -194,7 +194,7 @@ struct CorpusRaceTests {
 
     @Test("Concurrent corpus addIfInteresting")
     func concurrentAddIfInteresting() async {
-        let corpus = await Corpus<Int>(schemaVersion: "1.0.0")
+        let corpus = Corpus<Int>(schemaVersion: "1.0.0")
 
         await withTaskGroup(of: Bool.self) { group in
             for i in 0..<100 {
@@ -434,7 +434,7 @@ struct HighContentionTests {
 
     @Test("Concurrent corpus and coverage operations", .timeLimit(.minutes(1)))
     func concurrentCorpusAndCoverage() async {
-        let corpus = await Corpus<Int>(schemaVersion: "1.0.0")
+        let corpus = Corpus<Int>(schemaVersion: "1.0.0")
 
         await withTaskGroup(of: Void.self) { group in
             // Tasks that measure coverage and add to corpus

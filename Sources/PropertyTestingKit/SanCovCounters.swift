@@ -12,6 +12,40 @@
 import Foundation
 import ValueProfileHooks
 
+// MARK: - SparseCoverage
+
+/// Efficient representation of sparse coverage data using parallel arrays.
+///
+/// This is significantly faster than `[Int: UInt8]` because it avoids
+/// Dictionary hashing overhead. The indices and counts arrays are parallel:
+/// `counts[i]` is the hit count for edge `indices[i]`.
+public struct SparseCoverage: Sendable {
+    /// Edge indices that were executed.
+    public let indices: [UInt32]
+
+    /// Hit counts for each edge (parallel to indices).
+    public let counts: [UInt8]
+
+    /// Number of covered edges.
+    public var count: Int { indices.count }
+
+    /// Whether any edges were covered.
+    public var isEmpty: Bool { indices.isEmpty }
+
+    /// Create from parallel arrays.
+    public init(indices: [UInt32], counts: [UInt8]) {
+        precondition(indices.count == counts.count, "indices and counts must have same length")
+        self.indices = indices
+        self.counts = counts
+    }
+
+    /// Create an empty sparse coverage.
+    public init() {
+        self.indices = []
+        self.counts = []
+    }
+}
+
 // MARK: - SanCovCounters
 
 /// A snapshot of coverage counters with task-level isolation.
@@ -143,7 +177,24 @@ public struct SanCovCounters: Sendable {
     /// This is more efficient than `snapshot()` when coverage is sparse.
     ///
     /// - Returns: Dictionary mapping edge index to hit count, or nil if unavailable.
+    @available(*, deprecated, message: "Use snapshotCoveredArrays() for better performance")
     public static func snapshotCoveredOnly() -> [Int: UInt8]? {
+        guard let sparse = snapshotCoveredArrays() else { return nil }
+        var result: [Int: UInt8] = [:]
+        result.reserveCapacity(sparse.count)
+        for i in 0..<sparse.count {
+            result[Int(sparse.indices[i])] = sparse.counts[i]
+        }
+        return result
+    }
+
+    /// Get only the covered (non-zero) edge indices with their hit counts.
+    ///
+    /// Returns parallel arrays for efficiency - avoids Dictionary hashing overhead.
+    /// This is the fastest way to get sparse coverage data.
+    ///
+    /// - Returns: SparseCoverage with parallel indices/counts arrays, or nil if unavailable.
+    public static func snapshotCoveredArrays() -> SparseCoverage? {
         guard isAvailable else { return nil }
 
         // Optimization: Use a single pass with a reasonable max buffer.
@@ -164,24 +215,19 @@ public struct SanCovCounters: Sendable {
                 var largeCounts = [UInt8](repeating: 0, count: actualCount)
                 let actualFilled = sancov_snapshot_covered_indices(&largeIndices, &largeCounts, actualCount)
 
-                var result: [Int: UInt8] = [:]
-                result.reserveCapacity(actualFilled)
-                for i in 0..<actualFilled {
-                    result[Int(largeIndices[i])] = largeCounts[i]
-                }
-                return result
+                // Trim to actual size
+                largeIndices.removeLast(actualCount - actualFilled)
+                largeCounts.removeLast(actualCount - actualFilled)
+                return SparseCoverage(indices: largeIndices, counts: largeCounts)
             }
         }
 
-        guard filled > 0 else { return [:] }
+        guard filled > 0 else { return SparseCoverage() }
 
-        // Build dictionary from single-pass results
-        var result: [Int: UInt8] = [:]
-        result.reserveCapacity(filled)
-        for i in 0..<filled {
-            result[Int(indices[i])] = counts[i]
-        }
-        return result
+        // Trim arrays to actual size
+        indices.removeLast(maxEntries - filled)
+        counts.removeLast(maxEntries - filled)
+        return SparseCoverage(indices: indices, counts: counts)
     }
 
     // MARK: - Comparison

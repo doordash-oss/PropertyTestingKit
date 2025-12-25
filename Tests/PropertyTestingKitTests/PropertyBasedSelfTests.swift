@@ -332,7 +332,7 @@ struct CorpusPropertyTests {
 
     @Test("Corpus addIfInteresting rejects redundant coverage")
     func testAddIfInterestingRejectsRedundant() async throws {
-        let corpus = await Corpus<String>(schemaVersion: "test")
+        let corpus = Corpus<String>(schemaVersion: "test")
 
         let sig1 = CoverageSignature(buckets: [0: .one, 1: .two, 2: .three])
 
@@ -353,7 +353,7 @@ struct CorpusPropertyTests {
 
     @Test("Corpus minimization preserves total coverage")
     func testMinimizationPreservesCoverage() async throws {
-        let corpus = await Corpus<String>(schemaVersion: "test")
+        let corpus = Corpus<String>(schemaVersion: "test")
 
         // Add entries with overlapping coverage
         await corpus.add(input: "a", signature: CoverageSignature(buckets: [0: .one, 1: .two]))
@@ -377,7 +377,7 @@ struct CorpusPropertyTests {
 
     @Test("Corpus selectForMutation returns valid indices")
     func testSelectForMutationValidIndex() async throws {
-        let corpus = await Corpus<String>(schemaVersion: "test")
+        let corpus = Corpus<String>(schemaVersion: "test")
 
         // Empty corpus should return nil
         let emptySelection = await corpus.selectForMutation()
@@ -399,14 +399,14 @@ struct CorpusPropertyTests {
 
     @Test("Corpus handles empty minimization")
     func testEmptyMinimization() async throws {
-        let corpus = await Corpus<String>(schemaVersion: "test")
+        let corpus = Corpus<String>(schemaVersion: "test")
         let minimized = await corpus.minimized()
         #expect(minimized.isEmpty, "Minimized empty corpus should be empty")
     }
 
     @Test("Corpus isEmpty property")
     func testCorpusIsEmpty() async throws {
-        let corpus = await Corpus<String>(schemaVersion: "test")
+        let corpus = Corpus<String>(schemaVersion: "test")
         var isEmpty = await corpus.isEmpty
         #expect(isEmpty, "New corpus should be empty")
 
@@ -417,7 +417,7 @@ struct CorpusPropertyTests {
 
     @Test("Corpus signatures property")
     func testCorpusSignatures() async throws {
-        let corpus = await Corpus<String>(schemaVersion: "test")
+        let corpus = Corpus<String>(schemaVersion: "test")
 
         let sig1 = CoverageSignature(buckets: [0: .one])
         let sig2 = CoverageSignature(buckets: [1: .two])
@@ -433,7 +433,7 @@ struct CorpusPropertyTests {
 
     @Test("Corpus inputs property")
     func testCorpusInputs() async throws {
-        let corpus = await Corpus<String>(schemaVersion: "test")
+        let corpus = Corpus<String>(schemaVersion: "test")
 
         await corpus.add(input: "hello", signature: CoverageSignature(buckets: [0: .one]))
         await corpus.add(input: "world", signature: CoverageSignature(buckets: [1: .two]))
@@ -446,7 +446,7 @@ struct CorpusPropertyTests {
 
     @Test("Corpus selectForMutation with empty signatures")
     func testSelectForMutationEmptySignatures() async throws {
-        let corpus = await Corpus<String>(schemaVersion: "test")
+        let corpus = Corpus<String>(schemaVersion: "test")
 
         // Add entries with empty signatures (totalScore will be 0)
         let emptySig = CoverageSignature(buckets: [:])
@@ -462,7 +462,7 @@ struct CorpusPropertyTests {
 
     @Test("Corpus minimization with no new coverage")
     func testMinimizationNoNewCoverage() async throws {
-        let corpus = await Corpus<String>(schemaVersion: "test")
+        let corpus = Corpus<String>(schemaVersion: "test")
 
         // Add one entry that covers everything
         await corpus.add(input: "all", signature: CoverageSignature(buckets: [0: .one, 1: .two, 2: .three]))
@@ -490,7 +490,7 @@ struct CorpusEntryPropertyTests {
 
     @Test("CorpusEntry preserves all fields through Codable")
     func testCorpusEntryCodable() async throws {
-        let entry = await CorpusEntry(
+        let entry = CorpusEntry(
             input: "test input",
             signature: CoverageSignature(buckets: [0: .one, 5: .fourToSeven]),
             discoveredAt: Date(),
@@ -705,7 +705,7 @@ struct EdgeCaseTests {
 
     @Test("Corpus with complex input types")
     func testCorpusComplexTypes() async throws {
-        let corpus = await Corpus<[String]>(schemaVersion: "test")
+        let corpus = Corpus<[String]>(schemaVersion: "test")
 
         await corpus.add(
             input: ["a", "b", "c"],

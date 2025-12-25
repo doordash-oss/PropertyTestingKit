@@ -336,8 +336,8 @@ public actor FuzzEngine<each Input: Fuzzable & Codable & Sendable> {
         let emptySnapshot = CorpusSnapshot<repeat each Input>(
             entries: [],
             schemaVersion: await CorpusSchema.currentVersion(),
-            createdAt: await dateClient.now(),
-            updatedAt: await dateClient.now(),
+            createdAt: dateClient.now(),
+            updatedAt: dateClient.now(),
             totalCoverage: CoverageSignature(buckets: [:])
         )
         let emptyStats = FuzzStats(
@@ -365,8 +365,8 @@ public actor FuzzEngine<each Input: Fuzzable & Codable & Sendable> {
         additionalSeeds: [(repeat each Input)] = [],
         test: @escaping @Sendable ((repeat each Input)) async throws -> Void
     ) async -> FuzzResult<repeat each Input> {
-        let startTime = await dateClient.now()
-        let corpus: CorpusClient<repeat each Input> = await corpusRegistry.get(schemaVersion: CorpusSchema.currentVersion())
+        let startTime = dateClient.now()
+        let corpus: CorpusClient<repeat each Input> = corpusRegistry.get(schemaVersion: await CorpusSchema.currentVersion())
         var failures: [(input: (repeat each Input), error: Error)] = []
         var hangs: [(input: (repeat each Input), timeout: TimeInterval)] = []
         var iterationsSinceNewCoverage = 0
@@ -446,8 +446,8 @@ public actor FuzzEngine<each Input: Fuzzable & Codable & Sendable> {
 
                     // Get coverage snapshot for this task
                     let signature: CoverageSignature?
-                    if let sparseCoverage = await coverageClient.snapshotCoveredOnly() {
-                        signature = CoverageSignature(sparseCoverage: sparseCoverage)
+                    if let sparse = await coverageClient.snapshotCoveredArrays() {
+                        signature = CoverageSignature(sparse: sparse)
                     } else {
                         signature = nil
                     }
@@ -511,7 +511,7 @@ public actor FuzzEngine<each Input: Fuzzable & Codable & Sendable> {
             if config.verbose {
                 print("[Fuzz] No seeds and no mutations possible - exiting early")
             }
-            let duration = await dateClient.now().timeIntervalSince(startTime)
+            let duration = dateClient.now().timeIntervalSince(startTime)
             let stats = FuzzStats(
                 totalInputs: 0,
                 newPaths: 0,
@@ -557,7 +557,7 @@ public actor FuzzEngine<each Input: Fuzzable & Codable & Sendable> {
             let batchStart = CFAbsoluteTimeGetCurrent()
 
             // Check stopping conditions before generating batch
-            if await dateClient.now().timeIntervalSince(startTime) >= config.maxDuration {
+            if dateClient.now().timeIntervalSince(startTime) >= config.maxDuration {
                 if config.verbose {
                     print("[Fuzz] Time limit reached after \(iteration) iterations")
                 }
@@ -567,7 +567,7 @@ public actor FuzzEngine<each Input: Fuzzable & Codable & Sendable> {
 
             if plateauDetector.hasPlateaued {
                 if config.verbose {
-                    print("[Fuzz] Coverage plateau detected: \(await plateauDetector.summary(includeDetails: true))")
+                    print("[Fuzz] Coverage plateau detected: \(plateauDetector.summary(includeDetails: true))")
                     print("[Fuzz] Stopping early at iteration \(iteration) (saved \(config.maxIterations - iteration) iterations)")
                 }
                 stopReason = .coveragePlateau
@@ -591,13 +591,15 @@ public actor FuzzEngine<each Input: Fuzzable & Codable & Sendable> {
             batchInputs.reserveCapacity(currentBatchSize)
             batchMeta.reserveCapacity(currentBatchSize)
 
+            // Get corpus state once for the entire batch (1 actor hop instead of ~400)
+            let corpusState = await corpus.batchState()
+
             for batchIdx in 0..<currentBatchSize {
                 let input: (repeat each Input)
                 let parentIndex: Int?
                 var isMutation = false
 
-                let corpusIsEmpty = await corpus.isEmpty()
-                if corpusIsEmpty || randomDouble(in: 0..<1) < config.generationRatio {
+                if corpusState.isEmpty || randomDouble(in: 0..<1) < config.generationRatio {
                     // Generate fresh input
                     let fuzzValues = mutatorSeeds?() ?? cartesianProductFuzz()
                     guard let fuzzValue = randomElement(from: fuzzValues) else {
@@ -611,17 +613,15 @@ public actor FuzzEngine<each Input: Fuzzable & Codable & Sendable> {
                     let selectedIndex: Int
                     let usingPriority: Bool
 
-                    let corpusCount = await corpus.count()
-                    if let priorityIdx = priorityMutationIndex, priorityIdx < corpusCount {
+                    if let priorityIdx = priorityMutationIndex, priorityIdx < corpusState.count {
                         selectedIndex = priorityIdx
                         usingPriority = true
                     } else {
-                        selectedIndex = await corpus.selectForMutation()!
+                        selectedIndex = corpusState.selectForMutation()!
                         usingPriority = false
                     }
 
-                    let entries = await corpus.entries()
-                    let parent = entries[selectedIndex].input
+                    let parent = corpusState.entries[selectedIndex].input
                     var mutations = mutatorMutate?(parent) ?? mutateInput(parent)
 
                     // Add target-directed mutations from value profile
@@ -631,7 +631,7 @@ public actor FuzzEngine<each Input: Fuzzable & Codable & Sendable> {
                         if usingPriority && !savedTargets.isEmpty {
                             targets = savedTargets
                         } else {
-                            targets = await valueProfileTracker.extractTargets()
+                            targets = valueProfileTracker.extractTargets()
                         }
                         targetMutations = generateTargetDirectedMutations(from: parent, targets: targets)
                         mutations.append(contentsOf: targetMutations)
@@ -727,8 +727,8 @@ public actor FuzzEngine<each Input: Fuzzable & Codable & Sendable> {
 
                         // Get coverage snapshot
                         let signature: CoverageSignature?
-                        if let sparseCoverage = await coverageClient.snapshotCoveredOnly() {
-                            signature = CoverageSignature(sparseCoverage: sparseCoverage)
+                        if let sparse = await coverageClient.snapshotCoveredArrays() {
+                            signature = CoverageSignature(sparse: sparse)
                         } else {
                             signature = nil
                         }
@@ -777,7 +777,7 @@ public actor FuzzEngine<each Input: Fuzzable & Codable & Sendable> {
                     let addedForCoverage = await corpus.addIfInteresting(input, signature, meta.parentIndex)
 
                     // Record discovery status for plateau detection
-                    await plateauDetector.record(discoveredNewCoverage: addedForCoverage)
+                    plateauDetector.record(discoveredNewCoverage: addedForCoverage)
 
                     if addedForCoverage {
                         iterationsSinceNewCoverage = 0
@@ -788,7 +788,7 @@ public actor FuzzEngine<each Input: Fuzzable & Codable & Sendable> {
                         }
                     }
                 } else {
-                    await plateauDetector.record(discoveredNewCoverage: false)
+                    plateauDetector.record(discoveredNewCoverage: false)
                 }
             }
 
@@ -844,11 +844,11 @@ public actor FuzzEngine<each Input: Fuzzable & Codable & Sendable> {
         let saveEnd = CFAbsoluteTimeGetCurrent()
         print("[Timing] Save corpus: \(String(format: "%.3f", saveEnd - saveStart))s")
 
-        let duration = await dateClient.now().timeIntervalSince(startTime)
+        let duration = dateClient.now().timeIntervalSince(startTime)
 
         // Report plateau detector statistics if verbose
         if config.verbose && config.plateauConfig.enabled {
-            let pStats = await plateauDetector.stats()
+            let pStats = plateauDetector.stats()
             print("[Fuzz] Plateau detector: \(pStats.totalDiscoveries) discoveries in \(pStats.totalIterations) iterations")
             print("[Fuzz] Discovery rate: \(String(format: "%.4f", pStats.overallRate)) overall, \(String(format: "%.4f", pStats.windowRate)) recent")
         }
@@ -859,7 +859,7 @@ public actor FuzzEngine<each Input: Fuzzable & Codable & Sendable> {
         }
 
         let finalCorpusCount = await finalCorpus.count()
-        let plateauStats = config.plateauConfig.enabled ? await plateauDetector.stats() : nil
+        let plateauStats = config.plateauConfig.enabled ? plateauDetector.stats() : nil
         let stats = FuzzStats(
             totalInputs: iteration,
             newPaths: finalCorpusCount,
@@ -912,7 +912,7 @@ public actor FuzzEngine<each Input: Fuzzable & Codable & Sendable> {
     ) async -> FuzzResult<repeat each Input> {
         @Dependency(\.coverageCounters) var coverageCounters
 
-        let startTime = await dateClient.now()
+        let startTime = dateClient.now()
         var failures: [(input: (repeat each Input), error: Error)] = []
         var coverageChanges: [(input: (repeat each Input), expected: CoverageSignature, actual: CoverageSignature)] = []
         var needsRefuzz = false
@@ -938,8 +938,8 @@ public actor FuzzEngine<each Input: Fuzzable & Codable & Sendable> {
 
             // Get coverage snapshot (task-isolated, no diff needed)
             // Use sparse snapshot for efficiency - only iterates non-zero counters
-            if let sparseCoverage = await coverageCounters.snapshotCoveredOnly() {
-                let actualSignature = CoverageSignature(sparseCoverage: sparseCoverage)
+            if let sparse = await coverageCounters.snapshotCoveredArrays() {
+                let actualSignature = CoverageSignature(sparse: sparse)
                 if actualSignature != entry.signature {
                     coverageChanges.append((
                         input: entry.input,
@@ -963,7 +963,7 @@ public actor FuzzEngine<each Input: Fuzzable & Codable & Sendable> {
             return await runFuzzing(test: test)
         }
 
-        let duration = await dateClient.now().timeIntervalSince(startTime)
+        let duration = dateClient.now().timeIntervalSince(startTime)
         let stats = FuzzStats(
             totalInputs: snapshot.count,
             newPaths: 0,

@@ -40,9 +40,9 @@ public actor Corpus<each Input: Codable & Sendable>: Sendable {
         self.totalCoverage = totalCoverage
     }
 
-    public init(schemaVersion: String) async {
+    public init(schemaVersion: String) {
         @Dependency(\.dateClient) var dateClient
-        let now = await dateClient.now()
+        let now = dateClient.now()
         self.entries = []
         self.schemaVersion = schemaVersion
         self.createdAt = now
@@ -81,6 +81,20 @@ public actor Corpus<each Input: Codable & Sendable>: Sendable {
         entries.map(\.signature)
     }
 
+    // MARK: - Batch State
+
+    /// Get a snapshot of corpus state for batch operations.
+    ///
+    /// This returns all commonly-needed corpus state in a single call,
+    /// avoiding multiple actor boundary crossings during batch generation.
+    public func batchState() -> CorpusBatchState<repeat each Input> {
+        CorpusBatchState(
+            isEmpty: entries.isEmpty,
+            count: entries.count,
+            entries: entries
+        )
+    }
+
     // MARK: - Adding Entries
 
     /// Add an entry if it contributes new coverage.
@@ -91,8 +105,8 @@ public actor Corpus<each Input: Codable & Sendable>: Sendable {
         input: repeat each Input,
         signature: CoverageSignature,
         parentIndex: Int? = nil
-    ) async -> Bool {
-        return await addIfInteresting(
+    ) -> Bool {
+        return addIfInteresting(
             input: (repeat each input),
             signature: signature,
             parentIndex: parentIndex
@@ -104,20 +118,20 @@ public actor Corpus<each Input: Codable & Sendable>: Sendable {
         input: (repeat each Input),
         signature: CoverageSignature,
         parentIndex: Int? = nil
-    ) async -> Bool {
+    ) -> Bool {
         // Check if this signature adds new coverage
         guard signature.hasUniqueCoverage(comparedTo: totalCoverage) else {
             return false
         }
 
-        let entry = await CorpusEntry(
+        let entry = CorpusEntry(
             input: repeat each input,
             signature: signature,
             parentIndex: parentIndex
         )
         entries.append(entry)
-        totalCoverage = totalCoverage.union(with: signature)
-        updatedAt = await dateClient.now()
+        totalCoverage.merge(with: signature)
+        updatedAt = dateClient.now()
         return true
     }
 
@@ -128,8 +142,8 @@ public actor Corpus<each Input: Codable & Sendable>: Sendable {
         parentIndex: Int? = nil,
         entryType: CorpusEntryType = .coverage,
         failure: FailureInfo? = nil
-    ) async {
-        await add(
+    ) {
+        add(
             input: (repeat each input),
             signature: signature,
             parentIndex: parentIndex,
@@ -145,8 +159,8 @@ public actor Corpus<each Input: Codable & Sendable>: Sendable {
         parentIndex: Int? = nil,
         entryType: CorpusEntryType = .coverage,
         failure: FailureInfo? = nil
-    ) async {
-        let entry = await CorpusEntry(
+    ) {
+        let entry = CorpusEntry(
             input: repeat each input,
             signature: signature,
             parentIndex: parentIndex,
@@ -154,8 +168,8 @@ public actor Corpus<each Input: Codable & Sendable>: Sendable {
             failure: failure
         )
         entries.append(entry)
-        totalCoverage = totalCoverage.union(with: signature)
-        updatedAt = await dateClient.now()
+        totalCoverage.merge(with: signature)
+        updatedAt = dateClient.now()
     }
 
     // MARK: - Failure Statistics
@@ -192,7 +206,7 @@ public actor Corpus<each Input: Codable & Sendable>: Sendable {
     /// that "previously-failing cases must be preserved during minimization."
     ///
     /// - Returns: A snapshot of the minimized corpus.
-    public func minimized() async -> CorpusSnapshot<repeat each Input> {
+    public func minimized() -> CorpusSnapshot<repeat each Input> {
         guard !entries.isEmpty else { return snapshot() }
 
         var minimizedEntries: [CorpusEntry<repeat each Input>] = []
@@ -207,8 +221,8 @@ public actor Corpus<each Input: Codable & Sendable>: Sendable {
         for (i, (_, entry)) in remainingCoverage.enumerated() {
             if entry.entryType == .failure || entry.entryType == .hang {
                 minimizedEntries.append(entry)
-                minimizedCoverage = minimizedCoverage.union(with: entry.signature)
-                uncovered.subtract(entry.signature.executedIndices)
+                minimizedCoverage.merge(with: entry.signature)
+                entry.signature.subtractIndices(from: &uncovered)
                 indicesToRemove.append(i)
             }
         }
@@ -225,7 +239,7 @@ public actor Corpus<each Input: Codable & Sendable>: Sendable {
             var bestCoverageCount = 0
 
             for (i, (_, entry)) in remainingCoverage.enumerated() {
-                let covers = entry.signature.executedIndices.intersection(uncovered).count
+                let covers = entry.signature.countIndicesIn(uncovered)
                 if covers > bestCoverageCount {
                     bestCoverageCount = covers
                     bestIndex = i
@@ -240,10 +254,10 @@ public actor Corpus<each Input: Codable & Sendable>: Sendable {
             // Add the best entry
             let (_, bestEntry) = remainingCoverage.remove(at: bestIndex)
             minimizedEntries.append(bestEntry)
-            minimizedCoverage = minimizedCoverage.union(with: bestEntry.signature)
+            minimizedCoverage.merge(with: bestEntry.signature)
 
             // Remove covered indices
-            uncovered.subtract(bestEntry.signature.executedIndices)
+            bestEntry.signature.subtractIndices(from: &uncovered)
         }
 
         @Dependency(\.dateClient) var dateClient
@@ -251,7 +265,7 @@ public actor Corpus<each Input: Codable & Sendable>: Sendable {
             entries: minimizedEntries,
             schemaVersion: schemaVersion,
             createdAt: createdAt,
-            updatedAt: await dateClient.now(),
+            updatedAt: dateClient.now(),
             totalCoverage: minimizedCoverage
         )
     }
@@ -346,5 +360,42 @@ extension Corpus {
             updatedAt: snapshot.updatedAt,
             totalCoverage: snapshot.totalCoverage
         )
+    }
+}
+
+// MARK: - Batch State
+
+/// A snapshot of corpus state for efficient batch operations.
+///
+/// This struct captures all commonly-needed corpus state in a single structure,
+/// allowing FuzzEngine to avoid multiple actor boundary crossings during batch
+/// generation. Instead of 4 actor hops per batch entry (~400 for batch of 100),
+/// we get all state in 1 hop total.
+public struct CorpusBatchState<each Input: Codable & Sendable>: Sendable {
+    /// Whether the corpus is empty.
+    public let isEmpty: Bool
+
+    /// Number of entries in the corpus.
+    public let count: Int
+
+    /// All entries in the corpus.
+    public let entries: [CorpusEntry<repeat each Input>]
+
+    public init(
+        isEmpty: Bool,
+        count: Int,
+        entries: [CorpusEntry<repeat each Input>]
+    ) {
+        self.isEmpty = isEmpty
+        self.count = count
+        self.entries = entries
+    }
+
+    /// Select a random entry index for mutation.
+    ///
+    /// Uses uniform random selection from available entries.
+    public func selectForMutation() -> Int? {
+        guard !entries.isEmpty else { return nil }
+        return entries.indices.randomElement()
     }
 }

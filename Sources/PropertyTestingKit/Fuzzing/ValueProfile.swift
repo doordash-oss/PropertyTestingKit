@@ -168,7 +168,7 @@ extension ValueProfileTracker {
     ///
     /// - Parameter improvements: Comparisons that made progress.
     /// - Returns: Score bonus to add to corpus entry.
-    public func scoreBonus(for improvements: [ComparisonRecord]) -> Double {
+    nonisolated public func scoreBonus(for improvements: [ComparisonRecord]) -> Double {
         guard !improvements.isEmpty else { return 0 }
 
         var bonus = 0.0
@@ -332,7 +332,7 @@ extension ValueProfileTracker {
     ///
     /// Returns targets for constant comparisons that haven't been solved yet.
     /// These can be used to generate targeted mutations.
-    public func extractTargets() -> [ComparisonTarget] {
+    nonisolated public func extractTargets() -> [ComparisonTarget] {
         let count = vp_get_count()
         guard count > 0, let records = vp_get_records() else {
             return []

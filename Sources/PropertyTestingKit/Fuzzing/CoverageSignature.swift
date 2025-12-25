@@ -21,7 +21,7 @@ import Foundation
 public struct CoverageSignature: Hashable, Codable, Sendable {
     /// Bucketed counter values, keyed by counter index.
     /// Only non-zero buckets are stored for efficiency.
-    public let buckets: [Int: Bucket]
+    public private(set) var buckets: [Int: Bucket]
 
     /// The bucket categories, following AFL's approach.
     public enum Bucket: UInt8, Codable, Sendable {
@@ -89,6 +89,7 @@ public struct CoverageSignature: Hashable, Codable, Sendable {
     /// as it avoids iterating through all 26K+ counters.
     ///
     /// - Parameter sparseCoverage: Dictionary mapping edge index to hit count.
+    @available(*, deprecated, message: "Use init(sparse:) for better performance")
     public init(sparseCoverage: [Int: UInt8]) {
         var buckets: [Int: Bucket] = [:]
         buckets.reserveCapacity(sparseCoverage.count)
@@ -99,6 +100,23 @@ public struct CoverageSignature: Hashable, Codable, Sendable {
             }
         }
         self.buckets = buckets
+    }
+
+    /// Create a signature from sparse coverage arrays.
+    ///
+    /// This is the fastest way to create a signature from coverage data,
+    /// as it uses parallel arrays instead of Dictionary.
+    ///
+    /// - Parameter sparse: SparseCoverage with parallel indices/counts arrays.
+    public init(sparse: SparseCoverage) {
+        // Optimization: Use uniqueKeysWithValues for bulk construction
+        // This is faster than repeated Dictionary insertions.
+        // For SanCov edge coverage, all counts are 1 (bucket = .one)
+        // so we can skip the bucketing check for zero.
+        let pairs = (0..<sparse.count).map { i in
+            (Int(sparse.indices[i]), Bucket(count: UInt64(sparse.counts[i])))
+        }
+        self.buckets = Dictionary(uniqueKeysWithValues: pairs)
     }
 
     /// Number of counter regions that were executed.
@@ -116,6 +134,28 @@ public struct CoverageSignature: Hashable, Codable, Sendable {
         Set(buckets.keys)
     }
 
+    /// Remove this signature's executed indices from the given set.
+    /// More efficient than `set.subtract(executedIndices)` as it avoids
+    /// creating an intermediate Set.
+    public func subtractIndices(from set: inout Set<Int>) {
+        for key in buckets.keys {
+            set.remove(key)
+        }
+    }
+
+    /// Count how many of this signature's indices are in the given set.
+    /// More efficient than `executedIndices.intersection(set).count` as it
+    /// avoids creating intermediate Sets.
+    public func countIndicesIn(_ set: Set<Int>) -> Int {
+        var count = 0
+        for key in buckets.keys {
+            if set.contains(key) {
+                count += 1
+            }
+        }
+        return count
+    }
+
     // MARK: - Comparison
 
     /// Returns the indices covered by this signature but not the other.
@@ -129,8 +169,18 @@ public struct CoverageSignature: Hashable, Codable, Sendable {
     }
 
     /// Returns whether this signature covers any indices not in the other.
+    ///
+    /// Optimized to return early on first unique index found,
+    /// avoiding intermediate Set creation.
     public func hasUniqueCoverage(comparedTo other: CoverageSignature) -> Bool {
-        !uniqueIndices(comparedTo: other).isEmpty
+        // Fast path: if we have more indices, we definitely have unique ones
+        // (unless there's overlap, but this catches the common case)
+        for key in buckets.keys {
+            if other.buckets[key] == nil {
+                return true
+            }
+        }
+        return false
     }
 
     /// Returns the union of this signature with another.
@@ -145,6 +195,19 @@ public struct CoverageSignature: Hashable, Codable, Sendable {
             }
         }
         return CoverageSignature(buckets: merged)
+    }
+
+    /// Merges another signature into this one in-place.
+    /// Takes the maximum bucket value for each index.
+    /// More efficient than `union(with:)` when accumulating coverage.
+    public mutating func merge(with other: CoverageSignature) {
+        for (index, bucket) in other.buckets {
+            if let existing = buckets[index] {
+                buckets[index] = max(existing, bucket)
+            } else {
+                buckets[index] = bucket
+            }
+        }
     }
 }
 
@@ -200,7 +263,7 @@ public struct SignatureSet: Codable, Sendable {
     @discardableResult
     public mutating func insert(_ signature: CoverageSignature) -> Bool {
         let isNew = signatures.insert(signature).inserted
-        totalCoverage = totalCoverage.union(with: signature)
+        totalCoverage.merge(with: signature)
         return isNew
     }
 

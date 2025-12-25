@@ -50,3 +50,38 @@ extension Synchronized where T == Int {
         return storage
     }
 }
+
+/// A lock-based wrapper for synchronous thread-safe access to values.
+///
+/// Use this when you need synchronous access to a value across threads.
+/// Unlike `Synchronized` (which is an actor), this uses a lock and provides
+/// synchronous access suitable for use with non-async APIs like `DateClient.now`.
+///
+/// Example:
+/// ```swift
+/// let time = SyncBox(Date())
+/// let now = time.value  // Synchronous access
+/// time.update { $0.addingTimeInterval(1) }
+/// ```
+final class SyncBox<T>: @unchecked Sendable {
+    private var storage: T
+    private let lock = NSLock()
+
+    var value: T {
+        lock.lock()
+        defer { lock.unlock() }
+        return storage
+    }
+
+    init(_ value: T) {
+        self.storage = value
+    }
+
+    /// Atomically update the value with a transform closure.
+    @discardableResult
+    func update<Result>(_ transform: (inout T) throws -> Result) rethrows -> Result {
+        lock.lock()
+        defer { lock.unlock() }
+        return try transform(&storage)
+    }
+}

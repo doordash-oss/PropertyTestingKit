@@ -307,7 +307,7 @@ public struct TestCaseShrinker<T: Shrinkable & Sendable>: Sendable {
         input: T,
         test: @escaping (T) async -> ShrinkResult
     ) async -> (minimized: T, stats: ShrinkStats) {
-        let startTime = await dateClient.now()
+        let startTime = dateClient.now()
         var current = input
         var candidatesTested = 0
         var timedOut = false
@@ -329,7 +329,7 @@ public struct TestCaseShrinker<T: Shrinkable & Sendable>: Sendable {
 
             while offset < current.shrinkableElementCount {
                 // Check stopping conditions
-                if await dateClient.now().timeIntervalSince(startTime) >= config.timeout {
+                if dateClient.now().timeIntervalSince(startTime) >= config.timeout {
                     timedOut = true
                     break
                 }
@@ -377,7 +377,7 @@ public struct TestCaseShrinker<T: Shrinkable & Sendable>: Sendable {
                     maxExecutionsReached = true
                     break
                 }
-                if await dateClient.now().timeIntervalSince(startTime) >= config.timeout {
+                if dateClient.now().timeIntervalSince(startTime) >= config.timeout {
                     timedOut = true
                     break
                 }
@@ -392,7 +392,7 @@ public struct TestCaseShrinker<T: Shrinkable & Sendable>: Sendable {
             }
         }
 
-        let duration = await dateClient.now().timeIntervalSince(startTime)
+        let duration = dateClient.now().timeIntervalSince(startTime)
         let stats = ShrinkStats(
             candidatesTested: candidatesTested,
             originalSize: input.shrinkableElementCount,
@@ -425,7 +425,7 @@ public struct MultiComponentShrinker: Sendable {
         input: (A, B),
         test: @escaping ((A, B)) async -> ShrinkResult
     ) async -> (minimized: (A, B), stats: ShrinkStats) {
-        let startTime = await dateClient.now()
+        let startTime = dateClient.now()
         var current = input
         var candidatesTested = 0
         var timedOut = false
@@ -461,7 +461,7 @@ public struct MultiComponentShrinker: Sendable {
             maxExecutionsReached = statsA.maxExecutionsReached
         }
 
-        let duration = await dateClient.now().timeIntervalSince(startTime)
+        let duration = dateClient.now().timeIntervalSince(startTime)
         let stats = ShrinkStats(
             candidatesTested: candidatesTested,
             originalSize: input.0.shrinkableElementCount + input.1.shrinkableElementCount,

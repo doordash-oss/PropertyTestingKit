@@ -44,6 +44,21 @@ public struct CorpusClient<each Input: Codable & Sendable>: Sendable {
     public var failureEntries: @Sendable () async -> [CorpusEntry<repeat each Input>]
     public var hangEntries: @Sendable () async -> [CorpusEntry<repeat each Input>]
 
+    // MARK: - Batch Operations
+
+    /// Get all commonly-needed corpus state in a single call.
+    ///
+    /// Use this at the start of batch generation to avoid multiple actor hops:
+    /// ```swift
+    /// let state = await corpus.batchState()
+    /// for _ in 0..<batchSize {
+    ///     if state.isEmpty { ... }
+    ///     let idx = state.selectForMutation()
+    ///     let parent = state.entries[idx].input
+    /// }
+    /// ```
+    public var batchState: @Sendable () async -> CorpusBatchState<repeat each Input>
+
     // MARK: - Mutating Operations
 
     public var addIfInteresting: @Sendable ((repeat each Input), CoverageSignature, Int?) async -> Bool
@@ -66,6 +81,7 @@ public struct CorpusClient<each Input: Codable & Sendable>: Sendable {
         hangCount: @escaping @Sendable () async -> Int,
         failureEntries: @escaping @Sendable () async -> [CorpusEntry<repeat each Input>],
         hangEntries: @escaping @Sendable () async -> [CorpusEntry<repeat each Input>],
+        batchState: @escaping @Sendable () async -> CorpusBatchState<repeat each Input>,
         addIfInteresting: @escaping @Sendable ((repeat each Input), CoverageSignature, Int?) async -> Bool,
         add: @escaping @Sendable ((repeat each Input), CoverageSignature, Int?, CorpusEntryType, FailureInfo?) async -> Void,
         selectForMutation: @escaping @Sendable () async -> Int?,
@@ -85,6 +101,7 @@ public struct CorpusClient<each Input: Codable & Sendable>: Sendable {
         self.hangCount = hangCount
         self.failureEntries = failureEntries
         self.hangEntries = hangEntries
+        self.batchState = batchState
         self.addIfInteresting = addIfInteresting
         self.add = add
         self.selectForMutation = selectForMutation
@@ -93,8 +110,8 @@ public struct CorpusClient<each Input: Codable & Sendable>: Sendable {
     }
 
     /// Create a live client backed by a Corpus actor.
-    public static func live(schemaVersion: String) async -> CorpusClient<repeat each Input> {
-        let corpus = await Corpus<repeat each Input>(schemaVersion: schemaVersion)
+    public static func live(schemaVersion: String) -> CorpusClient<repeat each Input> {
+        let corpus = Corpus<repeat each Input>(schemaVersion: schemaVersion)
         return CorpusClient<repeat each Input>(
             count: { await corpus.count },
             isEmpty: { await corpus.isEmpty },
@@ -109,6 +126,7 @@ public struct CorpusClient<each Input: Codable & Sendable>: Sendable {
             hangCount: { await corpus.hangCount },
             failureEntries: { await corpus.failureEntries },
             hangEntries: { await corpus.hangEntries },
+            batchState: { await corpus.batchState() },
             addIfInteresting: { input, signature, parentIndex in
                 await corpus.addIfInteresting(input: input, signature: signature, parentIndex: parentIndex)
             },
@@ -137,6 +155,7 @@ public struct CorpusClient<each Input: Codable & Sendable>: Sendable {
             hangCount: { await corpus.hangCount },
             failureEntries: { await corpus.failureEntries },
             hangEntries: { await corpus.hangEntries },
+            batchState: { await corpus.batchState() },
             addIfInteresting: { input, signature, parentIndex in
                 await corpus.addIfInteresting(input: input, signature: signature, parentIndex: parentIndex)
             },
@@ -153,8 +172,8 @@ public struct CorpusClient<each Input: Codable & Sendable>: Sendable {
     ///
     /// This is useful for tests that want to verify mutation/generation
     /// without needing to mock coverage data.
-    public static func alwaysInteresting(schemaVersion: String = "test") async -> CorpusClient<repeat each Input> {
-        let corpus = await Corpus<repeat each Input>(schemaVersion: schemaVersion)
+    public static func alwaysInteresting(schemaVersion: String = "test") -> CorpusClient<repeat each Input> {
+        let corpus = Corpus<repeat each Input>(schemaVersion: schemaVersion)
         return CorpusClient<repeat each Input>(
             count: { await corpus.count },
             isEmpty: { await corpus.isEmpty },
@@ -169,6 +188,7 @@ public struct CorpusClient<each Input: Codable & Sendable>: Sendable {
             hangCount: { await corpus.hangCount },
             failureEntries: { await corpus.failureEntries },
             hangEntries: { await corpus.hangEntries },
+            batchState: { await corpus.batchState() },
             addIfInteresting: { input, signature, parentIndex in
                 // Always add to corpus (bypass coverage check)
                 await corpus.add(
@@ -197,8 +217,8 @@ public struct CorpusClient<each Input: Codable & Sendable>: Sendable {
 /// Provides a factory for creating corpus clients with the appropriate type.
 public struct CorpusRegistry: Sendable {
     /// Create a corpus client for the given input types.
-    public func get<each Input: Codable & Sendable>(schemaVersion: String) async -> CorpusClient<repeat each Input> {
-        return await CorpusClient.live(schemaVersion: schemaVersion)
+    public func get<each Input: Codable & Sendable>(schemaVersion: String) -> CorpusClient<repeat each Input> {
+        return CorpusClient.live(schemaVersion: schemaVersion)
     }
 
     /// Create a corpus client from an existing corpus.
@@ -210,7 +230,7 @@ public struct CorpusRegistry: Sendable {
 extension CorpusRegistry: CorpusRegistryProtocol {}
 
 public protocol CorpusRegistryProtocol: Sendable {
-    func get<each T: Codable & Sendable>(schemaVersion: String) async -> CorpusClient<repeat each T>
+    func get<each T: Codable & Sendable>(schemaVersion: String) -> CorpusClient<repeat each T>
     func get<each T: Codable & Sendable>(corpus: Corpus<repeat each T>) -> CorpusClient<repeat each T>
 }
 

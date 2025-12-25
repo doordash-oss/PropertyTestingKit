@@ -27,6 +27,22 @@ func makeSparseCoverage(coveredCount: Int, totalEdges: Int) -> [Int: UInt8] {
     return coverage
 }
 
+/// Generate a SparseCoverage struct simulating typical fuzz test coverage.
+func makeSparseCoverageArrays(coveredCount: Int, totalEdges: Int) -> SparseCoverage {
+    var indices: [UInt32] = []
+    var counts: [UInt8] = []
+    indices.reserveCapacity(coveredCount)
+    counts.reserveCapacity(coveredCount)
+
+    let step = max(1, totalEdges / coveredCount)
+    for i in 0..<coveredCount {
+        let index = (i * step + i * 7) % totalEdges
+        indices.append(UInt32(index))
+        counts.append(UInt8(1 + (i % 10)))
+    }
+    return SparseCoverage(indices: indices, counts: counts)
+}
+
 /// Generate a full counter array simulating a SanCovCounters snapshot.
 func makeFullCounters(coveredCount: Int, totalEdges: Int) -> [UInt8] {
     var counters = [UInt8](repeating: 0, count: totalEdges)
@@ -165,11 +181,15 @@ let benchmarks: @Sendable () -> Void = {
     let typicalCoveredEdges = 10
     let largeCoveredEdges = 100
 
-    // Pre-generate test data
+    // Pre-generate test data (dictionary format - deprecated)
     let sparseSmall = makeSparseCoverage(coveredCount: typicalCoveredEdges, totalEdges: totalEdges)
     let sparseLarge = makeSparseCoverage(coveredCount: largeCoveredEdges, totalEdges: totalEdges)
     let fullCountersSmall = makeFullCounters(coveredCount: typicalCoveredEdges, totalEdges: totalEdges)
     let fullCountersLarge = makeFullCounters(coveredCount: largeCoveredEdges, totalEdges: totalEdges)
+
+    // Pre-generate test data (array format - optimized)
+    let sparseArraysSmall = makeSparseCoverageArrays(coveredCount: typicalCoveredEdges, totalEdges: totalEdges)
+    let sparseArraysLarge = makeSparseCoverageArrays(coveredCount: largeCoveredEdges, totalEdges: totalEdges)
 
     // MARK: - CoverageSignature Creation
 
@@ -196,6 +216,33 @@ let benchmarks: @Sendable () -> Void = {
     ) { benchmark in
         for _ in benchmark.scaledIterations {
             blackHole(CoverageSignature(sparseCoverage: sparseLarge))
+        }
+    }
+
+    // New optimized SparseCoverage benchmarks
+    Benchmark(
+        "CoverageSignature(SparseCoverage) - 10 edges",
+        configuration: .init(
+            metrics: [.wallClock],
+            warmupIterations: 100,
+            scalingFactor: .kilo
+        )
+    ) { benchmark in
+        for _ in benchmark.scaledIterations {
+            blackHole(CoverageSignature(sparse: sparseArraysSmall))
+        }
+    }
+
+    Benchmark(
+        "CoverageSignature(SparseCoverage) - 100 edges",
+        configuration: .init(
+            metrics: [.wallClock],
+            warmupIterations: 100,
+            scalingFactor: .kilo
+        )
+    ) { benchmark in
+        for _ in benchmark.scaledIterations {
+            blackHole(CoverageSignature(sparse: sparseArraysLarge))
         }
     }
 
@@ -867,9 +914,9 @@ let benchmarks: @Sendable () -> Void = {
                 blackHole(try? parseAndValidate(input))
 
                 // 3. Snapshot coverage
-                if let sparse = SanCovCounters.snapshotCoveredOnly() {
+                if let sparse = SanCovCounters.snapshotCoveredArrays() {
                     // 4. Create signature
-                    let sig = CoverageSignature(sparseCoverage: sparse)
+                    let sig = CoverageSignature(sparse: sparse)
 
                     // 5. Add to corpus if interesting
                     blackHole(await corpus.addIfInteresting(input: input, signature: sig))
@@ -896,9 +943,9 @@ let benchmarks: @Sendable () -> Void = {
             blackHole(try? parseAndValidate(42))
 
             // 3. Snapshot coverage
-            if let sparse = SanCovCounters.snapshotCoveredOnly() {
+            if let sparse = SanCovCounters.snapshotCoveredArrays() {
                 // 4. Create signature
-                let sig = CoverageSignature(sparseCoverage: sparse)
+                let sig = CoverageSignature(sparse: sparse)
 
                 // 5. Add to corpus if interesting
                 blackHole(await corpus.addIfInteresting(input: 42, signature: sig))
@@ -918,6 +965,19 @@ let benchmarks: @Sendable () -> Void = {
     ) { benchmark in
         for _ in benchmark.scaledIterations {
             blackHole(SanCovCounters.snapshotCoveredOnly())
+        }
+    }
+
+    Benchmark(
+        "SanCovCounters.snapshotCoveredArrays()",
+        configuration: .init(
+            metrics: [.wallClock],
+            warmupIterations: 10,
+            scalingFactor: .kilo
+        )
+    ) { benchmark in
+        for _ in benchmark.scaledIterations {
+            blackHole(SanCovCounters.snapshotCoveredArrays())
         }
     }
 

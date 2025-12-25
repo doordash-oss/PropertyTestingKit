@@ -13,11 +13,14 @@ import Foundation
 /// Provides `Date()` as both live and test values so it doesn't interfere
 /// with users' tests. PropertyTestingKit's internal tests can override this
 /// to control timing when needed.
+///
+/// Note: `now` is synchronous because `Date()` is thread-safe and doesn't
+/// require actor isolation. This avoids unnecessary async overhead in hot paths.
 public struct DateClient: Sendable {
     /// Generate the current date.
-    public var now: @Sendable () async -> Date
+    public var now: @Sendable () -> Date
 
-    public init(now: @escaping @Sendable () async -> Date) {
+    public init(now: @escaping @Sendable () -> Date) {
         self.now = now
     }
 }
