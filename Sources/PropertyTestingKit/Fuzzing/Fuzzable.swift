@@ -161,45 +161,46 @@ extension Int: Fuzzable {
 // MARK: - String Conformance
 
 extension String: Fuzzable {
-    public static var fuzz: [String] {
-        [
-            // Empty and whitespace
-            "",
-            " ",
-            "\t\n\r",
+    // Cache the fuzz array to avoid regenerating the 1000-char string on each access
+    private static let _cachedFuzz: [String] = [
+        // Empty and whitespace
+        "",
+        " ",
+        "\t\n\r",
 
-            // Various lengths (1-6 chars for length-based tests)
-            "a",
-            "ab",
-            "abc",
-            "abcd",
-            "abcde",    // Length 5 - common test case
-            "abcdef",
+        // Various lengths (1-6 chars for length-based tests)
+        "a",
+        "ab",
+        "abc",
+        "abcd",
+        "abcde",    // Length 5 - common test case
+        "abcdef",
 
-            // Common magic strings
-            "xyzzy",    // Classic adventure game magic word
-            "plugh",    // Another classic magic word
-            "test",
-            "admin",
-            "password",
+        // Common magic strings
+        "xyzzy",    // Classic adventure game magic word
+        "plugh",    // Another classic magic word
+        "test",
+        "admin",
+        "password",
 
-            // Common prefixes
-            "SECRET_x",
-            "PRIVATE_",
-            "API_KEY_",
-            "TOKEN_",
+        // Common prefixes
+        "SECRET_x",
+        "PRIVATE_",
+        "API_KEY_",
+        "TOKEN_",
 
-            // Unicode and special
-            "😄",
-            "\0",
-            "Hello World",
-            "Hello\nWorld",
-            "Hello!@#$%^&*()_+-=[]{}|;:,.<>?",
+        // Unicode and special
+        "😄",
+        "\0",
+        "Hello World",
+        "Hello\nWorld",
+        "Hello!@#$%^&*()_+-=[]{}|;:,.<>?",
 
-            // Long string
-            String(repeating: "a", count: 1000),
-        ]
-    }
+        // Long string
+        String(repeating: "a", count: 1000),
+    ]
+
+    public static var fuzz: [String] { _cachedFuzz }
 
     public func mutate() -> [String] {
         var mutations: [String] = []

@@ -82,8 +82,8 @@ import Dependencies
 ///   - detectCoverageGaps: Enable coverage gap detection to identify partially-covered
 ///     functions. When enabled, the result includes a report of functions that have
 ///     some coverage but not complete coverage. Default: false.
-///   - mutationBatchSize: Number of mutations to run in parallel per batch (default: 8).
-///     Set to 1 for sequential execution when test closures capture mutable shared state.
+///   - mutationBatchSize: Number of mutations to run in parallel per batch.
+///     0 = auto-tune based on test cost (default), 1 = sequential, 4-16 = manual batching.
 ///   - filePath: Source file path (auto-filled).
 ///   - function: Test function name (auto-filled).
 ///   - test: The test closure receiving fuzzed inputs.
@@ -98,7 +98,7 @@ public func fuzz<each Input: Fuzzable & Codable & Sendable, each M: Mutator>(
     perInputTimeout: TimeInterval? = nil,
     corpusMode: CorpusMode? = nil,
     detectCoverageGaps: Bool = false,
-    mutationBatchSize: Int = 8,
+    mutationBatchSize: Int = 0,
     filePath: StaticString = #filePath,
     function: StaticString = #function,
     line: Int = #line,
@@ -144,8 +144,8 @@ public func fuzz<each Input: Fuzzable & Codable & Sendable, each M: Mutator>(
 ///   - detectCoverageGaps: Enable coverage gap detection to identify partially-covered
 ///     functions. When enabled, the result includes a report of functions that have
 ///     some coverage but not complete coverage. Default: false.
-///   - mutationBatchSize: Number of mutations to run in parallel per batch (default: 8).
-///     Set to 1 for sequential execution when test closures capture mutable shared state.
+///   - mutationBatchSize: Number of mutations to run in parallel per batch.
+///     0 = auto-tune based on test cost (default), 1 = sequential, 4-16 = manual batching.
 ///   - filePath: Source file path (auto-filled).
 ///   - function: Test function name (auto-filled).
 ///   - test: The test closure receiving fuzzed inputs.
@@ -159,7 +159,7 @@ public func fuzz<each Input: Fuzzable & Codable & Sendable>(
     perInputTimeout: TimeInterval? = nil,
     corpusMode: CorpusMode? = nil,
     detectCoverageGaps: Bool = false,
-    mutationBatchSize: Int = 8,
+    mutationBatchSize: Int = 0,
     filePath: StaticString = #filePath,
     function: StaticString = #function,
     line: Int = #line,

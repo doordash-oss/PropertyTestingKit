@@ -53,7 +53,10 @@ extension FuzzEngine {
         /// Number of inputs to test in parallel during the mutation phase.
         /// Higher values increase parallelism but may reduce coverage guidance accuracy
         /// since corpus updates happen in batches rather than after each test.
-        /// Default: 8 (balanced parallelism with reasonable guidance accuracy).
+        /// - 0: Auto-tune based on test execution time (recommended)
+        /// - 1: Sequential execution (best for cheap tests or shared mutable state)
+        /// - 4-16: Manual batching (for expensive tests with independent state)
+        /// Default: 0 (auto-tune based on measured test cost).
         public var mutationBatchSize: Int
 
         /// Enable coverage gap detection to identify partially-covered functions.
@@ -80,7 +83,7 @@ extension FuzzEngine {
             enableValueProfile: Bool = true,
             corpusMode: CorpusMode? = nil,
             perInputTimeout: TimeInterval? = nil,
-            mutationBatchSize: Int = 8,
+            mutationBatchSize: Int = 0,
             detectCoverageGaps: Bool = false,
             coverageGapConfig: CoverageGapDetector.Config = CoverageGapDetector.Config(),
             projectPath: String? = nil
@@ -102,7 +105,7 @@ extension FuzzEngine {
             // Use provided mode, or check environment, or default to auto
             self.corpusMode = corpusMode ?? CorpusMode.fromEnvironment()
             self.perInputTimeout = perInputTimeout
-            self.mutationBatchSize = max(1, mutationBatchSize)  // Ensure at least 1
+            self.mutationBatchSize = max(0, mutationBatchSize)  // 0 = auto-tune
             self.detectCoverageGaps = detectCoverageGaps
             self.coverageGapConfig = coverageGapConfig
             self.projectPath = projectPath

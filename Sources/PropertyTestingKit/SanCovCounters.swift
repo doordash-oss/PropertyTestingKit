@@ -146,16 +146,36 @@ public struct SanCovCounters: Sendable {
     public static func snapshotCoveredOnly() -> [Int: UInt8]? {
         guard isAvailable else { return nil }
 
-        // First get the count of covered edges
-        let coveredCount = sancov_snapshot_covered_indices(nil, nil, 0)
-        guard coveredCount > 0 else { return [:] }
+        // Optimization: Use a single pass with a reasonable max buffer.
+        // Coverage is typically sparse (<1% of edges hit), so 8K entries is usually enough.
+        // If we need more, we fall back to the two-pass approach.
+        let maxEntries = 8192
 
-        // Allocate buffers and get the data
-        var indices = [UInt32](repeating: 0, count: coveredCount)
-        var counts = [UInt8](repeating: 0, count: coveredCount)
-        let filled = sancov_snapshot_covered_indices(&indices, &counts, coveredCount)
+        // Single-pass: allocate buffer and fill in one call
+        var indices = [UInt32](repeating: 0, count: maxEntries)
+        var counts = [UInt8](repeating: 0, count: maxEntries)
+        let filled = sancov_snapshot_covered_indices(&indices, &counts, maxEntries)
 
-        // Build dictionary
+        // If buffer was too small, fall back to two-pass
+        if filled == maxEntries {
+            let actualCount = sancov_snapshot_covered_indices(nil, nil, 0)
+            if actualCount > maxEntries {
+                var largeIndices = [UInt32](repeating: 0, count: actualCount)
+                var largeCounts = [UInt8](repeating: 0, count: actualCount)
+                let actualFilled = sancov_snapshot_covered_indices(&largeIndices, &largeCounts, actualCount)
+
+                var result: [Int: UInt8] = [:]
+                result.reserveCapacity(actualFilled)
+                for i in 0..<actualFilled {
+                    result[Int(largeIndices[i])] = largeCounts[i]
+                }
+                return result
+            }
+        }
+
+        guard filled > 0 else { return [:] }
+
+        // Build dictionary from single-pass results
         var result: [Int: UInt8] = [:]
         result.reserveCapacity(filled)
         for i in 0..<filled {

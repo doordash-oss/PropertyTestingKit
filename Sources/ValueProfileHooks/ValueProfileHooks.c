@@ -9,6 +9,12 @@
 #include <string.h>
 #include <dlfcn.h>
 
+// SIMD support for ARM64 NEON
+#if defined(__aarch64__) || defined(__arm64__)
+#include <arm_neon.h>
+#define USE_NEON_SIMD 1
+#endif
+
 // Thread-local storage for comparison records
 static _Thread_local VPComparisonRecord vp_records[VP_MAX_RECORDS];
 static _Thread_local size_t vp_count = 0;
@@ -592,7 +598,75 @@ size_t sancov_snapshot_covered_indices(uint32_t* indices, uint8_t* counts, size_
     size_t counter_count = sancov_get_counter_count();
     if (!counters || counter_count == 0) return 0;
 
-    // If indices is NULL, just count covered edges
+#if USE_NEON_SIMD
+    // SIMD-optimized version using ARM NEON
+    // Process 16 bytes at a time, checking for any non-zero values
+
+    if (indices == NULL) {
+        // Count-only mode: use SIMD to quickly count non-zero bytes
+        size_t covered = 0;
+        size_t i = 0;
+
+        // Process 16 bytes at a time
+        uint8x16_t zero = vdupq_n_u8(0);
+        for (; i + 16 <= counter_count; i += 16) {
+            uint8x16_t chunk = vld1q_u8(counters + i);
+            uint8x16_t cmp = vcgtq_u8(chunk, zero);  // Compare: chunk > 0
+
+            // Count non-zero bytes using horizontal add
+            // First reduce to 8-byte counts
+            uint8x8_t sum8 = vadd_u8(vget_low_u8(cmp), vget_high_u8(cmp));
+            // Then sum pairs to get total (each non-zero becomes 0xFF = -1 in signed)
+            // We negate to count: each 0xFF becomes 1
+            uint64_t mask = vget_lane_u64(vreinterpret_u64_u8(sum8), 0);
+            // Count set bytes (each 0xFF byte represents one covered edge)
+            covered += __builtin_popcountll(mask) / 8;
+        }
+
+        // Handle remaining bytes
+        for (; i < counter_count; i++) {
+            if (counters[i] > 0) covered++;
+        }
+        return covered;
+    }
+
+    // Fill mode: use SIMD to find non-zero chunks, then extract indices
+    size_t filled = 0;
+    size_t i = 0;
+
+    uint8x16_t zero = vdupq_n_u8(0);
+    for (; i + 16 <= counter_count && filled < max_entries; i += 16) {
+        uint8x16_t chunk = vld1q_u8(counters + i);
+        uint8x16_t cmp = vcgtq_u8(chunk, zero);
+
+        // Quick check: any non-zero in this 16-byte chunk?
+        uint64x2_t cmp64 = vreinterpretq_u64_u8(cmp);
+        if (vgetq_lane_u64(cmp64, 0) == 0 && vgetq_lane_u64(cmp64, 1) == 0) {
+            continue;  // Skip entirely zero chunk
+        }
+
+        // Extract non-zero indices from this chunk
+        for (size_t j = 0; j < 16 && filled < max_entries; j++) {
+            if (counters[i + j] > 0) {
+                indices[filled] = (uint32_t)(i + j);
+                if (counts) counts[filled] = counters[i + j];
+                filled++;
+            }
+        }
+    }
+
+    // Handle remaining bytes
+    for (; i < counter_count && filled < max_entries; i++) {
+        if (counters[i] > 0) {
+            indices[filled] = (uint32_t)i;
+            if (counts) counts[filled] = counters[i];
+            filled++;
+        }
+    }
+    return filled;
+
+#else
+    // Fallback: scalar implementation for non-ARM platforms
     if (indices == NULL) {
         size_t covered = 0;
         for (size_t i = 0; i < counter_count; i++) {
@@ -601,7 +675,6 @@ size_t sancov_snapshot_covered_indices(uint32_t* indices, uint8_t* counts, size_
         return covered;
     }
 
-    // Fill arrays with covered indices and their counts
     size_t filled = 0;
     for (size_t i = 0; i < counter_count && filled < max_entries; i++) {
         if (counters[i] > 0) {
@@ -611,6 +684,7 @@ size_t sancov_snapshot_covered_indices(uint32_t* indices, uint8_t* counts, size_
         }
     }
     return filled;
+#endif
 }
 
 // MARK: - PC-to-Source Mapping Implementation

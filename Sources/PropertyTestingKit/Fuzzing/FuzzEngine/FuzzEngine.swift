@@ -400,6 +400,9 @@ public actor FuzzEngine<each Input: Fuzzable & Codable & Sendable> {
         // Capture coverage client before task group to satisfy Sendable requirements
         let coverageClient = coverageCounters
 
+        // Track seed execution time for auto-tuning batch size
+        let seedPhaseStart = CFAbsoluteTimeGetCurrent()
+
         let seedResults = await withTaskGroup(
             of: SeedTaskResult.self,
             returning: [SeedTaskResult].self
@@ -467,6 +470,8 @@ public actor FuzzEngine<each Input: Fuzzable & Codable & Sendable> {
             // Sort by index to maintain deterministic corpus building
             return results.sorted { $0.index < $1.index }
         }
+
+        let seedExecutionTime = CFAbsoluteTimeGetCurrent() - seedPhaseStart
 
         // Process results sequentially to build corpus
         for result in seedResults {
@@ -538,7 +543,15 @@ public actor FuzzEngine<each Input: Fuzzable & Codable & Sendable> {
         var timeInTest: Double = 0
         var timeInCoverage: Double = 0
 
-        let batchSize = config.mutationBatchSize
+        // Auto-tune batch size based on test execution time if configured
+        let batchSize: Int
+        if config.mutationBatchSize == 0 {
+            // Auto-tune: measure test cost from seed execution
+            let avgTestTime = seedInputs.isEmpty ? 0.0 : seedExecutionTime / Double(seedInputs.count)
+            batchSize = Self.selectBatchSize(forAvgTestTime: avgTestTime, verbose: config.verbose)
+        } else {
+            batchSize = config.mutationBatchSize
+        }
 
         while iteration < config.maxIterations {
             let batchStart = CFAbsoluteTimeGetCurrent()
@@ -1534,5 +1547,36 @@ public actor FuzzEngine<each Input: Fuzzable & Codable & Sendable> {
         results.append(exactTarget)
 
         return results
+    }
+
+    // MARK: - Auto-tuning
+
+    /// Select optimal batch size based on measured average test execution time.
+    ///
+    /// Heuristic based on benchmark data:
+    /// - Cheap tests (<100μs): Sequential is fastest (task overhead dominates)
+    /// - Medium tests (100μs-1ms): Small batches balance overhead and parallelism
+    /// - Expensive tests (>1ms): Larger batches maximize parallel throughput
+    private static func selectBatchSize(forAvgTestTime avgTime: Double, verbose: Bool) -> Int {
+        let batchSize: Int
+        if avgTime < 0.0001 {  // < 100μs
+            batchSize = 1
+        } else if avgTime < 0.001 {  // < 1ms
+            batchSize = 4
+        } else {
+            batchSize = 16
+        }
+
+        if verbose {
+            let timeStr: String
+            if avgTime < 0.001 {
+                timeStr = String(format: "%.0fμs", avgTime * 1_000_000)
+            } else {
+                timeStr = String(format: "%.1fms", avgTime * 1_000)
+            }
+            print("[Fuzz] Auto-tuned batch size: \(batchSize) (avg test time: \(timeStr))")
+        }
+
+        return batchSize
     }
 }
