@@ -395,6 +395,10 @@ public struct SanCovSourceLocation: Sendable {
     /// The program counter (instruction address) for this edge.
     public let pc: UInt
 
+    /// The function start address from dladdr (dli_saddr).
+    /// This is the true beginning of the function, useful for computing function bounds.
+    public let functionStart: UInt
+
     /// The SanCov edge index.
     public let edgeIndex: UInt32
 
@@ -415,6 +419,7 @@ public struct SanCovSourceLocation: Sendable {
             self.column = nil
         }
         self.pc = UInt(cLocation.pc)
+        self.functionStart = UInt(cLocation.function_start)
         self.edgeIndex = cLocation.edge_index
     }
 }
@@ -568,6 +573,219 @@ private actor DWARFSymbolizerActor {
 
 /// Global actor instance for DWARF symbolization.
 private let dwarfSymbolizerHelper = DWARFSymbolizerActor()
+
+// MARK: - Function Size Lookup
+
+/// Helper for looking up function sizes from the Mach-O symbol table.
+/// Parses the symbol table once, then provides O(log n) lookups.
+private actor FunctionSizeLookupActor {
+    /// Sorted array of (address, size) for binary search
+    private var _functionBounds: [(address: UInt, size: UInt)] = []
+    private var _initialized = false
+    private var _slide: Int = 0
+
+    /// Initialize and parse the symbol table.
+    private func initialize() {
+        guard !_initialized else { return }
+        _initialized = true
+
+        // Find the test binary
+        var targetImageIndex: UInt32 = 0
+        for i in 0..<_dyld_image_count() {
+            guard let name = _dyld_get_image_name(i) else { continue }
+            let path = String(cString: name)
+            if path.contains(".xctest/") {
+                targetImageIndex = i
+                break
+            }
+        }
+
+        guard let headerRaw = _dyld_get_image_header(targetImageIndex) else {
+            return
+        }
+        _slide = _dyld_get_image_vmaddr_slide(targetImageIndex)
+
+        // Cast to 64-bit header (we're always on 64-bit Apple Silicon)
+        let header = UnsafeRawPointer(headerRaw).assumingMemoryBound(to: mach_header_64.self)
+
+        // Parse symbol table from Mach-O header
+        var symbols: [(address: UInt, name: String)] = []
+
+        // Iterate load commands to find LC_SYMTAB
+        var commandPtr = UnsafeRawPointer(header).advanced(by: MemoryLayout<mach_header_64>.size)
+        for _ in 0..<header.pointee.ncmds {
+            let command = commandPtr.assumingMemoryBound(to: load_command.self).pointee
+
+            if command.cmd == LC_SYMTAB {
+                let symtabCmd = commandPtr.assumingMemoryBound(to: symtab_command.self).pointee
+
+                // Get pointers to symbol table and string table
+                let linkeditBase = findLinkeditBase(header: header)
+                guard linkeditBase != nil else { break }
+
+                let symtabPtr = linkeditBase!.advanced(by: Int(symtabCmd.symoff))
+                    .assumingMemoryBound(to: nlist_64.self)
+                let strtabPtr = linkeditBase!.advanced(by: Int(symtabCmd.stroff))
+                    .assumingMemoryBound(to: CChar.self)
+
+                // Extract function symbols (type 0x0f = N_SECT, external or local)
+                for i in 0..<Int(symtabCmd.nsyms) {
+                    let nlist = symtabPtr[i]
+                    let type = nlist.n_type & UInt8(N_TYPE)
+
+                    // Only include defined symbols in a section (functions/data)
+                    if type == UInt8(N_SECT) {
+                        let nameOffset = Int(nlist.n_un.n_strx)
+                        let name = String(cString: strtabPtr.advanced(by: nameOffset))
+
+                        // Filter to likely function symbols (not empty, not metadata)
+                        if !name.isEmpty && !name.hasPrefix("_$s") == false {
+                            let address = UInt(nlist.n_value) + UInt(bitPattern: _slide)
+                            symbols.append((address: address, name: name))
+                        }
+                    }
+                }
+                break
+            }
+
+            commandPtr = commandPtr.advanced(by: Int(command.cmdsize))
+        }
+
+        // Sort by address
+        symbols.sort { $0.address < $1.address }
+
+        // Compute sizes as gaps between adjacent symbols
+        _functionBounds.reserveCapacity(symbols.count)
+        for i in 0..<symbols.count {
+            let address = symbols[i].address
+            let size: UInt
+            if i + 1 < symbols.count {
+                size = symbols[i + 1].address - address
+            } else {
+                size = 4096  // Default for last symbol
+            }
+            _functionBounds.append((address: address, size: size))
+        }
+
+        #if DEBUG
+        print("[FunctionSizeLookup] Parsed \(_functionBounds.count) symbols from symbol table")
+        #endif
+    }
+
+    /// Find the base address where linkedit segment is mapped.
+    /// For a loaded binary, the linkedit data is at: slide + vmaddr
+    private func findLinkeditBase(header: UnsafePointer<mach_header_64>) -> UnsafeRawPointer? {
+        var commandPtr = UnsafeRawPointer(header).advanced(by: MemoryLayout<mach_header_64>.size)
+        var linkeditVMAddr: UInt64 = 0
+        var linkeditFileOff: UInt64 = 0
+        var textVMAddr: UInt64 = 0
+
+        for _ in 0..<header.pointee.ncmds {
+            let command = commandPtr.assumingMemoryBound(to: load_command.self).pointee
+
+            if command.cmd == LC_SEGMENT_64 {
+                let segment = commandPtr.assumingMemoryBound(to: segment_command_64.self).pointee
+                let segname = withUnsafeBytes(of: segment.segname) { ptr -> String in
+                    let bytes = ptr.bindMemory(to: CChar.self)
+                    return String(cString: bytes.baseAddress!)
+                }
+                if segname == "__LINKEDIT" {
+                    linkeditVMAddr = segment.vmaddr
+                    linkeditFileOff = segment.fileoff
+                } else if segname == "__TEXT" {
+                    textVMAddr = segment.vmaddr
+                }
+            }
+
+            commandPtr = commandPtr.advanced(by: Int(command.cmdsize))
+        }
+
+        guard linkeditVMAddr > 0 else { return nil }
+
+        // For a loaded binary with ASLR:
+        // actual_linkedit_addr = slide + linkedit_vmaddr
+        // The symtab/strtab offsets are relative to the start of linkedit data
+        // So we need: slide + linkedit_vmaddr - linkedit_fileoff + offset
+        // Which simplifies to: headerAddr - textVMAddr + linkedit_vmaddr - linkedit_fileoff + offset
+        // Or: headerAddr + (linkedit_vmaddr - textVMAddr) - linkedit_fileoff + offset
+
+        // Actually simpler: the linkedit base for offset lookups is:
+        // slide + linkedit_vmaddr - linkedit_fileoff
+        let slide = UInt64(bitPattern: Int64(_slide))
+        let linkeditBase = slide + linkeditVMAddr - linkeditFileOff
+        return UnsafeRawPointer(bitPattern: UInt(linkeditBase))
+    }
+
+    /// Look up the size of a function given its start address.
+    /// Returns nil if the address is not found.
+    func getSize(forFunctionAt address: UInt) -> UInt? {
+        if !_initialized {
+            initialize()
+        }
+
+        // Binary search for the address
+        var low = 0
+        var high = _functionBounds.count - 1
+
+        while low <= high {
+            let mid = (low + high) / 2
+            let entry = _functionBounds[mid]
+
+            if entry.address == address {
+                return entry.size
+            } else if entry.address < address {
+                low = mid + 1
+            } else {
+                high = mid - 1
+            }
+        }
+
+        return nil
+    }
+
+    /// Get sizes for multiple function addresses at once.
+    /// More efficient than individual lookups due to reduced actor overhead.
+    func getSizes(forFunctionsAt addresses: [UInt]) -> [UInt: UInt] {
+        if !_initialized {
+            initialize()
+        }
+
+        var result: [UInt: UInt] = [:]
+        result.reserveCapacity(addresses.count)
+
+        for address in addresses {
+            if let size = getSize(forFunctionAt: address) {
+                result[address] = size
+            }
+        }
+
+        return result
+    }
+
+    /// Check if the lookup table is available.
+    var isAvailable: Bool {
+        if !_initialized {
+            initialize()
+        }
+        return !_functionBounds.isEmpty
+    }
+}
+
+/// Global actor instance for function size lookup.
+private let functionSizeLookup = FunctionSizeLookupActor()
+
+extension SanCovCounters {
+    /// Get the size of a function given its start address.
+    /// Uses the Mach-O symbol table for accurate sizes.
+    public static func getFunctionSize(at address: UInt) async -> UInt? {
+        await functionSizeLookup.getSize(forFunctionAt: address)
+    }
+
+    /// Get sizes for multiple function addresses at once.
+    public static func getFunctionSizes(at addresses: [UInt]) async -> [UInt: UInt] {
+        await functionSizeLookup.getSizes(forFunctionsAt: addresses)
+    }
+}
 
 extension SanCovCounters {
     /// Check if PC-to-source mapping is available.

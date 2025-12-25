@@ -271,12 +271,13 @@ public struct CoverageGapDetector: Sendable {
             let key = "\(filename):\(funcName)"
             testedFunctions.insert(key)
 
-            // Track PC range for this function
-            let pc = location.pc
+            // Track function start address from dladdr (true function start)
+            let funcStart = location.functionStart > 0 ? location.functionStart : location.pc
             if let existing = functionPCRanges[key] {
-                functionPCRanges[key] = (min: min(existing.min, pc), max: max(existing.max, pc))
+                // Use minimum of all function starts we've seen (should be the same)
+                functionPCRanges[key] = (min: min(existing.min, funcStart), max: existing.max)
             } else {
-                functionPCRanges[key] = (min: pc, max: pc)
+                functionPCRanges[key] = (min: funcStart, max: 0)  // max will be set from symbol table
             }
 
             var info = functionEdges[key] ?? FunctionEdgeInfo(
@@ -289,27 +290,41 @@ public struct CoverageGapDetector: Sendable {
             functionEdges[key] = info
         }
 
-        // Build per-function PC ranges with padding for uncovered edge filtering
-        // This is much tighter than a global range and avoids dladdr calls for edges
-        // that are clearly outside all tested functions.
-        let pcPadding: UInt = 4096  // 4KB padding per function
+        // Query symbol table for accurate function sizes (one-time cost)
+        // This gives us precise bounds instead of relying on padding
+        let functionStarts = Array(Set(functionPCRanges.values.map { $0.min }))
+        let functionSizes = await SanCovCounters.getFunctionSizes(at: functionStarts)
 
-        // Pre-compute padded ranges for faster lookup in Step 2
-        struct PaddedPCRange {
+        #if DEBUG
+        let symbolTableTime = CFAbsoluteTimeGetCurrent()
+        print("[GapDetector] Symbol table lookup: \(String(format: "%.3f", symbolTableTime - step1Start))s for \(functionStarts.count) functions")
+        #endif
+
+        // Build per-function PC ranges using accurate sizes from symbol table
+        // Fallback to 64KB padding if symbol lookup fails
+        let fallbackPadding: UInt = 65536
+
+        struct FunctionPCRange {
             let min: UInt
             let max: UInt
         }
-        var paddedFunctionRanges: [PaddedPCRange] = []
-        paddedFunctionRanges.reserveCapacity(functionPCRanges.count)
+        var accurateFunctionRanges: [FunctionPCRange] = []
+        accurateFunctionRanges.reserveCapacity(functionPCRanges.count)
 
         var globalMinPC: UInt = .max
         var globalMaxPC: UInt = 0
         for (_, range) in functionPCRanges {
-            let paddedMin = range.min > pcPadding ? range.min - pcPadding : 0
-            let paddedMax = range.max.addingReportingOverflow(pcPadding).overflow ? .max : range.max + pcPadding
-            paddedFunctionRanges.append(PaddedPCRange(min: paddedMin, max: paddedMax))
-            globalMinPC = min(globalMinPC, paddedMin)
-            globalMaxPC = max(globalMaxPC, paddedMax)
+            let funcStart = range.min
+            let funcEnd: UInt
+            if let size = functionSizes[funcStart], size > 0 {
+                funcEnd = funcStart + size
+            } else {
+                // Fallback if symbol table lookup failed
+                funcEnd = funcStart + fallbackPadding
+            }
+            accurateFunctionRanges.append(FunctionPCRange(min: funcStart, max: funcEnd))
+            globalMinPC = min(globalMinPC, funcStart)
+            globalMaxPC = max(globalMaxPC, funcEnd)
         }
 
         let step1End = CFAbsoluteTimeGetCurrent()
@@ -363,10 +378,10 @@ public struct CoverageGapDetector: Sendable {
                 continue
             }
 
-            // Second filter: Per-function PC ranges
+            // Second filter: Per-function PC ranges (using accurate sizes from symbol table)
             // Check if this PC falls within ANY tested function's range
             var inAnyFunctionRange = false
-            for range in paddedFunctionRanges {
+            for range in accurateFunctionRanges {
                 if pc >= range.min && pc <= range.max {
                     inAnyFunctionRange = true
                     break

@@ -2,7 +2,9 @@
 
 ## Status: COMPLETED ✓
 
-Implemented per-function PC range filtering to reduce dladdr calls.
+Implemented two optimizations:
+1. Per-function PC range filtering (Phase 1)
+2. Symbol table function sizes (Phase 2)
 
 ## Problem (Fixed)
 
@@ -20,35 +22,50 @@ Total dladdr calls: 5,805
 
 ## Solution Implemented
 
-Changed from **global PC range** filter to **per-function PC range** filter:
+### Phase 1: Per-Function PC Range Filtering
+Changed from **global PC range** filter to **per-function PC range** filter.
 
-1. **Step 1:** Build per-function PC ranges from covered edges
-   - Track `functionPCRanges: [String: (min: UInt, max: UInt)]` for each tested function
-   - Pre-compute `paddedFunctionRanges` array with 4KB padding per function
+### Phase 2: Symbol Table Function Sizes
+Query the Mach-O symbol table once to get accurate function sizes instead of using arbitrary padding:
 
-2. **Step 2:** Two-phase filtering before dladdr
-   - First filter: Global PC range (very fast)
-   - Second filter: Check if PC falls within ANY tested function's padded range
-   - Only call dladdr if both filters pass
+1. **Symbol Table Parsing:** Parse the symbol table from the loaded binary's Mach-O header
+2. **Function Sizes:** Compute sizes as gaps between adjacent symbols (sorted by address)
+3. **Accurate Bounds:** Use `functionStart + size` instead of `functionStart + padding`
+
+Benefits:
+- Large functions (>4KB) are now fully covered
+- Small functions have tighter bounds, filtering more edges
 
 ## Results
 
-**After optimization (testNumberParserCoverage):**
+**After Phase 2 (testNumberParserCoverage):**
 ```
-Step 2 total: 0.047s
-  - PC filter time: 0.003s (21,438 edges filtered out)
-  - dladdr time: 0.043s (476 calls)
-  - Function filter time: 0.000s (377 edges filtered out)
+Symbol table lookup: 0.049s for 9 functions (32,631 symbols parsed)
+Step 2 total: 0.014s
+  - PC filter time: 0.004s (21,811 edges filtered out)
+  - dladdr time: 0.009s (103 calls)
+  - Function filter time: 0.000s (4 edges filtered out)
 
-Total dladdr calls: 496
+Total dladdr calls: 123
 ```
 
 ### Improvement Summary
 
-| Metric | Before | After | Improvement |
-|--------|--------|-------|-------------|
-| dladdr calls | 5,805 | 496 | **11.7x reduction** |
-| Step 2 time | 0.504s | 0.047s | **10.7x faster** |
-| Uncovered edges | 99 | 99 | Same (correctness preserved) |
+| Metric | Original | Phase 1 | Phase 2 | Total Improvement |
+|--------|----------|---------|---------|-------------------|
+| dladdr calls | 5,805 | 496 | 123 | **47x reduction** |
+| Step 2 time | 0.504s | 0.047s | 0.014s | **36x faster** |
+| Edges filtered by PC | 16,129 | 21,438 | 21,811 | More precise |
+| Edges filtered by func name | 5,686 | 377 | 4 | Minimal waste |
 
-~11x faster gap detection with per-function PC range filtering.
+Symbol table is parsed once and cached. First call ~50ms, subsequent calls near-zero.
+
+## Benchmark Results
+
+```
+fuzz(Int) - 1000 iterations, with gap detection
+------------------------------------------------
+Before: 45ms (p50)
+After:  11ms (p50)
+Improvement: 76-82% faster (4x speedup)
+```

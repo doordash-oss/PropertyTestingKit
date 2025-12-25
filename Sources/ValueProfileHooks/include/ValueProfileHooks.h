@@ -94,6 +94,7 @@ typedef struct {
     const char* filename;      // Source file path (may be NULL)
     const char* function_name; // Demangled function name (may be NULL)
     uintptr_t pc;              // Program counter for this edge
+    uintptr_t function_start;  // Function start address from dladdr (dli_saddr)
     uint32_t edge_index;       // The SanCov edge index
 } SanCovSourceLocation;
 

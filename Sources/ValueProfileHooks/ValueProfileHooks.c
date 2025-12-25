@@ -722,6 +722,7 @@ bool sancov_get_source_location(size_t edge_index, SanCovSourceLocation* locatio
     location->edge_index = (uint32_t)edge_index;
     location->filename = NULL;
     location->function_name = NULL;
+    location->function_start = 0;
 
     // Use dladdr to get symbol info
     Dl_info info;
@@ -729,6 +730,7 @@ bool sancov_get_source_location(size_t edge_index, SanCovSourceLocation* locatio
     if (dladdr((void*)pc, &info)) {
         location->filename = info.dli_fname;
         location->function_name = info.dli_sname;
+        location->function_start = (uintptr_t)info.dli_saddr;
     }
 
     return true;
