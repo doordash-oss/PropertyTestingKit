@@ -459,6 +459,31 @@ private actor DWARFSymbolizerActor {
         return await symbolizer.lookup(address: fileOffset)
     }
 
+    /// Batch look up DWARF info for multiple PC addresses.
+    /// Much faster than individual lookups due to reduced actor overhead.
+    func lookupBatch(pcs: [UInt]) async -> [UInt: DWARFSourceLocation] {
+        guard let symbolizer = shared else {
+            return [:]
+        }
+
+        // Convert runtime PCs to file offsets
+        let addresses = pcs.map { runtimeToFileOffset($0) }
+
+        // Batch lookup
+        let results = await symbolizer.lookup(addresses: addresses)
+
+        // Map back to runtime PCs
+        var pcResults: [UInt: DWARFSourceLocation] = [:]
+        pcResults.reserveCapacity(results.count)
+        for (i, pc) in pcs.enumerated() {
+            let fileOffset = addresses[i]
+            if let location = results[fileOffset] {
+                pcResults[pc] = location
+            }
+        }
+        return pcResults
+    }
+
     /// Check if the symbolizer is available.
     var isAvailable: Bool {
         shared != nil
@@ -538,6 +563,32 @@ extension SanCovCounters {
         // Try to get DWARF line info (expensive - skip if not needed)
         let dwarfLocation = includeDWARF ? await dwarfSymbolizerHelper.lookup(pc: UInt(cLocation.pc)) : nil
         return SanCovSourceLocation(from: cLocation, dwarfLocation: dwarfLocation)
+    }
+
+    /// Get source location info synchronously (no DWARF).
+    ///
+    /// This is faster than the async version when you don't need line numbers.
+    /// Uses dladdr for function-level info only.
+    ///
+    /// - Parameter edgeIndex: The edge index to look up.
+    /// - Returns: Source location info, or nil if unavailable.
+    public static func getSourceLocationSync(for edgeIndex: Int) -> SanCovSourceLocation? {
+        var cLocation = SanCovSourceLocation_C()
+        guard sancov_get_source_location(edgeIndex, &cLocation) else {
+            return nil
+        }
+        return SanCovSourceLocation(from: cLocation, dwarfLocation: nil)
+    }
+
+    /// Batch look up DWARF source locations for multiple PC addresses.
+    ///
+    /// Much faster than individual `getSourceLocation` calls when you need line numbers
+    /// for many addresses, as it reduces actor overhead and batches LLVM lookups.
+    ///
+    /// - Parameter pcs: Array of program counter addresses to look up.
+    /// - Returns: Dictionary mapping PCs to their DWARF source locations.
+    public static func getDWARFLocations(for pcs: [UInt]) async -> [UInt: DWARFSourceLocation] {
+        await dwarfSymbolizerHelper.lookupBatch(pcs: pcs)
     }
 
     /// Get source locations for all covered edges in the current task.

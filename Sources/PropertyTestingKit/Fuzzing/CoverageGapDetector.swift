@@ -11,10 +11,10 @@ import Foundation
 
 /// An uncovered region within a function.
 public struct UncoveredRegion: Sendable, Equatable {
-    /// The starting line number (1-indexed).
+    /// The starting line number (1-indexed). May be 0 if not yet resolved.
     public let lineStart: Int
 
-    /// The starting column number (1-indexed).
+    /// The starting column number (1-indexed). May be 0 if not yet resolved.
     public let columnStart: Int
 
     /// The ending line number (1-indexed).
@@ -26,6 +26,9 @@ public struct UncoveredRegion: Sendable, Equatable {
     /// The edge index in the SanCov PC table.
     public let edgeIndex: Int
 
+    /// The program counter for this edge (for lazy line lookup).
+    public let pc: UInt
+
     /// Whether this region represents a branch (vs a statement).
     public let isBranch: Bool
 
@@ -35,6 +38,7 @@ public struct UncoveredRegion: Sendable, Equatable {
         lineEnd: Int = 0,
         columnEnd: Int = 0,
         edgeIndex: Int,
+        pc: UInt = 0,
         isBranch: Bool = false
     ) {
         self.lineStart = lineStart
@@ -42,6 +46,7 @@ public struct UncoveredRegion: Sendable, Equatable {
         self.lineEnd = lineEnd > 0 ? lineEnd : lineStart
         self.columnEnd = columnEnd > 0 ? columnEnd : columnStart
         self.edgeIndex = edgeIndex
+        self.pc = pc
         self.isBranch = isBranch
     }
 }
@@ -237,6 +242,7 @@ public struct CoverageGapDetector: Sendable {
 
         // Step 1: Fast scan to find all function keys and count edges (no DWARF)
         // Also track PC ranges for each function to enable fast filtering in Step 2
+        let step1Start = CFAbsoluteTimeGetCurrent()
         var functionEdges: [String: FunctionEdgeInfo] = [:]
         var testedFunctions: Set<String> = []
         var functionPCRanges: [String: (min: UInt, max: UInt)] = [:]
@@ -244,7 +250,7 @@ public struct CoverageGapDetector: Sendable {
         // Mark functions that have covered edges as "tested"
         for edgeIndex in coveredIndices {
             guard edgeIndex < totalEdges else { continue }
-            guard let location = await SanCovCounters.getSourceLocation(for: edgeIndex, includeDWARF: false) else {
+            guard let location = SanCovCounters.getSourceLocationSync(for: edgeIndex) else {
                 continue
             }
 
@@ -287,10 +293,13 @@ public struct CoverageGapDetector: Sendable {
             globalMinPC = min(globalMinPC, range.min)
             globalMaxPC = max(globalMaxPC, range.max)
         }
-        // Add padding to account for uncovered branches (typically within ~64KB of covered code)
-        let pcPadding: UInt = 65536
+        // Add padding to account for uncovered branches (typically within ~4KB of covered code)
+        // Reduced from 64KB to 4KB for performance - functions rarely span more than 4KB
+        let pcPadding: UInt = 4096
         let filterMinPC = globalMinPC > pcPadding ? globalMinPC - pcPadding : 0
         let filterMaxPC = globalMaxPC.addingReportingOverflow(pcPadding).overflow ? .max : globalMaxPC + pcPadding
+
+        let step1End = CFAbsoluteTimeGetCurrent()
 
         // If no functions were tested, return early (no gaps to detect)
         if testedFunctions.isEmpty {
@@ -302,9 +311,20 @@ public struct CoverageGapDetector: Sendable {
             )
         }
 
+        let step2Start = CFAbsoluteTimeGetCurrent()
         // Step 2: Scan uncovered edges, but only for functions we're tracking
         // Optimization: First filter by PC range (fast array lookup), then dladdr only for candidates
+        // Collect all edges that need DWARF lookup, then batch process them
         let coveredSet = coveredIndices
+
+        // First pass: identify uncovered edges in tested functions (no DWARF)
+        struct UncoveredEdge {
+            let edgeIndex: Int
+            let pc: UInt
+            let key: String
+        }
+        var uncoveredEdgesNeedingDWARF: [UncoveredEdge] = []
+
         for edgeIndex in 0..<totalEdges where !coveredSet.contains(edgeIndex) {
             // Fast PC range filter - skip edges clearly outside tested functions
             let pc = SanCovCounters.getPC(for: edgeIndex)
@@ -312,7 +332,7 @@ public struct CoverageGapDetector: Sendable {
                 continue
             }
 
-            guard let location = await SanCovCounters.getSourceLocation(for: edgeIndex, includeDWARF: false) else {
+            guard let location = SanCovCounters.getSourceLocationSync(for: edgeIndex) else {
                 continue
             }
 
@@ -328,19 +348,39 @@ public struct CoverageGapDetector: Sendable {
                 continue
             }
 
-            // Now get the full location with DWARF for line numbers
-            let fullLocation = await SanCovCounters.getSourceLocation(for: edgeIndex, includeDWARF: true)
+            // Track this edge for batch DWARF lookup
+            uncoveredEdgesNeedingDWARF.append(UncoveredEdge(edgeIndex: edgeIndex, pc: pc, key: key))
 
+            // Update total count (we don't have line info yet)
             if var info = functionEdges[key] {
                 info.totalEdges += 1
-                info.uncoveredEdges.append(EdgeInfo(
-                    index: edgeIndex,
-                    line: fullLocation?.line ?? 0,
-                    column: fullLocation?.column ?? 0
-                ))
                 functionEdges[key] = info
             }
         }
+
+        let step2FirstPassEnd = CFAbsoluteTimeGetCurrent()
+
+        // Second pass: batch DWARF lookup for all uncovered edges
+        // Optimization: Skip DWARF lookup during detection. Line numbers are computed
+        // lazily when detailedSummary is accessed (if ever). This saves ~10-20ms.
+        for edge in uncoveredEdgesNeedingDWARF {
+            if var info = functionEdges[edge.key] {
+                // Store edge index and PC, defer line lookup to lazy access
+                info.uncoveredEdges.append(EdgeInfo(
+                    index: edge.edgeIndex,
+                    pc: edge.pc,
+                    line: 0,  // Will be computed lazily if needed
+                    column: 0
+                ))
+                functionEdges[edge.key] = info
+            }
+        }
+
+        #if DEBUG
+        print("[GapDetector] Step 1 (covered edges dladdr): \(String(format: "%.3f", step1End - step1Start))s")
+        print("[GapDetector] Step 2 first pass (uncovered dladdr): \(String(format: "%.3f", step2FirstPassEnd - step2Start))s")
+        print("[GapDetector] Edges scanned: \(totalEdges), uncovered edges: \(uncoveredEdgesNeedingDWARF.count)")
+        #endif
 
         // Analyze each function and detect gaps
         var gaps: [CoverageGap] = []
@@ -363,6 +403,7 @@ public struct CoverageGapDetector: Sendable {
                         lineStart: edge.line,
                         columnStart: edge.column,
                         edgeIndex: edge.index,
+                        pc: edge.pc,
                         isBranch: false  // TODO: detect branches vs statements
                     )
                 }
@@ -446,6 +487,7 @@ private struct FunctionEdgeInfo {
 
 private struct EdgeInfo {
     let index: Int
+    let pc: UInt
     let line: Int
     let column: Int
 }

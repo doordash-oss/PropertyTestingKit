@@ -111,6 +111,14 @@ uintptr_t sancov_get_pc(size_t edge_index);
 /// Note: filename and function_name point to static storage and must not be freed.
 bool sancov_get_source_location(size_t edge_index, SanCovSourceLocation* location);
 
+/// Get source locations for multiple edge indices (batch version).
+/// Much faster than calling sancov_get_source_location in a loop.
+/// @param edge_indices Array of edge indices to look up
+/// @param locations Output array of source locations (must be same size as edge_indices)
+/// @param count Number of edges to look up
+/// @return Number of locations successfully filled
+size_t sancov_get_source_locations_batch(const size_t* edge_indices, SanCovSourceLocation* locations, size_t count);
+
 /// Get source locations for all covered edges in the current task.
 /// Fills the provided array with location info for covered edges.
 /// Returns the number of locations written (up to max_locations).
