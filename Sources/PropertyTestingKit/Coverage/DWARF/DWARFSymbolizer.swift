@@ -9,6 +9,21 @@ import Foundation
 import CLLVMSymbolizer
 import Dependencies
 
+/// Wrapper class that owns the LLVM symbolizer resource and handles cleanup.
+/// This class is marked Sendable because the underlying C code uses a mutex
+/// for thread-safety, and the pointer value itself is just a number.
+private final class SymbolizerRef: @unchecked Sendable {
+    let pointer: LLVMSymbolizerRef
+
+    init(_ pointer: LLVMSymbolizerRef) {
+        self.pointer = pointer
+    }
+
+    deinit {
+        llvm_symbolizer_destroy(pointer)
+    }
+}
+
 /// Symbolizer that uses LLVM to resolve addresses to source locations.
 ///
 /// This actor provides thread-safe access to LLVM symbolization.
@@ -21,7 +36,7 @@ import Dependencies
 /// }
 /// ```
 public actor DWARFSymbolizer: Sendable {
-    private let ref: LLVMSymbolizerRef
+    private let ref: SymbolizerRef
 
     /// Initialize a symbolizer for the given binary path.
     ///
@@ -37,7 +52,7 @@ public actor DWARFSymbolizer: Sendable {
         var lastError: String = "unknown error"
         for tryPath in pathsToTry {
             if let symbolizerRef = llvm_symbolizer_create(tryPath) {
-                self.ref = symbolizerRef
+                self.ref = SymbolizerRef(symbolizerRef)
                 return
             }
             lastError = llvm_symbolizer_get_error().map { String(cString: $0) } ?? "unknown error"
@@ -110,16 +125,14 @@ public actor DWARFSymbolizer: Sendable {
         return paths
     }
 
-    isolated deinit {
-        llvm_symbolizer_destroy(ref)
-    }
+    // No deinit needed - SymbolizerRef handles cleanup
 
     /// Look up source location for a given address.
     ///
     /// - Parameter address: The program counter address to look up.
     /// - Returns: The source location, or nil if not found.
     public func lookup(address: UInt64) -> DWARFSourceLocation? {
-        var result = llvm_symbolizer_lookup(ref, address)
+        var result = llvm_symbolizer_lookup(ref.pointer, address)
         defer { llvm_symbolizer_free_result(&result) }
 
         guard result.success else {
@@ -145,7 +158,7 @@ public actor DWARFSymbolizer: Sendable {
         var results: [UInt64: DWARFSourceLocation] = [:]
 
         for addr in addresses {
-            var result = llvm_symbolizer_lookup(ref, addr)
+            var result = llvm_symbolizer_lookup(ref.pointer, addr)
             defer { llvm_symbolizer_free_result(&result) }
 
             if result.success {

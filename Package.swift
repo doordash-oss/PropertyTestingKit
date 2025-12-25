@@ -20,7 +20,7 @@ let package = Package(
         .package(url: "https://github.com/swiftlang/swift-syntax.git", from: "600.0.1"),
         .package(url: "https://github.com/pointfreeco/swift-dependencies.git", from: "1.6.0"),
         .package(url: "https://github.com/twof/FunctionSpy.git", from: "1.2.0"),
-        .package(url: "https://github.com/ordo-one/package-benchmark.git", from: "1.4.0"),
+        .package(path: "../../../Documents/OpenSource/package-benchmark"),
     ],
     targets: [
         // C module for value profile hooks (sanitizer coverage)
