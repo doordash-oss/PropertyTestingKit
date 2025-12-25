@@ -287,12 +287,14 @@ let benchmarks: @Sendable () -> Void = {
         )
     ) { benchmark in
         for _ in benchmark.scaledIterations {
-            let _ = try? await fuzz(
-                iterations: 100,
-                duration: 1,
+            let config = FuzzEngine<Int>.Config(
+                maxIterations: 100,
+                maxDuration: 1,
                 corpusMode: .refuzzReplace,
-                detectCoverageGaps: false
-            ) { (input: Int) in
+                disablePlateauDetection: true
+            )
+            let engine = FuzzEngine<Int>(config: config)
+            let _ = await engine.run { input in
                 try parseAndValidate(input)
             }
         }
@@ -313,7 +315,8 @@ let benchmarks: @Sendable () -> Void = {
                 maxIterations: 100,
                 maxDuration: 1,
                 enableValueProfile: false,
-                corpusMode: .refuzzReplace
+                corpusMode: .refuzzReplace,
+                disablePlateauDetection: true
             )
             let engine = FuzzEngine<Int>(config: config)
             let _ = await engine.run { input in
@@ -328,17 +331,20 @@ let benchmarks: @Sendable () -> Void = {
             metrics: [.wallClock],
             warmupIterations: 1,
             scalingFactor: .one,
-            maxDuration: .seconds(60),
+            maxDuration: .seconds(30),
             maxIterations: 10
         )
     ) { benchmark in
         for _ in benchmark.scaledIterations {
-            let _ = try? await fuzz(
-                iterations: 100,
-                duration: 1,
+            let config = FuzzEngine<Int>.Config(
+                maxIterations: 100,
+                maxDuration: 1,
                 corpusMode: .refuzzReplace,
-                detectCoverageGaps: true
-            ) { (input: Int) in
+                detectCoverageGaps: true,
+                disablePlateauDetection: true
+            )
+            let engine = FuzzEngine<Int>(config: config)
+            let _ = await engine.run { input in
                 try parseAndValidate(input)
             }
         }
@@ -355,12 +361,14 @@ let benchmarks: @Sendable () -> Void = {
         )
     ) { benchmark in
         for _ in benchmark.scaledIterations {
-            let _ = try? await fuzz(
-                iterations: 100,
-                duration: 1,
+            let config = FuzzEngine<String>.Config(
+                maxIterations: 100,
+                maxDuration: 1,
                 corpusMode: .refuzzReplace,
-                detectCoverageGaps: false
-            ) { (input: String) in
+                disablePlateauDetection: true
+            )
+            let engine = FuzzEngine<String>(config: config)
+            let _ = await engine.run { input in
                 try validateString(input)
             }
         }
@@ -377,12 +385,14 @@ let benchmarks: @Sendable () -> Void = {
         )
     ) { benchmark in
         for _ in benchmark.scaledIterations {
-            let _ = try? await fuzz(
-                iterations: 1000,
-                duration: 10,
+            let config = FuzzEngine<Int>.Config(
+                maxIterations: 1000,
+                maxDuration: 10,
                 corpusMode: .refuzzReplace,
-                detectCoverageGaps: false
-            ) { (input: Int) in
+                disablePlateauDetection: true
+            )
+            let engine = FuzzEngine<Int>(config: config)
+            let _ = await engine.run { input in
                 try parseAndValidate(input)
             }
         }
@@ -395,16 +405,19 @@ let benchmarks: @Sendable () -> Void = {
             warmupIterations: 0,
             scalingFactor: .one,
             maxDuration: .seconds(60),
-            maxIterations: 100
+            maxIterations: 1000
         )
     ) { benchmark in
         for _ in benchmark.scaledIterations {
-            let _ = try? await fuzz(
-                iterations: 1000,
-                duration: 10,
+            let config = FuzzEngine<Int>.Config(
+                maxIterations: 1000,
+                maxDuration: 10,
                 corpusMode: .refuzzReplace,
-                detectCoverageGaps: true
-            ) { (input: Int) in
+                detectCoverageGaps: true,
+                disablePlateauDetection: true
+            )
+            let engine = FuzzEngine<Int>(config: config)
+            let _ = await engine.run { input in
                 try parseAndValidate(input)
             }
         }
@@ -421,12 +434,15 @@ let benchmarks: @Sendable () -> Void = {
         )
     ) { benchmark in
         for _ in benchmark.scaledIterations {
-            let _ = try? await fuzz(
-                iterations: 100,
-                duration: 5,
+            let config = FuzzEngine<Int>.Config(
+                maxIterations: 100,
+                maxDuration: 5,
                 corpusMode: .refuzzReplace,
-                detectCoverageGaps: true
-            ) { (input: Int) in
+                detectCoverageGaps: true,
+                disablePlateauDetection: true
+            )
+            let engine = FuzzEngine<Int>(config: config)
+            let _ = await engine.run { input in
                 realisticCoverageGap(input)
             }
         }
@@ -446,7 +462,8 @@ let benchmarks: @Sendable () -> Void = {
             let config = FuzzEngine<EmptyFuzzable>.Config(
                 maxIterations: 10,
                 maxDuration: 1,
-                corpusMode: .refuzzReplace
+                corpusMode: .refuzzReplace,
+                disablePlateauDetection: true
             )
             let engine = FuzzEngine<EmptyFuzzable>(config: config, corpusDirectory: nil)
             let _ = await engine.run { _ in }
@@ -800,12 +817,14 @@ let benchmarks: @Sendable () -> Void = {
         )
     ) { benchmark in
         for _ in benchmark.scaledIterations {
-            let _ = try? await fuzz(
-                iterations: 10,
-                duration: 1,
+            let config = FuzzEngine<Int>.Config(
+                maxIterations: 10,
+                maxDuration: 1,
                 corpusMode: .refuzzReplace,
-                detectCoverageGaps: false
-            ) { (input: Int) in
+                disablePlateauDetection: true
+            )
+            let engine = FuzzEngine<Int>(config: config)
+            let _ = await engine.run { input in
                 // Minimal test - just touch the input
                 blackHole(input)
             }
@@ -823,12 +842,14 @@ let benchmarks: @Sendable () -> Void = {
         )
     ) { benchmark in
         for _ in benchmark.scaledIterations {
-            let _ = try? await fuzz(
-                iterations: 50,
-                duration: 1,
+            let config = FuzzEngine<Int>.Config(
+                maxIterations: 50,
+                maxDuration: 1,
                 corpusMode: .refuzzReplace,
-                detectCoverageGaps: false
-            ) { (input: Int) in
+                disablePlateauDetection: true
+            )
+            let engine = FuzzEngine<Int>(config: config)
+            let _ = await engine.run { input in
                 blackHole(input)
             }
         }
@@ -1035,12 +1056,14 @@ let benchmarks: @Sendable () -> Void = {
         )
     ) { benchmark in
         for _ in benchmark.scaledIterations {
-            let _ = try? await fuzz(
-                iterations: 100,
-                duration: 30,
+            let config = FuzzEngine<Int>.Config(
+                maxIterations: 100,
+                maxDuration: 30,
                 corpusMode: .refuzzReplace,
-                detectCoverageGaps: false
-            ) { (input: Int) in
+                disablePlateauDetection: true
+            )
+            let engine = FuzzEngine<Int>(config: config)
+            let _ = await engine.run { input in
                 try expensiveValidation(input)
             }
         }
@@ -1061,7 +1084,8 @@ let benchmarks: @Sendable () -> Void = {
                 maxIterations: 100,
                 maxDuration: 30,
                 corpusMode: .refuzzReplace,
-                mutationBatchSize: 1  // Force sequential execution
+                mutationBatchSize: 1,  // Force sequential execution
+                disablePlateauDetection: true
             )
             let engine = FuzzEngine<Int>(config: config)
             let _ = await engine.run { input in
@@ -1085,7 +1109,8 @@ let benchmarks: @Sendable () -> Void = {
                 maxIterations: 100,
                 maxDuration: 30,
                 corpusMode: .refuzzReplace,
-                mutationBatchSize: 16
+                mutationBatchSize: 16,
+                disablePlateauDetection: true
             )
             let engine = FuzzEngine<Int>(config: config)
             let _ = await engine.run { input in

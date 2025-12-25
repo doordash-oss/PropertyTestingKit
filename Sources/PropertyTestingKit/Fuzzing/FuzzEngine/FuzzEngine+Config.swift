@@ -72,6 +72,10 @@ extension FuzzEngine {
         /// When set, only reports gaps in files under this path.
         public var projectPath: String?
 
+        /// When true, disables plateau detection and runs for the full maxIterations.
+        /// Useful for benchmarking to ensure consistent iteration counts.
+        public var disablePlateauDetection: Bool
+
         public init(
             maxIterations: Int = 10_000,
             maxDuration: TimeInterval = 60,
@@ -86,17 +90,20 @@ extension FuzzEngine {
             mutationBatchSize: Int = 0,
             detectCoverageGaps: Bool = false,
             coverageGapConfig: CoverageGapDetector.Config = CoverageGapDetector.Config(),
-            projectPath: String? = nil
+            projectPath: String? = nil,
+            disablePlateauDetection: Bool = false
         ) {
             self.maxIterations = maxIterations
             self.maxDuration = maxDuration
             self.plateauThreshold = plateauThreshold
+            self.disablePlateauDetection = disablePlateauDetection
             // Default plateau config based on iterations
+            // Disable if disablePlateauDetection is true
             self.plateauConfig = plateauConfig ?? CoveragePlateauDetector.Config(
                 windowSize: max(1, min(500, maxIterations / 10)),
                 minDiscoveryRate: 0.001,
                 confirmationWindows: 3,
-                enabled: true
+                enabled: !disablePlateauDetection
             )
             self.generationRatio = generationRatio
             self.minimizeCorpus = minimizeCorpus
