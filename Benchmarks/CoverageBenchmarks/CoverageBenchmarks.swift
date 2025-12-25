@@ -274,60 +274,6 @@ let benchmarks: @Sendable () -> Void = {
         }
     }
 
-    // MARK: - Fuzz API Benchmarks
-
-    // Note: These benchmarks use small iteration counts to measure per-iteration overhead.
-    // The fuzz function is called once per benchmark iteration.
-
-    // MARK: - Raw Baseline (no fuzz overhead)
-    // These measure just calling the test function without fuzz infrastructure
-    // Note: Each "call" in the name refers to inner loop iterations per benchmark iteration
-
-    Benchmark(
-        "parseAndValidate(Int) - single call",
-        configuration: .init(
-            metrics: [.wallClock],
-            warmupIterations: 100,
-            scalingFactor: .kilo
-        )
-    ) { benchmark in
-        for _ in benchmark.scaledIterations {
-            blackHole(try? parseAndValidate(42))
-        }
-    }
-
-    Benchmark(
-        "parseAndValidate(Int) - 100 calls (raw baseline)",
-        configuration: .init(
-            metrics: [.wallClock],
-            warmupIterations: 10,
-            scalingFactor: .kilo
-        )
-    ) { benchmark in
-        for _ in benchmark.scaledIterations {
-            for i in 0..<100 {
-                blackHole(try? parseAndValidate(i))
-            }
-        }
-    }
-
-    Benchmark(
-        "parseAndValidate(Int) - 1000 calls (raw baseline)",
-        configuration: .init(
-            metrics: [.wallClock],
-            warmupIterations: 5,
-            scalingFactor: .one,
-            maxDuration: .seconds(5),
-            maxIterations: 500
-        )
-    ) { benchmark in
-        for _ in benchmark.scaledIterations {
-            for i in 0..<1000 {
-                blackHole(try? parseAndValidate(i))
-            }
-        }
-    }
-
     // MARK: - Fuzz Benchmarks
 
     Benchmark(
