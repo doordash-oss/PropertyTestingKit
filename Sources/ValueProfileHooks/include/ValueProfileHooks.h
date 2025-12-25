@@ -94,6 +94,7 @@ typedef struct {
     const char* filename;      // Source file path (may be NULL)
     const char* function_name; // Demangled function name (may be NULL)
     uintptr_t pc;              // Program counter for this edge
+    uintptr_t function_start;  // Function start address from dladdr (dli_saddr)
     uint32_t edge_index;       // The SanCov edge index
 } SanCovSourceLocation;
 
@@ -110,6 +111,12 @@ uintptr_t sancov_get_pc(size_t edge_index);
 /// Returns true if successful, false if index out of bounds or PCs unavailable.
 /// Note: filename and function_name point to static storage and must not be freed.
 bool sancov_get_source_location(size_t edge_index, SanCovSourceLocation* location);
+
+/// Get the number of dladdr calls made (for profiling).
+size_t sancov_get_dladdr_call_count(void);
+
+/// Reset the dladdr call counter.
+void sancov_reset_dladdr_call_count(void);
 
 /// Get source locations for multiple edge indices (batch version).
 /// Much faster than calling sancov_get_source_location in a loop.
