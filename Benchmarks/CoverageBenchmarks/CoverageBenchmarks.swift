@@ -392,10 +392,10 @@ let benchmarks: @Sendable () -> Void = {
         "fuzz(Int) - 1000 iterations, with gap detection",
         configuration: .init(
             metrics: [.wallClock],
-            warmupIterations: 1,
+            warmupIterations: 0,
             scalingFactor: .one,
             maxDuration: .seconds(60),
-            maxIterations: 5
+            maxIterations: 100
         )
     ) { benchmark in
         for _ in benchmark.scaledIterations {
