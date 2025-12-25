@@ -267,6 +267,79 @@ Environment variables:
 - `FUZZ_DURATION=N` - Override max duration
 - `FUZZ_CORPUS_MODE=<mode>` - Control corpus behavior (see [Corpus Modes](#corpus-modes))
 
+### When Fuzzing Finds a Bug
+
+When fuzzing discovers a failing input, you'll see a detailed report:
+
+```
+Fuzz test failure #1
+
+Failing input:
+{
+  "userId": -9223372036854775808,
+  "name": "x"
+}
+
+Error:
+ValidationError: User ID cannot be negative
+
+Fuzz run stats:
+  - Total inputs tested: 847
+  - Unique coverage paths: 23
+  - Stop reason: iteration_limit
+```
+
+The failure includes:
+- **Failing input**: The exact input that caused the failure (JSON-formatted for complex types)
+- **Error**: The error that was thrown
+- **Fuzz run stats**: Context about the fuzzing session
+
+To reproduce the failure, the failing input is automatically saved to the corpus and will be replayed on subsequent test runs.
+
+### Hang Detection
+
+Detect infinite loops or deadlocks with per-input timeouts:
+
+```swift
+@Test func testParser() throws {
+    try fuzz(
+        perInputTimeout: 1.0  // 1 second timeout per input
+    ) { (input: String) in
+        parse(input)  // Will be interrupted if it takes > 1s
+    }
+}
+```
+
+When a hang is detected:
+- The input is recorded as a "hang" (separate from failures)
+- The test continues with other inputs
+- Stats include both failure and hang counts
+
+### Coverage Gap Detection
+
+Find functions with incomplete test coverage:
+
+```swift
+@Test func testParser() throws {
+    try fuzz(
+        detectCoverageGaps: true
+    ) { (input: String) in
+        parse(input)
+    }
+}
+```
+
+After fuzzing completes, coverage gaps are reported as test issues:
+
+```
+Coverage gap: parseNumber in Parser.swift is 75% covered (lines: 42, 47, 51)
+```
+
+This helps identify:
+- Branches not exercised by the fuzzer
+- Dead code or unreachable paths
+- Areas needing additional seeds or mutators
+
 ### Building with Coverage
 
 Coverage instrumentation must be enabled:

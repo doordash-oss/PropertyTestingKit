@@ -194,17 +194,32 @@ private func reportFuzzResult<each Input: Codable & Sendable>(
     filePath: StaticString,
     line: Int = #line
 ) throws -> FuzzResult<repeat each Input> {
-    for (input, error) in result.failures {
+    let testFilePath = String(describing: filePath)
+
+    for (index, (input, error)) in result.failures.enumerated() {
+        // Format the input for readability
+        let formattedInput = formatInput(input)
+
+        // Build a comprehensive failure message
+        var message = "Fuzz test failure #\(index + 1)"
+        message += "\n\nFailing input:\n\(formattedInput)"
+        message += "\n\nError:\n\(error)"
+
+        // Add context about the fuzz run
+        message += "\n\nFuzz run stats:"
+        message += "\n  - Total inputs tested: \(result.stats.totalInputs)"
+        message += "\n  - Unique coverage paths: \(result.stats.newPaths)"
+        message += "\n  - Stop reason: \(result.stats.stopReason.rawValue)"
+
         Issue.record(
-            Comment(rawValue: "Fuzz failure with input: \(input)"),
+            Comment(rawValue: message),
             sourceLocation: SourceLocation(
-                fileID: String(describing: filePath),
-                filePath: String(describing: filePath),
-                line: 1,
+                fileID: testFilePath,
+                filePath: testFilePath,
+                line: line,
                 column: 1
             )
         )
-        Issue.record(error)
     }
 
     // Record coverage gaps as issues (fails the test)
@@ -240,12 +255,52 @@ private func reportFuzzResult<each Input: Codable & Sendable>(
 
     if let firstFailure = result.failures.first {
         throw FuzzError.testFailed(
-            input: "\(firstFailure.input)",
+            input: formatInput(firstFailure.input),
             underlyingError: firstFailure.error
         )
     }
 
     return result
+}
+
+/// Format an input value for readable display in failure messages.
+private func formatInput<T>(_ input: T) -> String {
+    // Try JSON encoding for Codable types (pretty printed)
+    if let encodable = input as? Encodable {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        if let data = try? encoder.encode(AnyEncodable(encodable)),
+           let jsonString = String(data: data, encoding: .utf8) {
+            return jsonString
+        }
+    }
+
+    // Fall back to string description
+    let description = String(describing: input)
+
+    // If it's a long string, truncate with ellipsis
+    if description.count > 500 {
+        let prefix = description.prefix(250)
+        let suffix = description.suffix(250)
+        return "\(prefix)\n... [\(description.count - 500) characters truncated] ...\n\(suffix)"
+    }
+
+    return description
+}
+
+/// Type-erased wrapper for encoding any Encodable value.
+private struct AnyEncodable: Encodable {
+    private let _encode: (Encoder) throws -> Void
+
+    init(_ value: Encodable) {
+        self._encode = { encoder in
+            try value.encode(to: encoder)
+        }
+    }
+
+    func encode(to encoder: Encoder) throws {
+        try _encode(encoder)
+    }
 }
 
 // MARK: - Path Resolution
