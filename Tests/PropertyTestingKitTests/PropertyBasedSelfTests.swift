@@ -637,7 +637,12 @@ struct RegressionModeTests {
         let (snapshotSpy, snapshotFn) = spy { () async -> SanCovCounters? in
             SanCovCounters(counters: [UInt64](repeating: 0, count: 100))
         }
-        let mockClient = CoverageCountersClient(snapshot: snapshotFn, reset: {}, isAvailable: { true })
+        let mockClient = CoverageCountersClient(
+            snapshot: snapshotFn,
+            snapshotCoveredArrays: { SparseCoverage(indices: [], counts: []) },
+            reset: {},
+            isAvailable: { true }
+        )
         let version1 = await CorpusSchema.currentVersion(using: mockClient)
 
         // Version should be in expected format
@@ -670,7 +675,12 @@ struct RegressionModeTests {
     @Test("CorpusSchema returns unknown when coverage unavailable")
     func testSchemaVersioningUnknown() async throws {
         // Use a mock client that returns nil (simulating coverage unavailable)
-        let mockClient = CoverageCountersClient(snapshot: { nil }, reset: {}, isAvailable: { false })
+        let mockClient = CoverageCountersClient(
+            snapshot: { nil },
+            snapshotCoveredArrays: { nil },
+            reset: {},
+            isAvailable: { false }
+        )
         let version = await CorpusSchema.currentVersion(using: mockClient)
         #expect(version == "unknown", "Should return 'unknown' when coverage unavailable")
     }

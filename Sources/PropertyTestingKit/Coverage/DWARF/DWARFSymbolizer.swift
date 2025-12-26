@@ -72,6 +72,7 @@ public actor DWARFSymbolizer: Sendable {
     /// Searches for dSYM bundles in common locations:
     /// - Adjacent to .xctest/.app/.framework bundle
     /// - Adjacent to standalone binary (non-bundle case)
+    /// - Xcode's DerivedData structure (dSYMs folder, Build/Products)
     private static func findDebugInfoPaths(for binaryPath: String) -> [String] {
         @Dependency(\.fileManager) var fm
 
@@ -85,11 +86,13 @@ public actor DWARFSymbolizer: Sendable {
         // Binary: /path/to/Foo.xctest/Contents/MacOS/Foo
         // dSYM:   /path/to/Foo.xctest.dSYM/Contents/Resources/DWARF/Foo
         var foundBundle = false
+        var bundleURL: URL?
         var searchURL = binaryURL.deletingLastPathComponent()
         while searchURL.path != "/" {
             let parentName = searchURL.lastPathComponent
             if parentName.hasSuffix(".xctest") || parentName.hasSuffix(".app") || parentName.hasSuffix(".framework") {
                 foundBundle = true
+                bundleURL = searchURL
                 let dsymPath = searchURL
                     .deletingLastPathComponent()
                     .appendingPathComponent("\(parentName).dSYM")
@@ -102,6 +105,35 @@ public actor DWARFSymbolizer: Sendable {
                 break
             }
             searchURL = searchURL.deletingLastPathComponent()
+        }
+
+        // For Xcode builds, also check the dSYMs subdirectory
+        // Xcode sometimes puts dSYMs in: /DerivedData/.../Build/Products/Debug/dSYMs/
+        if let bundleURL = bundleURL {
+            let productsDir = bundleURL.deletingLastPathComponent()
+            let bundleName = bundleURL.lastPathComponent
+
+            // Check dSYMs subdirectory
+            let dsymsSubdir = productsDir
+                .appendingPathComponent("dSYMs")
+                .appendingPathComponent("\(bundleName).dSYM")
+                .appendingPathComponent("Contents/Resources/DWARF")
+                .appendingPathComponent(binaryName)
+                .path
+            if fm.fileExists(atPath: dsymsSubdir) {
+                paths.append(dsymsSubdir)
+            }
+
+            // Also check if Xcode placed dSYM with a different naming convention
+            // Sometimes it's just BinaryName.dSYM instead of Bundle.xctest.dSYM
+            let binaryDsym = productsDir
+                .appendingPathComponent("\(binaryName).dSYM")
+                .appendingPathComponent("Contents/Resources/DWARF")
+                .appendingPathComponent(binaryName)
+                .path
+            if fm.fileExists(atPath: binaryDsym) {
+                paths.append(binaryDsym)
+            }
         }
 
         // For standalone binaries (not in a bundle), check for dSYM adjacent to binary
@@ -118,6 +150,11 @@ public actor DWARFSymbolizer: Sendable {
                 paths.append(adjacentDsym)
             }
         }
+
+        #if DEBUG
+        print("[DWARFSymbolizer] Binary path: \(binaryPath)")
+        print("[DWARFSymbolizer] dSYM search paths: \(paths)")
+        #endif
 
         // Always try the original binary path last
         paths.append(binaryPath)

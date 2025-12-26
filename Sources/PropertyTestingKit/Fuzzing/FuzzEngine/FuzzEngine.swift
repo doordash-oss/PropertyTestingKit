@@ -444,9 +444,9 @@ public actor FuzzEngine<each Input: Fuzzable & Codable & Sendable> {
                         }
                     }
 
-                    // Get coverage snapshot for this task
+                    // Get coverage snapshot for this task (sync - uses task-local data)
                     let signature: CoverageSignature?
-                    if let sparse = await coverageClient.snapshotCoveredArrays() {
+                    if let sparse = coverageClient.snapshotCoveredArrays() {
                         signature = CoverageSignature(sparse: sparse)
                     } else {
                         signature = nil
@@ -473,8 +473,12 @@ public actor FuzzEngine<each Input: Fuzzable & Codable & Sendable> {
 
         let seedExecutionTime = CFAbsoluteTimeGetCurrent() - seedPhaseStart
 
-        // Process results sequentially to build corpus
-        for result in seedResults {
+        // First pass: handle errors/hangs and collect coverage candidates
+        typealias SeedCandidateEntry = Corpus<repeat each Input>.CandidateEntry
+        var seedCandidates: [SeedCandidateEntry] = []
+        var seedCandidateIndices: [Int] = []
+
+        for (resultIdx, result) in seedResults.enumerated() {
             let input = seedInputs[result.index]
 
             // Handle test failures and hangs
@@ -487,16 +491,23 @@ public actor FuzzEngine<each Input: Fuzzable & Codable & Sendable> {
                 failures.append((input, error))
             }
 
-            // Add to corpus if we have coverage (using tuple overload)
+            // Collect candidates for batch add
             if let signature = result.signature {
-                let addedForCoverage = await corpus.addIfInteresting(input, signature, nil)
+                seedCandidates.append(SeedCandidateEntry(input: input, signature: signature, parentIndex: nil))
+                seedCandidateIndices.append(resultIdx)
+            }
+        }
 
-                if addedForCoverage {
-                    iterationsSinceNewCoverage = 0
-                    if verbose {
-                        let count = await corpus.count()
-                        print("[Fuzz] New coverage from seed: \(count) entries")
-                    }
+        // Batch add all seed candidates in a single actor call
+        let seedAddResults = await corpus.batchAddIfInteresting(seedCandidates)
+
+        // Second pass: update counters based on batch results
+        for wasAdded in seedAddResults {
+            if wasAdded {
+                iterationsSinceNewCoverage = 0
+                if verbose {
+                    let count = await corpus.count()
+                    print("[Fuzz] New coverage from seed: \(count) entries")
                 }
             }
         }
@@ -717,9 +728,9 @@ public actor FuzzEngine<each Input: Fuzzable & Codable & Sendable> {
                             }
                         }
 
-                        // Get coverage snapshot
+                        // Get coverage snapshot (sync - uses task-local data)
                         let signature: CoverageSignature?
-                        if let sparse = await coverageClient.snapshotCoveredArrays() {
+                        if let sparse = coverageClient.snapshotCoveredArrays() {
                             signature = CoverageSignature(sparse: sparse)
                         } else {
                             signature = nil
@@ -747,31 +758,50 @@ public actor FuzzEngine<each Input: Fuzzable & Codable & Sendable> {
             // // Process results sequentially to update corpus and state
             // let coverageStart = CFAbsoluteTimeGetCurrent()
 
-            for result in batchResults {
+            // First pass: handle errors/hangs and collect coverage candidates
+            typealias CandidateEntry = Corpus<repeat each Input>.CandidateEntry
+            var candidates: [CandidateEntry] = []
+            var candidateIndices: [Int] = []  // Track which batchResults have candidates
+
+            for (resultIdx, result) in batchResults.enumerated() {
                 let input = batchInputs[result.index]
-                let meta = batchMeta[result.index]
-                iteration += 1
-                iterationsSinceNewCoverage += 1
 
                 // Handle test errors and hangs
                 if result.timedOut {
                     let timeout = config.perInputTimeout ?? 0
                     hangs.append((input, timeout))
                     if verbose {
-                        print("[Fuzz] Hang detected: input timed out after \(timeout)s, iteration \(iteration)")
+                        print("[Fuzz] Hang detected: input timed out after \(timeout)s, iteration \(iteration + resultIdx + 1)")
                     }
                 } else if let error = result.error {
                     failures.append((input, error))
                 }
 
-                // Process coverage
+                // Collect candidates for batch add
                 if let signature = result.signature {
-                    let addedForCoverage = await corpus.addIfInteresting(input, signature, meta.parentIndex)
+                    let meta = batchMeta[result.index]
+                    candidates.append(CandidateEntry(input: input, signature: signature, parentIndex: meta.parentIndex))
+                    candidateIndices.append(resultIdx)
+                }
+            }
+
+            // Batch add all candidates in a single actor call
+            let addResults = await corpus.batchAddIfInteresting(candidates)
+
+            // Second pass: update counters based on batch results
+            var candidateResultIdx = 0
+            for result in batchResults {
+                iteration += 1
+                iterationsSinceNewCoverage += 1
+
+                if result.signature != nil {
+                    let wasAdded = addResults[candidateResultIdx]
+                    candidateResultIdx += 1
 
                     // Record discovery status for plateau detection
-                    plateauDetector.record(discoveredNewCoverage: addedForCoverage)
+                    plateauDetector.record(discoveredNewCoverage: wasAdded)
 
-                    if addedForCoverage {
+                    if wasAdded {
                         iterationsSinceNewCoverage = 0
 
                         if verbose {
@@ -929,8 +959,8 @@ public actor FuzzEngine<each Input: Fuzzable & Codable & Sendable> {
             }
 
             // Get coverage snapshot (task-isolated, no diff needed)
-            // Use sparse snapshot for efficiency - only iterates non-zero counters
-            if let sparse = await coverageCounters.snapshotCoveredArrays() {
+            // Use sparse snapshot for efficiency - only iterates non-zero counters (sync)
+            if let sparse = coverageCounters.snapshotCoveredArrays() {
                 let actualSignature = CoverageSignature(sparse: sparse)
                 if actualSignature != entry.signature {
                     coverageChanges.append((

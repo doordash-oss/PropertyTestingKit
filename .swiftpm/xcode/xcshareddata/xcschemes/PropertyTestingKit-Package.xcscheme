@@ -57,6 +57,24 @@
       selectedLauncherIdentifier = "Xcode.DebuggerFoundation.Launcher.LLDB"
       shouldUseLaunchSchemeArgsEnv = "YES"
       shouldAutocreateTestPlan = "YES">
+      <PreActions>
+         <ExecutionAction
+            ActionType = "Xcode.IDEStandardExecutionActionsCore.ExecutionActionType.ShellScriptAction">
+            <ActionContent
+               title = "Generate dSYM for coverage"
+               scriptText = "# Generate dSYM for all test bundles to enable DWARF symbolication&#10;for BUNDLE in &quot;${BUILT_PRODUCTS_DIR}&quot;/*.xctest; do&#10;    if [ -d &quot;$BUNDLE&quot; ]; then&#10;        BINARY=&quot;${BUNDLE}/Contents/MacOS/$(basename &quot;$BUNDLE&quot; .xctest)&quot;&#10;        if [ -f &quot;$BINARY&quot; ]; then&#10;            dsymutil &quot;$BINARY&quot; -o &quot;${BUNDLE}.dSYM&quot; 2&gt;/dev/null || true&#10;        fi&#10;    fi&#10;done&#10;">
+               <EnvironmentBuildable>
+                  <BuildableReference
+                     BuildableIdentifier = "primary"
+                     BlueprintIdentifier = "PropertyTestingKitTests"
+                     BuildableName = "PropertyTestingKitTests"
+                     BlueprintName = "PropertyTestingKitTests"
+                     ReferencedContainer = "container:">
+                  </BuildableReference>
+               </EnvironmentBuildable>
+            </ActionContent>
+         </ExecutionAction>
+      </PreActions>
       <Testables>
          <TestableReference
             skipped = "NO">
@@ -95,6 +113,16 @@
                BlueprintIdentifier = "TSanTests"
                BuildableName = "TSanTests"
                BlueprintName = "TSanTests"
+               ReferencedContainer = "container:">
+            </BuildableReference>
+         </TestableReference>
+         <TestableReference
+            skipped = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "ScratchPad"
+               BuildableName = "ScratchPad"
+               BlueprintName = "ScratchPad"
                ReferencedContainer = "container:">
             </BuildableReference>
          </TestableReference>

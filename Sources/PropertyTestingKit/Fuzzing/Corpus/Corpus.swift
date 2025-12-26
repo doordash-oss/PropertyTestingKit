@@ -135,6 +135,56 @@ public actor Corpus<each Input: Codable & Sendable>: Sendable {
         return true
     }
 
+    /// A candidate entry for batch processing.
+    public struct CandidateEntry: Sendable {
+        public let input: (repeat each Input)
+        public let signature: CoverageSignature
+        public let parentIndex: Int?
+
+        public init(input: (repeat each Input), signature: CoverageSignature, parentIndex: Int?) {
+            self.input = input
+            self.signature = signature
+            self.parentIndex = parentIndex
+        }
+    }
+
+    /// Batch-add multiple entries, checking each for interesting coverage.
+    ///
+    /// This method processes all candidates in a single actor call, avoiding
+    /// multiple actor boundary crossings. Returns which entries were added.
+    ///
+    /// - Parameter candidates: Array of (input, signature, parentIndex) tuples.
+    /// - Returns: Array of booleans indicating which candidates were added (in order).
+    public func batchAddIfInteresting(_ candidates: [CandidateEntry]) -> [Bool] {
+        var results: [Bool] = []
+        results.reserveCapacity(candidates.count)
+
+        var addedAny = false
+        for candidate in candidates {
+            // Check if this signature adds new coverage
+            guard candidate.signature.hasUniqueCoverage(comparedTo: totalCoverage) else {
+                results.append(false)
+                continue
+            }
+
+            let entry = CorpusEntry(
+                input: repeat each candidate.input,
+                signature: candidate.signature,
+                parentIndex: candidate.parentIndex
+            )
+            entries.append(entry)
+            totalCoverage.merge(with: candidate.signature)
+            results.append(true)
+            addedAny = true
+        }
+
+        if addedAny {
+            updatedAt = dateClient.now()
+        }
+
+        return results
+    }
+
     /// Add an entry unconditionally.
     public func add(
         input: repeat each Input,

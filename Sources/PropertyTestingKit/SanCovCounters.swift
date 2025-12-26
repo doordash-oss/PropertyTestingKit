@@ -371,6 +371,8 @@ public func isStdlibFunction(_ functionName: String) -> Bool {
     // Swift stdlib functions
     functionName.hasPrefix("Swift.") ||
     functionName.hasPrefix("(extension in Swift)") ||
+    // Default arguments for stdlib functions (e.g., "default argument 1 of Swift.print(...)")
+    (functionName.hasPrefix("default argument") && functionName.contains(" of Swift.")) ||
     // Swift runtime internals
     functionName.hasPrefix("__swift_") ||
     functionName.hasPrefix("_swift_") ||

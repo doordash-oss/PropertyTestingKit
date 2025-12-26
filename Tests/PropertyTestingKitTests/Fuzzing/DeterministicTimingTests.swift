@@ -11,6 +11,30 @@ import Dependencies
 import FunctionSpy
 @testable import PropertyTestingKit
 
+/// Helper to create a mock CoverageCountersClient with both snapshot and snapshotCoveredArrays.
+private func makeMockCoverageClient(
+    countersGenerator: @escaping @Sendable () -> [UInt64]
+) -> CoverageCountersClient {
+    return CoverageCountersClient(
+        snapshot: {
+            let counters = countersGenerator()
+            return SanCovCounters(counters: counters)
+        },
+        snapshotCoveredArrays: {
+            let counters = countersGenerator()
+            var indices: [UInt32] = []
+            var counts: [UInt8] = []
+            for (index, count) in counters.enumerated() where count > 0 {
+                indices.append(UInt32(index))
+                counts.append(UInt8(min(count, UInt64(UInt8.max))))
+            }
+            return SparseCoverage(indices: indices, counts: counts)
+        },
+        reset: {},
+        isAvailable: { true }
+    )
+}
+
 /// A minimal Fuzzable type with a single seed for predictable test behavior.
 private struct SingleSeedInt: Fuzzable, Codable, Sendable, Equatable {
     let value: Int
@@ -37,16 +61,12 @@ struct DeterministicTimingTests {
 
             let result = await withDependencies {
                 $0.dateClient = DateClient(now: { currentTime.value })
-                $0.coverageCounters = CoverageCountersClient(
-                    snapshot: {
-                        var counters = [UInt64](repeating: 0, count: 100)
-                        let timeIndex = Int(currentTime.value.timeIntervalSince1970) % 100
-                        counters[timeIndex] = UInt64(timeIndex + 1)
-                        return SanCovCounters(counters: counters)
-                    },
-                    reset: {},
-                    isAvailable: { true }
-                )
+                $0.coverageCounters = makeMockCoverageClient {
+                    var counters = [UInt64](repeating: 0, count: 100)
+                    let timeIndex = Int(currentTime.value.timeIntervalSince1970) % 100
+                    counters[timeIndex] = UInt64(timeIndex + 1)
+                    return counters
+                }
             } operation: {
                 let config = FuzzEngine<SingleSeedInt>.Config(
                     maxIterations: 1000,
@@ -75,16 +95,12 @@ struct DeterministicTimingTests {
 
             let result = await withDependencies {
                 $0.dateClient = DateClient(now: { currentTime.value })
-                $0.coverageCounters = CoverageCountersClient(
-                    snapshot: {
-                        var counters = [UInt64](repeating: 0, count: 100)
-                        let count = testCount.value
-                        counters[count % 100] = UInt64(count + 1)
-                        return SanCovCounters(counters: counters)
-                    },
-                    reset: {},
-                    isAvailable: { true }
-                )
+                $0.coverageCounters = makeMockCoverageClient {
+                    var counters = [UInt64](repeating: 0, count: 100)
+                    let count = testCount.value
+                    counters[count % 100] = UInt64(count + 1)
+                    return counters
+                }
             } operation: {
                 var config = FuzzEngine<SingleSeedInt>.Config(
                     maxIterations: 5,
@@ -112,16 +128,12 @@ struct DeterministicTimingTests {
 
             let result = await withDependencies {
                 $0.dateClient = DateClient(now: { currentTime.value })
-                $0.coverageCounters = CoverageCountersClient(
-                    snapshot: {
-                        var counters = [UInt64](repeating: 0, count: 100)
-                        let timeIndex = Int(currentTime.value.timeIntervalSince1970) % 100
-                        counters[timeIndex] = UInt64(timeIndex + 1)
-                        return SanCovCounters(counters: counters)
-                    },
-                    reset: {},
-                    isAvailable: { true }
-                )
+                $0.coverageCounters = makeMockCoverageClient {
+                    var counters = [UInt64](repeating: 0, count: 100)
+                    let timeIndex = Int(currentTime.value.timeIntervalSince1970) % 100
+                    counters[timeIndex] = UInt64(timeIndex + 1)
+                    return counters
+                }
             } operation: {
                 var config = FuzzEngine<SingleSeedInt>.Config(
                     maxIterations: 5,

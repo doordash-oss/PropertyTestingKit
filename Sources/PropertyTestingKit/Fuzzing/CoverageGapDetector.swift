@@ -241,30 +241,55 @@ public struct CoverageGapDetector: Sendable {
             )
         }
 
-        // Optimization: Use fast dladdr lookups (no DWARF) for initial function detection,
-        // then only use expensive DWARF lookups for uncovered edges that need line numbers.
-
-        // Step 1: Fast scan to find all function keys and count edges (no DWARF)
-        // Also track PC ranges for each function to enable fast filtering in Step 2
+        // Step 1: Get covered edge PCs and do batched DWARF lookup for accurate source paths
+        // dladdr returns binary paths, but DWARF gives us actual source file paths needed
+        // for proper projectPath filtering.
         // let step1Start = CFAbsoluteTimeGetCurrent()
         var functionEdges: [String: FunctionEdgeInfo] = [:]
         var testedFunctions: Set<String> = []
         var functionPCRanges: [String: (min: UInt, max: UInt)] = [:]
 
-        // Mark functions that have covered edges as "tested"
+        // Collect PCs for all covered edges
+        var coveredEdgePCs: [(edgeIndex: Int, pc: UInt)] = []
         for edgeIndex in coveredIndices {
             guard edgeIndex < totalEdges else { continue }
-            guard let location = SanCovCounters.getSourceLocationSync(for: edgeIndex) else {
+            let pc = SanCovCounters.getPC(for: edgeIndex)
+            if pc > 0 {
+                coveredEdgePCs.append((edgeIndex: edgeIndex, pc: pc))
+            }
+        }
+
+        // Batch DWARF lookup for all covered edges (typically small set, ~5-20ms)
+        let pcs = coveredEdgePCs.map { $0.pc }
+        let dwarfLocations = await SanCovCounters.getDWARFLocations(for: pcs)
+
+        // Process covered edges with DWARF-resolved source paths
+        for (edgeIndex, pc) in coveredEdgePCs {
+            // Get dladdr info for function start address
+            guard let dlAddrLocation = SanCovCounters.getSourceLocationSync(for: edgeIndex) else {
                 continue
             }
 
-            guard let funcName = location.functionName,
-                  let filename = location.filename else {
+            // Use DWARF for filename (accurate source path), fall back to dladdr
+            let dwarfLoc = dwarfLocations[pc]
+            let hasDWARF = dwarfLoc != nil
+            let filename = dwarfLoc?.file ?? dlAddrLocation.filename
+            let funcName = dwarfLoc?.function ?? dlAddrLocation.functionName
+
+            guard let filename = filename, let funcName = funcName else {
+                continue
+            }
+
+            // Skip stdlib functions by name (always, regardless of DWARF availability)
+            if isStdlibFunction(funcName) {
                 continue
             }
 
             // Skip excluded paths
-            if shouldExclude(filename: filename, projectPath: projectPath) {
+            // When DWARF is unavailable, we only have binary paths from dladdr which can't be
+            // properly filtered by projectPath - skip projectPath check in that case
+            let effectiveProjectPath = hasDWARF ? projectPath : nil
+            if shouldExclude(filename: filename, projectPath: effectiveProjectPath) {
                 continue
             }
 
@@ -272,7 +297,7 @@ public struct CoverageGapDetector: Sendable {
             testedFunctions.insert(key)
 
             // Track function start address from dladdr (true function start)
-            let funcStart = location.functionStart > 0 ? location.functionStart : location.pc
+            let funcStart = dlAddrLocation.functionStart > 0 ? dlAddrLocation.functionStart : pc
             if let existing = functionPCRanges[key] {
                 // Use minimum of all function starts we've seen (should be the same)
                 functionPCRanges[key] = (min: min(existing.min, funcStart), max: existing.max)
@@ -558,6 +583,7 @@ public struct CoverageGapDetector: Sendable {
         }
 
         // If project path is specified, only include files in the project
+        // (DWARF lookup provides accurate source paths, so this filter works correctly)
         if let projectPath = projectPath {
             if !filename.hasPrefix(projectPath) {
                 return true

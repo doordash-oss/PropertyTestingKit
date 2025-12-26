@@ -30,7 +30,8 @@ public struct CoverageCountersClient: Sendable {
 
     /// Get only the covered (non-zero) edges as parallel arrays.
     /// This is the fastest way to get sparse coverage data.
-    public var snapshotCoveredArrays: @Sendable () async -> SparseCoverage?
+    /// Note: This is synchronous since the underlying SanCov implementation uses task-local data.
+    public var snapshotCoveredArrays: @Sendable () -> SparseCoverage?
 
     /// Reset coverage counters for the current task only.
     /// Other concurrent tasks are not affected.
@@ -44,7 +45,7 @@ public struct CoverageCountersClient: Sendable {
             "snapshot",
             placeholder: nil
         ),
-        snapshotCoveredArrays: @escaping @Sendable () async -> SparseCoverage? = unimplemented(
+        snapshotCoveredArrays: @escaping @Sendable () -> SparseCoverage? = unimplemented(
             "snapshotCoveredArrays",
             placeholder: nil
         ),
@@ -56,29 +57,6 @@ public struct CoverageCountersClient: Sendable {
     ) {
         self.snapshot = snapshot
         self.snapshotCoveredArrays = snapshotCoveredArrays
-        self.reset = reset
-        self.isAvailable = isAvailable
-    }
-
-    /// Convenience initializer that derives sparse snapshots from full snapshot.
-    ///
-    /// Use this when mocking in tests to avoid having to implement all methods.
-    public init(
-        snapshot: @escaping @Sendable () async -> SanCovCounters?,
-        reset: @escaping @Sendable () -> Void,
-        isAvailable: @escaping @Sendable () -> Bool
-    ) {
-        self.snapshot = snapshot
-        self.snapshotCoveredArrays = {
-            guard let counters = await snapshot() else { return nil }
-            var indices: [UInt32] = []
-            var counts: [UInt8] = []
-            for (index, count) in counters.counters.enumerated() where count > 0 {
-                indices.append(UInt32(index))
-                counts.append(count)
-            }
-            return SparseCoverage(indices: indices, counts: counts)
-        }
         self.reset = reset
         self.isAvailable = isAvailable
     }

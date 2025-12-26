@@ -62,6 +62,7 @@ public struct CorpusClient<each Input: Codable & Sendable>: Sendable {
     // MARK: - Mutating Operations
 
     public var addIfInteresting: @Sendable ((repeat each Input), CoverageSignature, Int?) async -> Bool
+    public var batchAddIfInteresting: @Sendable ([Corpus<repeat each Input>.CandidateEntry]) async -> [Bool]
     public var add: @Sendable ((repeat each Input), CoverageSignature, Int?, CorpusEntryType, FailureInfo?) async -> Void
     public var selectForMutation: @Sendable () async -> Int?
     public var minimized: @Sendable () async -> CorpusSnapshot<repeat each Input>
@@ -83,6 +84,7 @@ public struct CorpusClient<each Input: Codable & Sendable>: Sendable {
         hangEntries: @escaping @Sendable () async -> [CorpusEntry<repeat each Input>],
         batchState: @escaping @Sendable () async -> CorpusBatchState<repeat each Input>,
         addIfInteresting: @escaping @Sendable ((repeat each Input), CoverageSignature, Int?) async -> Bool,
+        batchAddIfInteresting: @escaping @Sendable ([Corpus<repeat each Input>.CandidateEntry]) async -> [Bool],
         add: @escaping @Sendable ((repeat each Input), CoverageSignature, Int?, CorpusEntryType, FailureInfo?) async -> Void,
         selectForMutation: @escaping @Sendable () async -> Int?,
         minimized: @escaping @Sendable () async -> CorpusSnapshot<repeat each Input>,
@@ -103,6 +105,7 @@ public struct CorpusClient<each Input: Codable & Sendable>: Sendable {
         self.hangEntries = hangEntries
         self.batchState = batchState
         self.addIfInteresting = addIfInteresting
+        self.batchAddIfInteresting = batchAddIfInteresting
         self.add = add
         self.selectForMutation = selectForMutation
         self.minimized = minimized
@@ -129,6 +132,9 @@ public struct CorpusClient<each Input: Codable & Sendable>: Sendable {
             batchState: { await corpus.batchState() },
             addIfInteresting: { input, signature, parentIndex in
                 await corpus.addIfInteresting(input: input, signature: signature, parentIndex: parentIndex)
+            },
+            batchAddIfInteresting: { candidates in
+                await corpus.batchAddIfInteresting(candidates)
             },
             add: { input, signature, parentIndex, entryType, failure in
                 await corpus.add(input: input, signature: signature, parentIndex: parentIndex, entryType: entryType, failure: failure)
@@ -158,6 +164,9 @@ public struct CorpusClient<each Input: Codable & Sendable>: Sendable {
             batchState: { await corpus.batchState() },
             addIfInteresting: { input, signature, parentIndex in
                 await corpus.addIfInteresting(input: input, signature: signature, parentIndex: parentIndex)
+            },
+            batchAddIfInteresting: { candidates in
+                await corpus.batchAddIfInteresting(candidates)
             },
             add: { input, signature, parentIndex, entryType, failure in
                 await corpus.add(input: input, signature: signature, parentIndex: parentIndex, entryType: entryType, failure: failure)
@@ -199,6 +208,19 @@ public struct CorpusClient<each Input: Codable & Sendable>: Sendable {
                     failure: nil
                 )
                 return true
+            },
+            batchAddIfInteresting: { candidates in
+                // Always add all candidates to corpus (bypass coverage check)
+                for candidate in candidates {
+                    await corpus.add(
+                        input: candidate.input,
+                        signature: candidate.signature,
+                        parentIndex: candidate.parentIndex,
+                        entryType: .coverage,
+                        failure: nil
+                    )
+                }
+                return [Bool](repeating: true, count: candidates.count)
             },
             add: { input, signature, parentIndex, entryType, failure in
                 await corpus.add(input: input, signature: signature, parentIndex: parentIndex, entryType: entryType, failure: failure)

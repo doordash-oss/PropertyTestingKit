@@ -262,7 +262,9 @@ extension ValueProfileTracker {
             // Only apply to small targets that look like modulo results
             guard targetInt >= 0 && targetInt < 100_000 else { return [] }
 
-            var mutations: [Int] = []
+            // Use Set from the start to avoid Array→Set→Array conversion
+            // Max possible: 8 moduli × 11 k values × 2 directions = 176
+            var mutations = Set<Int>(minimumCapacity: 176)
 
             // Common moduli in real code
             let commonModuli = [10, 100, 256, 1000, 1024, 10000, 65536, 100000]
@@ -275,20 +277,20 @@ extension ValueProfileTracker {
                 for k in 0...10 {
                     let (value, overflow) = targetInt.addingReportingOverflow(k * modulus)
                     if !overflow {
-                        mutations.append(value)
+                        mutations.insert(value)
                     }
 
                     // Also try negative direction
                     if k > 0 {
                         let (negValue, negOverflow) = targetInt.subtractingReportingOverflow(k * modulus)
                         if !negOverflow {
-                            mutations.append(negValue)
+                            mutations.insert(negValue)
                         }
                     }
                 }
             }
 
-            return Array(Set(mutations))
+            return Array(mutations)
         }
 
         /// Generate pair mutations for constraints like `a + b == target`.
