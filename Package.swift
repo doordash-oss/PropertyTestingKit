@@ -30,13 +30,6 @@ let package = Package(
             publicHeadersPath: "include"
         ),
 
-        // C module for string allocation hooks (fishhook-based)
-        .target(
-            name: "StringAllocationHooks",
-            path: "Sources/StringAllocationHooks",
-            publicHeadersPath: "include"
-        ),
-
         // LLVM-based symbolizer for DWARF debug info parsing
         .target(
             name: "CLLVMSymbolizer",
@@ -65,7 +58,6 @@ let package = Package(
             dependencies: [
                 "PropertyTestingKitMacros",
                 "ValueProfileHooks",
-                "StringAllocationHooks",
                 "CLLVMSymbolizer",
                 .product(name: "Dependencies", package: "swift-dependencies"),
             ]
@@ -160,4 +152,30 @@ package.targets += [
             .plugin(name: "BenchmarkPlugin", package: "package-benchmark")
         ]
     ),
+    .executableTarget(
+        name: "ProfiledBenchmark",
+        dependencies: [
+            .product(name: "Benchmark", package: "package-benchmark"),
+            "PropertyTestingKit",
+        ],
+        path: "Benchmarks/ProfiledBenchmark",
+        swiftSettings: [
+            // Enable sanitizer coverage so we have realistic counter counts
+            // Note: sanitize-coverage requires a sanitizer to be enabled
+            .unsafeFlags([
+                "-sanitize=undefined",
+                "-sanitize-coverage=edge,trace-cmp,pc-table"
+            ])
+        ],
+        linkerSettings: [
+            // Add rpath for Testing.framework from Xcode (needed for local toolchain)
+            .unsafeFlags([
+                "-Xlinker", "-rpath",
+                "-Xlinker", "/Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks"
+            ])
+        ],
+        plugins: [
+            .plugin(name: "BenchmarkPlugin", package: "package-benchmark")
+        ]
+    )
 ]

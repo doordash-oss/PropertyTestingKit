@@ -315,7 +315,7 @@ extension ValueProfileTracker {
                 for k in -5...5 {
                     let (base, o1) = targetInt.subtractingReportingOverflow(otherValue)
                     guard !o1 else { continue }
-                    let (adjustment, o2) = (k * modulus).addingReportingOverflow(0) // Just to check k*modulus
+                    let (_, o2) = (k * modulus).addingReportingOverflow(0) // Just to check k*modulus
                     guard !o2 else { continue }
                     let (value, o3) = base.addingReportingOverflow(k * modulus)
                     if !o3 {

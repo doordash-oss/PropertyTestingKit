@@ -3,7 +3,7 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 63;
+	objectVersion = 77;
 	objects = {
 
 /* Begin PBXBuildFile section */
@@ -31,6 +31,7 @@
 		5118F45702A081DEB42B60AA /* DateClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8DCFCD27F236B21539FDC070 /* DateClient.swift */; };
 		52C260E19A743BA5BCADC703 /* CoverageSignature.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BD8E7DDBFB1256A08DEBE05 /* CoverageSignature.swift */; };
 		5605B6F68948A32A75666D62 /* SanCovCounters.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E3F60C1EA2AF5369E9B330B /* SanCovCounters.swift */; };
+		589D0164A415C152CDD4B160 /* Benchmark in Frameworks */ = {isa = PBXBuildFile; productRef = E6A87E5EFC33D405ECEDD0E1 /* Benchmark */; };
 		5A314ACEB5F304A91A20681E /* CoveragePlateauDetector.swift in Sources */ = {isa = PBXBuildFile; fileRef = 98DBDB0EC1AABC42503C90F2 /* CoveragePlateauDetector.swift */; };
 		60F4B0B951427866AB7380DC /* CorpusEntry.swift in Sources */ = {isa = PBXBuildFile; fileRef = D708E6A5A1B65DA927AFEA9E /* CorpusEntry.swift */; };
 		61031F0CE3C1B19C1D04DF89 /* PropertyTestingKit.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 2595E9AD80DBFC77F241A7E7 /* PropertyTestingKit.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
@@ -41,6 +42,7 @@
 		72D386A1E29FDC2E0CF6F18B /* ValueProfile.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6DA5AF860EEEC7534E7669AD /* ValueProfile.swift */; };
 		79D489B6D89C771503E3F4C8 /* libCLLVMSymbolizer.a in Frameworks */ = {isa = PBXBuildFile; fileRef = EF7AA1611BFAAB73EE70CA85 /* libCLLVMSymbolizer.a */; };
 		808DEDCEF3F72F26E4C97724 /* CorpusTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9E53225F99BA35278DB06DA6 /* CorpusTests.swift */; };
+		8583A6B9CC8AE06E1F34F8C4 /* CoverageBenchmarks.swift in Sources */ = {isa = PBXBuildFile; fileRef = EF833B020283C4892D55D53C /* CoverageBenchmarks.swift */; };
 		8A7850782EEB6B4C185DAC75 /* ValueProfileHooks.c in Sources */ = {isa = PBXBuildFile; fileRef = D1F5931FF8E7123C141A0043 /* ValueProfileHooks.c */; };
 		8B77076135753B47C626A029 /* FuzzEngine+Config.swift in Sources */ = {isa = PBXBuildFile; fileRef = ACE4D8AA0A411B9988FA7E7C /* FuzzEngine+Config.swift */; };
 		902AD170388F6A40C15ECCA5 /* MutatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C2AB425C1886E9C43DA056F /* MutatorTests.swift */; };
@@ -68,6 +70,7 @@
 		DB71EBF35575DA1DEA31C0F0 /* Macros.swift in Sources */ = {isa = PBXBuildFile; fileRef = D9AB1FE9A26A576DB0D5550E /* Macros.swift */; };
 		E22FD5BA11720007BFEC6E1E /* DWARFSourceLocation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 801978DFD141E3190DC8219D /* DWARFSourceLocation.swift */; };
 		EDA4F3DF2A8772887434F792 /* Testing.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 3F5DD8CB2128FA92846AA71F /* Testing.framework */; };
+		F175208C6823ED3BC2A92224 /* PropertyTestingKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 2595E9AD80DBFC77F241A7E7 /* PropertyTestingKit.framework */; };
 		F4E3D1DF382DCAC750307163 /* UserService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5305591133199EC528A0A92D /* UserService.swift */; };
 		F8CA279E1D5C86F49E55C093 /* RandomNumberGeneratorClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = C6B7D375C4052AA3BFE8E32A /* RandomNumberGeneratorClient.swift */; };
 		F90AAA32E041831DC6EEF916 /* CorpusPersistenceClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8FED37BAA14224125F5AD7CA /* CorpusPersistenceClient.swift */; };
@@ -96,6 +99,13 @@
 			proxyType = 1;
 			remoteGlobalIDString = 1D266A530C4E3CFD54AC82B8;
 			remoteInfo = ValueProfileHooks;
+		};
+		67AF272922F6EC84F10C5334 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 93269515397F3B540BE8A95E /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 3158F44FBF717D69B2A46E2E;
+			remoteInfo = PropertyTestingKit;
 		};
 		681184979170B744BAAC0C3A /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -150,6 +160,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		021ACDF8BE3B266FA44EEDBD /* CoverageBenchmarks */ = {isa = PBXFileReference; includeInIndex = 0; path = CoverageBenchmarks; sourceTree = BUILT_PRODUCTS_DIR; };
 		09F9A66C1671353C4CCF4F16 /* CoverageSignatureTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoverageSignatureTests.swift; sourceTree = "<group>"; };
 		0A5FD30F272F4610F9D0637A /* FileManagerClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileManagerClient.swift; sourceTree = "<group>"; };
 		0BC4138150CDC1ABC2DE7C65 /* FuzzEngineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FuzzEngineTests.swift; sourceTree = "<group>"; };
@@ -207,6 +218,7 @@
 		E608E2023D7BBC10559B3505 /* AllCoverageTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AllCoverageTests.swift; sourceTree = "<group>"; };
 		EA720B45CA762CCCFFA439C0 /* TestCaseShrinker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TestCaseShrinker.swift; sourceTree = "<group>"; };
 		EF7AA1611BFAAB73EE70CA85 /* libCLLVMSymbolizer.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = libCLLVMSymbolizer.a; sourceTree = BUILT_PRODUCTS_DIR; };
+		EF833B020283C4892D55D53C /* CoverageBenchmarks.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoverageBenchmarks.swift; sourceTree = "<group>"; };
 		F1E97A029218EB361C14F01D /* DWARFSymbolizerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DWARFSymbolizerTests.swift; sourceTree = "<group>"; };
 		F46057CB7F84DA3671178057 /* EnvironmentClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EnvironmentClient.swift; sourceTree = "<group>"; };
 		F58C560D0D81EBCA41AC8282 /* TestCaseShrinkerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TestCaseShrinkerTests.swift; sourceTree = "<group>"; };
@@ -228,6 +240,15 @@
 			buildActionMask = 2147483647;
 			files = (
 				A1B5C9D7B4345854FF5D488A /* PropertyTestingKit.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		CD10D50D4495AF0639255840 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				F175208C6823ED3BC2A92224 /* PropertyTestingKit.framework in Frameworks */,
+				589D0164A415C152CDD4B160 /* Benchmark in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -281,6 +302,7 @@
 			isa = PBXGroup;
 			children = (
 				A02618471FF4E5CAE16C036E /* CLLVMSymbolizer */,
+				D90E9AECF33092EB6E4921C9 /* CoverageBenchmarks */,
 				7772FE8E711FE4E44FDBBA37 /* PropertyTestingKit */,
 				BDDFFD2714DEB826C97E5A69 /* PropertyTestingKitTests */,
 				C57630F4E61E4FE3B2C652DC /* SanCovTests */,
@@ -294,6 +316,7 @@
 		242BA066D9B0C1EE32B183C1 /* Products */ = {
 			isa = PBXGroup;
 			children = (
+				021ACDF8BE3B266FA44EEDBD /* CoverageBenchmarks */,
 				EF7AA1611BFAAB73EE70CA85 /* libCLLVMSymbolizer.a */,
 				CB305AEAB5B3C5055EC92BEF /* libValueProfileHooks.a */,
 				2595E9AD80DBFC77F241A7E7 /* PropertyTestingKit.framework */,
@@ -425,6 +448,15 @@
 			path = Tests/SanCovTests;
 			sourceTree = "<group>";
 		};
+		D90E9AECF33092EB6E4921C9 /* CoverageBenchmarks */ = {
+			isa = PBXGroup;
+			children = (
+				EF833B020283C4892D55D53C /* CoverageBenchmarks.swift */,
+			);
+			name = CoverageBenchmarks;
+			path = Benchmarks/CoverageBenchmarks;
+			sourceTree = "<group>";
+		};
 		DC660732E9D43D922568F89E /* Fuzzing */ = {
 			isa = PBXGroup;
 			children = (
@@ -542,6 +574,26 @@
 			productReference = 2595E9AD80DBFC77F241A7E7 /* PropertyTestingKit.framework */;
 			productType = "com.apple.product-type.framework";
 		};
+		5F7ED0684477D1C9FC1834A5 /* CoverageBenchmarks */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = B7CA9713E7D8C787A61941AE /* Build configuration list for PBXNativeTarget "CoverageBenchmarks" */;
+			buildPhases = (
+				6FAEC171EAB33652890F6D25 /* Sources */,
+				CD10D50D4495AF0639255840 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				D887263A2077C704DB84CDF4 /* PBXTargetDependency */,
+			);
+			name = CoverageBenchmarks;
+			packageProductDependencies = (
+				E6A87E5EFC33D405ECEDD0E1 /* Benchmark */,
+			);
+			productName = CoverageBenchmarks;
+			productReference = 021ACDF8BE3B266FA44EEDBD /* CoverageBenchmarks */;
+			productType = "com.apple.product-type.tool";
+		};
 		B0BE09FFE9F586EDF3FC5EB9 /* TSanTests */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = F69A8FB46A72F5538B4C3216 /* Build configuration list for PBXNativeTarget "TSanTests" */;
@@ -604,12 +656,15 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				1210619D1E73774D621E2E7E /* XCRemoteSwiftPackageReference "FunctionSpy" */,
+				E3D499669E4759325EF6414E /* XCRemoteSwiftPackageReference "package-benchmark" */,
 				FE7753DCDC2B738759F3B507 /* XCRemoteSwiftPackageReference "swift-dependencies" */,
 			);
+			preferredProjectObjectVersion = 77;
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
 				05E982383D21A29F788C71F5 /* CLLVMSymbolizer */,
+				5F7ED0684477D1C9FC1834A5 /* CoverageBenchmarks */,
 				3158F44FBF717D69B2A46E2E /* PropertyTestingKit */,
 				E50766C553D412A57A53F038 /* PropertyTestingKitTests */,
 				00E9596C140254811771B723 /* SanCovTests */,
@@ -633,6 +688,14 @@
 			buildActionMask = 2147483647;
 			files = (
 				6C92AFA4A8A89008D14C5645 /* SanCovIsolationTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		6FAEC171EAB33652890F6D25 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				8583A6B9CC8AE06E1F34F8C4 /* CoverageBenchmarks.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -745,6 +808,11 @@
 			target = 3158F44FBF717D69B2A46E2E /* PropertyTestingKit */;
 			targetProxy = 3218720DD27BCF321104A88E /* PBXContainerItemProxy */;
 		};
+		D887263A2077C704DB84CDF4 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 3158F44FBF717D69B2A46E2E /* PropertyTestingKit */;
+			targetProxy = 67AF272922F6EC84F10C5334 /* PBXContainerItemProxy */;
+		};
 /* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
@@ -763,8 +831,9 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				LIBRARY_SEARCH_PATHS = /opt/homebrew/opt/llvm/lib;
-				MACOSX_DEPLOYMENT_TARGET = 26.0;
+				LIBRARY_SEARCH_PATHS = (
+					/opt/homebrew/opt/llvm/lib,
+				);
 				MODULEMAP_FILE = "$(SRCROOT)/Sources/CLLVMSymbolizer/include/module.modulemap";
 				PRODUCT_BUNDLE_IDENTIFIER = com.propertytestingkit.CLLVMSymbolizer;
 				PRODUCT_NAME = CLLVMSymbolizer;
@@ -780,21 +849,16 @@
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				COMBINE_HIDPI_IMAGES = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"$(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin",
-				);
-				MACOSX_DEPLOYMENT_TARGET = 26.0;
-				OTHER_LDFLAGS = (
-					"$(inherited)",
-					"-L$(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin",
-					"-lclang_rt.ubsan_osx_dynamic",
-				);
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) $(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin";
+				OTHER_LDFLAGS = "$(inherited) -L$(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin -lclang_rt.ubsan_osx_dynamic";
 				OTHER_SWIFT_FLAGS = "$(inherited) -g -sanitize=undefined -sanitize-coverage=edge,trace-cmp,pc-table";
 				PRODUCT_BUNDLE_IDENTIFIER = com.propertytestingkit.sancovtests;
 				PRODUCT_NAME = SanCovTests;
 				SDKROOT = macosx;
-				SWIFT_INCLUDE_PATHS = "$(SRCROOT)/Sources/CLLVMSymbolizer/include $(SRCROOT)/Sources/StringAllocationHooks/include $(SRCROOT)/Sources/ValueProfileHooks/include";
+				SWIFT_INCLUDE_PATHS = (
+					"$(SRCROOT)/Sources/CLLVMSymbolizer/include",
+					"$(SRCROOT)/Sources/ValueProfileHooks/include",
+				);
 			};
 			name = Release;
 		};
@@ -804,21 +868,16 @@
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				COMBINE_HIDPI_IMAGES = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"$(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin",
-				);
-				MACOSX_DEPLOYMENT_TARGET = 26.0;
-				OTHER_LDFLAGS = (
-					"$(inherited)",
-					"-L$(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin",
-					"-lclang_rt.ubsan_osx_dynamic",
-				);
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) $(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin";
+				OTHER_LDFLAGS = "$(inherited) -L$(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin -lclang_rt.ubsan_osx_dynamic";
 				OTHER_SWIFT_FLAGS = "$(inherited) -g -sanitize=undefined -sanitize-coverage=edge,trace-cmp,pc-table";
 				PRODUCT_BUNDLE_IDENTIFIER = com.propertytestingkit.tests;
 				PRODUCT_NAME = PropertyTestingKitTests;
 				SDKROOT = macosx;
-				SWIFT_INCLUDE_PATHS = "$(SRCROOT)/Sources/CLLVMSymbolizer/include $(SRCROOT)/Sources/StringAllocationHooks/include $(SRCROOT)/Sources/ValueProfileHooks/include";
+				SWIFT_INCLUDE_PATHS = (
+					"$(SRCROOT)/Sources/CLLVMSymbolizer/include",
+					"$(SRCROOT)/Sources/ValueProfileHooks/include",
+				);
 			};
 			name = Debug;
 		};
@@ -834,9 +893,7 @@
 				DYLIB_CURRENT_VERSION = 1;
 				DYLIB_INSTALL_NAME_BASE = "@rpath";
 				FRAMEWORK_SEARCH_PATHS = (
-					"$(inherited)",
-					"$(DEVELOPER_FRAMEWORKS_DIR)",
-					"$(PLATFORM_DIR)/Developer/Library/Frameworks",
+					"$(inherited) $(DEVELOPER_FRAMEWORKS_DIR) $(PLATFORM_DIR)/Developer/Library/Frameworks",
 					"\".\"",
 				);
 				GCC_ENABLE_CPP_EXCEPTIONS = NO;
@@ -844,26 +901,25 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				HEADER_SEARCH_PATHS = (
 					"$(SRCROOT)/Sources/CLLVMSymbolizer/include",
-					"$(SRCROOT)/Sources/StringAllocationHooks/include",
 					"$(SRCROOT)/Sources/ValueProfileHooks/include",
 				);
 				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) /opt/homebrew/opt/llvm/lib";
+				LIBRARY_SEARCH_PATHS = (
 					/opt/homebrew/opt/llvm/lib,
 				);
-				LIBRARY_SEARCH_PATHS = /opt/homebrew/opt/llvm/lib;
-				MACOSX_DEPLOYMENT_TARGET = 26.0;
 				OTHER_LDFLAGS = (
-					"$(inherited)",
-					"-lLLVM",
+					"$(inherited) -lLLVM",
 					"-ObjC",
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.propertytestingkit.framework;
 				PRODUCT_NAME = PropertyTestingKit;
 				SDKROOT = macosx;
 				SKIP_INSTALL = YES;
-				SWIFT_INCLUDE_PATHS = "$(SRCROOT)/Sources/CLLVMSymbolizer/include $(SRCROOT)/Sources/StringAllocationHooks/include $(SRCROOT)/Sources/ValueProfileHooks/include";
+				SWIFT_INCLUDE_PATHS = (
+					"$(SRCROOT)/Sources/CLLVMSymbolizer/include",
+					"$(SRCROOT)/Sources/ValueProfileHooks/include",
+				);
 				SWIFT_TESTING_ENABLED = YES;
 				VERSIONING_SYSTEM = "apple-generic";
 			};
@@ -881,9 +937,7 @@
 				DYLIB_CURRENT_VERSION = 1;
 				DYLIB_INSTALL_NAME_BASE = "@rpath";
 				FRAMEWORK_SEARCH_PATHS = (
-					"$(inherited)",
-					"$(DEVELOPER_FRAMEWORKS_DIR)",
-					"$(PLATFORM_DIR)/Developer/Library/Frameworks",
+					"$(inherited) $(DEVELOPER_FRAMEWORKS_DIR) $(PLATFORM_DIR)/Developer/Library/Frameworks",
 					"\".\"",
 				);
 				GCC_ENABLE_CPP_EXCEPTIONS = NO;
@@ -891,26 +945,25 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				HEADER_SEARCH_PATHS = (
 					"$(SRCROOT)/Sources/CLLVMSymbolizer/include",
-					"$(SRCROOT)/Sources/StringAllocationHooks/include",
 					"$(SRCROOT)/Sources/ValueProfileHooks/include",
 				);
 				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) /opt/homebrew/opt/llvm/lib";
+				LIBRARY_SEARCH_PATHS = (
 					/opt/homebrew/opt/llvm/lib,
 				);
-				LIBRARY_SEARCH_PATHS = /opt/homebrew/opt/llvm/lib;
-				MACOSX_DEPLOYMENT_TARGET = 26.0;
 				OTHER_LDFLAGS = (
-					"$(inherited)",
-					"-lLLVM",
+					"$(inherited) -lLLVM",
 					"-ObjC",
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.propertytestingkit.framework;
 				PRODUCT_NAME = PropertyTestingKit;
 				SDKROOT = macosx;
 				SKIP_INSTALL = YES;
-				SWIFT_INCLUDE_PATHS = "$(SRCROOT)/Sources/CLLVMSymbolizer/include $(SRCROOT)/Sources/StringAllocationHooks/include $(SRCROOT)/Sources/ValueProfileHooks/include";
+				SWIFT_INCLUDE_PATHS = (
+					"$(SRCROOT)/Sources/CLLVMSymbolizer/include",
+					"$(SRCROOT)/Sources/ValueProfileHooks/include",
+				);
 				SWIFT_TESTING_ENABLED = YES;
 				VERSIONING_SYSTEM = "apple-generic";
 			};
@@ -931,8 +984,9 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				LIBRARY_SEARCH_PATHS = /opt/homebrew/opt/llvm/lib;
-				MACOSX_DEPLOYMENT_TARGET = 26.0;
+				LIBRARY_SEARCH_PATHS = (
+					/opt/homebrew/opt/llvm/lib,
+				);
 				MODULEMAP_FILE = "$(SRCROOT)/Sources/CLLVMSymbolizer/include/module.modulemap";
 				PRODUCT_BUNDLE_IDENTIFIER = com.propertytestingkit.CLLVMSymbolizer;
 				PRODUCT_NAME = CLLVMSymbolizer;
@@ -946,12 +1000,13 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				COMBINE_HIDPI_IMAGES = YES;
-				HEADER_SEARCH_PATHS = "$(SRCROOT)/Sources/ValueProfileHooks/include";
+				HEADER_SEARCH_PATHS = (
+					"$(SRCROOT)/Sources/ValueProfileHooks/include",
+				);
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MACOSX_DEPLOYMENT_TARGET = 26.0;
 				MODULEMAP_FILE = "$(SRCROOT)/Sources/ValueProfileHooks/include/module.modulemap";
 				PRODUCT_BUNDLE_IDENTIFIER = com.propertytestingkit.ValueProfileHooks;
 				PRODUCT_NAME = ValueProfileHooks;
@@ -967,21 +1022,16 @@
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				COMBINE_HIDPI_IMAGES = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"$(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin",
-				);
-				MACOSX_DEPLOYMENT_TARGET = 26.0;
-				OTHER_LDFLAGS = (
-					"$(inherited)",
-					"-L$(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin",
-					"-lclang_rt.tsan_osx_dynamic",
-				);
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) $(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin";
+				OTHER_LDFLAGS = "$(inherited) -L$(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin -lclang_rt.tsan_osx_dynamic";
 				OTHER_SWIFT_FLAGS = "$(inherited) -g -sanitize=thread -sanitize-coverage=edge,trace-cmp,pc-table";
 				PRODUCT_BUNDLE_IDENTIFIER = com.propertytestingkit.tsantests;
 				PRODUCT_NAME = TSanTests;
 				SDKROOT = macosx;
-				SWIFT_INCLUDE_PATHS = "$(SRCROOT)/Sources/CLLVMSymbolizer/include $(SRCROOT)/Sources/StringAllocationHooks/include $(SRCROOT)/Sources/ValueProfileHooks/include";
+				SWIFT_INCLUDE_PATHS = (
+					"$(SRCROOT)/Sources/CLLVMSymbolizer/include",
+					"$(SRCROOT)/Sources/ValueProfileHooks/include",
+				);
 			};
 			name = Debug;
 		};
@@ -991,23 +1041,35 @@
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				COMBINE_HIDPI_IMAGES = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"$(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin",
-				);
-				MACOSX_DEPLOYMENT_TARGET = 26.0;
-				OTHER_LDFLAGS = (
-					"$(inherited)",
-					"-L$(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin",
-					"-lclang_rt.ubsan_osx_dynamic",
-				);
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) $(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin";
+				OTHER_LDFLAGS = "$(inherited) -L$(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin -lclang_rt.ubsan_osx_dynamic";
 				OTHER_SWIFT_FLAGS = "$(inherited) -g -sanitize=undefined -sanitize-coverage=edge,trace-cmp,pc-table";
 				PRODUCT_BUNDLE_IDENTIFIER = com.propertytestingkit.sancovtests;
 				PRODUCT_NAME = SanCovTests;
 				SDKROOT = macosx;
-				SWIFT_INCLUDE_PATHS = "$(SRCROOT)/Sources/CLLVMSymbolizer/include $(SRCROOT)/Sources/StringAllocationHooks/include $(SRCROOT)/Sources/ValueProfileHooks/include";
+				SWIFT_INCLUDE_PATHS = (
+					"$(SRCROOT)/Sources/CLLVMSymbolizer/include",
+					"$(SRCROOT)/Sources/ValueProfileHooks/include",
+				);
 			};
 			name = Debug;
+		};
+		B147423A294AC4D462AB9F47 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				COMBINE_HIDPI_IMAGES = YES;
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) $(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin";
+				OTHER_LDFLAGS = "$(inherited) -L$(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin -lclang_rt.ubsan_osx_dynamic";
+				OTHER_SWIFT_FLAGS = "$(inherited) -g -sanitize=undefined -sanitize-coverage=edge,trace-cmp,pc-table";
+				PRODUCT_BUNDLE_IDENTIFIER = com.propertytestingkit.CoverageBenchmarks;
+				PRODUCT_NAME = CoverageBenchmarks;
+				SDKROOT = macosx;
+				SWIFT_INCLUDE_PATHS = (
+					"$(SRCROOT)/Sources/CLLVMSymbolizer/include",
+					"$(SRCROOT)/Sources/ValueProfileHooks/include",
+				);
+			};
+			name = Release;
 		};
 		B729C25E47F705C7B4B4890B /* Release */ = {
 			isa = XCBuildConfiguration;
@@ -1015,34 +1077,47 @@
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				COMBINE_HIDPI_IMAGES = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"$(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin",
-				);
-				MACOSX_DEPLOYMENT_TARGET = 26.0;
-				OTHER_LDFLAGS = (
-					"$(inherited)",
-					"-L$(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin",
-					"-lclang_rt.tsan_osx_dynamic",
-				);
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) $(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin";
+				OTHER_LDFLAGS = "$(inherited) -L$(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin -lclang_rt.tsan_osx_dynamic";
 				OTHER_SWIFT_FLAGS = "$(inherited) -g -sanitize=thread -sanitize-coverage=edge,trace-cmp,pc-table";
 				PRODUCT_BUNDLE_IDENTIFIER = com.propertytestingkit.tsantests;
 				PRODUCT_NAME = TSanTests;
 				SDKROOT = macosx;
-				SWIFT_INCLUDE_PATHS = "$(SRCROOT)/Sources/CLLVMSymbolizer/include $(SRCROOT)/Sources/StringAllocationHooks/include $(SRCROOT)/Sources/ValueProfileHooks/include";
+				SWIFT_INCLUDE_PATHS = (
+					"$(SRCROOT)/Sources/CLLVMSymbolizer/include",
+					"$(SRCROOT)/Sources/ValueProfileHooks/include",
+				);
 			};
 			name = Release;
+		};
+		BA07BB2B6178D08810B34BD4 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				COMBINE_HIDPI_IMAGES = YES;
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) $(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin";
+				OTHER_LDFLAGS = "$(inherited) -L$(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin -lclang_rt.ubsan_osx_dynamic";
+				OTHER_SWIFT_FLAGS = "$(inherited) -g -sanitize=undefined -sanitize-coverage=edge,trace-cmp,pc-table";
+				PRODUCT_BUNDLE_IDENTIFIER = com.propertytestingkit.CoverageBenchmarks;
+				PRODUCT_NAME = CoverageBenchmarks;
+				SDKROOT = macosx;
+				SWIFT_INCLUDE_PATHS = (
+					"$(SRCROOT)/Sources/CLLVMSymbolizer/include",
+					"$(SRCROOT)/Sources/ValueProfileHooks/include",
+				);
+			};
+			name = Debug;
 		};
 		C6BFE06EB4C365CFD43E1B9B /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				COMBINE_HIDPI_IMAGES = YES;
-				HEADER_SEARCH_PATHS = "$(SRCROOT)/Sources/ValueProfileHooks/include";
+				HEADER_SEARCH_PATHS = (
+					"$(SRCROOT)/Sources/ValueProfileHooks/include",
+				);
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MACOSX_DEPLOYMENT_TARGET = 26.0;
 				MODULEMAP_FILE = "$(SRCROOT)/Sources/ValueProfileHooks/include/module.modulemap";
 				PRODUCT_BUNDLE_IDENTIFIER = com.propertytestingkit.ValueProfileHooks;
 				PRODUCT_NAME = ValueProfileHooks;
@@ -1099,7 +1174,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MACOSX_DEPLOYMENT_TARGET = 26.0;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -1165,7 +1240,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MACOSX_DEPLOYMENT_TARGET = 26.0;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
@@ -1185,21 +1260,16 @@
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				COMBINE_HIDPI_IMAGES = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"$(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin",
-				);
-				MACOSX_DEPLOYMENT_TARGET = 26.0;
-				OTHER_LDFLAGS = (
-					"$(inherited)",
-					"-L$(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin",
-					"-lclang_rt.ubsan_osx_dynamic",
-				);
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) $(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin";
+				OTHER_LDFLAGS = "$(inherited) -L$(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin -lclang_rt.ubsan_osx_dynamic";
 				OTHER_SWIFT_FLAGS = "$(inherited) -g -sanitize=undefined -sanitize-coverage=edge,trace-cmp,pc-table";
 				PRODUCT_BUNDLE_IDENTIFIER = com.propertytestingkit.tests;
 				PRODUCT_NAME = PropertyTestingKitTests;
 				SDKROOT = macosx;
-				SWIFT_INCLUDE_PATHS = "$(SRCROOT)/Sources/CLLVMSymbolizer/include $(SRCROOT)/Sources/StringAllocationHooks/include $(SRCROOT)/Sources/ValueProfileHooks/include";
+				SWIFT_INCLUDE_PATHS = (
+					"$(SRCROOT)/Sources/CLLVMSymbolizer/include",
+					"$(SRCROOT)/Sources/ValueProfileHooks/include",
+				);
 			};
 			name = Release;
 		};
@@ -1251,6 +1321,15 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;
 		};
+		B7CA9713E7D8C787A61941AE /* Build configuration list for PBXNativeTarget "CoverageBenchmarks" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				BA07BB2B6178D08810B34BD4 /* Debug */,
+				B147423A294AC4D462AB9F47 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
 		DA62F1D8A65E7BD1CCEAC4B9 /* Build configuration list for PBXNativeTarget "PropertyTestingKitTests" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
@@ -1280,6 +1359,14 @@
 				version = 1.2.0;
 			};
 		};
+		E3D499669E4759325EF6414E /* XCRemoteSwiftPackageReference "package-benchmark" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/ordo-one/package-benchmark.git";
+			requirement = {
+				kind = exactVersion;
+				version = 1.27.3;
+			};
+		};
 		FE7753DCDC2B738759F3B507 /* XCRemoteSwiftPackageReference "swift-dependencies" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/pointfreeco/swift-dependencies.git";
@@ -1295,6 +1382,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = FE7753DCDC2B738759F3B507 /* XCRemoteSwiftPackageReference "swift-dependencies" */;
 			productName = Dependencies;
+		};
+		E6A87E5EFC33D405ECEDD0E1 /* Benchmark */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = E3D499669E4759325EF6414E /* XCRemoteSwiftPackageReference "package-benchmark" */;
+			productName = Benchmark;
 		};
 		F0BEB91D5B04B84629BA665A /* FunctionSpy */ = {
 			isa = XCSwiftPackageProductDependency;

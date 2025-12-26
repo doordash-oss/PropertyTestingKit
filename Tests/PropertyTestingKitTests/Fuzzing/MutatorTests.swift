@@ -352,7 +352,7 @@ struct MutatorFuzzEngineTests {
             let config = FuzzEngine<String>.Config(
                 maxIterations: 10,
                 maxDuration: 1,
-                plateauThreshold: 5
+                plateauConfig: .init(enabled: false)
             )
 
             let engine = FuzzEngine<String>(mutators: mutator, config: config)
@@ -385,7 +385,7 @@ struct MutatorFuzzEngineTests {
             let config = FuzzEngine<String>.Config(
                 maxIterations: 20,
                 maxDuration: 2,
-                plateauThreshold: 10
+                plateauConfig: .init(enabled: false)
             )
 
             let engine = FuzzEngine<String>(mutators: mutator, config: config)

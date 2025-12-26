@@ -132,11 +132,11 @@ struct SanCovCountersRaceTests {
 
 /// Helper to create a CoverageSignature from a set of indices
 private func makeSignature(indices: [Int]) -> CoverageSignature {
-    var sparse: [Int: UInt8] = [:]
-    for idx in indices {
-        sparse[idx] = 1
-    }
-    return CoverageSignature(sparseCoverage: sparse)
+    let sparse = SparseCoverage(
+        indices: indices.map { UInt32($0) },
+        counts: [UInt8](repeating: 1, count: indices.count)
+    )
+    return CoverageSignature(sparse: sparse)
 }
 
 @Suite("Corpus Race Detection")

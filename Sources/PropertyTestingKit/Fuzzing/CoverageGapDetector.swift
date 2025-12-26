@@ -246,7 +246,7 @@ public struct CoverageGapDetector: Sendable {
 
         // Step 1: Fast scan to find all function keys and count edges (no DWARF)
         // Also track PC ranges for each function to enable fast filtering in Step 2
-        let step1Start = CFAbsoluteTimeGetCurrent()
+        // let step1Start = CFAbsoluteTimeGetCurrent()
         var functionEdges: [String: FunctionEdgeInfo] = [:]
         var testedFunctions: Set<String> = []
         var functionPCRanges: [String: (min: UInt, max: UInt)] = [:]
@@ -295,10 +295,10 @@ public struct CoverageGapDetector: Sendable {
         let functionStarts = Array(Set(functionPCRanges.values.map { $0.min }))
         let functionSizes = await SanCovCounters.getFunctionSizes(at: functionStarts)
 
-        #if DEBUG
-        let symbolTableTime = CFAbsoluteTimeGetCurrent()
-        print("[GapDetector] Symbol table lookup: \(String(format: "%.3f", symbolTableTime - step1Start))s for \(functionStarts.count) functions")
-        #endif
+        // #if DEBUG
+        // let symbolTableTime = CFAbsoluteTimeGetCurrent()
+        // print("[GapDetector] Symbol table lookup: \(String(format: "%.3f", symbolTableTime - step1Start))s for \(functionStarts.count) functions")
+        // #endif
 
         // Build per-function PC ranges using accurate sizes from symbol table
         // Fallback to 64KB padding if symbol lookup fails
@@ -327,7 +327,7 @@ public struct CoverageGapDetector: Sendable {
             globalMaxPC = max(globalMaxPC, funcEnd)
         }
 
-        let step1End = CFAbsoluteTimeGetCurrent()
+        // let step1End = CFAbsoluteTimeGetCurrent()
 
         // If no functions were tested, return early (no gaps to detect)
         if testedFunctions.isEmpty {
@@ -339,7 +339,7 @@ public struct CoverageGapDetector: Sendable {
             )
         }
 
-        let step2Start = CFAbsoluteTimeGetCurrent()
+        // let step2Start = CFAbsoluteTimeGetCurrent()
         // Step 2: Scan uncovered edges, but only for functions we're tracking
         // Optimization: First filter by PC range (fast array lookup), then dladdr only for candidates
         // Collect all edges that need DWARF lookup, then batch process them
@@ -353,28 +353,28 @@ public struct CoverageGapDetector: Sendable {
         }
         var uncoveredEdgesNeedingDWARF: [UncoveredEdge] = []
 
-        #if DEBUG
-        var step2PCFilterTime: Double = 0
-        var step2DladdrTime: Double = 0
-        var step2FunctionFilterTime: Double = 0
-        var step2EdgesPCFiltered: Int = 0
-        var step2EdgesDladdrd: Int = 0
-        var step2EdgesFunctionFiltered: Int = 0
-        #endif
+        // #if DEBUG
+        // var step2PCFilterTime: Double = 0
+        // var step2DladdrTime: Double = 0
+        // var step2FunctionFilterTime: Double = 0
+        // var step2EdgesPCFiltered: Int = 0
+        // var step2EdgesDladdrd: Int = 0
+        // var step2EdgesFunctionFiltered: Int = 0
+        // #endif
 
         for edgeIndex in 0..<totalEdges where !coveredSet.contains(edgeIndex) {
             // Fast PC range filter - skip edges clearly outside tested functions
-            #if DEBUG
-            let pcStart = CFAbsoluteTimeGetCurrent()
-            #endif
+            // #if DEBUG
+            // let pcStart = CFAbsoluteTimeGetCurrent()
+            // #endif
             let pc = SanCovCounters.getPC(for: edgeIndex)
 
             // First filter: Global PC range (very fast)
             if pc < globalMinPC || pc > globalMaxPC {
-                #if DEBUG
-                step2PCFilterTime += CFAbsoluteTimeGetCurrent() - pcStart
-                step2EdgesPCFiltered += 1
-                #endif
+                // #if DEBUG
+                // step2PCFilterTime += CFAbsoluteTimeGetCurrent() - pcStart
+                // step2EdgesPCFiltered += 1
+                // #endif
                 continue
             }
 
@@ -389,53 +389,53 @@ public struct CoverageGapDetector: Sendable {
             }
 
             if !inAnyFunctionRange {
-                #if DEBUG
-                step2PCFilterTime += CFAbsoluteTimeGetCurrent() - pcStart
-                step2EdgesPCFiltered += 1
-                #endif
+                // #if DEBUG
+                // step2PCFilterTime += CFAbsoluteTimeGetCurrent() - pcStart
+                // step2EdgesPCFiltered += 1
+                // #endif
                 continue
             }
-            #if DEBUG
-            step2PCFilterTime += CFAbsoluteTimeGetCurrent() - pcStart
-            #endif
+            // #if DEBUG
+            // step2PCFilterTime += CFAbsoluteTimeGetCurrent() - pcStart
+            // #endif
 
             // Only now do the expensive dladdr call
-            #if DEBUG
-            let dladdrStart = CFAbsoluteTimeGetCurrent()
-            #endif
+            // #if DEBUG
+            // let dladdrStart = CFAbsoluteTimeGetCurrent()
+            // #endif
             guard let location = SanCovCounters.getSourceLocationSync(for: edgeIndex) else {
-                #if DEBUG
-                step2DladdrTime += CFAbsoluteTimeGetCurrent() - dladdrStart
-                step2EdgesDladdrd += 1
-                #endif
+                // #if DEBUG
+                // step2DladdrTime += CFAbsoluteTimeGetCurrent() - dladdrStart
+                // step2EdgesDladdrd += 1
+                // #endif
                 continue
             }
-            #if DEBUG
-            step2DladdrTime += CFAbsoluteTimeGetCurrent() - dladdrStart
-            step2EdgesDladdrd += 1
-            #endif
+            // #if DEBUG
+            // step2DladdrTime += CFAbsoluteTimeGetCurrent() - dladdrStart
+            // step2EdgesDladdrd += 1
+            // #endif
 
             guard let funcName = location.functionName,
                   let filename = location.filename else {
                 continue
             }
 
-            #if DEBUG
-            let funcFilterStart = CFAbsoluteTimeGetCurrent()
-            #endif
+            // #if DEBUG
+            // let funcFilterStart = CFAbsoluteTimeGetCurrent()
+            // #endif
             let key = "\(filename):\(funcName)"
 
             // Only track uncovered edges from tested functions
             guard testedFunctions.contains(key) else {
-                #if DEBUG
-                step2FunctionFilterTime += CFAbsoluteTimeGetCurrent() - funcFilterStart
-                step2EdgesFunctionFiltered += 1
-                #endif
+                // #if DEBUG
+                // step2FunctionFilterTime += CFAbsoluteTimeGetCurrent() - funcFilterStart
+                // step2EdgesFunctionFiltered += 1
+                // #endif
                 continue
             }
-            #if DEBUG
-            step2FunctionFilterTime += CFAbsoluteTimeGetCurrent() - funcFilterStart
-            #endif
+            // #if DEBUG
+            // step2FunctionFilterTime += CFAbsoluteTimeGetCurrent() - funcFilterStart
+            // #endif
 
             // Track this edge for batch DWARF lookup
             uncoveredEdgesNeedingDWARF.append(UncoveredEdge(edgeIndex: edgeIndex, pc: pc, key: key))
@@ -447,7 +447,7 @@ public struct CoverageGapDetector: Sendable {
             }
         }
 
-        let step2FirstPassEnd = CFAbsoluteTimeGetCurrent()
+        // let step2FirstPassEnd = CFAbsoluteTimeGetCurrent()
 
         // Second pass: batch DWARF lookup for all uncovered edges
         // Optimization: Skip DWARF lookup during detection. Line numbers are computed
@@ -465,15 +465,15 @@ public struct CoverageGapDetector: Sendable {
             }
         }
 
-        #if DEBUG
-        print("[GapDetector] Step 1 (covered edges dladdr): \(String(format: "%.3f", step1End - step1Start))s")
-        print("[GapDetector] Step 2 total: \(String(format: "%.3f", step2FirstPassEnd - step2Start))s")
-        print("[GapDetector]   - PC filter time: \(String(format: "%.3f", step2PCFilterTime))s (\(step2EdgesPCFiltered) edges filtered out)")
-        print("[GapDetector]   - dladdr time: \(String(format: "%.3f", step2DladdrTime))s (\(step2EdgesDladdrd) calls)")
-        print("[GapDetector]   - Function filter time: \(String(format: "%.3f", step2FunctionFilterTime))s (\(step2EdgesFunctionFiltered) edges filtered out)")
-        print("[GapDetector] Edges scanned: \(totalEdges), uncovered edges in report: \(uncoveredEdgesNeedingDWARF.count)")
-        print("[GapDetector] Total dladdr calls: \(SanCovCounters.dlAddrCallCount)")
-        #endif
+        // #if DEBUG
+        // print("[GapDetector] Step 1 (covered edges dladdr): \(String(format: "%.3f", step1End - step1Start))s")
+        // print("[GapDetector] Step 2 total: \(String(format: "%.3f", step2FirstPassEnd - step2Start))s")
+        // print("[GapDetector]   - PC filter time: \(String(format: "%.3f", step2PCFilterTime))s (\(step2EdgesPCFiltered) edges filtered out)")
+        // print("[GapDetector]   - dladdr time: \(String(format: "%.3f", step2DladdrTime))s (\(step2EdgesDladdrd) calls)")
+        // print("[GapDetector]   - Function filter time: \(String(format: "%.3f", step2FunctionFilterTime))s (\(step2EdgesFunctionFiltered) edges filtered out)")
+        // print("[GapDetector] Edges scanned: \(totalEdges), uncovered edges in report: \(uncoveredEdgesNeedingDWARF.count)")
+        // print("[GapDetector] Total dladdr calls: \(SanCovCounters.dlAddrCallCount)")
+        // #endif
 
         // Analyze each function and detect gaps
         var gaps: [CoverageGap] = []

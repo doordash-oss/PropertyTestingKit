@@ -232,7 +232,7 @@ struct DeterministicTimingTests {
         func testDurationTracking() async {
             let currentTime = SyncBox(Date(timeIntervalSince1970: 0))
 
-            let stats = await withDependencies {
+            let stats = withDependencies {
                 $0.dateClient = DateClient(now: { currentTime.value })
             } operation: {
                 let config = CoveragePlateauDetector.Config(
@@ -264,7 +264,7 @@ struct DeterministicTimingTests {
 
         @Test("PlateauStats duration is zero before any records")
         func testZeroDurationBeforeRecords() async {
-            let stats = await withDependencies {
+            let stats = withDependencies {
                 $0.dateClient = DateClient.constant(Date())
             } operation: {
                 let config = CoveragePlateauDetector.Config(enabled: true)
@@ -279,7 +279,7 @@ struct DeterministicTimingTests {
         func testDiscoveryRateCalculation() async {
             let currentTime = SyncBox(Date(timeIntervalSince1970: 0))
 
-            let stats = await withDependencies {
+            let stats = withDependencies {
                 $0.dateClient = DateClient(now: { currentTime.value })
             } operation: {
                 let config = CoveragePlateauDetector.Config(

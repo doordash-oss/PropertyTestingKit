@@ -1,4 +1,0 @@
-module StringAllocationHooks {
-    header "StringAllocationHooks.h"
-    export *
-}

@@ -8,6 +8,20 @@
       runPostActionsOnFailure = "NO">
       <BuildActionEntries>
          <BuildActionEntry
+            buildForTesting = "NO"
+            buildForRunning = "YES"
+            buildForProfiling = "NO"
+            buildForArchiving = "NO"
+            buildForAnalyzing = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "5F7ED0684477D1C9FC1834A5"
+               BuildableName = "CoverageBenchmarks"
+               BlueprintName = "CoverageBenchmarks"
+               ReferencedContainer = "container:PropertyTestingKit.xcodeproj">
+            </BuildableReference>
+         </BuildActionEntry>
+         <BuildActionEntry
             buildForTesting = "YES"
             buildForRunning = "YES"
             buildForProfiling = "YES"
@@ -128,15 +142,16 @@
       debugDocumentVersioning = "YES"
       debugServiceExtension = "internal"
       allowLocationSimulation = "YES">
-      <MacroExpansion>
+      <BuildableProductRunnable
+         runnableDebuggingMode = "0">
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "3158F44FBF717D69B2A46E2E"
-            BuildableName = "PropertyTestingKit.framework"
-            BlueprintName = "PropertyTestingKit"
+            BlueprintIdentifier = "5F7ED0684477D1C9FC1834A5"
+            BuildableName = "CoverageBenchmarks"
+            BlueprintName = "CoverageBenchmarks"
             ReferencedContainer = "container:PropertyTestingKit.xcodeproj">
          </BuildableReference>
-      </MacroExpansion>
+      </BuildableProductRunnable>
    </LaunchAction>
    <ProfileAction
       buildConfiguration = "Release"
@@ -144,15 +159,16 @@
       savedToolIdentifier = ""
       useCustomWorkingDirectory = "NO"
       debugDocumentVersioning = "YES">
-      <MacroExpansion>
+      <BuildableProductRunnable
+         runnableDebuggingMode = "0">
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "3158F44FBF717D69B2A46E2E"
-            BuildableName = "PropertyTestingKit.framework"
-            BlueprintName = "PropertyTestingKit"
+            BlueprintIdentifier = "5F7ED0684477D1C9FC1834A5"
+            BuildableName = "CoverageBenchmarks"
+            BlueprintName = "CoverageBenchmarks"
             ReferencedContainer = "container:PropertyTestingKit.xcodeproj">
          </BuildableReference>
-      </MacroExpansion>
+      </BuildableProductRunnable>
    </ProfileAction>
    <AnalyzeAction
       buildConfiguration = "Debug">

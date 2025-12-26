@@ -83,25 +83,6 @@ public struct CoverageSignature: Hashable, Codable, Sendable {
         self.buckets = buckets
     }
 
-    /// Create a signature from sparse coverage data (only non-zero counters).
-    ///
-    /// This is more efficient than `init(snapshot:)` when coverage is sparse,
-    /// as it avoids iterating through all 26K+ counters.
-    ///
-    /// - Parameter sparseCoverage: Dictionary mapping edge index to hit count.
-    @available(*, deprecated, message: "Use init(sparse:) for better performance")
-    public init(sparseCoverage: [Int: UInt8]) {
-        var buckets: [Int: Bucket] = [:]
-        buckets.reserveCapacity(sparseCoverage.count)
-        for (index, count) in sparseCoverage {
-            let bucket = Bucket(count: UInt64(count))
-            if bucket != .zero {
-                buckets[index] = bucket
-            }
-        }
-        self.buckets = buckets
-    }
-
     /// Create a signature from sparse coverage arrays.
     ///
     /// This is the fastest way to create a signature from coverage data,

@@ -533,15 +533,15 @@ public actor FuzzEngine<each Input: Fuzzable & Codable & Sendable> {
             )
         }
 
-        let fuzzLoopStart = CFAbsoluteTimeGetCurrent()
+//        let fuzzLoopStart = CFAbsoluteTimeGetCurrent()
         // Phase 2: Coverage-guided fuzzing with batch parallelization
         var iteration = seedInputs.count
         var stopReason: FuzzStats.StopReason = .iterationLimit
 
         // Timing accumulators for profiling
-        var timeInMutation: Double = 0
-        var timeInTest: Double = 0
-        var timeInCoverage: Double = 0
+        // var timeInMutation: Double = 0
+        // var timeInTest: Double = 0
+        // var timeInCoverage: Double = 0
 
         // Auto-tune batch size based on test execution time if configured
         let batchSize: Int
@@ -554,7 +554,7 @@ public actor FuzzEngine<each Input: Fuzzable & Codable & Sendable> {
         }
 
         while iteration < config.maxIterations {
-            let batchStart = CFAbsoluteTimeGetCurrent()
+//            let batchStart = CFAbsoluteTimeGetCurrent()
 
             // Check stopping conditions before generating batch
             if dateClient.now().timeIntervalSince(startTime) >= config.maxDuration {
@@ -571,14 +571,6 @@ public actor FuzzEngine<each Input: Fuzzable & Codable & Sendable> {
                     print("[Fuzz] Stopping early at iteration \(iteration) (saved \(config.maxIterations - iteration) iterations)")
                 }
                 stopReason = .coveragePlateau
-                break
-            }
-
-            if !config.plateauConfig.enabled && iterationsSinceNewCoverage >= config.plateauThreshold {
-                if config.verbose {
-                    print("[Fuzz] Coverage plateau reached (legacy threshold)")
-                }
-                stopReason = .legacyPlateau
                 break
             }
 
@@ -681,12 +673,12 @@ public actor FuzzEngine<each Input: Fuzzable & Codable & Sendable> {
                 continue
             }
 
-            let mutationEnd = CFAbsoluteTimeGetCurrent()
-            timeInMutation += mutationEnd - batchStart
+            // let mutationEnd = CFAbsoluteTimeGetCurrent()
+            // timeInMutation += mutationEnd - batchStart
 
             // Run batch in parallel using withTaskGroup
             // Each task gets isolated coverage via swift_task_getCurrent()
-            let testStart = CFAbsoluteTimeGetCurrent()
+            // let testStart = CFAbsoluteTimeGetCurrent()
             let batchResults = await withTaskGroup(
                 of: BatchTestResult.self,
                 returning: [BatchTestResult].self
@@ -749,11 +741,11 @@ public actor FuzzEngine<each Input: Fuzzable & Codable & Sendable> {
                 return results.sorted { $0.index < $1.index }
             }
 
-            let testEnd = CFAbsoluteTimeGetCurrent()
-            timeInTest += testEnd - testStart
+            // let testEnd = CFAbsoluteTimeGetCurrent()
+            // timeInTest += testEnd - testStart
 
-            // Process results sequentially to update corpus and state
-            let coverageStart = CFAbsoluteTimeGetCurrent()
+            // // Process results sequentially to update corpus and state
+            // let coverageStart = CFAbsoluteTimeGetCurrent()
 
             for result in batchResults {
                 let input = batchInputs[result.index]
@@ -792,8 +784,8 @@ public actor FuzzEngine<each Input: Fuzzable & Codable & Sendable> {
                 }
             }
 
-            let coverageEnd = CFAbsoluteTimeGetCurrent()
-            timeInCoverage += coverageEnd - coverageStart
+            // let coverageEnd = CFAbsoluteTimeGetCurrent()
+            // timeInCoverage += coverageEnd - coverageStart
         }
 
         // Disable value profile tracking
@@ -805,14 +797,14 @@ public actor FuzzEngine<each Input: Fuzzable & Codable & Sendable> {
             }
         }
 
-        let fuzzLoopEnd = CFAbsoluteTimeGetCurrent()
-        print("[Timing] Fuzz loop: \(String(format: "%.3f", fuzzLoopEnd - fuzzLoopStart))s (\(iteration) iterations)")
-        print("[Timing]   - Mutation: \(String(format: "%.3f", timeInMutation))s")
-        print("[Timing]   - Test execution: \(String(format: "%.3f", timeInTest))s")
-        print("[Timing]   - Coverage processing: \(String(format: "%.3f", timeInCoverage))s")
+        // let fuzzLoopEnd = CFAbsoluteTimeGetCurrent()
+        // print("[Timing] Fuzz loop: \(String(format: "%.3f", fuzzLoopEnd - fuzzLoopStart))s (\(iteration) iterations)")
+        // print("[Timing]   - Mutation: \(String(format: "%.3f", timeInMutation))s")
+        // print("[Timing]   - Test execution: \(String(format: "%.3f", timeInTest))s")
+        // print("[Timing]   - Coverage processing: \(String(format: "%.3f", timeInCoverage))s")
 
         // Phase 3: Minimize corpus
-        let minimizeStart = CFAbsoluteTimeGetCurrent()
+        // let minimizeStart = CFAbsoluteTimeGetCurrent()
         var finalCorpus = corpus
         let corpusCountBeforeMinimize = await corpus.count()
         if config.minimizeCorpus && corpusCountBeforeMinimize > 1 {
@@ -823,11 +815,11 @@ public actor FuzzEngine<each Input: Fuzzable & Codable & Sendable> {
                 print("[Fuzz] Minimized corpus: \(corpusCountBeforeMinimize) -> \(finalCount)")
             }
         }
-        let minimizeEnd = CFAbsoluteTimeGetCurrent()
-        print("[Timing] Minimize corpus: \(String(format: "%.3f", minimizeEnd - minimizeStart))s")
+        // let minimizeEnd = CFAbsoluteTimeGetCurrent()
+        // print("[Timing] Minimize corpus: \(String(format: "%.3f", minimizeEnd - minimizeStart))s")
 
         // Phase 4: Save corpus
-        let saveStart = CFAbsoluteTimeGetCurrent()
+        // let saveStart = CFAbsoluteTimeGetCurrent()
         if let directory = corpusDirectory {
             do {
                 let snapshotToSave = await finalCorpus.snapshot()
@@ -841,8 +833,8 @@ public actor FuzzEngine<each Input: Fuzzable & Codable & Sendable> {
                 }
             }
         }
-        let saveEnd = CFAbsoluteTimeGetCurrent()
-        print("[Timing] Save corpus: \(String(format: "%.3f", saveEnd - saveStart))s")
+        // let saveEnd = CFAbsoluteTimeGetCurrent()
+        // print("[Timing] Save corpus: \(String(format: "%.3f", saveEnd - saveStart))s")
 
         let duration = dateClient.now().timeIntervalSince(startTime)
 
@@ -873,25 +865,25 @@ public actor FuzzEngine<each Input: Fuzzable & Codable & Sendable> {
         )
 
         // Detect coverage gaps if enabled
-        let gapStart = CFAbsoluteTimeGetCurrent()
+//        let gapStart = CFAbsoluteTimeGetCurrent()
         var coverageGapReport: CoverageGapReport?
         if config.detectCoverageGaps {
             let totalCoverage = await finalCorpus.totalCoverage()
             let totalCoveredIndices = totalCoverage.executedIndices
             let detector = CoverageGapDetector(config: config.coverageGapConfig)
 
-            if config.verbose {
-                print("[Fuzz] Gap detection: corpus covered \(totalCoveredIndices.count) edges, total edges: \(SanCovCounters.totalEdgeCount)")
-            }
+            // if config.verbose {
+            //     print("[Fuzz] Gap detection: corpus covered \(totalCoveredIndices.count) edges, total edges: \(SanCovCounters.totalEdgeCount)")
+            // }
 
             coverageGapReport = await detector.detect(from: totalCoveredIndices, projectPath: config.projectPath)
 
-            if config.verbose, let report = coverageGapReport {
-                print("[Fuzz] \(report.detailedSummary)")
-            }
+            // if config.verbose, let report = coverageGapReport {
+            //     print("[Fuzz] \(report.detailedSummary)")
+            // }
         }
-        let gapEnd = CFAbsoluteTimeGetCurrent()
-        print("[Timing] Gap detection: \(String(format: "%.3f", gapEnd - gapStart))s")
+        // let gapEnd = CFAbsoluteTimeGetCurrent()
+        // print("[Timing] Gap detection: \(String(format: "%.3f", gapEnd - gapStart))s")
 
         let finalSnapshot = await finalCorpus.snapshot()
         return FuzzResult(

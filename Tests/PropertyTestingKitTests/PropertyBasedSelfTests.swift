@@ -829,9 +829,19 @@ struct SanCovSourceCoverageAPITests {
         }
 
         // Coverage should be captured if SanCov is available
-        // Assert exact count to catch any race conditions or measurement issues
         if let coverage = coverage {
-            #expect(coverage.coveredCount == 5, "Expected exactly 5 covered edges, got \(coverage.coveredCount)")
+            // getCoveredLocations filters out stdlib by default, so we only see test code edges.
+            // Different compilers handle stdlib specialization instrumentation differently:
+            // - Local/dev toolchain: Does NOT instrument specialized stdlib (e.g., Array.map)
+            // - Xcode bundled toolchain: DOES instrument specialized stdlib
+            // The isStdlibFunction() filter handles this transparently.
+            //
+            // Test code should always have exactly 5 edges regardless of toolchain:
+            // 1 for outer closure, 2 for compute(), 2 for map closure
+            #expect(
+                coverage.coveredLocations.count == 5,
+                "Expected exactly 5 test edges, got \(coverage.coveredLocations.count)"
+            )
         }
     }
 

@@ -33,7 +33,7 @@ struct FuzzAPITests {
             let config = FuzzEngine<String>.Config(
                 maxIterations: 100,
                 maxDuration: 5,
-                plateauThreshold: 30,
+                plateauConfig: .init(enabled: false),
                 generationRatio: 0.2,
                 minimizeCorpus: true,
                 verbose: true,
@@ -117,7 +117,7 @@ struct FuzzAPITests {
             let config = FuzzEngine<String>.Config(
                 maxIterations: 50,
                 maxDuration: 5,
-                plateauThreshold: 30,
+                plateauConfig: .init(enabled: false),
                 verbose: false
             )
 
@@ -187,7 +187,7 @@ struct FuzzAPITests {
 
     @Test("Config.fromEnvironment reads environment variables")
     func testConfigFromEnvironment() async {
-        await withDependencies {
+        withDependencies {
             $0.environment = EnvironmentClient(environment: {
                 [
                     "FUZZ_ITERATIONS": "500",
@@ -206,7 +206,7 @@ struct FuzzAPITests {
 
     @Test("Config.fromEnvironment uses defaults when env vars not set")
     func testConfigFromEnvironmentDefaults() async {
-        await withDependencies {
+        withDependencies {
             $0.environment = EnvironmentClient(environment: { [:] })
         } operation: {
             let config: FuzzEngine<String>.Config = .fromEnvironment()

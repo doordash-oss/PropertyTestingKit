@@ -184,21 +184,6 @@ public struct SanCovCounters: Sendable {
     }
 
     /// Get only the covered (non-zero) edge indices with their hit counts.
-    /// This is more efficient than `snapshot()` when coverage is sparse.
-    ///
-    /// - Returns: Dictionary mapping edge index to hit count, or nil if unavailable.
-    @available(*, deprecated, message: "Use snapshotCoveredArrays() for better performance")
-    public static func snapshotCoveredOnly() -> [Int: UInt8]? {
-        guard let sparse = snapshotCoveredArrays() else { return nil }
-        var result: [Int: UInt8] = [:]
-        result.reserveCapacity(sparse.count)
-        for i in 0..<sparse.count {
-            result[Int(sparse.indices[i])] = sparse.counts[i]
-        }
-        return result
-    }
-
-    /// Get only the covered (non-zero) edge indices with their hit counts.
     ///
     /// Returns parallel arrays for efficiency - avoids Dictionary hashing overhead.
     /// This is the fastest way to get sparse coverage data.
@@ -374,6 +359,32 @@ private func demangle(_ mangledName: String) -> String {
     return String(cString: result)
 }
 
+/// Check if a function name is from the Swift standard library.
+///
+/// When a toolchain instruments specialized stdlib code (e.g., `Array.map`),
+/// those edges should typically be excluded from coverage analysis since
+/// they're not part of the user's code under test.
+///
+/// - Parameter functionName: The demangled function name to check.
+/// - Returns: `true` if this appears to be a stdlib function.
+public func isStdlibFunction(_ functionName: String) -> Bool {
+    // Swift stdlib functions
+    functionName.hasPrefix("Swift.") ||
+    functionName.hasPrefix("(extension in Swift)") ||
+    // Swift runtime internals
+    functionName.hasPrefix("__swift_") ||
+    functionName.hasPrefix("_swift_") ||
+    // Compiler-generated helpers
+    functionName.hasPrefix("outlined ") ||
+    functionName.contains("protocol witness table") ||
+    functionName.contains("protocol conformance descriptor") ||
+    // Common specialized stdlib functions that appear in user code
+    functionName.contains("_endMutation") ||
+    functionName.contains("_finalizeUninitializedArray") ||
+    functionName.contains("_makeMutableAndUnique") ||
+    functionName.contains("_bridgeToObjectiveC")
+}
+
 /// Source location information for a covered edge.
 ///
 /// Maps a SanCov edge index to its source location using debug symbol info.
@@ -401,6 +412,15 @@ public struct SanCovSourceLocation: Sendable {
 
     /// The SanCov edge index.
     public let edgeIndex: UInt32
+
+    /// Whether this location is from the Swift standard library.
+    ///
+    /// Some toolchains instrument specialized stdlib code (e.g., `Array.map`).
+    /// This property helps filter those edges from coverage analysis.
+    public var isStdlib: Bool {
+        guard let name = functionName else { return false }
+        return isStdlibFunction(name)
+    }
 
     fileprivate init(from cLocation: SanCovSourceLocation_C, dwarfLocation: DWARFSourceLocation? = nil) {
         // Prefer DWARF info when available
@@ -678,7 +698,6 @@ private actor FunctionSizeLookupActor {
         var commandPtr = UnsafeRawPointer(header).advanced(by: MemoryLayout<mach_header_64>.size)
         var linkeditVMAddr: UInt64 = 0
         var linkeditFileOff: UInt64 = 0
-        var textVMAddr: UInt64 = 0
 
         for _ in 0..<header.pointee.ncmds {
             let command = commandPtr.assumingMemoryBound(to: load_command.self).pointee
@@ -692,8 +711,6 @@ private actor FunctionSizeLookupActor {
                 if segname == "__LINKEDIT" {
                     linkeditVMAddr = segment.vmaddr
                     linkeditFileOff = segment.fileoff
-                } else if segname == "__TEXT" {
-                    textVMAddr = segment.vmaddr
                 }
             }
 
@@ -702,15 +719,7 @@ private actor FunctionSizeLookupActor {
 
         guard linkeditVMAddr > 0 else { return nil }
 
-        // For a loaded binary with ASLR:
-        // actual_linkedit_addr = slide + linkedit_vmaddr
-        // The symtab/strtab offsets are relative to the start of linkedit data
-        // So we need: slide + linkedit_vmaddr - linkedit_fileoff + offset
-        // Which simplifies to: headerAddr - textVMAddr + linkedit_vmaddr - linkedit_fileoff + offset
-        // Or: headerAddr + (linkedit_vmaddr - textVMAddr) - linkedit_fileoff + offset
-
-        // Actually simpler: the linkedit base for offset lookups is:
-        // slide + linkedit_vmaddr - linkedit_fileoff
+        // The linkedit base for offset lookups is: slide + linkedit_vmaddr - linkedit_fileoff
         let slide = UInt64(bitPattern: Int64(_slide))
         let linkeditBase = slide + linkeditVMAddr - linkeditFileOff
         return UnsafeRawPointer(bitPattern: UInt(linkeditBase))
@@ -891,8 +900,10 @@ extension SanCovCounters {
     /// When DWARF debug info is available, each location includes line numbers.
     /// Otherwise falls back to function-level info.
     ///
+    /// - Parameter includeStdlib: If `false` (default), filters out Swift stdlib functions.
+    ///   Some toolchains instrument specialized stdlib code which pollutes coverage data.
     /// - Returns: Array of source locations for covered edges.
-    public static func getCoveredLocations() async -> [SanCovSourceLocation] {
+    public static func getCoveredLocations(includeStdlib: Bool = false) async -> [SanCovSourceLocation] {
         // First, get the count
         let count = sancov_get_covered_locations(nil, 0)
         guard count > 0 else { return [] }
@@ -906,7 +917,14 @@ extension SanCovCounters {
         results.reserveCapacity(filled)
         for cLoc in cLocations.prefix(filled) {
             let dwarfLocation = await dwarfSymbolizerHelper.lookup(pc: UInt(cLoc.pc))
-            results.append(SanCovSourceLocation(from: cLoc, dwarfLocation: dwarfLocation))
+            let location = SanCovSourceLocation(from: cLoc, dwarfLocation: dwarfLocation)
+
+            // Filter out stdlib if requested
+            if !includeStdlib && location.isStdlib {
+                continue
+            }
+
+            results.append(location)
         }
         return results
     }

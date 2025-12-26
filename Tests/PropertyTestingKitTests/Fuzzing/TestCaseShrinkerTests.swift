@@ -5,6 +5,7 @@
 
 import Testing
 import Foundation
+import Dependencies
 @testable import PropertyTestingKit
 
 @Suite("TestCaseShrinker")
@@ -149,21 +150,29 @@ struct TestCaseShrinkerTests {
 
     @Test("Shrinker respects timeout")
     func testShrinkerTimeout() async {
-        let shrinker = TestCaseShrinker<[Int]>(config: ShrinkConfig(
-            timeout: 0.05 // Very short timeout
-        ))
+        // Use injected time instead of actual sleep for deterministic testing
+        let currentTime = SyncBox(Date(timeIntervalSince1970: 0))
 
-        // Create array where failure requires specific element
-        let largeArray = Array(0..<500) + [999]
-        let (minimized, stats) = await shrinker.shrink(input: largeArray) { candidate in
-            // Slow test that requires 999
-            try? await Task.sleep(for: .milliseconds(20))
-            return candidate.contains(999) ? .fail : .pass
+        let (minimized, stats) = await withDependencies {
+            $0.dateClient = DateClient(now: { currentTime.value })
+        } operation: {
+            let shrinker = TestCaseShrinker<[Int]>(config: ShrinkConfig(
+                timeout: 0.05 // Very short timeout (50ms)
+            ))
+
+            // Create array where failure requires specific element
+            let largeArray = Array(0..<500) + [999]
+            return await shrinker.shrink(input: largeArray) { candidate in
+                // Simulate slow test by advancing time (20ms per test)
+                currentTime.update { $0 = $0.addingTimeInterval(0.02) }
+                return candidate.contains(999) ? .fail : .pass
+            }
         }
 
-        // With short timeout and slow tests, should either timeout or complete quickly
+        // With 50ms timeout and 20ms per test, should timeout after ~2-3 tests
         #expect(minimized.contains(999)) // Must still contain the failing element
-        #expect(stats.duration <= 0.5) // Should complete relatively quickly
+        #expect(stats.timedOut, "Should have timed out")
+        #expect(stats.candidatesTested <= 5, "Should stop after few tests due to timeout")
     }
 
     // MARK: - TestCaseShrinker String Tests

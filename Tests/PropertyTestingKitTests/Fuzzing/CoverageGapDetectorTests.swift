@@ -285,7 +285,7 @@ struct CoverageGapDetectorTests {
     @Test("Realistic coverage gap test")
     func realisticCoverageGapTest() async throws {
         // Use a hash-based check that value profile can't solve easily
-        @Sendable @inline(never)
+        @Sendable
         func partiallyCoveredFunction(input: Int) {
             // Simple hash to defeat value profile guidance
             let hash = (input &* 31) ^ (input >> 4)

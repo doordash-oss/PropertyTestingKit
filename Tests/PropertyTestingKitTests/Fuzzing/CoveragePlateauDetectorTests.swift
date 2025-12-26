@@ -21,7 +21,7 @@ struct CoveragePlateauDetectorTests {
         let detector = CoveragePlateauDetector(config: config)
 
         #expect(!detector.hasPlateaued)
-        let stats = await detector.stats()
+        let stats = detector.stats()
         #expect(stats.totalIterations == 0)
         #expect(stats.totalDiscoveries == 0)
     }
@@ -38,7 +38,7 @@ struct CoveragePlateauDetectorTests {
 
         // Record many non-discoveries
         for _ in 0..<20 {
-            await detector.record(discoveredNewCoverage: false)
+            detector.record(discoveredNewCoverage: false)
         }
 
         #expect(detector.hasPlateaued)
@@ -56,7 +56,7 @@ struct CoveragePlateauDetectorTests {
 
         // Record discoveries at a good rate
         for i in 0..<50 {
-            await detector.record(discoveredNewCoverage: i % 5 == 0)
+            detector.record(discoveredNewCoverage: i % 5 == 0)
         }
 
         #expect(!detector.hasPlateaued)
@@ -74,7 +74,7 @@ struct CoveragePlateauDetectorTests {
 
         // Record many non-discoveries
         for _ in 0..<100 {
-            await detector.record(discoveredNewCoverage: false)
+            detector.record(discoveredNewCoverage: false)
         }
 
         // Should never plateau when disabled
@@ -91,13 +91,13 @@ struct CoveragePlateauDetectorTests {
         )
         var detector = CoveragePlateauDetector(config: config)
 
-        await detector.record(discoveredNewCoverage: true)
-        await detector.record(discoveredNewCoverage: false)
-        await detector.record(discoveredNewCoverage: true)
-        await detector.record(discoveredNewCoverage: false)
-        await detector.record(discoveredNewCoverage: false)
+        detector.record(discoveredNewCoverage: true)
+        detector.record(discoveredNewCoverage: false)
+        detector.record(discoveredNewCoverage: true)
+        detector.record(discoveredNewCoverage: false)
+        detector.record(discoveredNewCoverage: false)
 
-        let stats = await detector.stats()
+        let stats = detector.stats()
         #expect(stats.totalIterations == 5)
         #expect(stats.totalDiscoveries == 2)
         #expect(stats.overallRate == 0.4)
@@ -114,10 +114,10 @@ struct CoveragePlateauDetectorTests {
         var detector = CoveragePlateauDetector(config: config)
 
         for _ in 0..<15 {
-            await detector.record(discoveredNewCoverage: false)
+            detector.record(discoveredNewCoverage: false)
         }
 
-        let summary = await detector.summary(includeDetails: true)
+        let summary = detector.summary(includeDetails: true)
         #expect(summary.contains("rate"))
     }
 
@@ -133,16 +133,16 @@ struct CoveragePlateauDetectorTests {
 
         // Record non-discoveries to approach plateau
         for _ in 0..<10 {
-            await detector.record(discoveredNewCoverage: false)
+            detector.record(discoveredNewCoverage: false)
         }
 
         // Then record some discoveries
         for _ in 0..<3 {
-            await detector.record(discoveredNewCoverage: true)
+            detector.record(discoveredNewCoverage: true)
         }
 
         // Rate should improve
-        let stats = await detector.stats()
+        let stats = detector.stats()
         #expect(stats.windowRate > 0)
     }
 }

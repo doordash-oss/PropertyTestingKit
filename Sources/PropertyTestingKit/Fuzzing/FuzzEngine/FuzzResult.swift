@@ -65,7 +65,6 @@ public struct FuzzStats: Sendable {
         case iterationLimit = "iteration_limit"
         case timeLimit = "time_limit"
         case coveragePlateau = "coverage_plateau"
-        case legacyPlateau = "legacy_plateau"
         case regression = "regression"
         case noSeedsAvailable = "no_seeds_available"
     }

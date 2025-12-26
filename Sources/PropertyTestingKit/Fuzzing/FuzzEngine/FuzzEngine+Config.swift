@@ -18,11 +18,6 @@ extension FuzzEngine {
         /// When nil, uses a simple iteration count-based approach.
         public var plateauConfig: CoveragePlateauDetector.Config
 
-        /// Legacy: Stop after this many iterations without new coverage.
-        /// Only used when plateauConfig is disabled.
-        /// Deprecated: Use plateauConfig instead for more accurate plateau detection.
-        public var plateauThreshold: Int
-
         /// Probability of generating fresh vs mutating (0.0-1.0).
         /// Higher = more fresh generation.
         public var generationRatio: Double
@@ -72,14 +67,9 @@ extension FuzzEngine {
         /// When set, only reports gaps in files under this path.
         public var projectPath: String?
 
-        /// When true, disables plateau detection and runs for the full maxIterations.
-        /// Useful for benchmarking to ensure consistent iteration counts.
-        public var disablePlateauDetection: Bool
-
         public init(
             maxIterations: Int = 10_000,
             maxDuration: TimeInterval = 60,
-            plateauThreshold: Int = 1000,
             plateauConfig: CoveragePlateauDetector.Config? = nil,
             generationRatio: Double = 0.3,
             minimizeCorpus: Bool = true,
@@ -90,20 +80,15 @@ extension FuzzEngine {
             mutationBatchSize: Int = 0,
             detectCoverageGaps: Bool = false,
             coverageGapConfig: CoverageGapDetector.Config = CoverageGapDetector.Config(),
-            projectPath: String? = nil,
-            disablePlateauDetection: Bool = false
+            projectPath: String? = nil
         ) {
             self.maxIterations = maxIterations
             self.maxDuration = maxDuration
-            self.plateauThreshold = plateauThreshold
-            self.disablePlateauDetection = disablePlateauDetection
             // Default plateau config based on iterations
-            // Disable if disablePlateauDetection is true
             self.plateauConfig = plateauConfig ?? CoveragePlateauDetector.Config(
                 windowSize: max(1, min(500, maxIterations / 10)),
                 minDiscoveryRate: 0.001,
-                confirmationWindows: 3,
-                enabled: !disablePlateauDetection
+                confirmationWindows: 3
             )
             self.generationRatio = generationRatio
             self.minimizeCorpus = minimizeCorpus

@@ -14,30 +14,19 @@ import PropertyTestingKit
 
 // MARK: - Test Data Setup
 
-/// Generate a sparse coverage dictionary simulating typical fuzz test coverage.
-func makeSparseCoverage(coveredCount: Int, totalEdges: Int) -> [Int: UInt8] {
-    var coverage: [Int: UInt8] = [:]
-    coverage.reserveCapacity(coveredCount)
-
-    let step = max(1, totalEdges / coveredCount)
-    for i in 0..<coveredCount {
-        let index = (i * step + i * 7) % totalEdges
-        coverage[index] = UInt8(1 + (i % 10))
-    }
-    return coverage
-}
-
 /// Generate a SparseCoverage struct simulating typical fuzz test coverage.
 func makeSparseCoverageArrays(coveredCount: Int, totalEdges: Int) -> SparseCoverage {
+    // Clamp to avoid duplicates
+    let actualCount = min(coveredCount, totalEdges)
+
     var indices: [UInt32] = []
     var counts: [UInt8] = []
-    indices.reserveCapacity(coveredCount)
-    counts.reserveCapacity(coveredCount)
+    indices.reserveCapacity(actualCount)
+    counts.reserveCapacity(actualCount)
 
-    let step = max(1, totalEdges / coveredCount)
-    for i in 0..<coveredCount {
-        let index = (i * step + i * 7) % totalEdges
-        indices.append(UInt32(index))
+    // Use sequential indices for simplicity and guaranteed uniqueness
+    for i in 0..<actualCount {
+        indices.append(UInt32(i))
         counts.append(UInt8(1 + (i % 10)))
     }
     return SparseCoverage(indices: indices, counts: counts)
@@ -161,19 +150,6 @@ struct EmptyFuzzable: Fuzzable, Codable, Sendable, Equatable {
     func mutate() -> [EmptyFuzzable] { [] }
 }
 
-/// Nested Fuzzable types for benchmarking cartesian product generation.
-@Fuzzable
-struct BenchDog: Codable, Sendable, Equatable, Hashable {
-    let age: Int
-    let isBrown: Bool
-}
-
-@Fuzzable
-struct BenchHuman: Codable, Sendable, Equatable, Hashable {
-    let age: Int
-    let dog: BenchDog
-}
-
 // MARK: - Benchmarks
 
 let benchmarks: @Sendable () -> Void = {
@@ -182,8 +158,6 @@ let benchmarks: @Sendable () -> Void = {
     let largeCoveredEdges = 100
 
     // Pre-generate test data (dictionary format - deprecated)
-    let sparseSmall = makeSparseCoverage(coveredCount: typicalCoveredEdges, totalEdges: totalEdges)
-    let sparseLarge = makeSparseCoverage(coveredCount: largeCoveredEdges, totalEdges: totalEdges)
     let fullCountersSmall = makeFullCounters(coveredCount: typicalCoveredEdges, totalEdges: totalEdges)
     let fullCountersLarge = makeFullCounters(coveredCount: largeCoveredEdges, totalEdges: totalEdges)
 
@@ -192,32 +166,6 @@ let benchmarks: @Sendable () -> Void = {
     let sparseArraysLarge = makeSparseCoverageArrays(coveredCount: largeCoveredEdges, totalEdges: totalEdges)
 
     // MARK: - CoverageSignature Creation
-
-    Benchmark(
-        "CoverageSignature(sparse) - 10 edges",
-        configuration: .init(
-            metrics: [.wallClock],
-            warmupIterations: 100,
-            scalingFactor: .kilo
-        )
-    ) { benchmark in
-        for _ in benchmark.scaledIterations {
-            blackHole(CoverageSignature(sparseCoverage: sparseSmall))
-        }
-    }
-
-    Benchmark(
-        "CoverageSignature(sparse) - 100 edges",
-        configuration: .init(
-            metrics: [.wallClock],
-            warmupIterations: 100,
-            scalingFactor: .kilo
-        )
-    ) { benchmark in
-        for _ in benchmark.scaledIterations {
-            blackHole(CoverageSignature(sparseCoverage: sparseLarge))
-        }
-    }
 
     // New optimized SparseCoverage benchmarks
     Benchmark(
@@ -290,8 +238,8 @@ let benchmarks: @Sendable () -> Void = {
             let config = FuzzEngine<Int>.Config(
                 maxIterations: 100,
                 maxDuration: 1,
-                corpusMode: .refuzzReplace,
-                disablePlateauDetection: true
+                plateauConfig: .init(enabled: false),
+                corpusMode: .refuzzReplace
             )
             let engine = FuzzEngine<Int>(config: config)
             let _ = await engine.run { input in
@@ -314,9 +262,9 @@ let benchmarks: @Sendable () -> Void = {
             let config = FuzzEngine<Int>.Config(
                 maxIterations: 100,
                 maxDuration: 1,
+                plateauConfig: .init(enabled: false),
                 enableValueProfile: false,
-                corpusMode: .refuzzReplace,
-                disablePlateauDetection: true
+                corpusMode: .refuzzReplace
             )
             let engine = FuzzEngine<Int>(config: config)
             let _ = await engine.run { input in
@@ -339,9 +287,9 @@ let benchmarks: @Sendable () -> Void = {
             let config = FuzzEngine<Int>.Config(
                 maxIterations: 100,
                 maxDuration: 1,
+                plateauConfig: .init(enabled: false),
                 corpusMode: .refuzzReplace,
-                detectCoverageGaps: true,
-                disablePlateauDetection: true
+                detectCoverageGaps: true
             )
             let engine = FuzzEngine<Int>(config: config)
             let _ = await engine.run { input in
@@ -364,8 +312,8 @@ let benchmarks: @Sendable () -> Void = {
             let config = FuzzEngine<String>.Config(
                 maxIterations: 100,
                 maxDuration: 1,
-                corpusMode: .refuzzReplace,
-                disablePlateauDetection: true
+                plateauConfig: .init(enabled: false),
+                corpusMode: .refuzzReplace
             )
             let engine = FuzzEngine<String>(config: config)
             let _ = await engine.run { input in
@@ -378,18 +326,18 @@ let benchmarks: @Sendable () -> Void = {
         "fuzz(Int) - 1000 iterations, refuzzReplace",
         configuration: .init(
             metrics: [.wallClock],
-            warmupIterations: 1,
+            warmupIterations: 0,
             scalingFactor: .one,
             maxDuration: .seconds(60),
-            maxIterations: 5
+            maxIterations: 1000
         )
     ) { benchmark in
         for _ in benchmark.scaledIterations {
             let config = FuzzEngine<Int>.Config(
                 maxIterations: 1000,
                 maxDuration: 10,
-                corpusMode: .refuzzReplace,
-                disablePlateauDetection: true
+                plateauConfig: .init(enabled: false),
+                corpusMode: .refuzzReplace
             )
             let engine = FuzzEngine<Int>(config: config)
             let _ = await engine.run { input in
@@ -412,9 +360,9 @@ let benchmarks: @Sendable () -> Void = {
             let config = FuzzEngine<Int>.Config(
                 maxIterations: 1000,
                 maxDuration: 10,
+                plateauConfig: .init(enabled: false),
                 corpusMode: .refuzzReplace,
-                detectCoverageGaps: true,
-                disablePlateauDetection: true
+                detectCoverageGaps: true
             )
             let engine = FuzzEngine<Int>(config: config)
             let _ = await engine.run { input in
@@ -437,9 +385,9 @@ let benchmarks: @Sendable () -> Void = {
             let config = FuzzEngine<Int>.Config(
                 maxIterations: 100,
                 maxDuration: 5,
+                plateauConfig: .init(enabled: false),
                 corpusMode: .refuzzReplace,
-                detectCoverageGaps: true,
-                disablePlateauDetection: true
+                detectCoverageGaps: true
             )
             let engine = FuzzEngine<Int>(config: config)
             let _ = await engine.run { input in
@@ -462,8 +410,8 @@ let benchmarks: @Sendable () -> Void = {
             let config = FuzzEngine<EmptyFuzzable>.Config(
                 maxIterations: 10,
                 maxDuration: 1,
-                corpusMode: .refuzzReplace,
-                disablePlateauDetection: true
+                plateauConfig: .init(enabled: false),
+                corpusMode: .refuzzReplace
             )
             let engine = FuzzEngine<EmptyFuzzable>(config: config, corpusDirectory: nil)
             let _ = await engine.run { _ in }
@@ -481,8 +429,8 @@ let benchmarks: @Sendable () -> Void = {
         )
     ) { benchmark async in
         for _ in benchmark.scaledIterations {
-            let corpus = await Corpus<Int>(schemaVersion: "bench-v1")
-            let sig = CoverageSignature(sparseCoverage: sparseSmall)
+            let corpus = Corpus<Int>(schemaVersion: "bench-v1")
+            let sig = CoverageSignature(sparse: sparseArraysSmall)
             blackHole(await corpus.addIfInteresting(input: 42, signature: sig))
         }
     }
@@ -495,9 +443,9 @@ let benchmarks: @Sendable () -> Void = {
             scalingFactor: .kilo
         )
     ) { benchmark async in
-        let corpus = await Corpus<Int>(schemaVersion: "bench-v1")
+        let corpus = Corpus<Int>(schemaVersion: "bench-v1")
         for i in 0..<100 {
-            let sig = CoverageSignature(sparseCoverage: makeSparseCoverage(
+            let sig = CoverageSignature(sparse: makeSparseCoverageArrays(
                 coveredCount: typicalCoveredEdges,
                 totalEdges: totalEdges
             ))
@@ -505,7 +453,7 @@ let benchmarks: @Sendable () -> Void = {
         }
 
         for _ in benchmark.scaledIterations {
-            let sig = CoverageSignature(sparseCoverage: sparseSmall)
+            let sig = CoverageSignature(sparse: sparseArraysSmall)
             blackHole(await corpus.addIfInteresting(input: 999, signature: sig))
         }
     }
@@ -520,8 +468,8 @@ let benchmarks: @Sendable () -> Void = {
             scalingFactor: .kilo
         )
     ) { benchmark in
-        let sig1 = CoverageSignature(sparseCoverage: sparseSmall)
-        let sig2 = CoverageSignature(sparseCoverage: sparseLarge)
+        let sig1 = CoverageSignature(sparse: sparseArraysSmall)
+        let sig2 = CoverageSignature(sparse: sparseArraysLarge)
 
         for _ in benchmark.scaledIterations {
             blackHole(sig1.hasUniqueCoverage(comparedTo: sig2))
@@ -536,8 +484,8 @@ let benchmarks: @Sendable () -> Void = {
             scalingFactor: .kilo
         )
     ) { benchmark in
-        let sig1 = CoverageSignature(sparseCoverage: sparseSmall)
-        let sig2 = CoverageSignature(sparseCoverage: sparseLarge)
+        let sig1 = CoverageSignature(sparse: sparseArraysSmall)
+        let sig2 = CoverageSignature(sparse: sparseArraysLarge)
 
         for _ in benchmark.scaledIterations {
             blackHole(sig1.union(with: sig2))
@@ -675,7 +623,7 @@ let benchmarks: @Sendable () -> Void = {
         for _ in benchmark.scaledIterations {
             var detector = CoveragePlateauDetector()
             for _ in 0..<100 {
-                await detector.record(discoveredNewCoverage: false)
+                detector.record(discoveredNewCoverage: false)
             }
             blackHole(detector.hasPlateaued)
         }
@@ -692,7 +640,7 @@ let benchmarks: @Sendable () -> Void = {
         for _ in benchmark.scaledIterations {
             var detector = CoveragePlateauDetector()
             for i in 0..<100 {
-                await detector.record(discoveredNewCoverage: i % 10 == 0)
+                detector.record(discoveredNewCoverage: i % 10 == 0)
             }
             blackHole(detector.hasPlateaued)
         }
@@ -709,9 +657,9 @@ let benchmarks: @Sendable () -> Void = {
         )
     ) { benchmark async in
         for _ in benchmark.scaledIterations {
-            let corpus = await Corpus<Int>(schemaVersion: "bench-v1")
+            let corpus = Corpus<Int>(schemaVersion: "bench-v1")
             for i in 0..<100 {
-                let sig = CoverageSignature(sparseCoverage: makeSparseCoverage(
+                let sig = CoverageSignature(sparse: makeSparseCoverageArrays(
                     coveredCount: typicalCoveredEdges + i,
                     totalEdges: totalEdges
                 ))
@@ -729,9 +677,9 @@ let benchmarks: @Sendable () -> Void = {
             scalingFactor: .kilo
         )
     ) { benchmark async in
-        let corpus = await Corpus<Int>(schemaVersion: "bench-v1")
+        let corpus = Corpus<Int>(schemaVersion: "bench-v1")
         for i in 0..<100 {
-            let sig = CoverageSignature(sparseCoverage: makeSparseCoverage(
+            let sig = CoverageSignature(sparse: makeSparseCoverageArrays(
                 coveredCount: typicalCoveredEdges,
                 totalEdges: totalEdges
             ))
@@ -751,10 +699,10 @@ let benchmarks: @Sendable () -> Void = {
             scalingFactor: .one
         )
     ) { benchmark async in
-        let corpus = await Corpus<Int>(schemaVersion: "bench-v1")
+        let corpus = Corpus<Int>(schemaVersion: "bench-v1")
         for i in 0..<100 {
             // Create overlapping signatures to test minimization
-            let sig = CoverageSignature(sparseCoverage: makeSparseCoverage(
+            let sig = CoverageSignature(sparse: makeSparseCoverageArrays(
                 coveredCount: typicalCoveredEdges,
                 totalEdges: totalEdges
             ))
@@ -820,8 +768,8 @@ let benchmarks: @Sendable () -> Void = {
             let config = FuzzEngine<Int>.Config(
                 maxIterations: 10,
                 maxDuration: 1,
-                corpusMode: .refuzzReplace,
-                disablePlateauDetection: true
+                plateauConfig: .init(enabled: false),
+                corpusMode: .refuzzReplace
             )
             let engine = FuzzEngine<Int>(config: config)
             let _ = await engine.run { input in
@@ -845,8 +793,8 @@ let benchmarks: @Sendable () -> Void = {
             let config = FuzzEngine<Int>.Config(
                 maxIterations: 50,
                 maxDuration: 1,
-                corpusMode: .refuzzReplace,
-                disablePlateauDetection: true
+                plateauConfig: .init(enabled: false),
+                corpusMode: .refuzzReplace
             )
             let engine = FuzzEngine<Int>(config: config)
             let _ = await engine.run { input in
@@ -870,7 +818,7 @@ let benchmarks: @Sendable () -> Void = {
     ) { benchmark async in
         for _ in benchmark.scaledIterations {
             // This simulates one seed iteration in the fuzz loop
-            let corpus = await Corpus<Int>(schemaVersion: "bench-v1")
+            let corpus = Corpus<Int>(schemaVersion: "bench-v1")
 
             // Process all Int.fuzz seeds (21 values)
             for input in Int.fuzz {
@@ -900,7 +848,7 @@ let benchmarks: @Sendable () -> Void = {
             scalingFactor: .kilo
         )
     ) { benchmark async in
-        let corpus = await Corpus<Int>(schemaVersion: "bench-v1")
+        let corpus = Corpus<Int>(schemaVersion: "bench-v1")
 
         for _ in benchmark.scaledIterations {
             // 1. Reset coverage
@@ -931,7 +879,7 @@ let benchmarks: @Sendable () -> Void = {
         )
     ) { benchmark in
         for _ in benchmark.scaledIterations {
-            blackHole(SanCovCounters.snapshotCoveredOnly())
+            blackHole(SanCovCounters.snapshotCoveredArrays())
         }
     }
 
@@ -961,86 +909,6 @@ let benchmarks: @Sendable () -> Void = {
         }
     }
 
-    // MARK: - Nested Fuzzable Benchmarks
-
-    Benchmark(
-        "BenchHuman.fuzz generation",
-        configuration: .init(
-            metrics: [.wallClock],
-            warmupIterations: 10,
-            scalingFactor: .one
-        )
-    ) { benchmark in
-        for _ in benchmark.scaledIterations {
-            blackHole(BenchHuman.fuzz)
-        }
-    }
-
-    Benchmark(
-        "BenchDog.fuzz generation",
-        configuration: .init(
-            metrics: [.wallClock],
-            warmupIterations: 10,
-            scalingFactor: .kilo
-        )
-    ) { benchmark in
-        for _ in benchmark.scaledIterations {
-            blackHole(BenchDog.fuzz)
-        }
-    }
-
-    Benchmark(
-        "Nested fuzzable contains all combinations (O(n²) check)",
-        configuration: .init(
-            metrics: [.wallClock],
-            warmupIterations: 1,
-            scalingFactor: .one,
-            maxDuration: .seconds(30),
-            maxIterations: 5
-        )
-    ) { benchmark in
-        // This mirrors the nestedFuzzableContainsAllCombinations test
-        for _ in benchmark.scaledIterations {
-            let humans = BenchHuman.fuzz
-
-            // O(n²) verification - same as the test
-            for humanAge in Int.fuzz {
-                for dog in BenchDog.fuzz {
-                    let matchingHuman = humans.contains {
-                        $0.age == humanAge && $0.dog.age == dog.age && $0.dog.isBrown == dog.isBrown
-                    }
-                    blackHole(matchingHuman)
-                }
-            }
-        }
-    }
-
-    Benchmark(
-        "Nested fuzzable O(n) check using Set",
-        configuration: .init(
-            metrics: [.wallClock],
-            warmupIterations: 10,
-            scalingFactor: .one,
-            maxDuration: .seconds(30),
-            maxIterations: 100
-        )
-    ) { benchmark in
-        // This shows the improvement possible with a Set-based approach
-        for _ in benchmark.scaledIterations {
-            let humans = BenchHuman.fuzz
-            let humanSet = Set(humans)
-
-            // O(n) verification using Set
-            for humanAge in Int.fuzz {
-                for dog in BenchDog.fuzz {
-                    let candidate = BenchHuman(age: humanAge, dog: dog)
-                    let matchingHuman = humanSet.contains(candidate)
-                    blackHole(matchingHuman)
-                }
-            }
-        }
-    }
-
     // MARK: - Expensive Test Function Benchmarks (Real Coverage)
     // These benchmarks use computationally expensive test functions to simulate
     // realistic fuzzing scenarios where parallelization benefits outweigh overhead.
@@ -1059,8 +927,8 @@ let benchmarks: @Sendable () -> Void = {
             let config = FuzzEngine<Int>.Config(
                 maxIterations: 100,
                 maxDuration: 30,
-                corpusMode: .refuzzReplace,
-                disablePlateauDetection: true
+                plateauConfig: .init(enabled: false),
+                corpusMode: .refuzzReplace
             )
             let engine = FuzzEngine<Int>(config: config)
             let _ = await engine.run { input in
@@ -1083,9 +951,9 @@ let benchmarks: @Sendable () -> Void = {
             let config = FuzzEngine<Int>.Config(
                 maxIterations: 100,
                 maxDuration: 30,
+                plateauConfig: .init(enabled: false),
                 corpusMode: .refuzzReplace,
-                mutationBatchSize: 1,  // Force sequential execution
-                disablePlateauDetection: true
+                mutationBatchSize: 1  // Force sequential execution
             )
             let engine = FuzzEngine<Int>(config: config)
             let _ = await engine.run { input in
@@ -1108,9 +976,9 @@ let benchmarks: @Sendable () -> Void = {
             let config = FuzzEngine<Int>.Config(
                 maxIterations: 100,
                 maxDuration: 30,
+                plateauConfig: .init(enabled: false),
                 corpusMode: .refuzzReplace,
-                mutationBatchSize: 16,
-                disablePlateauDetection: true
+                mutationBatchSize: 16
             )
             let engine = FuzzEngine<Int>(config: config)
             let _ = await engine.run { input in
