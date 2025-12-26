@@ -16,9 +16,9 @@ struct CorpusTests {
     func testCorpusAddsInteresting() async {
         let corpus = Corpus<Int>(schemaVersion: "test")
 
-        let sig1 = CoverageSignature(buckets: [0: .one])
-        let sig2 = CoverageSignature(buckets: [1: .one])
-        let sig3 = CoverageSignature(buckets: [0: .one])  // Duplicate coverage
+        let sig1 = CoverageSignature(edges: [0])
+        let sig2 = CoverageSignature(edges: [1])
+        let sig3 = CoverageSignature(edges: [0])  // Duplicate coverage
 
         let added1 = await corpus.addIfInteresting(input: 1, signature: sig1)
         let added2 = await corpus.addIfInteresting(input: 2, signature: sig2)
@@ -37,11 +37,11 @@ struct CorpusTests {
         let corpus = Corpus<Int>(schemaVersion: "test")
 
         // Entry 1 covers indices 0, 1
-        await corpus.add(input: 1, signature: CoverageSignature(buckets: [0: .one, 1: .one]))
+        await corpus.add(input: 1, signature: CoverageSignature(edges: [0, 1]))
         // Entry 2 covers indices 1, 2
-        await corpus.add(input: 2, signature: CoverageSignature(buckets: [1: .one, 2: .one]))
+        await corpus.add(input: 2, signature: CoverageSignature(edges: [1, 2]))
         // Entry 3 covers indices 0, 2 (makes 1 and 2 redundant together)
-        await corpus.add(input: 3, signature: CoverageSignature(buckets: [0: .one, 2: .one]))
+        await corpus.add(input: 3, signature: CoverageSignature(edges: [0, 2]))
 
         let minimized = await corpus.minimized()
 

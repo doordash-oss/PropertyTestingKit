@@ -30,7 +30,6 @@
 
 #include <stdlib.h>
 #include <stdatomic.h>
-#include <pthread.h>  // For measurement context registry (not in hot path)
 
 // Forward declare Swift runtime function
 // Returns the current Swift Task pointer, or NULL if not in an async context
@@ -58,20 +57,19 @@ static _Atomic(size_t) g_task_registry_count = 0;
 static _Thread_local uint8_t *tls_coverage_map = NULL;
 static _Thread_local size_t tls_coverage_map_size = 0;
 
-// MARK: - Per-Task Measurement Context Registry
-// Measurement contexts are now tracked per-task to avoid TLS interference
+// MARK: - Per-Task Measurement Context Registry (Lock-Free)
+// Measurement contexts are tracked per-task to avoid TLS interference
 // when multiple Swift tasks run on the same thread.
+// Uses atomics for lock-free reads in the hot path.
 
 typedef struct {
-    void* task_id;              // Swift task pointer (or pseudo-task for sync code)
-    void* measurement_context;  // The measurement context ID
+    _Atomic(void*) task_id;              // Swift task pointer (atomic for lock-free access)
+    _Atomic(void*) measurement_context;  // The measurement context ID (atomic)
 } TaskMeasurementEntry;
 
 #define MAX_TASK_MEASUREMENT_ENTRIES 512
 
 static TaskMeasurementEntry g_task_measurement_registry[MAX_TASK_MEASUREMENT_ENTRIES];
-static size_t g_task_measurement_count = 0;
-static pthread_mutex_t g_task_measurement_lock = PTHREAD_MUTEX_INITIALIZER;
 
 // Thread-local pseudo-task ID for synchronous code outside async contexts
 static _Thread_local void* tls_sync_pseudo_task = NULL;
@@ -104,65 +102,75 @@ static void* get_current_task_for_measurement(void) {
     return get_sync_pseudo_task();
 }
 
-// Get measurement context for a task
+// Get measurement context for a task (lock-free)
 static void* get_measurement_context_for_task(void* task_id) {
     if (task_id == NULL) return NULL;
 
-    pthread_mutex_lock(&g_task_measurement_lock);
-    for (size_t i = 0; i < g_task_measurement_count; i++) {
-        if (g_task_measurement_registry[i].task_id == task_id) {
-            void* ctx = g_task_measurement_registry[i].measurement_context;
-            pthread_mutex_unlock(&g_task_measurement_lock);
-            return ctx;
+    // Lock-free scan of all slots
+    for (size_t i = 0; i < MAX_TASK_MEASUREMENT_ENTRIES; i++) {
+        void* stored_task = atomic_load_explicit(&g_task_measurement_registry[i].task_id, memory_order_acquire);
+        if (stored_task == task_id) {
+            return atomic_load_explicit(&g_task_measurement_registry[i].measurement_context, memory_order_acquire);
         }
     }
-    pthread_mutex_unlock(&g_task_measurement_lock);
     return NULL;
 }
 
-// Set measurement context for a task
+// Set measurement context for a task (lock-free using CAS)
 static void set_measurement_context_for_task(void* task_id, void* context) {
     if (task_id == NULL) return;
 
-    pthread_mutex_lock(&g_task_measurement_lock);
-
-    // Check if entry already exists
-    for (size_t i = 0; i < g_task_measurement_count; i++) {
-        if (g_task_measurement_registry[i].task_id == task_id) {
-            g_task_measurement_registry[i].measurement_context = context;
-            pthread_mutex_unlock(&g_task_measurement_lock);
+    // First, check if entry already exists
+    for (size_t i = 0; i < MAX_TASK_MEASUREMENT_ENTRIES; i++) {
+        void* stored_task = atomic_load_explicit(&g_task_measurement_registry[i].task_id, memory_order_acquire);
+        if (stored_task == task_id) {
+            // Update existing entry
+            atomic_store_explicit(&g_task_measurement_registry[i].measurement_context, context, memory_order_release);
             return;
         }
     }
 
-    // Add new entry
-    if (g_task_measurement_count < MAX_TASK_MEASUREMENT_ENTRIES) {
-        g_task_measurement_registry[g_task_measurement_count].task_id = task_id;
-        g_task_measurement_registry[g_task_measurement_count].measurement_context = context;
-        g_task_measurement_count++;
+    // Not found, try to claim a free slot
+    for (size_t i = 0; i < MAX_TASK_MEASUREMENT_ENTRIES; i++) {
+        void* expected = NULL;
+        if (atomic_compare_exchange_strong_explicit(
+                &g_task_measurement_registry[i].task_id,
+                &expected,
+                task_id,
+                memory_order_acq_rel,
+                memory_order_acquire)) {
+            // Successfully claimed this slot
+            atomic_store_explicit(&g_task_measurement_registry[i].measurement_context, context, memory_order_release);
+            return;
+        }
+        // If CAS failed because another thread added our task_id, update it
+        if (expected == task_id) {
+            atomic_store_explicit(&g_task_measurement_registry[i].measurement_context, context, memory_order_release);
+            return;
+        }
     }
-
-    pthread_mutex_unlock(&g_task_measurement_lock);
+    // No free slots - silently fail (measurement will use task-based isolation)
 }
 
-// Remove measurement context for a task
+// Remove measurement context for a task (lock-free using CAS)
 static void remove_measurement_context_for_task(void* task_id) {
     if (task_id == NULL) return;
 
-    pthread_mutex_lock(&g_task_measurement_lock);
-
-    for (size_t i = 0; i < g_task_measurement_count; i++) {
-        if (g_task_measurement_registry[i].task_id == task_id) {
-            // Swap-remove
-            if (i < g_task_measurement_count - 1) {
-                g_task_measurement_registry[i] = g_task_measurement_registry[g_task_measurement_count - 1];
-            }
-            g_task_measurement_count--;
-            break;
+    for (size_t i = 0; i < MAX_TASK_MEASUREMENT_ENTRIES; i++) {
+        void* stored_task = atomic_load_explicit(&g_task_measurement_registry[i].task_id, memory_order_acquire);
+        if (stored_task == task_id) {
+            // Clear the measurement context first, then the task_id
+            atomic_store_explicit(&g_task_measurement_registry[i].measurement_context, NULL, memory_order_release);
+            // Use CAS to clear task_id (another thread might have already done it)
+            atomic_compare_exchange_strong_explicit(
+                &g_task_measurement_registry[i].task_id,
+                &stored_task,
+                NULL,
+                memory_order_acq_rel,
+                memory_order_acquire);
+            return;
         }
     }
-
-    pthread_mutex_unlock(&g_task_measurement_lock);
 }
 
 // Find or create a coverage map for the given task (lock-free).

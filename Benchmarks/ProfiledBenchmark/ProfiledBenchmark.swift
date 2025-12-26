@@ -49,5 +49,4 @@ let benchmarks: @Sendable () -> Void = {
             }
         }
     }
-
 }

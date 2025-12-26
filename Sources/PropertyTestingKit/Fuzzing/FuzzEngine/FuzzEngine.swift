@@ -329,7 +329,7 @@ public actor FuzzEngine<each Input: Fuzzable & Codable & Sendable> {
             schemaVersion: await CorpusSchema.currentVersion(),
             createdAt: dateClient.now(),
             updatedAt: dateClient.now(),
-            totalCoverage: CoverageSignature(buckets: [:])
+            totalCoverage: CoverageSignature(edges: [])
         )
         let emptyStats = FuzzStats(
             totalInputs: 0,

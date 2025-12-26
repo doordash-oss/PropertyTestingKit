@@ -47,7 +47,7 @@ public actor Corpus<each Input: Codable & Sendable>: Sendable {
         self.schemaVersion = schemaVersion
         self.createdAt = now
         self.updatedAt = now
-        self.totalCoverage = CoverageSignature(buckets: [:])
+        self.totalCoverage = CoverageSignature(edges: [])
     }
 
     // MARK: - Serialization
@@ -260,7 +260,7 @@ public actor Corpus<each Input: Codable & Sendable>: Sendable {
         guard !entries.isEmpty else { return snapshot() }
 
         var minimizedEntries: [CorpusEntry<repeat each Input>] = []
-        var minimizedCoverage = CoverageSignature(buckets: [:])
+        var minimizedCoverage = CoverageSignature(edges: [])
         var uncovered = totalCoverage.executedIndices
 
         // First, preserve ALL failure and hang entries - these are never removed

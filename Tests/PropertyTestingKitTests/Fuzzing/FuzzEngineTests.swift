@@ -306,7 +306,7 @@ struct FuzzEngineTests {
         let testCounters = testCountersMutable
         let testSnapshot = SanCovCounters(counters: testCounters)
         let sigTest = CoverageSignature(snapshot: testSnapshot)
-        print("DEBUG: Test signature buckets=\(sigTest.buckets)")
+        print("DEBUG: Test signature edges=\(sigTest.edges)")
 
         // Create corpus with matching signature
         // Note: InputContainer encodes Int 42 as base64 of "42" = "NDI="
@@ -316,21 +316,21 @@ struct FuzzEngineTests {
             "entries": [
                 {
                     "input": ["NDI="],
-                    "signature": {"buckets": {"1": 1}},
+                    "signature": {"edges": [1]},
                     "discoveredAt": "2025-01-01T00:00:00Z",
                     "parentIndex": null
                 }
             ],
             "createdAt": "2025-01-01T00:00:00Z",
             "updatedAt": "2025-01-01T00:00:00Z",
-            "totalCoverage": {"buckets": {"1": 1}}
+            "totalCoverage": {"edges": [1]}
         }
         """
         let corpusData = Data(corpusJSON.utf8)
 
         // Parse corpus to verify the signature
         let parsedCorpusSnapshot = try JSONDecoder.corpusDecoder.decode(CorpusSnapshot<Int>.self, from: corpusData)
-        print("DEBUG: Parsed corpus signature=\(parsedCorpusSnapshot.entries[0].signature.buckets)")
+        print("DEBUG: Parsed corpus signature edges=\(parsedCorpusSnapshot.entries[0].signature.edges)")
         print("DEBUG: Signatures equal? \(sigTest == parsedCorpusSnapshot.entries[0].signature)")
 
         let (loadSpy, loadFn) = spy { (_: URL) -> Data in corpusData }

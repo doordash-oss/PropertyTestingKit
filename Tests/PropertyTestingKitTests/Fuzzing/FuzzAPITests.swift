@@ -314,7 +314,7 @@ struct FuzzAPITests {
         let existingCorpus = Corpus<String>(schemaVersion: await CorpusSchema.currentVersion())
         await existingCorpus.add(
             input: "from_corpus",
-            signature: CoverageSignature(buckets: [1: .one])
+            signature: CoverageSignature(edges: [1])
         )
         let corpusSnapshot = await existingCorpus.snapshot()
         let corpusData = try JSONEncoder.corpusEncoder.encode(corpusSnapshot)

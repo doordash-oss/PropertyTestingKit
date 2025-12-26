@@ -960,4 +960,66 @@ let benchmarks: @Sendable () -> Void = {
         }
     }
 
+    // Benchmark to test mutex contention with parallel fuzz engines
+    Benchmark(
+        "fuzz(Int) - 8 parallel engines, 100 iterations each",
+        configuration: .init(
+            metrics: [.wallClock],
+            warmupIterations: 0,
+            scalingFactor: .one,
+            maxDuration: .seconds(120),
+            maxIterations: 100
+        )
+    ) { benchmark in
+        for _ in benchmark.scaledIterations {
+            await withTaskGroup(of: Void.self) { group in
+                for _ in 0..<8 {
+                    group.addTask {
+                        let config = FuzzEngine<Int>.Config(
+                            maxIterations: 100,
+                            plateauConfig: .init(enabled: false),
+                            corpusMode: .refuzzReplace,
+                            mutationBatchSize: 1  // Sequential to maximize edge hits per engine
+                        )
+                        let engine = FuzzEngine<Int>(config: config)
+                        let _ = await engine.run { input in
+                            try parseAndValidate(input)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Even more parallel engines to stress test
+    Benchmark(
+        "fuzz(Int) - 16 parallel engines, 100 iterations each",
+        configuration: .init(
+            metrics: [.wallClock],
+            warmupIterations: 0,
+            scalingFactor: .one,
+            maxDuration: .seconds(120),
+            maxIterations: 100
+        )
+    ) { benchmark in
+        for _ in benchmark.scaledIterations {
+            await withTaskGroup(of: Void.self) { group in
+                for _ in 0..<16 {
+                    group.addTask {
+                        let config = FuzzEngine<Int>.Config(
+                            maxIterations: 100,
+                            plateauConfig: .init(enabled: false),
+                            corpusMode: .refuzzReplace,
+                            mutationBatchSize: 1  // Sequential to maximize edge hits per engine
+                        )
+                        let engine = FuzzEngine<Int>(config: config)
+                        let _ = await engine.run { input in
+                            try parseAndValidate(input)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
 }

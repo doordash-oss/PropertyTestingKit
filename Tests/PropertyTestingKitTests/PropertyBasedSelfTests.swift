@@ -17,68 +17,13 @@ import FunctionSpy
 @Suite("CoverageSignature Properties")
 struct CoverageSignaturePropertyTests {
 
-    // MARK: - Bucket Classification Properties
-
-    @Test("Bucket classifies all UInt64 values into expected ranges")
-    func testBucketClassification() async throws {
-        // Test boundary values for each bucket
-        let testCases: [(UInt64, CoverageSignature.Bucket)] = [
-            (0, .zero),
-            (1, .one),
-            (2, .two),
-            (3, .three),
-            (4, .fourToSeven),
-            (5, .fourToSeven),
-            (6, .fourToSeven),
-            (7, .fourToSeven),
-            (8, .eightToFifteen),
-            (15, .eightToFifteen),
-            (16, .sixteenToThirtyOne),
-            (31, .sixteenToThirtyOne),
-            (32, .thirtyTwoTo127),
-            (127, .thirtyTwoTo127),
-            (128, .oneHundredTwentyEightPlus),
-            (UInt64.max, .oneHundredTwentyEightPlus),
-        ]
-
-        for (count, expectedBucket) in testCases {
-            let bucket = CoverageSignature.Bucket(count: count)
-            #expect(bucket == expectedBucket, "Count \(count) should be bucket \(expectedBucket), got \(bucket)")
-        }
-    }
-
-    @Test("Bucket classification is monotonic")
-    func testBucketMonotonicity() async throws {
-        // Property: larger counts should never produce smaller buckets
-        // Test specific boundary values
-        let testCounts: [UInt64] = [0, 1, 2, 3, 4, 7, 8, 15, 16, 31, 32, 127, 128, 1000, UInt64.max]
-
-        for count in testCounts {
-            let bucket = CoverageSignature.Bucket(count: count)
-
-            // If we increment, bucket should stay same or increase
-            if count < UInt64.max {
-                let nextBucket = CoverageSignature.Bucket(count: count + 1)
-                #expect(nextBucket >= bucket, "Bucket(\(count+1)) should be >= Bucket(\(count))")
-            }
-        }
-
-        // Also test some random intermediate values
-        for i in 0..<100 {
-            let count = UInt64(i * 10)
-            let bucket = CoverageSignature.Bucket(count: count)
-            let nextBucket = CoverageSignature.Bucket(count: count + 1)
-            #expect(nextBucket >= bucket, "Bucket(\(count+1)) should be >= Bucket(\(count))")
-        }
-    }
-
     // MARK: - Signature Algebra Properties
 
     @Test("Signature union is commutative")
     func testUnionCommutative() async throws {
         // Property: A ∪ B = B ∪ A
-        let sig1 = CoverageSignature(buckets: [0: .one, 1: .two, 2: .three])
-        let sig2 = CoverageSignature(buckets: [1: .three, 2: .one, 3: .two])
+        let sig1 = CoverageSignature(edges: [0, 1, 2])
+        let sig2 = CoverageSignature(edges: [1, 2, 3])
 
         let union1 = sig1.union(with: sig2)
         let union2 = sig2.union(with: sig1)
@@ -89,9 +34,9 @@ struct CoverageSignaturePropertyTests {
     @Test("Signature union is associative")
     func testUnionAssociative() async throws {
         // Property: (A ∪ B) ∪ C = A ∪ (B ∪ C)
-        let sig1 = CoverageSignature(buckets: [0: .one, 1: .two])
-        let sig2 = CoverageSignature(buckets: [1: .three, 2: .one])
-        let sig3 = CoverageSignature(buckets: [2: .two, 3: .three])
+        let sig1 = CoverageSignature(edges: [0, 1])
+        let sig2 = CoverageSignature(edges: [1, 2])
+        let sig3 = CoverageSignature(edges: [2, 3])
 
         let leftAssoc = sig1.union(with: sig2).union(with: sig3)
         let rightAssoc = sig1.union(with: sig2.union(with: sig3))
@@ -101,28 +46,27 @@ struct CoverageSignaturePropertyTests {
 
     @Test("Signature union with empty is identity")
     func testUnionIdentity() async throws {
-        let sig = CoverageSignature(buckets: [0: .one, 5: .fourToSeven, 10: .oneHundredTwentyEightPlus])
-        let empty = CoverageSignature(buckets: [:])
+        let sig = CoverageSignature(edges: [0, 5, 10])
+        let empty = CoverageSignature(edges: [])
 
         #expect(sig.union(with: empty) == sig, "Union with empty should be identity")
         #expect(empty.union(with: sig) == sig, "Empty union with sig should be identity")
     }
 
-    @Test("Signature union takes maximum bucket values")
-    func testUnionTakesMax() async throws {
-        let sig1 = CoverageSignature(buckets: [0: .one, 1: .fourToSeven])
-        let sig2 = CoverageSignature(buckets: [0: .three, 1: .two])
+    @Test("Signature union combines all edges")
+    func testUnionCombinesEdges() async throws {
+        let sig1 = CoverageSignature(edges: [0, 1, 2])
+        let sig2 = CoverageSignature(edges: [2, 3, 4])
 
         let union = sig1.union(with: sig2)
 
-        #expect(union.buckets[0] == .three, "Union should take max: .three > .one")
-        #expect(union.buckets[1] == .fourToSeven, "Union should take max: .fourToSeven > .two")
+        #expect(union.edges == Set([0, 1, 2, 3, 4]), "Union should contain all edges from both")
     }
 
     @Test("uniqueIndices and commonIndices are complementary")
     func testIndexSetOperations() async throws {
-        let sig1 = CoverageSignature(buckets: [0: .one, 1: .two, 2: .three])
-        let sig2 = CoverageSignature(buckets: [1: .one, 2: .two, 3: .three])
+        let sig1 = CoverageSignature(edges: [0, 1, 2])
+        let sig2 = CoverageSignature(edges: [1, 2, 3])
 
         let unique1 = sig1.uniqueIndices(comparedTo: sig2)
         let unique2 = sig2.uniqueIndices(comparedTo: sig1)
@@ -138,9 +82,9 @@ struct CoverageSignaturePropertyTests {
 
     @Test("hasUniqueCoverage consistent with uniqueIndices")
     func testHasUniqueCoverage() async throws {
-        let sig1 = CoverageSignature(buckets: [0: .one, 1: .two])
-        let sig2 = CoverageSignature(buckets: [1: .one])
-        let sig3 = CoverageSignature(buckets: [0: .three, 1: .three])
+        let sig1 = CoverageSignature(edges: [0, 1])
+        let sig2 = CoverageSignature(edges: [1])
+        let sig3 = CoverageSignature(edges: [0, 1])
 
         #expect(sig1.hasUniqueCoverage(comparedTo: sig2) == true, "sig1 has index 0 not in sig2")
         #expect(sig2.hasUniqueCoverage(comparedTo: sig1) == false, "sig2 is subset of sig1")
@@ -152,9 +96,9 @@ struct CoverageSignaturePropertyTests {
     @Test("CoverageSignature round-trips through Codable")
     func testSignatureCodableRoundTrip() async throws {
         let signatures = [
-            CoverageSignature(buckets: [:]),
-            CoverageSignature(buckets: [0: .one]),
-            CoverageSignature(buckets: [0: .one, 100: .fourToSeven, 1000: .oneHundredTwentyEightPlus]),
+            CoverageSignature(edges: []),
+            CoverageSignature(edges: [0]),
+            CoverageSignature(edges: [0, 100, 1000]),
         ]
 
         let encoder = JSONEncoder.corpusEncoder
@@ -177,9 +121,9 @@ struct SignatureSetPropertyTests {
     func testInsertNewness() async throws {
         var set = SignatureSet()
 
-        let sig1 = CoverageSignature(buckets: [0: .one])
-        let sig2 = CoverageSignature(buckets: [0: .one])  // Duplicate
-        let sig3 = CoverageSignature(buckets: [1: .two])  // New
+        let sig1 = CoverageSignature(edges: [0])
+        let sig2 = CoverageSignature(edges: [0])  // Duplicate
+        let sig3 = CoverageSignature(edges: [1])  // New
 
         #expect(set.insert(sig1) == true, "First insert should be new")
         #expect(set.insert(sig2) == false, "Duplicate insert should not be new")
@@ -190,8 +134,8 @@ struct SignatureSetPropertyTests {
     func testTotalCoverageIsUnion() async throws {
         var set = SignatureSet()
 
-        let sig1 = CoverageSignature(buckets: [0: .one, 1: .two])
-        let sig2 = CoverageSignature(buckets: [2: .three, 3: .fourToSeven])
+        let sig1 = CoverageSignature(edges: [0, 1])
+        let sig2 = CoverageSignature(edges: [2, 3])
 
         set.insert(sig1)
         set.insert(sig2)
@@ -204,11 +148,11 @@ struct SignatureSetPropertyTests {
     func testWouldAddNewCoverage() async throws {
         var set = SignatureSet()
 
-        let sig1 = CoverageSignature(buckets: [0: .one, 1: .two])
+        let sig1 = CoverageSignature(edges: [0, 1])
         set.insert(sig1)
 
-        let subsetSig = CoverageSignature(buckets: [0: .one])
-        let newSig = CoverageSignature(buckets: [2: .three])
+        let subsetSig = CoverageSignature(edges: [0])
+        let newSig = CoverageSignature(edges: [2])
 
         #expect(set.wouldAddNewCoverage(subsetSig) == false, "Subset should not add new coverage")
         #expect(set.wouldAddNewCoverage(newSig) == true, "New index should add coverage")
@@ -334,19 +278,19 @@ struct CorpusPropertyTests {
     func testAddIfInterestingRejectsRedundant() async throws {
         let corpus = Corpus<String>(schemaVersion: "test")
 
-        let sig1 = CoverageSignature(buckets: [0: .one, 1: .two, 2: .three])
+        let sig1 = CoverageSignature(edges: [0, 1, 2])
 
         // First add should succeed
         let added1 = await corpus.addIfInteresting(input: "first", signature: sig1)
         #expect(added1 == true, "First entry should be added")
 
         // Subset signature should be rejected
-        let sigSubset = CoverageSignature(buckets: [0: .one, 1: .two])
+        let sigSubset = CoverageSignature(edges: [0, 1])
         let added2 = await corpus.addIfInteresting(input: "subset", signature: sigSubset)
         #expect(added2 == false, "Subset coverage should be rejected")
 
         // New coverage should be accepted
-        let sigNew = CoverageSignature(buckets: [3: .fourToSeven])
+        let sigNew = CoverageSignature(edges: [3])
         let added3 = await corpus.addIfInteresting(input: "new", signature: sigNew)
         #expect(added3 == true, "New coverage should be accepted")
     }
@@ -356,10 +300,10 @@ struct CorpusPropertyTests {
         let corpus = Corpus<String>(schemaVersion: "test")
 
         // Add entries with overlapping coverage
-        await corpus.add(input: "a", signature: CoverageSignature(buckets: [0: .one, 1: .two]))
-        await corpus.add(input: "b", signature: CoverageSignature(buckets: [1: .three, 2: .one]))
-        await corpus.add(input: "c", signature: CoverageSignature(buckets: [2: .two, 3: .three]))
-        await corpus.add(input: "d", signature: CoverageSignature(buckets: [0: .two, 1: .one]))  // Redundant
+        await corpus.add(input: "a", signature: CoverageSignature(edges: [0, 1]))
+        await corpus.add(input: "b", signature: CoverageSignature(edges: [1, 2]))
+        await corpus.add(input: "c", signature: CoverageSignature(edges: [2, 3]))
+        await corpus.add(input: "d", signature: CoverageSignature(edges: [0, 1]))  // Redundant
 
         let originalCoverage = await corpus.totalCoverage
         let minimized = await corpus.minimized()
@@ -384,9 +328,9 @@ struct CorpusPropertyTests {
         #expect(emptySelection == nil, "Empty corpus should return nil")
 
         // Add some entries
-        await corpus.add(input: "a", signature: CoverageSignature(buckets: [0: .one]))
-        await corpus.add(input: "b", signature: CoverageSignature(buckets: [1: .two]))
-        await corpus.add(input: "c", signature: CoverageSignature(buckets: [2: .three]))
+        await corpus.add(input: "a", signature: CoverageSignature(edges: [0]))
+        await corpus.add(input: "b", signature: CoverageSignature(edges: [1]))
+        await corpus.add(input: "c", signature: CoverageSignature(edges: [2]))
 
         // Selection should be valid index
         let entries = await corpus.entries
@@ -410,7 +354,7 @@ struct CorpusPropertyTests {
         var isEmpty = await corpus.isEmpty
         #expect(isEmpty, "New corpus should be empty")
 
-        await corpus.add(input: "a", signature: CoverageSignature(buckets: [0: .one]))
+        await corpus.add(input: "a", signature: CoverageSignature(edges: [0]))
         isEmpty = await corpus.isEmpty
         #expect(!isEmpty, "Corpus with entry should not be empty")
     }
@@ -419,8 +363,8 @@ struct CorpusPropertyTests {
     func testCorpusSignatures() async throws {
         let corpus = Corpus<String>(schemaVersion: "test")
 
-        let sig1 = CoverageSignature(buckets: [0: .one])
-        let sig2 = CoverageSignature(buckets: [1: .two])
+        let sig1 = CoverageSignature(edges: [0])
+        let sig2 = CoverageSignature(edges: [1])
 
         await corpus.add(input: "a", signature: sig1)
         await corpus.add(input: "b", signature: sig2)
@@ -435,8 +379,8 @@ struct CorpusPropertyTests {
     func testCorpusInputs() async throws {
         let corpus = Corpus<String>(schemaVersion: "test")
 
-        await corpus.add(input: "hello", signature: CoverageSignature(buckets: [0: .one]))
-        await corpus.add(input: "world", signature: CoverageSignature(buckets: [1: .two]))
+        await corpus.add(input: "hello", signature: CoverageSignature(edges: [0]))
+        await corpus.add(input: "world", signature: CoverageSignature(edges: [1]))
 
         let inputs = await corpus.inputs
         #expect(inputs.count == 2, "Should have 2 inputs")
@@ -449,7 +393,7 @@ struct CorpusPropertyTests {
         let corpus = Corpus<String>(schemaVersion: "test")
 
         // Add entries with empty signatures (totalScore will be 0)
-        let emptySig = CoverageSignature(buckets: [:])
+        let emptySig = CoverageSignature(edges: [])
         await corpus.add(input: "a", signature: emptySig)
         await corpus.add(input: "b", signature: emptySig)
 
@@ -465,11 +409,11 @@ struct CorpusPropertyTests {
         let corpus = Corpus<String>(schemaVersion: "test")
 
         // Add one entry that covers everything
-        await corpus.add(input: "all", signature: CoverageSignature(buckets: [0: .one, 1: .two, 2: .three]))
+        await corpus.add(input: "all", signature: CoverageSignature(edges: [0, 1, 2]))
 
         // Add more entries that cover subsets (will have bestCoverage = 0 after first)
-        await corpus.add(input: "sub1", signature: CoverageSignature(buckets: [0: .one]))
-        await corpus.add(input: "sub2", signature: CoverageSignature(buckets: [1: .two]))
+        await corpus.add(input: "sub1", signature: CoverageSignature(edges: [0]))
+        await corpus.add(input: "sub2", signature: CoverageSignature(edges: [1]))
 
         let minimized = await corpus.minimized()
         let totalCoverage = await corpus.totalCoverage
@@ -492,7 +436,7 @@ struct CorpusEntryPropertyTests {
     func testCorpusEntryCodable() async throws {
         let entry = CorpusEntry(
             input: "test input",
-            signature: CoverageSignature(buckets: [0: .one, 5: .fourToSeven]),
+            signature: CoverageSignature(edges: [0, 5]),
             discoveredAt: Date(),
             parentIndex: 42
         )
@@ -590,10 +534,10 @@ struct IntegrationPropertyTests {
         let signature = CoverageSignature(counters: rawCounters)
 
         #expect(signature.executedCount == 3, "Should only count non-zero")
-        #expect(signature.buckets[0] == nil, "Index 0 (zero count) should not be in buckets")
-        #expect(signature.buckets[1] == CoverageSignature.Bucket.one, "Index 1 should be bucket .one")
-        #expect(signature.buckets[3] == CoverageSignature.Bucket.two, "Index 3 should be bucket .two")
-        #expect(signature.buckets[6] == CoverageSignature.Bucket.three, "Index 6 should be bucket .three")
+        #expect(!signature.edges.contains(0), "Index 0 (zero count) should not be in edges")
+        #expect(signature.edges.contains(1), "Index 1 should be in edges")
+        #expect(signature.edges.contains(3), "Index 3 should be in edges")
+        #expect(signature.edges.contains(6), "Index 6 should be in edges")
     }
 }
 
@@ -691,19 +635,10 @@ struct RegressionModeTests {
 @Suite("Edge Cases")
 struct EdgeCaseTests {
 
-    @Test("Very large bucket values")
-    func testLargeBucketValues() async throws {
-        let bucket = CoverageSignature.Bucket(count: UInt64.max)
-        #expect(bucket == .oneHundredTwentyEightPlus)
-    }
-
     @Test("Signature with many indices")
     func testManyIndices() async throws {
-        var buckets: [Int: CoverageSignature.Bucket] = [:]
-        for i in 0..<1000 {
-            buckets[i] = .one
-        }
-        let sig = CoverageSignature(buckets: buckets)
+        let edges = Set(0..<1000)
+        let sig = CoverageSignature(edges: edges)
 
         #expect(sig.executedCount == 1000)
         #expect(!sig.isEmpty)
@@ -719,15 +654,15 @@ struct EdgeCaseTests {
 
         await corpus.add(
             input: ["a", "b", "c"],
-            signature: CoverageSignature(buckets: [0: .one])
+            signature: CoverageSignature(edges: [0])
         )
         await corpus.add(
             input: [],
-            signature: CoverageSignature(buckets: [1: .two])
+            signature: CoverageSignature(edges: [1])
         )
         await corpus.add(
             input: ["single"],
-            signature: CoverageSignature(buckets: [2: .three])
+            signature: CoverageSignature(edges: [2])
         )
 
         let count = await corpus.count
@@ -738,32 +673,13 @@ struct EdgeCaseTests {
         #expect(minimized.count <= count)
     }
 
-    @Test("Bucket description strings")
-    func testBucketDescriptions() async throws {
-        let cases: [(CoverageSignature.Bucket, String)] = [
-            (.zero, "0"),
-            (.one, "1"),
-            (.two, "2"),
-            (.three, "3"),
-            (.fourToSeven, "4-7"),
-            (.eightToFifteen, "8-15"),
-            (.sixteenToThirtyOne, "16-31"),
-            (.thirtyTwoTo127, "32-127"),
-            (.oneHundredTwentyEightPlus, "128+"),
-        ]
-
-        for (bucket, expected) in cases {
-            #expect(bucket.description == expected)
-        }
-    }
-
     @Test("CoverageSignature description")
     func testSignatureDescription() async throws {
-        let sig = CoverageSignature(buckets: [0: .one, 1: .two, 2: .three])
-        #expect(sig.description == "CoverageSignature(3 regions)")
+        let sig = CoverageSignature(edges: [0, 1, 2])
+        #expect(sig.description == "CoverageSignature(3 edges)")
 
-        let empty = CoverageSignature(buckets: [:])
-        #expect(empty.description == "CoverageSignature(0 regions)")
+        let empty = CoverageSignature(edges: [])
+        #expect(empty.description == "CoverageSignature(0 edges)")
     }
 }
 
