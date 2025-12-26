@@ -38,12 +38,6 @@ import Testing
 /// 6. Stop when: iteration limit, time limit, or coverage plateau
 /// 7. Minimize corpus, save to disk
 ///
-/// ## Value Profile Guidance
-///
-/// When enabled and the test code is compiled with `-sanitize-coverage=trace-cmp`,
-/// the engine also tracks comparison operand distances. Inputs that get "closer"
-/// to satisfying comparisons (e.g., `x == 12345`) are prioritized for mutation,
-/// even if they don't discover new edge coverage.
 public actor FuzzEngine<each Input: Fuzzable & Codable & Sendable> {
     /// Type-erased mutator functions for each input component.
     /// When nil, uses the type's Fuzzable conformance.
@@ -76,9 +70,6 @@ public actor FuzzEngine<each Input: Fuzzable & Codable & Sendable> {
     private let corpusDirectory: URL?
     private let mutatorSeeds: MutatorSeeds?
     private let mutatorMutate: MutatorMutate?
-
-    /// Tracks comparison operand distances for value profile guidance.
-    private let valueProfileTracker = ValueProfileTracker()
 
     public init(config: Config = Config(), corpusDirectory: URL? = nil) {
         self.config = config
@@ -373,18 +364,8 @@ public actor FuzzEngine<each Input: Fuzzable & Codable & Sendable> {
         var totalMutations = 0
         var totalGenerations = 0
 
-        // Value profile tracking state (local to this run)
-        var priorityMutationIndex: Int?
-        var savedTargets: [ValueProfileTracker.ComparisonTarget] = []
-
         // Initialize plateau detector for adaptive early stopping
         var plateauDetector = CoveragePlateauDetector(config: config.plateauConfig)
-
-        // Enable value profile tracking if configured
-        if config.enableValueProfile {
-            valueProfileTracker.enable()
-            await valueProfileTracker.clearState()
-        }
 
         // Phase 1: Seed with boundary values (defaults + user-provided)
         // Run seeds in parallel using Swift structured concurrency
@@ -554,15 +535,7 @@ public actor FuzzEngine<each Input: Fuzzable & Codable & Sendable> {
         // var timeInTest: Double = 0
         // var timeInCoverage: Double = 0
 
-        // Auto-tune batch size based on test execution time if configured
-        let batchSize: Int
-        if config.mutationBatchSize == 0 {
-            // Auto-tune: measure test cost from seed execution
-            let avgTestTime = seedInputs.isEmpty ? 0.0 : seedExecutionTime / Double(seedInputs.count)
-            batchSize = Self.selectBatchSize(forAvgTestTime: avgTestTime, verbose: config.verbose)
-        } else {
-            batchSize = config.mutationBatchSize
-        }
+        let batchSize = config.mutationBatchSize
 
         while iteration < config.maxIterations {
 //            let batchStart = CFAbsoluteTimeGetCurrent()
@@ -613,46 +586,13 @@ public actor FuzzEngine<each Input: Fuzzable & Codable & Sendable> {
                     totalGenerations += 1
                 } else {
                     // Mutate existing corpus entry
-                    let selectedIndex: Int
-                    let usingPriority: Bool
-
-                    if let priorityIdx = priorityMutationIndex, priorityIdx < corpusState.count {
-                        selectedIndex = priorityIdx
-                        usingPriority = true
-                    } else {
-                        selectedIndex = corpusState.selectForMutation()!
-                        usingPriority = false
-                    }
+                    let selectedIndex = corpusState.selectForMutation()!
 
                     let parent = corpusState.entries[selectedIndex].input
-                    var mutations = mutatorMutate?(parent) ?? mutateInput(parent)
+                    let mutations = mutatorMutate?(parent) ?? mutateInput(parent)
 
-                    // Add target-directed mutations from value profile
-                    var targetMutations: [(repeat each Input)] = []
-                    if config.enableValueProfile {
-                        let targets: [ValueProfileTracker.ComparisonTarget]
-                        if usingPriority && !savedTargets.isEmpty {
-                            targets = savedTargets
-                        } else {
-                            targets = valueProfileTracker.extractTargets()
-                        }
-                        targetMutations = generateTargetDirectedMutations(from: parent, targets: targets)
-                        mutations.append(contentsOf: targetMutations)
-                    }
-
-                    if usingPriority && !targetMutations.isEmpty {
-                        input = randomElement(from: targetMutations)!
-                        if targetMutations.count <= 1 {
-                            priorityMutationIndex = nil
-                            savedTargets = []
-                        }
-                        parentIndex = selectedIndex
-                        totalMutations += 1
-                        isMutation = true
-                    } else if let m = randomElement(from: mutations) {
+                    if let m = randomElement(from: mutations) {
                         input = m
-                        priorityMutationIndex = nil
-                        savedTargets = []
                         parentIndex = selectedIndex
                         totalMutations += 1
                         isMutation = true
@@ -665,8 +605,6 @@ public actor FuzzEngine<each Input: Fuzzable & Codable & Sendable> {
                         input = fuzzValue
                         parentIndex = nil
                         totalGenerations += 1
-                        priorityMutationIndex = nil
-                        savedTargets = []
                     }
                 }
 
@@ -816,15 +754,6 @@ public actor FuzzEngine<each Input: Fuzzable & Codable & Sendable> {
 
             // let coverageEnd = CFAbsoluteTimeGetCurrent()
             // timeInCoverage += coverageEnd - coverageStart
-        }
-
-        // Disable value profile tracking
-        if config.enableValueProfile {
-            valueProfileTracker.disable()
-            if config.verbose {
-                let (tracked, solved) = await valueProfileTracker.stats()
-                print("[Fuzz] Value profile: \(tracked) comparisons tracked, \(solved) solved")
-            }
         }
 
         // let fuzzLoopEnd = CFAbsoluteTimeGetCurrent()
@@ -1222,140 +1151,6 @@ public actor FuzzEngine<each Input: Fuzzable & Codable & Sendable> {
         return Array(Set(derived)) // Deduplicate
     }
 
-    /// Generate mutations that target specific comparison values discovered by value profiling.
-    ///
-    /// This implements multiple strategies:
-    /// 1. **Binary search**: Try the target directly and midpoints toward it
-    /// 2. **Modulo-aware**: For small targets, try target + k*modulus
-    /// 3. **Pair mutations**: For multi-input cases, solve a + b == target
-    /// 4. **Array size targeting**: Grow arrays toward size targets
-    private func generateTargetDirectedMutations(
-        from input: (repeat each Input),
-        targets: [ValueProfileTracker.ComparisonTarget]
-    ) -> [(repeat each Input)] {
-        guard !targets.isEmpty else { return [] }
-
-        var results: [(repeat each Input)] = []
-
-        // Find Int components and their values
-        var intComponents: [(index: Int, value: Int)] = []
-        // Find array components and their counts
-        var arrayComponents: [(index: Int, count: Int, value: Any)] = []
-        var componentIdx = 0
-
-        func findComponents<V>(_ value: V) {
-            if let intVal = value as? Int {
-                intComponents.append((componentIdx, intVal))
-            }
-            // Check if this is an array (via Collection conformance and count)
-            if let collection = value as? any Collection {
-                arrayComponents.append((componentIdx, collection.count, value))
-            }
-            componentIdx += 1
-        }
-        (repeat findComponents(each input))
-
-        // Strategy 4: Array size targeting
-        // When VP detects comparisons like `count >= 100` and we have array inputs,
-        // generate arrays with sizes approaching the target.
-        if !arrayComponents.isEmpty {
-            for target in targets {
-                guard let targetSize = Int(exactly: target.target),
-                      targetSize > 0,
-                      targetSize < 10_000 else { continue }  // Reasonable size bounds
-
-                let currentFromVP = Int(exactly: target.current) ?? 0
-
-                // Find arrays whose count matches the VP's current value
-                for (arrayIndex, arrayCount, arrayValue) in arrayComponents {
-                    // Only mutate arrays whose size matches the comparison operand
-                    guard arrayCount == currentFromVP || arrayCount < targetSize else { continue }
-
-                    // Generate array mutations toward the target size
-                    let sizeMutations = generateArraySizeMutations(
-                        from: arrayValue,
-                        currentSize: arrayCount,
-                        targetSize: targetSize,
-                        componentIndex: arrayIndex,
-                        input: input
-                    )
-                    results.append(contentsOf: sizeMutations)
-                }
-            }
-        }
-
-        guard !intComponents.isEmpty else { return results }
-
-        // For each target, generate mutations only at positions matching the observed input value.
-        // This preserves positions that have already been solved (e.g., if a==111 is solved,
-        // don't mutate position 0 when trying to solve b==222).
-        for target in targets {
-            // Strategy 1: Binary search mutations (try target directly)
-            let binaryMutations = target.binarySearchMutations()
-
-            // Strategy 2: Modulo-aware mutations
-            let moduloMutations = target.moduloAwareMutations()
-
-            let allSingleMutations = binaryMutations + moduloMutations
-
-            // Only mutate positions where current value matches target.current
-            // This ensures we don't clobber already-solved constraints
-            let currentInt = Int(exactly: target.current) ?? Int(bitPattern: UInt(truncatingIfNeeded: target.current))
-            let candidatePositions = intComponents.filter { $0.value == currentInt }
-
-            // If no exact match, fall back to all positions (for initial exploration)
-            let positionsToMutate = candidatePositions.isEmpty ? intComponents : candidatePositions
-
-            for (intIndex, _) in positionsToMutate {
-                for mutation in allSingleMutations {
-                    if let newTuple = createMutatedTuple(input, mutating: intIndex, with: mutation) {
-                        results.append(newTuple)
-                    }
-                }
-            }
-
-            // Strategy 3: Pair mutations for multi-input constraints like a + b == target
-            // Mutate BOTH values together to satisfy a + b = target + k*modulus
-            if intComponents.count >= 2 {
-                guard let targetInt = Int(exactly: target.target) else { continue }
-
-                // Try specific (a, b) pairs that satisfy a + b ≡ target (mod common_moduli)
-                let commonModuli = [1000, 100, 256, 1024, 10000]
-                let baseValues = [0, 1, 10, 100, 500, 777]  // Common "a" values to try
-
-                for modulus in commonModuli {
-                    guard targetInt < modulus else { continue }
-
-                    for k in 0...3 {
-                        let targetSum = targetInt + k * modulus
-
-                        for a in baseValues {
-                            let b = targetSum - a
-                            // Skip if b is negative or too large
-                            guard b >= 0 && b < 1_000_000 else { continue }
-
-                            // Create tuple with both values set
-                            for i in 0..<intComponents.count {
-                                for j in 0..<intComponents.count where i != j {
-                                    let (indexI, _) = intComponents[i]
-                                    let (indexJ, _) = intComponents[j]
-
-                                    // Set a at indexI, b at indexJ (two-step mutation)
-                                    if let intermediate = createMutatedTuple(input, mutating: indexI, with: a),
-                                       let finalTuple = createMutatedTuple(intermediate, mutating: indexJ, with: b) {
-                                        results.append(finalTuple)
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        return results
-    }
-
     /// Create a tuple with two components swapped.
     private func createSwappedTuple(
         _ input: (repeat each Input),
@@ -1402,203 +1197,4 @@ public actor FuzzEngine<each Input: Fuzzable & Codable & Sendable> {
         return newTuple
     }
 
-    /// Generate array mutations that grow toward a target size.
-    ///
-    /// Uses exponential growth (doubling) to quickly approach the target,
-    /// plus targeted sizes at key points (target-1, target, target+1).
-    private func generateArraySizeMutations(
-        from arrayValue: Any,
-        currentSize: Int,
-        targetSize: Int,
-        componentIndex: Int,
-        input: (repeat each Input)
-    ) -> [(repeat each Input)] {
-        var results: [(repeat each Input)] = []
-
-        // Try to cast to a known array type and generate appropriately-sized arrays
-        // We handle [Int] specifically since it's the most common case
-        if let intArray = arrayValue as? [Int] {
-            let sizedArrays = generateSizedIntArrays(
-                from: intArray,
-                currentSize: currentSize,
-                targetSize: targetSize
-            )
-            for newArray in sizedArrays {
-                if let newTuple = createMutatedTuple(input, mutating: componentIndex, with: newArray) {
-                    results.append(newTuple)
-                }
-            }
-        } else if let stringArray = arrayValue as? [String] {
-            let sizedArrays = generateSizedStringArrays(
-                from: stringArray,
-                currentSize: currentSize,
-                targetSize: targetSize
-            )
-            for newArray in sizedArrays {
-                if let newTuple = createMutatedTuple(input, mutating: componentIndex, with: newArray) {
-                    results.append(newTuple)
-                }
-            }
-        } else if let boolArray = arrayValue as? [Bool] {
-            let sizedArrays = generateSizedBoolArrays(
-                from: boolArray,
-                currentSize: currentSize,
-                targetSize: targetSize
-            )
-            for newArray in sizedArrays {
-                if let newTuple = createMutatedTuple(input, mutating: componentIndex, with: newArray) {
-                    results.append(newTuple)
-                }
-            }
-        }
-        // For other array types, fall back to standard mutations
-
-        return results
-    }
-
-    /// Generate Int arrays of various sizes approaching the target.
-    private func generateSizedIntArrays(
-        from array: [Int],
-        currentSize: Int,
-        targetSize: Int
-    ) -> [[Int]] {
-        guard currentSize < targetSize else { return [] }
-
-        var results: [[Int]] = []
-
-        // Get a representative element for padding
-        let padElement = array.first ?? 0
-
-        // Strategy 1: Direct doubling (exponential growth)
-        if currentSize > 0 {
-            let doubled = array + array
-            if doubled.count <= targetSize + 10 {  // Don't overshoot too much
-                results.append(doubled)
-            }
-        }
-
-        // Strategy 2: Exact target size
-        if currentSize < targetSize {
-            var exactTarget = array
-            while exactTarget.count < targetSize {
-                exactTarget.append(padElement)
-            }
-            results.append(exactTarget)
-        }
-
-        // Strategy 3: Target ± small offsets (for off-by-one boundaries)
-        for offset in [-1, 1, 2] {
-            let size = targetSize + offset
-            if size > currentSize && size > 0 {
-                var sized = array
-                while sized.count < size {
-                    sized.append(padElement)
-                }
-                if sized.count == size {
-                    results.append(sized)
-                }
-            }
-        }
-
-        // Strategy 4: Binary search sizes (midpoint between current and target)
-        let midpoint = (currentSize + targetSize) / 2
-        if midpoint > currentSize && midpoint < targetSize {
-            var midArray = array
-            while midArray.count < midpoint {
-                midArray.append(padElement)
-            }
-            results.append(midArray)
-        }
-
-        return results
-    }
-
-    /// Generate String arrays of various sizes approaching the target.
-    private func generateSizedStringArrays(
-        from array: [String],
-        currentSize: Int,
-        targetSize: Int
-    ) -> [[String]] {
-        guard currentSize < targetSize else { return [] }
-
-        var results: [[String]] = []
-        let padElement = array.first ?? ""
-
-        // Doubling
-        if currentSize > 0 {
-            let doubled = array + array
-            if doubled.count <= targetSize + 10 {
-                results.append(doubled)
-            }
-        }
-
-        // Exact target
-        var exactTarget = array
-        while exactTarget.count < targetSize {
-            exactTarget.append(padElement)
-        }
-        results.append(exactTarget)
-
-        return results
-    }
-
-    /// Generate Bool arrays of various sizes approaching the target.
-    private func generateSizedBoolArrays(
-        from array: [Bool],
-        currentSize: Int,
-        targetSize: Int
-    ) -> [[Bool]] {
-        guard currentSize < targetSize else { return [] }
-
-        var results: [[Bool]] = []
-        let padElement = array.first ?? false
-
-        // Doubling
-        if currentSize > 0 {
-            let doubled = array + array
-            if doubled.count <= targetSize + 10 {
-                results.append(doubled)
-            }
-        }
-
-        // Exact target
-        var exactTarget = array
-        while exactTarget.count < targetSize {
-            exactTarget.append(padElement)
-        }
-        results.append(exactTarget)
-
-        return results
-    }
-
-    // MARK: - Auto-tuning
-
-    /// Select optimal batch size based on measured average test execution time.
-    ///
-    /// Heuristic based on benchmark data:
-    /// - Cheap tests (<100μs): Sequential is fastest (task overhead dominates)
-    /// - Medium tests (100μs-1ms): Small batches balance overhead and parallelism
-    /// - Expensive tests (>1ms): Larger batches maximize parallel throughput
-    private static func selectBatchSize(forAvgTestTime avgTime: Double, verbose: Bool) -> Int {
-        let batchSize: Int
-        if avgTime < 0.0001 {  // < 100μs
-            batchSize = 1
-        } else if avgTime < 0.001 {  // < 1ms
-            batchSize = 4
-        } else {
-            batchSize = 16
-        }
-
-        if verbose {
-            let timeStr: String
-            if avgTime < 0.001 {
-                timeStr = String(format: "%.0fμs", avgTime * 1_000_000)
-            } else {
-                timeStr = String(format: "%.1fms", avgTime * 1_000)
-            }
-            print("[Fuzz] Auto-tuned batch size: \(batchSize) (avg test time: \(timeStr))")
-        }
-
-        return batchSize
-    }
 }

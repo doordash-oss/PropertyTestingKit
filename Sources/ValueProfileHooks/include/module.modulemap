@@ -1,4 +1,0 @@
-module ValueProfileHooks {
-    header "ValueProfileHooks.h"
-    export *
-}

@@ -11,7 +11,7 @@
 //
 
 import Testing
-import ValueProfileHooks
+import SanCovHooks
 import Foundation
 
 // MARK: - Test Infrastructure

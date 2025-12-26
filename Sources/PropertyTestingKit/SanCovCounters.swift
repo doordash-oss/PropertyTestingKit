@@ -10,7 +10,7 @@
 //
 
 import Foundation
-import ValueProfileHooks
+import SanCovHooks
 
 // MARK: - SparseCoverage
 
@@ -447,7 +447,7 @@ public struct SanCovSourceLocation: Sendable {
 }
 
 // Type alias to avoid ambiguity with C struct
-private typealias SanCovSourceLocation_C = ValueProfileHooks.SanCovSourceLocation
+private typealias SanCovSourceLocation_C = SanCovHooks.SanCovSourceLocation
 
 // MARK: - DWARF Symbolizer Integration
 

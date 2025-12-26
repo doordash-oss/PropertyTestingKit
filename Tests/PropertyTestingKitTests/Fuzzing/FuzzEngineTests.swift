@@ -144,8 +144,7 @@ struct FuzzEngineTests {
                 maxIterations: 50,  // Higher than Int.fuzz count (21) to allow some fuzzing
                 maxDuration: 60,
                 plateauConfig: .init(enabled: false),
-                verbose: false,
-                enableValueProfile: false  // Disable to test iteration limit precisely
+                verbose: false
             )
 
             let engine = FuzzEngine<Int>(config: config, corpusDirectory: nil)

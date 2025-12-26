@@ -1,0 +1,4 @@
+module SanCovHooks {
+    header "SanCovHooks.h"
+    export *
+}

@@ -28,10 +28,6 @@ extension FuzzEngine {
         /// Verbose logging.
         public var verbose: Bool
 
-        /// Enable value profile guidance for comparison tracking.
-        /// Requires test code to be compiled with `-sanitize-coverage=trace-cmp`.
-        public var enableValueProfile: Bool
-
         /// Controls how the fuzzer handles existing corpus files.
         /// Defaults to checking the `FUZZ_CORPUS_MODE` environment variable,
         /// then falling back to `.auto`.
@@ -48,10 +44,10 @@ extension FuzzEngine {
         /// Number of inputs to test in parallel during the mutation phase.
         /// Higher values increase parallelism but may reduce coverage guidance accuracy
         /// since corpus updates happen in batches rather than after each test.
-        /// - 0: Auto-tune based on test execution time (recommended)
-        /// - 1: Sequential execution (best for cheap tests or shared mutable state)
-        /// - 4-16: Manual batching (for expensive tests with independent state)
-        /// Default: 0 (auto-tune based on measured test cost).
+        /// - 0: Use system processor count (default, ~50% faster than sequential)
+        /// - 1: Sequential execution (best for shared mutable state)
+        /// - N: Fixed batch size
+        /// Default: 0 (processor count).
         public var mutationBatchSize: Int
 
         /// Enable coverage gap detection to identify partially-covered functions.
@@ -74,7 +70,6 @@ extension FuzzEngine {
             generationRatio: Double = 0.3,
             minimizeCorpus: Bool = true,
             verbose: Bool = false,
-            enableValueProfile: Bool = true,
             corpusMode: CorpusMode? = nil,
             perInputTimeout: TimeInterval? = nil,
             mutationBatchSize: Int = 0,
@@ -93,11 +88,13 @@ extension FuzzEngine {
             self.generationRatio = generationRatio
             self.minimizeCorpus = minimizeCorpus
             self.verbose = verbose
-            self.enableValueProfile = enableValueProfile
             // Use provided mode, or check environment, or default to auto
             self.corpusMode = corpusMode ?? CorpusMode.fromEnvironment()
             self.perInputTimeout = perInputTimeout
-            self.mutationBatchSize = max(0, mutationBatchSize)  // 0 = auto-tune
+            // 0 means "use processor count"
+            self.mutationBatchSize = mutationBatchSize == 0
+                ? ProcessInfo.processInfo.processorCount
+                : max(1, mutationBatchSize)
             self.detectCoverageGaps = detectCoverageGaps
             self.coverageGapConfig = coverageGapConfig
             self.projectPath = projectPath

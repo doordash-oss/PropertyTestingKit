@@ -40,10 +40,8 @@ let benchmarks: @Sendable () -> Void = {
             let config = FuzzEngine<Int>.Config(
                 maxIterations: 1000,
                 plateauConfig: .init(enabled: false),
-                enableValueProfile: false,
                 corpusMode: .refuzzReplace,
-                mutationBatchSize: 16,
-                detectCoverageGaps: true,
+                detectCoverageGaps: true
             )
             let engine = FuzzEngine<Int>(config: config)
             let _ = await engine.run { input in

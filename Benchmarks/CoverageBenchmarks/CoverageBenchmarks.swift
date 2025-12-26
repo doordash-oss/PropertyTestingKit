@@ -249,31 +249,6 @@ let benchmarks: @Sendable () -> Void = {
     }
 
     Benchmark(
-        "fuzz(Int) - 100 iterations, no value profile",
-        configuration: .init(
-            metrics: [.wallClock],
-            warmupIterations: 1,
-            scalingFactor: .one,
-            maxDuration: .seconds(120),
-            maxIterations: 100
-        )
-    ) { benchmark in
-        for _ in benchmark.scaledIterations {
-            let config = FuzzEngine<Int>.Config(
-                maxIterations: 100,
-                maxDuration: 1,
-                plateauConfig: .init(enabled: false),
-                enableValueProfile: false,
-                corpusMode: .refuzzReplace
-            )
-            let engine = FuzzEngine<Int>(config: config)
-            let _ = await engine.run { input in
-                try parseAndValidate(input)
-            }
-        }
-    }
-
-    Benchmark(
         "fuzz(Int) - 100 iterations, refuzzReplace, with gap detection",
         configuration: .init(
             metrics: [.wallClock],
@@ -335,7 +310,6 @@ let benchmarks: @Sendable () -> Void = {
         for _ in benchmark.scaledIterations {
             let config = FuzzEngine<Int>.Config(
                 maxIterations: 1000,
-                maxDuration: 10,
                 plateauConfig: .init(enabled: false),
                 corpusMode: .refuzzReplace
             )
@@ -359,7 +333,6 @@ let benchmarks: @Sendable () -> Void = {
         for _ in benchmark.scaledIterations {
             let config = FuzzEngine<Int>.Config(
                 maxIterations: 1000,
-                maxDuration: 10,
                 plateauConfig: .init(enabled: false),
                 corpusMode: .refuzzReplace,
                 detectCoverageGaps: true

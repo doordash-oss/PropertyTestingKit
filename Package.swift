@@ -23,10 +23,10 @@ let package = Package(
         .package(path: "../../../Documents/OpenSource/package-benchmark"),
     ],
     targets: [
-        // C module for value profile hooks (sanitizer coverage)
+        // C module for SanitizerCoverage hooks
         .target(
-            name: "ValueProfileHooks",
-            path: "Sources/ValueProfileHooks",
+            name: "SanCovHooks",
+            path: "Sources/SanCovHooks",
             publicHeadersPath: "include"
         ),
 
@@ -57,7 +57,7 @@ let package = Package(
             name: "PropertyTestingKit",
             dependencies: [
                 "PropertyTestingKitMacros",
-                "ValueProfileHooks",
+                "SanCovHooks",
                 "CLLVMSymbolizer",
                 .product(name: "Dependencies", package: "swift-dependencies"),
             ]
@@ -73,7 +73,7 @@ let package = Package(
                 // Enable sanitizer coverage for SanCov source mapping tests
                 .unsafeFlags([
                     "-sanitize=undefined",
-                    "-sanitize-coverage=edge,trace-cmp,pc-table"
+                    "-sanitize-coverage=edge,pc-table"
                 ])
             ]
         ),
@@ -88,7 +88,7 @@ let package = Package(
                 // Enable sanitizer coverage for SanCov source mapping tests
                 .unsafeFlags([
                     "-sanitize=undefined",
-                    "-sanitize-coverage=edge,trace-cmp,pc-table"
+                    "-sanitize-coverage=edge,pc-table"
                 ])
             ]
         ),
@@ -99,23 +99,23 @@ let package = Package(
                 .product(name: "Dependencies", package: "swift-dependencies"),
             ],
             swiftSettings: [
-                // Enable value profile guidance for stress tests
+                // Enable sanitizer coverage
                 .unsafeFlags([
                     "-sanitize=undefined",
-                    "-sanitize-coverage=edge,trace-cmp"
+                    "-sanitize-coverage=edge"
                 ])
             ]
         ),
         .testTarget(
             name: "SanCovTests",
             dependencies: [
-                "ValueProfileHooks",
+                "SanCovHooks",
             ],
             swiftSettings: [
                 // Enable sanitizer coverage for thread-local coverage testing
                 .unsafeFlags([
                     "-sanitize=undefined",
-                    "-sanitize-coverage=edge,trace-cmp"
+                    "-sanitize-coverage=edge"
                 ])
             ]
         ),
@@ -153,7 +153,7 @@ package.targets += [
             // Note: sanitize-coverage requires a sanitizer to be enabled
             .unsafeFlags([
                 "-sanitize=undefined",
-                "-sanitize-coverage=edge,trace-cmp,pc-table"
+                "-sanitize-coverage=edge,pc-table"
             ])
         ],
         linkerSettings: [
@@ -179,7 +179,7 @@ package.targets += [
             // Note: sanitize-coverage requires a sanitizer to be enabled
             .unsafeFlags([
                 "-sanitize=undefined",
-                "-sanitize-coverage=edge,trace-cmp,pc-table"
+                "-sanitize-coverage=edge,pc-table"
             ])
         ],
         linkerSettings: [

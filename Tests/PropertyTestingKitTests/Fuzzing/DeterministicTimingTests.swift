@@ -102,12 +102,11 @@ struct DeterministicTimingTests {
                     return counters
                 }
             } operation: {
-                var config = FuzzEngine<SingleSeedInt>.Config(
+                let config = FuzzEngine<SingleSeedInt>.Config(
                     maxIterations: 5,
                     maxDuration: 100,
                     verbose: false
                 )
-                config.enableValueProfile = false  // Disable to avoid C library interaction
 
                 let engine = FuzzEngine<SingleSeedInt>(config: config, corpusDirectory: nil)
                 return await engine.run { _ in
@@ -135,12 +134,11 @@ struct DeterministicTimingTests {
                     return counters
                 }
             } operation: {
-                var config = FuzzEngine<SingleSeedInt>.Config(
+                let config = FuzzEngine<SingleSeedInt>.Config(
                     maxIterations: 5,
                     maxDuration: 1000,  // Very long time limit
                     verbose: false
                 )
-                config.enableValueProfile = false  // Disable to avoid C library interaction
 
                 let engine = FuzzEngine<SingleSeedInt>(config: config, corpusDirectory: nil)
                 return await engine.run { _ in
