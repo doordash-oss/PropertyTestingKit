@@ -228,10 +228,10 @@ let benchmarks: @Sendable () -> Void = {
         "fuzz(Int) - 100 iterations, refuzzReplace",
         configuration: .init(
             metrics: [.wallClock],
-            warmupIterations: 1,
+            warmupIterations: 5,
             scalingFactor: .one,
-            maxDuration: .seconds(30),
-            maxIterations: 10
+            maxDuration: .seconds(120),
+            maxIterations: 100
         )
     ) { benchmark in
         for _ in benchmark.scaledIterations {
@@ -254,8 +254,8 @@ let benchmarks: @Sendable () -> Void = {
             metrics: [.wallClock],
             warmupIterations: 1,
             scalingFactor: .one,
-            maxDuration: .seconds(30),
-            maxIterations: 10
+            maxDuration: .seconds(120),
+            maxIterations: 100
         )
     ) { benchmark in
         for _ in benchmark.scaledIterations {
@@ -279,8 +279,8 @@ let benchmarks: @Sendable () -> Void = {
             metrics: [.wallClock],
             warmupIterations: 1,
             scalingFactor: .one,
-            maxDuration: .seconds(30),
-            maxIterations: 10
+            maxDuration: .seconds(120),
+            maxIterations: 100
         )
     ) { benchmark in
         for _ in benchmark.scaledIterations {
@@ -304,8 +304,8 @@ let benchmarks: @Sendable () -> Void = {
             metrics: [.wallClock],
             warmupIterations: 1,
             scalingFactor: .one,
-            maxDuration: .seconds(30),
-            maxIterations: 10
+            maxDuration: .seconds(120),
+            maxIterations: 100
         )
     ) { benchmark in
         for _ in benchmark.scaledIterations {
@@ -377,8 +377,8 @@ let benchmarks: @Sendable () -> Void = {
             metrics: [.wallClock],
             warmupIterations: 1,
             scalingFactor: .one,
-            maxDuration: .seconds(60),
-            maxIterations: 5
+            maxDuration: .seconds(120),
+            maxIterations: 100
         )
     ) { benchmark in
         for _ in benchmark.scaledIterations {
@@ -402,8 +402,8 @@ let benchmarks: @Sendable () -> Void = {
             metrics: [.wallClock],
             warmupIterations: 1,
             scalingFactor: .one,
-            maxDuration: .seconds(30),
-            maxIterations: 5
+            maxDuration: .seconds(120),
+            maxIterations: 100
         )
     ) { benchmark in
         for _ in benchmark.scaledIterations {
@@ -760,8 +760,8 @@ let benchmarks: @Sendable () -> Void = {
             metrics: [.wallClock],
             warmupIterations: 5,
             scalingFactor: .one,
-            maxDuration: .seconds(30),
-            maxIterations: 20
+            maxDuration: .seconds(120),
+            maxIterations: 100
         )
     ) { benchmark in
         for _ in benchmark.scaledIterations {
@@ -785,8 +785,8 @@ let benchmarks: @Sendable () -> Void = {
             metrics: [.wallClock],
             warmupIterations: 3,
             scalingFactor: .one,
-            maxDuration: .seconds(30),
-            maxIterations: 15
+            maxDuration: .seconds(120),
+            maxIterations: 100
         )
     ) { benchmark in
         for _ in benchmark.scaledIterations {
@@ -919,8 +919,8 @@ let benchmarks: @Sendable () -> Void = {
             metrics: [.wallClock],
             warmupIterations: 1,
             scalingFactor: .one,
-            maxDuration: .seconds(60),
-            maxIterations: 5
+            maxDuration: .seconds(120),
+            maxIterations: 100
         )
     ) { benchmark in
         for _ in benchmark.scaledIterations {
@@ -943,8 +943,8 @@ let benchmarks: @Sendable () -> Void = {
             metrics: [.wallClock],
             warmupIterations: 1,
             scalingFactor: .one,
-            maxDuration: .seconds(60),
-            maxIterations: 5
+            maxDuration: .seconds(120),
+            maxIterations: 100
         )
     ) { benchmark in
         for _ in benchmark.scaledIterations {
@@ -968,8 +968,8 @@ let benchmarks: @Sendable () -> Void = {
             metrics: [.wallClock],
             warmupIterations: 1,
             scalingFactor: .one,
-            maxDuration: .seconds(60),
-            maxIterations: 5
+            maxDuration: .seconds(120),
+            maxIterations: 100
         )
     ) { benchmark in
         for _ in benchmark.scaledIterations {
