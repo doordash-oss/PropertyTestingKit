@@ -27,7 +27,10 @@ let package = Package(
         .target(
             name: "SanCovHooks",
             path: "Sources/SanCovHooks",
-            publicHeadersPath: "include"
+            publicHeadersPath: "include",
+            cSettings: [
+                .unsafeFlags(["-O3"])  // Optimize hot path even in debug builds
+            ]
         ),
 
         // LLVM-based symbolizer for DWARF debug info parsing
@@ -37,6 +40,7 @@ let package = Package(
             publicHeadersPath: "include",
             cxxSettings: [
                 .unsafeFlags([
+                    "-O3",  // Optimize even in debug builds
                     "-I/opt/homebrew/opt/llvm/include",
                     "-std=c++17",
                     "-fno-exceptions",
@@ -60,6 +64,9 @@ let package = Package(
                 "SanCovHooks",
                 "CLLVMSymbolizer",
                 .product(name: "Dependencies", package: "swift-dependencies"),
+            ],
+            swiftSettings: [
+                .unsafeFlags(["-O"])  // Optimize even in debug builds
             ]
         ),
         .testTarget(
@@ -134,6 +141,9 @@ let package = Package(
             dependencies: [
                 .product(name: "SwiftSyntaxMacros", package: "swift-syntax"),
                 .product(name: "SwiftCompilerPlugin", package: "swift-syntax"),
+            ],
+            swiftSettings: [
+                .unsafeFlags(["-O"])  // Optimize even in debug builds
             ]
         )
     ]

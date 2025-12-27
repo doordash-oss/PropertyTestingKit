@@ -585,7 +585,11 @@ struct RegressionModeTests {
             snapshot: snapshotFn,
             snapshotCoveredArrays: { SparseCoverage(indices: [], counts: []) },
             reset: {},
-            isAvailable: { true }
+            isAvailable: { true },
+            beginMeasurement: { SanCovCounters.MeasurementContext.testInstance() },
+            endMeasurement: { _ in },
+            resetWithContext: { _ in },
+            snapshotCoveredArraysWithContext: { _ in SparseCoverage(indices: [], counts: []) }
         )
         let version1 = await CorpusSchema.currentVersion(using: mockClient)
 
@@ -623,7 +627,11 @@ struct RegressionModeTests {
             snapshot: { nil },
             snapshotCoveredArrays: { nil },
             reset: {},
-            isAvailable: { false }
+            isAvailable: { false },
+            beginMeasurement: { nil },
+            endMeasurement: { _ in },
+            resetWithContext: { _ in },
+            snapshotCoveredArraysWithContext: { _ in nil }
         )
         let version = await CorpusSchema.currentVersion(using: mockClient)
         #expect(version == "unknown", "Should return 'unknown' when coverage unavailable")

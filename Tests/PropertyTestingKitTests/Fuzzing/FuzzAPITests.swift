@@ -113,6 +113,8 @@ struct FuzzAPITests {
                 delete: { _ in }
             )
             $0.corpusRegistry = alwaysInterestingRegistry
+            // Explicitly set live coverage to prevent mock leakage from parallel tests
+            $0.coverageCounters = .liveValue
         } operation: {
             let config = FuzzEngine<String>.Config(
                 maxIterations: 50,

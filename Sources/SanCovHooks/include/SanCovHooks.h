@@ -116,6 +116,31 @@ void* sancov_begin_measurement(void);
 /// Must be called with the same context pointer returned by sancov_begin_measurement.
 void sancov_end_measurement(void* context);
 
+// MARK: - Context-Aware API
+// These functions operate directly on a measurement context, bypassing TLS lookup.
+// This is critical for Swift concurrency where tasks can hop between threads.
+
+/// Reset counters for a specific measurement context.
+/// This bypasses TLS lookup by using the context directly.
+/// Much faster than sancov_reset_counters when the context is known.
+void sancov_reset_counters_with_context(void* context);
+
+/// Get the counters pointer for a specific measurement context.
+/// Returns the coverage map for the context, or NULL if not found.
+const uint8_t* sancov_get_counters_with_context(void* context);
+
+/// Get covered indices for a specific measurement context.
+/// Same as sancov_snapshot_covered_indices but operates on the given context.
+size_t sancov_snapshot_covered_indices_with_context(void* context, uint32_t* indices, uint8_t* counts, size_t max_entries);
+
+// MARK: - Debug API
+
+/// Get the number of measurement registry failures.
+/// This counts how many times the measurement registry was full when trying to
+/// register a new task→context mapping. If this is non-zero, some measurements
+/// may have received incorrect coverage data due to task hops.
+size_t sancov_get_measurement_registry_failures(void);
+
 #ifdef __cplusplus
 }
 #endif

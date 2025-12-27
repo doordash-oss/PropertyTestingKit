@@ -821,6 +821,14 @@ extension SanCovCounters {
         fileprivate init(_ raw: UnsafeMutableRawPointer) {
             self.rawContext = raw
         }
+
+        /// Creates a dummy context for testing purposes.
+        /// This context should only be used with mock CoverageCountersClients.
+        public static func testInstance() -> MeasurementContext {
+            // Allocate a small buffer that will be "freed" by the mock endMeasurement
+            let dummyPtr = UnsafeMutableRawPointer.allocate(byteCount: 1, alignment: 1)
+            return MeasurementContext(dummyPtr)
+        }
     }
 
     /// Begin a measurement context for synchronous coverage isolation.
@@ -840,6 +848,56 @@ extension SanCovCounters {
     /// - Parameter context: The context returned by `beginMeasurement()`.
     public static func endMeasurement(_ context: MeasurementContext) {
         sancov_end_measurement(context.rawContext)
+    }
+
+    // MARK: - Context-Aware API
+    // These methods operate directly on a measurement context, bypassing TLS lookup.
+    // This is critical for Swift concurrency where tasks can hop between threads.
+
+    /// Reset coverage counters for a specific measurement context.
+    ///
+    /// This method uses the context directly, avoiding O(512) registry scans
+    /// that would otherwise occur after a Swift task hops between threads.
+    ///
+    /// - Parameter context: The measurement context to reset.
+    public static func reset(with context: MeasurementContext) {
+        sancov_reset_counters_with_context(context.rawContext)
+    }
+
+    /// Get covered indices for a specific measurement context.
+    ///
+    /// This method uses the context directly, avoiding TLS lookup overhead.
+    /// Much faster than `snapshotCoveredArrays()` when the context is known.
+    ///
+    /// - Parameter context: The measurement context to snapshot.
+    /// - Returns: SparseCoverage with parallel indices/counts arrays, or nil if unavailable.
+    public static func snapshotCoveredArrays(with context: MeasurementContext) -> SparseCoverage? {
+        guard isAvailable else { return nil }
+
+        let maxEntries = 8192
+        var indices = [UInt32](repeating: 0, count: maxEntries)
+        var counts = [UInt8](repeating: 0, count: maxEntries)
+        let filled = sancov_snapshot_covered_indices_with_context(context.rawContext, &indices, &counts, maxEntries)
+
+        // If buffer was too small, fall back to two-pass
+        if filled == maxEntries {
+            let actualCount = sancov_snapshot_covered_indices_with_context(context.rawContext, nil, nil, 0)
+            if actualCount > maxEntries {
+                var largeIndices = [UInt32](repeating: 0, count: actualCount)
+                var largeCounts = [UInt8](repeating: 0, count: actualCount)
+                let actualFilled = sancov_snapshot_covered_indices_with_context(context.rawContext, &largeIndices, &largeCounts, actualCount)
+
+                largeIndices.removeLast(actualCount - actualFilled)
+                largeCounts.removeLast(actualCount - actualFilled)
+                return SparseCoverage(indices: largeIndices, counts: largeCounts)
+            }
+        }
+
+        guard filled > 0 else { return SparseCoverage() }
+
+        indices.removeLast(maxEntries - filled)
+        counts.removeLast(maxEntries - filled)
+        return SparseCoverage(indices: indices, counts: counts)
     }
 
     /// Get the program counter for a given edge index.
@@ -937,6 +995,17 @@ extension SanCovCounters {
     /// line and column numbers. When `false`, only function-level info is available.
     public static func lineNumbersAvailable() async -> Bool {
         await dwarfSymbolizerHelper.isAvailable
+    }
+
+    // MARK: - Debug API
+
+    /// Get the number of measurement registry failures.
+    ///
+    /// This counts how many times `beginMeasurement()` returned nil due to
+    /// the measurement registry being full. If this is non-zero during test runs,
+    /// increase `MAX_TASK_MEASUREMENT_ENTRIES` in SanCovHooks.c.
+    public static var measurementRegistryFailures: Int {
+        Int(sancov_get_measurement_registry_failures())
     }
 }
 

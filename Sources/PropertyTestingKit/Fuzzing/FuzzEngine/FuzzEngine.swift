@@ -357,7 +357,8 @@ public actor FuzzEngine<each Input: Fuzzable & Codable & Sendable> {
         test: @escaping @Sendable ((repeat each Input)) async throws -> Void
     ) async -> FuzzResult<repeat each Input> {
         let startTime = dateClient.now()
-        let corpus: CorpusClient<repeat each Input> = corpusRegistry.get(schemaVersion: await CorpusSchema.currentVersion())
+        let schemaVersion = await CorpusSchema.currentVersion()
+        let corpus: CorpusClient<repeat each Input> = corpusRegistry.get(schemaVersion: schemaVersion)
         var failures: [(input: (repeat each Input), error: Error)] = []
         var hangs: [(input: (repeat each Input), timeout: TimeInterval)] = []
         var iterationsSinceNewCoverage = 0
@@ -378,8 +379,9 @@ public actor FuzzEngine<each Input: Fuzzable & Codable & Sendable> {
         let perTimeout = config.perInputTimeout
         let verbose = config.verbose
 
-        // Capture coverage client before task group to satisfy Sendable requirements
+        // Capture clients before loops to avoid @Dependency lookup overhead in hot path
         let coverageClient = coverageCounters
+        let randomClient = random
 
         // Track seed execution time for auto-tuning batch size
         let seedPhaseStart = CFAbsoluteTimeGetCurrent()
@@ -390,8 +392,20 @@ public actor FuzzEngine<each Input: Fuzzable & Codable & Sendable> {
         ) { group in
             for (index, input) in seedInputs.enumerated() {
                 group.addTask {
-                    // Reset coverage for this task (task-isolated via swift_task_getCurrent)
-                    coverageClient.reset()
+                    // Begin measurement context - this pre-warms caches and creates isolated coverage map
+                    guard let context = coverageClient.beginMeasurement() else {
+                        return SeedTaskResult(
+                            index: index,
+                            signature: nil,
+                            error: nil,
+                            timedOut: false,
+                            timeout: perTimeout ?? 0
+                        )
+                    }
+                    defer { coverageClient.endMeasurement(context) }
+
+                    // Reset coverage for this measurement context (uses context-aware API for O(1) performance after task hop)
+                    coverageClient.resetWithContext(context)
 
                     // Run test with optional timeout
                     var testError: (any Error)?
@@ -425,9 +439,9 @@ public actor FuzzEngine<each Input: Fuzzable & Codable & Sendable> {
                         }
                     }
 
-                    // Get coverage snapshot for this task (sync - uses task-local data)
+                    // Get coverage snapshot using context-aware API (O(1) even after task hop)
                     let signature: CoverageSignature?
-                    if let sparse = coverageClient.snapshotCoveredArrays() {
+                    if let sparse = coverageClient.snapshotCoveredArraysWithContext(context) {
                         signature = CoverageSignature(sparse: sparse)
                     } else {
                         signature = nil
@@ -452,7 +466,7 @@ public actor FuzzEngine<each Input: Fuzzable & Codable & Sendable> {
             return results.sorted { $0.index < $1.index }
         }
 
-        let seedExecutionTime = CFAbsoluteTimeGetCurrent() - seedPhaseStart
+        _ = CFAbsoluteTimeGetCurrent() - seedPhaseStart  // seedExecutionTime (unused but kept for potential profiling)
 
         // First pass: handle errors/hangs and collect coverage candidates
         typealias SeedCandidateEntry = Corpus<repeat each Input>.CandidateEntry
@@ -575,10 +589,13 @@ public actor FuzzEngine<each Input: Fuzzable & Codable & Sendable> {
                 let parentIndex: Int?
                 var isMutation = false
 
-                if corpusState.isEmpty || randomDouble(in: 0..<1) < config.generationRatio {
+                // Use cached randomClient to avoid @Dependency lookup overhead
+                let shouldGenerate = corpusState.isEmpty || randomClient { rng in Double.random(in: 0..<1, using: &rng) } < config.generationRatio
+
+                if shouldGenerate {
                     // Generate fresh input
                     let fuzzValues = mutatorSeeds?() ?? cartesianProductFuzz()
-                    guard let fuzzValue = randomElement(from: fuzzValues) else {
+                    guard let fuzzValue = randomClient({ rng in fuzzValues.randomElement(using: &rng) }) else {
                         continue
                     }
                     input = fuzzValue
@@ -591,7 +608,7 @@ public actor FuzzEngine<each Input: Fuzzable & Codable & Sendable> {
                     let parent = corpusState.entries[selectedIndex].input
                     let mutations = mutatorMutate?(parent) ?? mutateInput(parent)
 
-                    if let m = randomElement(from: mutations) {
+                    if let m = randomClient({ rng in mutations.randomElement(using: &rng) }) {
                         input = m
                         parentIndex = selectedIndex
                         totalMutations += 1
@@ -599,7 +616,7 @@ public actor FuzzEngine<each Input: Fuzzable & Codable & Sendable> {
                     } else {
                         // Mutations exhausted - fall back to generation
                         let fuzzValues = mutatorSeeds?() ?? cartesianProductFuzz()
-                        guard let fuzzValue = randomElement(from: fuzzValues) else {
+                        guard let fuzzValue = randomClient({ rng in fuzzValues.randomElement(using: &rng) }) else {
                             continue
                         }
                         input = fuzzValue
@@ -634,8 +651,19 @@ public actor FuzzEngine<each Input: Fuzzable & Codable & Sendable> {
             ) { group in
                 for (index, input) in batchInputs.enumerated() {
                     group.addTask {
-                        // Reset coverage for this task (task-isolated)
-                        coverageClient.reset()
+                        // Begin measurement context - this pre-warms caches and creates isolated coverage map
+                        guard let context = coverageClient.beginMeasurement() else {
+                            return BatchTestResult(
+                                index: index,
+                                signature: nil,
+                                error: nil,
+                                timedOut: false
+                            )
+                        }
+                        defer { coverageClient.endMeasurement(context) }
+
+                        // Reset coverage using context-aware API (O(1) even after task hop)
+                        coverageClient.resetWithContext(context)
 
                         var testError: (any Error)?
                         var timedOut = false
@@ -666,9 +694,9 @@ public actor FuzzEngine<each Input: Fuzzable & Codable & Sendable> {
                             }
                         }
 
-                        // Get coverage snapshot (sync - uses task-local data)
+                        // Get coverage snapshot using context-aware API (O(1) even after task hop)
                         let signature: CoverageSignature?
-                        if let sparse = coverageClient.snapshotCoveredArrays() {
+                        if let sparse = coverageClient.snapshotCoveredArraysWithContext(context) {
                             signature = CoverageSignature(sparse: sparse)
                         } else {
                             signature = nil
@@ -873,8 +901,12 @@ public actor FuzzEngine<each Input: Fuzzable & Codable & Sendable> {
         }
 
         for entry in snapshot.entries {
-            // Reset coverage for this test (task-isolated)
-            coverageCounters.reset()
+            // Begin measurement context for this entry
+            guard let context = coverageCounters.beginMeasurement() else { continue }
+            defer { coverageCounters.endMeasurement(context) }
+
+            // Reset coverage using context-aware API (O(1) even after task hop)
+            coverageCounters.resetWithContext(context)
 
             var testError: Error?
             do {
@@ -887,9 +919,8 @@ public actor FuzzEngine<each Input: Fuzzable & Codable & Sendable> {
                 failures.append((entry.input, error))
             }
 
-            // Get coverage snapshot (task-isolated, no diff needed)
-            // Use sparse snapshot for efficiency - only iterates non-zero counters (sync)
-            if let sparse = coverageCounters.snapshotCoveredArrays() {
+            // Get coverage snapshot using context-aware API (O(1) even after task hop)
+            if let sparse = coverageCounters.snapshotCoveredArraysWithContext(context) {
                 let actualSignature = CoverageSignature(sparse: sparse)
                 if actualSignature != entry.signature {
                     coverageChanges.append((

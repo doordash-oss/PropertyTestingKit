@@ -40,6 +40,23 @@ public struct CoverageCountersClient: Sendable {
     /// Check if coverage instrumentation is available.
     public var isAvailable: @Sendable () -> Bool
 
+    /// Begin a measurement context for the current task.
+    /// This creates an isolated coverage map and pre-warms caches for optimal performance.
+    /// Must be paired with endMeasurement.
+    public var beginMeasurement: @Sendable () -> SanCovCounters.MeasurementContext?
+
+    /// End a measurement context and clean up resources.
+    /// This frees the coverage map slot for reuse by other tasks.
+    public var endMeasurement: @Sendable (SanCovCounters.MeasurementContext) -> Void
+
+    /// Reset counters using a specific measurement context.
+    /// This bypasses TLS lookup, providing O(1) performance even after task hops.
+    public var resetWithContext: @Sendable (SanCovCounters.MeasurementContext) -> Void
+
+    /// Get covered indices using a specific measurement context.
+    /// This bypasses TLS lookup, providing O(1) performance even after task hops.
+    public var snapshotCoveredArraysWithContext: @Sendable (SanCovCounters.MeasurementContext) -> SparseCoverage?
+
     public init(
         snapshot: @escaping @Sendable () async -> SanCovCounters? = unimplemented(
             "snapshot",
@@ -53,12 +70,30 @@ public struct CoverageCountersClient: Sendable {
         isAvailable: @escaping @Sendable () -> Bool = unimplemented(
             "isAvailable",
             placeholder: false
+        ),
+        beginMeasurement: @escaping @Sendable () -> SanCovCounters.MeasurementContext? = unimplemented(
+            "beginMeasurement",
+            placeholder: nil
+        ),
+        endMeasurement: @escaping @Sendable (SanCovCounters.MeasurementContext) -> Void = unimplemented(
+            "endMeasurement"
+        ),
+        resetWithContext: @escaping @Sendable (SanCovCounters.MeasurementContext) -> Void = unimplemented(
+            "resetWithContext"
+        ),
+        snapshotCoveredArraysWithContext: @escaping @Sendable (SanCovCounters.MeasurementContext) -> SparseCoverage? = unimplemented(
+            "snapshotCoveredArraysWithContext",
+            placeholder: nil
         )
     ) {
         self.snapshot = snapshot
         self.snapshotCoveredArrays = snapshotCoveredArrays
         self.reset = reset
         self.isAvailable = isAvailable
+        self.beginMeasurement = beginMeasurement
+        self.endMeasurement = endMeasurement
+        self.resetWithContext = resetWithContext
+        self.snapshotCoveredArraysWithContext = snapshotCoveredArraysWithContext
     }
 }
 
@@ -69,7 +104,11 @@ extension CoverageCountersClient: DependencyKey {
         snapshot: { SanCovCounters.snapshot() },
         snapshotCoveredArrays: { SanCovCounters.snapshotCoveredArrays() },
         reset: { SanCovCounters.reset() },
-        isAvailable: { SanCovCounters.isAvailable }
+        isAvailable: { SanCovCounters.isAvailable },
+        beginMeasurement: { SanCovCounters.beginMeasurement() },
+        endMeasurement: { SanCovCounters.endMeasurement($0) },
+        resetWithContext: { SanCovCounters.reset(with: $0) },
+        snapshotCoveredArraysWithContext: { SanCovCounters.snapshotCoveredArrays(with: $0) }
     )
 
     /// Test value uses live coverage counters since they're read-only and safe.
