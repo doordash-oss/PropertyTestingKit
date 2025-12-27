@@ -75,6 +75,7 @@ let package = Package(
                 "PropertyTestingKit",
                 .product(name: "Dependencies", package: "swift-dependencies"),
                 .product(name: "FunctionSpy", package: "FunctionSpy"),
+//                .product(name: "Benchmark", package: "package-benchmark")
             ],
             swiftSettings: [
                 // Enable sanitizer coverage for SanCov source mapping tests

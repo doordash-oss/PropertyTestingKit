@@ -961,28 +961,53 @@ extension SanCovCounters {
         guard isAvailable else { return nil }
 
         let maxEntries = 8192
-        var indices = [UInt32](repeating: 0, count: maxEntries)
-        var counts = [UInt8](repeating: 0, count: maxEntries)
-        let filled = sancov_snapshot_covered_indices_with_context(context.rawContext, &indices, &counts, maxEntries)
 
-        // If buffer was too small, fall back to two-pass
+        // Allocate uninitialized buffers to avoid zeroing 40KB per call.
+        // The C function fills only the entries it needs.
+        let indicesPtr = UnsafeMutablePointer<UInt32>.allocate(capacity: maxEntries)
+        let countsPtr = UnsafeMutablePointer<UInt8>.allocate(capacity: maxEntries)
+        defer {
+            indicesPtr.deallocate()
+            countsPtr.deallocate()
+        }
+
+        let filled = sancov_snapshot_covered_indices_with_context(
+            context.rawContext,
+            indicesPtr,
+            countsPtr,
+            maxEntries
+        )
+
+        guard filled > 0 else { return SparseCoverage() }
+
+        // If buffer was too small, fall back to two-pass with larger buffers
         if filled == maxEntries {
             let actualCount = sancov_snapshot_covered_indices_with_context(context.rawContext, nil, nil, 0)
             if actualCount > maxEntries {
-                var largeIndices = [UInt32](repeating: 0, count: actualCount)
-                var largeCounts = [UInt8](repeating: 0, count: actualCount)
-                let actualFilled = sancov_snapshot_covered_indices_with_context(context.rawContext, &largeIndices, &largeCounts, actualCount)
+                let largeIndicesPtr = UnsafeMutablePointer<UInt32>.allocate(capacity: actualCount)
+                let largeCountsPtr = UnsafeMutablePointer<UInt8>.allocate(capacity: actualCount)
+                defer {
+                    largeIndicesPtr.deallocate()
+                    largeCountsPtr.deallocate()
+                }
 
-                largeIndices.removeLast(actualCount - actualFilled)
-                largeCounts.removeLast(actualCount - actualFilled)
+                let actualFilled = sancov_snapshot_covered_indices_with_context(
+                    context.rawContext,
+                    largeIndicesPtr,
+                    largeCountsPtr,
+                    actualCount
+                )
+
+                // Copy to Swift arrays (only the filled portion)
+                let largeIndices = Array(UnsafeBufferPointer(start: largeIndicesPtr, count: actualFilled))
+                let largeCounts = Array(UnsafeBufferPointer(start: largeCountsPtr, count: actualFilled))
                 return SparseCoverage(indices: largeIndices, counts: largeCounts)
             }
         }
 
-        guard filled > 0 else { return SparseCoverage() }
-
-        indices.removeLast(maxEntries - filled)
-        counts.removeLast(maxEntries - filled)
+        // Copy to Swift arrays (only the filled portion)
+        let indices = Array(UnsafeBufferPointer(start: indicesPtr, count: filled))
+        let counts = Array(UnsafeBufferPointer(start: countsPtr, count: filled))
         return SparseCoverage(indices: indices, counts: counts)
     }
 

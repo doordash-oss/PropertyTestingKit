@@ -411,8 +411,7 @@ public actor FuzzEngine<each Input: Fuzzable & Codable & Sendable> {
                     }
                     defer { coverageClient.endMeasurement(context) }
 
-                    // Reset coverage for this measurement context (uses context-aware API for O(1) performance after task hop)
-                    coverageClient.resetWithContext(context)
+                    // No reset needed - map is already zero from calloc in beginMeasurement
 
                     // Run test with optional timeout
                     var testError: (any Error)?
@@ -669,8 +668,7 @@ public actor FuzzEngine<each Input: Fuzzable & Codable & Sendable> {
                         }
                         defer { coverageClient.endMeasurement(context) }
 
-                        // Reset coverage using context-aware API (O(1) even after task hop)
-                        coverageClient.resetWithContext(context)
+                        // No reset needed - map is already zero from calloc in beginMeasurement
 
                         var testError: (any Error)?
                         var timedOut = false
@@ -912,8 +910,7 @@ public actor FuzzEngine<each Input: Fuzzable & Codable & Sendable> {
             guard let context = coverageCounters.beginMeasurement() else { continue }
             defer { coverageCounters.endMeasurement(context) }
 
-            // Reset coverage using context-aware API (O(1) even after task hop)
-            coverageCounters.resetWithContext(context)
+            // No reset needed - map is already zero from calloc in beginMeasurement
 
             var testError: Error?
             do {
