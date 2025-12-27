@@ -238,8 +238,8 @@ let benchmarks: @Sendable () -> Void = {
             let config = FuzzEngine<Int>.Config(
                 maxIterations: 100,
                 maxDuration: 1,
-                plateauConfig: .init(enabled: false),
-                corpusMode: .refuzzReplace
+                corpusMode: .refuzzReplace,
+                stoppingPlugins: []
             )
             let engine = FuzzEngine<Int>(config: config)
             let _ = await engine.run { input in
@@ -262,9 +262,9 @@ let benchmarks: @Sendable () -> Void = {
             let config = FuzzEngine<Int>.Config(
                 maxIterations: 100,
                 maxDuration: 1,
-                plateauConfig: .init(enabled: false),
                 corpusMode: .refuzzReplace,
-                detectCoverageGaps: true
+                stoppingPlugins: [],
+                analysisPlugins: [.coverageGaps()]
             )
             let engine = FuzzEngine<Int>(config: config)
             let _ = await engine.run { input in
@@ -287,8 +287,8 @@ let benchmarks: @Sendable () -> Void = {
             let config = FuzzEngine<String>.Config(
                 maxIterations: 100,
                 maxDuration: 1,
-                plateauConfig: .init(enabled: false),
-                corpusMode: .refuzzReplace
+                corpusMode: .refuzzReplace,
+                stoppingPlugins: []
             )
             let engine = FuzzEngine<String>(config: config)
             let _ = await engine.run { input in
@@ -310,8 +310,8 @@ let benchmarks: @Sendable () -> Void = {
         for _ in benchmark.scaledIterations {
             let config = FuzzEngine<Int>.Config(
                 maxIterations: 1000,
-                plateauConfig: .init(enabled: false),
-                corpusMode: .refuzzReplace
+                corpusMode: .refuzzReplace,
+                stoppingPlugins: []
             )
             let engine = FuzzEngine<Int>(config: config)
             let _ = await engine.run { input in
@@ -333,9 +333,9 @@ let benchmarks: @Sendable () -> Void = {
         for _ in benchmark.scaledIterations {
             let config = FuzzEngine<Int>.Config(
                 maxIterations: 1000,
-                plateauConfig: .init(enabled: false),
                 corpusMode: .refuzzReplace,
-                detectCoverageGaps: true
+                stoppingPlugins: [],
+                analysisPlugins: [.coverageGaps()]
             )
             let engine = FuzzEngine<Int>(config: config)
             let _ = await engine.run { input in
@@ -358,9 +358,9 @@ let benchmarks: @Sendable () -> Void = {
             let config = FuzzEngine<Int>.Config(
                 maxIterations: 100,
                 maxDuration: 5,
-                plateauConfig: .init(enabled: false),
                 corpusMode: .refuzzReplace,
-                detectCoverageGaps: true
+                stoppingPlugins: [],
+                analysisPlugins: [.coverageGaps()]
             )
             let engine = FuzzEngine<Int>(config: config)
             let _ = await engine.run { input in
@@ -383,8 +383,8 @@ let benchmarks: @Sendable () -> Void = {
             let config = FuzzEngine<EmptyFuzzable>.Config(
                 maxIterations: 10,
                 maxDuration: 1,
-                plateauConfig: .init(enabled: false),
-                corpusMode: .refuzzReplace
+                corpusMode: .refuzzReplace,
+                stoppingPlugins: []
             )
             let engine = FuzzEngine<EmptyFuzzable>(config: config, corpusDirectory: nil)
             let _ = await engine.run { _ in }
@@ -741,8 +741,8 @@ let benchmarks: @Sendable () -> Void = {
             let config = FuzzEngine<Int>.Config(
                 maxIterations: 10,
                 maxDuration: 1,
-                plateauConfig: .init(enabled: false),
-                corpusMode: .refuzzReplace
+                corpusMode: .refuzzReplace,
+                stoppingPlugins: []
             )
             let engine = FuzzEngine<Int>(config: config)
             let _ = await engine.run { input in
@@ -766,8 +766,8 @@ let benchmarks: @Sendable () -> Void = {
             let config = FuzzEngine<Int>.Config(
                 maxIterations: 50,
                 maxDuration: 1,
-                plateauConfig: .init(enabled: false),
-                corpusMode: .refuzzReplace
+                corpusMode: .refuzzReplace,
+                stoppingPlugins: []
             )
             let engine = FuzzEngine<Int>(config: config)
             let _ = await engine.run { input in
@@ -900,8 +900,8 @@ let benchmarks: @Sendable () -> Void = {
             let config = FuzzEngine<Int>.Config(
                 maxIterations: 100,
                 maxDuration: 30,
-                plateauConfig: .init(enabled: false),
-                corpusMode: .refuzzReplace
+                corpusMode: .refuzzReplace,
+                stoppingPlugins: []
             )
             let engine = FuzzEngine<Int>(config: config)
             let _ = await engine.run { input in
@@ -924,9 +924,9 @@ let benchmarks: @Sendable () -> Void = {
             let config = FuzzEngine<Int>.Config(
                 maxIterations: 100,
                 maxDuration: 30,
-                plateauConfig: .init(enabled: false),
                 corpusMode: .refuzzReplace,
-                mutationBatchSize: 1  // Force sequential execution
+                mutationBatchSize: 1,  // Force sequential execution
+                stoppingPlugins: []
             )
             let engine = FuzzEngine<Int>(config: config)
             let _ = await engine.run { input in
@@ -949,9 +949,9 @@ let benchmarks: @Sendable () -> Void = {
             let config = FuzzEngine<Int>.Config(
                 maxIterations: 100,
                 maxDuration: 30,
-                plateauConfig: .init(enabled: false),
                 corpusMode: .refuzzReplace,
-                mutationBatchSize: 16
+                mutationBatchSize: 16,
+                stoppingPlugins: []
             )
             let engine = FuzzEngine<Int>(config: config)
             let _ = await engine.run { input in
@@ -977,9 +977,9 @@ let benchmarks: @Sendable () -> Void = {
                     group.addTask {
                         let config = FuzzEngine<Int>.Config(
                             maxIterations: 100,
-                            plateauConfig: .init(enabled: false),
                             corpusMode: .refuzzReplace,
-                            mutationBatchSize: 1  // Sequential to maximize edge hits per engine
+                            mutationBatchSize: 1,  // Sequential to maximize edge hits per engine
+                            stoppingPlugins: []
                         )
                         let engine = FuzzEngine<Int>(config: config)
                         let _ = await engine.run { input in
@@ -1008,9 +1008,9 @@ let benchmarks: @Sendable () -> Void = {
                     group.addTask {
                         let config = FuzzEngine<Int>.Config(
                             maxIterations: 100,
-                            plateauConfig: .init(enabled: false),
                             corpusMode: .refuzzReplace,
-                            mutationBatchSize: 1  // Sequential to maximize edge hits per engine
+                            mutationBatchSize: 1,  // Sequential to maximize edge hits per engine
+                            stoppingPlugins: []
                         )
                         let engine = FuzzEngine<Int>(config: config)
                         let _ = await engine.run { input in

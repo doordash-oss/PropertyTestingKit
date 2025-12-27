@@ -250,7 +250,7 @@ struct CoverageGapDetectorTests {
 
     @Test("Coverage gap detection in fuzz result")
     func fuzzResultIncludesGapReport() async throws {
-        // Verify that FuzzResult has the coverageGapReport field
+        // Verify that FuzzResult has the coverageGapReport computed property
         let emptyCorpus = Corpus<Int>(schemaVersion: "1.0.0")
         let emptySnapshot = await emptyCorpus.snapshot()
         let stats = FuzzStats(
@@ -266,20 +266,22 @@ struct CoverageGapDetectorTests {
             failures: [],
             stats: stats,
             wasRegression: false,
-            coverageChanges: [],
-            coverageGapReport: nil
+            coverageChanges: []
         )
 
+        // coverageGapReport is now a computed property from analysisReports
         #expect(result.coverageGapReport == nil)
     }
 
-    @Test("FuzzEngine.Config has detectCoverageGaps")
-    func configHasDetectCoverageGaps() {
-        let config = FuzzEngine<Int>.Config(detectCoverageGaps: true)
-        #expect(config.detectCoverageGaps == true)
+    @Test("FuzzEngine.Config has analysisPlugins for gap detection")
+    func configHasAnalysisPlugins() {
+        // With plugins, gap detection is enabled by adding CoverageGapPlugin
+        let config = FuzzEngine<Int>.Config(analysisPlugins: [.coverageGaps()])
+        #expect(config.analysisPlugins.count == 1)
+        #expect(config.analysisPlugins.contains { $0 is CoverageGapPlugin })
 
         let defaultConfig = FuzzEngine<Int>.Config()
-        #expect(defaultConfig.detectCoverageGaps == false)
+        #expect(defaultConfig.analysisPlugins.isEmpty)
     }
 
     @Test("Realistic coverage gap test")
@@ -304,7 +306,8 @@ struct CoverageGapDetectorTests {
             try await fuzz(
                 iterations: 100,
                 corpusMode: .refuzzReplace,
-                detectCoverageGaps: true
+                stoppingPlugins: [],
+                analysisPlugins: [.coverageGaps()]
             ) { (input: Int) in
                 partiallyCoveredFunction(input: input)
             }

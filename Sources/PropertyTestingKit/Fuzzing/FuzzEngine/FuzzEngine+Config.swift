@@ -14,10 +14,6 @@ extension FuzzEngine {
         /// Maximum time to spend fuzzing.
         public var maxDuration: TimeInterval
 
-        /// Configuration for adaptive early stopping based on coverage plateau detection.
-        /// When nil, uses a simple iteration count-based approach.
-        public var plateauConfig: CoveragePlateauDetector.Config
-
         /// Probability of generating fresh vs mutating (0.0-1.0).
         /// Higher = more fresh generation.
         public var generationRatio: Double
@@ -50,41 +46,42 @@ extension FuzzEngine {
         /// Default: 0 (processor count).
         public var mutationBatchSize: Int
 
-        /// Enable coverage gap detection to identify partially-covered functions.
-        /// When enabled, the fuzzer will report functions that have some coverage
-        /// but not complete coverage, helping identify missing seeds or mutation strategies.
-        /// Requires test code to be built with coverage instrumentation.
-        public var detectCoverageGaps: Bool
-
-        /// Configuration for coverage gap detection.
-        public var coverageGapConfig: CoverageGapDetector.Config
-
         /// Project root path for filtering coverage gaps to project files only.
         /// When set, only reports gaps in files under this path.
         public var projectPath: String?
 
+        // MARK: - Plugin Configuration
+
+        /// Observer plugins that receive lifecycle notifications.
+        /// These are called at various points during fuzzing but don't influence behavior.
+        public var observerPlugins: [any FuzzObserverPlugin]
+
+        /// Stopping condition plugins that determine when fuzzing should stop.
+        /// Default: `[.plateauDetector()]` for adaptive early stopping.
+        /// Pass an empty array to disable automatic stopping (only iteration/time limits apply).
+        public var stoppingPlugins: [any StoppingConditionPlugin]
+
+        /// Analysis plugins that run after fuzzing completes.
+        /// Default: empty (no post-fuzzing analysis).
+        /// Use `.coverageGaps()` to enable coverage gap detection.
+        public var analysisPlugins: [any AnalysisPlugin]
+
         public init(
             maxIterations: Int = 10_000,
             maxDuration: TimeInterval = 60,
-            plateauConfig: CoveragePlateauDetector.Config? = nil,
             generationRatio: Double = 0.3,
             minimizeCorpus: Bool = true,
             verbose: Bool = false,
             corpusMode: CorpusMode? = nil,
             perInputTimeout: TimeInterval? = nil,
             mutationBatchSize: Int = 0,
-            detectCoverageGaps: Bool = false,
-            coverageGapConfig: CoverageGapDetector.Config = CoverageGapDetector.Config(),
-            projectPath: String? = nil
+            projectPath: String? = nil,
+            observerPlugins: [any FuzzObserverPlugin] = [],
+            stoppingPlugins: [any StoppingConditionPlugin]? = nil,
+            analysisPlugins: [any AnalysisPlugin] = []
         ) {
             self.maxIterations = maxIterations
             self.maxDuration = maxDuration
-            // Default plateau config based on iterations
-            self.plateauConfig = plateauConfig ?? CoveragePlateauDetector.Config(
-                windowSize: max(1, min(500, maxIterations / 10)),
-                minDiscoveryRate: 0.001,
-                confirmationWindows: 3
-            )
             self.generationRatio = generationRatio
             self.minimizeCorpus = minimizeCorpus
             self.verbose = verbose
@@ -95,9 +92,17 @@ extension FuzzEngine {
             self.mutationBatchSize = mutationBatchSize == 0
                 ? ProcessInfo.processInfo.processorCount
                 : max(1, mutationBatchSize)
-            self.detectCoverageGaps = detectCoverageGaps
-            self.coverageGapConfig = coverageGapConfig
             self.projectPath = projectPath
+            self.observerPlugins = observerPlugins
+            // Default to plateau detector for adaptive early stopping
+            self.stoppingPlugins = stoppingPlugins ?? [
+                PlateauDetectorPlugin(config: .init(
+                    windowSize: max(1, min(500, maxIterations / 10)),
+                    minDiscoveryRate: 0.001,
+                    confirmationWindows: 3
+                ))
+            ]
+            self.analysisPlugins = analysisPlugins
         }
     }
 }

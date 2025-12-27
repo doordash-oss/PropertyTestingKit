@@ -51,6 +51,13 @@ import Dependencies
 ///         executeQuery(query, limit: limit)
 ///     }
 /// }
+///
+/// @Test func testWithGapDetection() throws {
+///     // Enable coverage gap detection
+///     try fuzz(analysisPlugins: [.coverageGaps()]) { (input: String) in
+///         parse(input)
+///     }
+/// }
 /// ```
 ///
 /// ## Corpus Storage
@@ -79,11 +86,13 @@ import Dependencies
 ///   - corpusMode: Controls corpus behavior. Use `.refuzzReplace` to start fresh,
 ///     `.refuzzExtend` to add to existing corpus, or `.auto` for default behavior.
 ///     Can also be set via `FUZZ_CORPUS_MODE` environment variable.
-///   - detectCoverageGaps: Enable coverage gap detection to identify partially-covered
-///     functions. When enabled, the result includes a report of functions that have
-///     some coverage but not complete coverage. Default: false.
 ///   - mutationBatchSize: Number of mutations to run in parallel per batch.
 ///     0 = auto-tune based on test cost (default), 1 = sequential, 4-16 = manual batching.
+///   - observerPlugins: Plugins that receive lifecycle notifications (start, batch complete, end).
+///   - stoppingPlugins: Plugins that determine when to stop fuzzing. Pass nil for defaults
+///     (plateau detection), or an empty array to disable automatic stopping.
+///   - analysisPlugins: Plugins that run after fuzzing completes. Use `.coverageGaps()`
+///     to enable coverage gap detection.
 ///   - filePath: Source file path (auto-filled).
 ///   - function: Test function name (auto-filled).
 ///   - test: The test closure receiving fuzzed inputs.
@@ -97,8 +106,10 @@ public func fuzz<each Input: Fuzzable & Codable & Sendable, each M: Mutator>(
     duration: TimeInterval = 60,
     perInputTimeout: TimeInterval? = nil,
     corpusMode: CorpusMode? = nil,
-    detectCoverageGaps: Bool = false,
     mutationBatchSize: Int = 0,
+    observerPlugins: [any FuzzObserverPlugin] = [],
+    stoppingPlugins: [any StoppingConditionPlugin]? = nil,
+    analysisPlugins: [any AnalysisPlugin] = [],
     filePath: StaticString = #filePath,
     function: StaticString = #function,
     line: Int = #line,
@@ -113,8 +124,10 @@ public func fuzz<each Input: Fuzzable & Codable & Sendable, each M: Mutator>(
         corpusMode: corpusMode,
         perInputTimeout: perInputTimeout,
         mutationBatchSize: mutationBatchSize,
-        detectCoverageGaps: detectCoverageGaps,
-        projectPath: projectPath(from: filePath)
+        projectPath: projectPath(from: filePath),
+        observerPlugins: observerPlugins,
+        stoppingPlugins: stoppingPlugins,
+        analysisPlugins: analysisPlugins
     )
 
     let engine = FuzzEngine<repeat each Input>(
@@ -141,11 +154,13 @@ public func fuzz<each Input: Fuzzable & Codable & Sendable, each M: Mutator>(
 ///   - corpusMode: Controls corpus behavior. Use `.refuzzReplace` to start fresh,
 ///     `.refuzzExtend` to add to existing corpus, or `.auto` for default behavior.
 ///     Can also be set via `FUZZ_CORPUS_MODE` environment variable.
-///   - detectCoverageGaps: Enable coverage gap detection to identify partially-covered
-///     functions. When enabled, the result includes a report of functions that have
-///     some coverage but not complete coverage. Default: false.
 ///   - mutationBatchSize: Number of mutations to run in parallel per batch.
 ///     0 = auto-tune based on test cost (default), 1 = sequential, 4-16 = manual batching.
+///   - observerPlugins: Plugins that receive lifecycle notifications (start, batch complete, end).
+///   - stoppingPlugins: Plugins that determine when to stop fuzzing. Pass nil for defaults
+///     (plateau detection), or an empty array to disable automatic stopping.
+///   - analysisPlugins: Plugins that run after fuzzing completes. Use `.coverageGaps()`
+///     to enable coverage gap detection.
 ///   - filePath: Source file path (auto-filled).
 ///   - function: Test function name (auto-filled).
 ///   - test: The test closure receiving fuzzed inputs.
@@ -158,8 +173,10 @@ public func fuzz<each Input: Fuzzable & Codable & Sendable>(
     duration: TimeInterval = 60,
     perInputTimeout: TimeInterval? = nil,
     corpusMode: CorpusMode? = nil,
-    detectCoverageGaps: Bool = false,
     mutationBatchSize: Int = 0,
+    observerPlugins: [any FuzzObserverPlugin] = [],
+    stoppingPlugins: [any StoppingConditionPlugin]? = nil,
+    analysisPlugins: [any AnalysisPlugin] = [],
     filePath: StaticString = #filePath,
     function: StaticString = #function,
     line: Int = #line,
@@ -174,8 +191,10 @@ public func fuzz<each Input: Fuzzable & Codable & Sendable>(
         corpusMode: corpusMode,
         perInputTimeout: perInputTimeout,
         mutationBatchSize: mutationBatchSize,
-        detectCoverageGaps: detectCoverageGaps,
-        projectPath: projectPath(from: filePath)
+        projectPath: projectPath(from: filePath),
+        observerPlugins: observerPlugins,
+        stoppingPlugins: stoppingPlugins,
+        analysisPlugins: analysisPlugins
     )
 
     let engine = FuzzEngine<repeat each Input>(
@@ -222,31 +241,15 @@ private func reportFuzzResult<each Input: Codable & Sendable>(
         )
     }
 
-    // Record coverage gaps as issues (fails the test)
-    if let report = result.coverageGapReport, !report.gaps.isEmpty {
-        let testFilePath = String(describing: filePath)
-
-        for gap in report.gaps {
-            let file = URL(fileURLWithPath: gap.filename).lastPathComponent
-            let pct = String(format: "%.0f", gap.coveragePercentage)
-            let uncoveredLines = gap.uncoveredRegions
-                .compactMap { $0.lineStart > 0 ? String($0.lineStart) : nil }
-                .prefix(5)
-                .joined(separator: ", ")
-            let lineInfo = uncoveredLines.isEmpty ? "" : " (lines: \(uncoveredLines))"
-            let message = "Coverage gap: \(gap.functionName) in \(file) is \(pct)% covered\(lineInfo)"
-
-            // Use uncovered line if available, otherwise fall back to test file location
-            let hasValidLine = gap.uncoveredRegions.first.map { $0.lineStart > 0 } ?? false
-            let issueFile = hasValidLine ? gap.filename : testFilePath
-            let issueLine = hasValidLine ? (gap.uncoveredRegions.first?.lineStart ?? 1) : line
-
+    // Record issues from analysis plugins
+    for report in result.analysisReports {
+        for issueMessage in report.issues {
             Issue.record(
-                Comment(rawValue: message),
+                Comment(rawValue: issueMessage),
                 sourceLocation: SourceLocation(
-                    fileID: issueFile,
-                    filePath: issueFile,
-                    line: issueLine,
+                    fileID: testFilePath,
+                    filePath: testFilePath,
+                    line: line,
                     column: 1
                 )
             )

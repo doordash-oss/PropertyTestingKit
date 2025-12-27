@@ -33,11 +33,11 @@ struct FuzzAPITests {
             let config = FuzzEngine<String>.Config(
                 maxIterations: 100,
                 maxDuration: 5,
-                plateauConfig: .init(enabled: false),
                 generationRatio: 0.2,
                 minimizeCorpus: true,
                 verbose: true,
-                detectCoverageGaps: true
+                stoppingPlugins: [],
+                analysisPlugins: [.coverageGaps()]
             )
 
             let engine = FuzzEngine<String>(config: config, corpusDirectory: corpusDir)
@@ -119,8 +119,8 @@ struct FuzzAPITests {
             let config = FuzzEngine<String>.Config(
                 maxIterations: 50,
                 maxDuration: 5,
-                plateauConfig: .init(enabled: false),
-                verbose: false
+                verbose: false,
+                stoppingPlugins: []
             )
 
             let engine = FuzzEngine<String>(config: config, corpusDirectory: corpusDir)

@@ -102,9 +102,9 @@ struct FuzzEngineTests {
             let config = FuzzEngine<Int>.Config(
                 maxIterations: 30,
                 maxDuration: 5,
-                plateauConfig: .init(enabled: false),
                 minimizeCorpus: false,
-                verbose: false
+                verbose: false,
+                stoppingPlugins: []
             )
 
             let engine = FuzzEngine<Int>(config: config, corpusDirectory: nil)
@@ -154,8 +154,8 @@ struct FuzzEngineTests {
             let config = FuzzEngine<Int>.Config(
                 maxIterations: 50,  // Higher than Int.fuzz count (21) to allow some fuzzing
                 maxDuration: 60,
-                plateauConfig: .init(enabled: false),
-                verbose: false
+                verbose: false,
+                stoppingPlugins: []
             )
 
             let engine = FuzzEngine<Int>(config: config, corpusDirectory: nil)
@@ -199,8 +199,8 @@ struct FuzzEngineTests {
             let config = FuzzEngine<Int>.Config(
                 maxIterations: 50,
                 maxDuration: 5,
-                plateauConfig: .init(enabled: false),
-                verbose: true
+                verbose: true,
+                stoppingPlugins: []
             )
 
             let engine = FuzzEngine<Int>(config: config, corpusDirectory: nil)
@@ -221,8 +221,8 @@ struct FuzzEngineTests {
             let config = FuzzEngine<Int>.Config(
                 maxIterations: 1_000_000,
                 maxDuration: 0.001,
-                plateauConfig: .init(enabled: false),
-                verbose: true
+                verbose: true,
+                stoppingPlugins: []
             )
 
             let engine = FuzzEngine<Int>(config: config, corpusDirectory: nil)
@@ -493,9 +493,9 @@ struct FuzzEngineTests {
             let config = FuzzEngine<Int>.Config(
                 maxIterations: 100,
                 maxDuration: 10,
-                plateauConfig: .init(enabled: false),
                 generationRatio: 0.5,
-                verbose: true
+                verbose: true,
+                stoppingPlugins: []
             )
 
             let engine = FuzzEngine<Int>(config: config, corpusDirectory: nil)
@@ -791,10 +791,10 @@ struct FuzzEngineTests {
             let config = FuzzEngine<Int>.Config(
                 maxIterations: 20,  // Will do seeds + iterations
                 maxDuration: 10,
-                plateauConfig: .init(enabled: false),
                 generationRatio: 1.0,  // Always generate fresh
                 minimizeCorpus: false,
-                verbose: true
+                verbose: true,
+                stoppingPlugins: []
             )
 
             let engine = FuzzEngine<Int>(config: config, corpusDirectory: nil)
@@ -895,8 +895,8 @@ struct FuzzEngineTests {
             let config = FuzzEngine<EmptyFuzzable>.Config(
                 maxIterations: 10,
                 maxDuration: 1,
-                plateauConfig: .init(enabled: false),
-                verbose: false
+                verbose: false,
+                stoppingPlugins: []
             )
 
             let engine = FuzzEngine<EmptyFuzzable>(config: config, corpusDirectory: nil)
@@ -920,9 +920,9 @@ struct FuzzEngineTests {
             let config = FuzzEngine<EmptyMutationsFuzzable>.Config(
                 maxIterations: 20,
                 maxDuration: 5,
-                plateauConfig: .init(enabled: false),
                 generationRatio: 0.0,  // Force mutation path
-                verbose: false
+                verbose: false,
+                stoppingPlugins: []
             )
 
             let engine = FuzzEngine<EmptyMutationsFuzzable>(config: config, corpusDirectory: nil)

@@ -240,10 +240,10 @@ public actor FuzzEngine<each Input: Fuzzable & Codable & Sendable> {
         additionalSeeds: [(repeat each Input)] = [],
         test: @escaping @Sendable ((repeat each Input)) async throws -> Void
     ) async -> FuzzResult<repeat each Input> {
-        // Start pre-warming the source location cache if gap detection is enabled.
+        // Start pre-warming the source location cache if gap analysis plugin is present.
         // This runs dladdr calls in the background so they complete by the time
         // gap detection needs them at the end of the fuzz run.
-        if config.detectCoverageGaps {
+        if config.analysisPlugins.contains(where: { $0 is CoverageGapPlugin }) {
             await SanCovCounters.startPreWarmingSourceLocations()
         }
 
@@ -352,8 +352,7 @@ public actor FuzzEngine<each Input: Fuzzable & Codable & Sendable> {
             failures: [],
             stats: emptyStats,
             wasRegression: true,
-            coverageChanges: [],
-            coverageGapReport: nil
+            coverageChanges: []
         )
     }
 
@@ -371,15 +370,30 @@ public actor FuzzEngine<each Input: Fuzzable & Codable & Sendable> {
         var iterationsSinceNewCoverage = 0
         var totalMutations = 0
         var totalGenerations = 0
+        var totalDiscoveries = 0
 
-        // Initialize plateau detector for adaptive early stopping
-        var plateauDetector = CoveragePlateauDetector(config: config.plateauConfig)
+        // Initialize plugin manager for lifecycle events and stopping conditions
+        var pluginManager = FuzzPluginManager(
+            observerPlugins: config.observerPlugins,
+            stoppingPlugins: config.stoppingPlugins,
+            analysisPlugins: config.analysisPlugins
+        )
 
         // Phase 1: Seed with boundary values (defaults + user-provided)
         // Run seeds in parallel using Swift structured concurrency
         // Each Task gets its own coverage map via swift_task_getCurrent()
         let defaultSeeds = mutatorSeeds?() ?? cartesianProductFuzz()
         let seedInputs = defaultSeeds + additionalSeeds
+
+        // Notify observers that fuzzing has started
+        let startContext = FuzzPluginContext.StartContext(
+            maxIterations: config.maxIterations,
+            maxDuration: config.maxDuration,
+            batchSize: config.mutationBatchSize,
+            corpusMode: config.corpusMode,
+            seedCount: seedInputs.count
+        )
+        await pluginManager.notifyStart(context: startContext)
 
         // Phase 1: Run seeds in parallel using withTaskGroup
         // Each task gets isolated coverage via swift_task_getCurrent()
@@ -540,8 +554,7 @@ public actor FuzzEngine<each Input: Fuzzable & Codable & Sendable> {
                 failures: failures,
                 stats: stats,
                 wasRegression: false,
-                coverageChanges: [],
-                coverageGapReport: nil
+                coverageChanges: []
             )
         }
 
@@ -569,12 +582,34 @@ public actor FuzzEngine<each Input: Fuzzable & Codable & Sendable> {
                 break
             }
 
-            if plateauDetector.hasPlateaued {
+            // Check plugin-based stopping conditions
+            let corpusSize = await corpus.count()
+            let elapsed = dateClient.now().timeIntervalSince(startTime)
+            // Compute recent discovery rate from the last ~100 iterations
+            let windowSize = min(100, iteration)
+            let recentRate = windowSize > 0 ? Double(totalDiscoveries) / Double(iteration) : 0.0
+            let stoppingContext = FuzzPluginContext.StoppingContext(
+                iteration: iteration,
+                elapsed: elapsed,
+                corpusSize: corpusSize,
+                recentDiscoveryRate: recentRate,
+                totalDiscoveries: totalDiscoveries,
+                iterationsSinceLastDiscovery: iterationsSinceNewCoverage
+            )
+
+            if let pluginStopReason = pluginManager.shouldStop(context: stoppingContext) {
                 if config.verbose {
-                    print("[Fuzz] Coverage plateau detected: \(plateauDetector.summary(includeDetails: true))")
+                    print("[Fuzz] Plugin stopping condition triggered: \(pluginStopReason)")
                     print("[Fuzz] Stopping early at iteration \(iteration) (saved \(config.maxIterations - iteration) iterations)")
                 }
-                stopReason = .coveragePlateau
+                // Map known reasons to FuzzStats.StopReason
+                if pluginStopReason == "coverage_plateau" {
+                    stopReason = .coveragePlateau
+                } else {
+                    // For custom reasons, use coverage_plateau as the enum value
+                    // but the actual reason is logged above
+                    stopReason = .coveragePlateau
+                }
                 break
             }
 
@@ -761,6 +796,7 @@ public actor FuzzEngine<each Input: Fuzzable & Codable & Sendable> {
 
             // Second pass: update counters based on batch results
             var candidateResultIdx = 0
+            var newPathsInBatch = 0
             for result in batchResults {
                 iteration += 1
                 iterationsSinceNewCoverage += 1
@@ -769,11 +805,13 @@ public actor FuzzEngine<each Input: Fuzzable & Codable & Sendable> {
                     let wasAdded = addResults[candidateResultIdx]
                     candidateResultIdx += 1
 
-                    // Record discovery status for plateau detection
-                    plateauDetector.record(discoveredNewCoverage: wasAdded)
+                    // Record discovery status for stopping plugins
+                    pluginManager.recordIteration(discoveredNewCoverage: wasAdded)
 
                     if wasAdded {
                         iterationsSinceNewCoverage = 0
+                        newPathsInBatch += 1
+                        totalDiscoveries += 1
 
                         if verbose {
                             let count = await corpus.count()
@@ -781,9 +819,23 @@ public actor FuzzEngine<each Input: Fuzzable & Codable & Sendable> {
                         }
                     }
                 } else {
-                    plateauDetector.record(discoveredNewCoverage: false)
+                    pluginManager.recordIteration(discoveredNewCoverage: false)
                 }
             }
+
+            // Notify observers that batch completed
+            let batchCorpusSize = await corpus.count()
+            let batchElapsed = dateClient.now().timeIntervalSince(startTime)
+            let batchContext = FuzzPluginContext.BatchContext(
+                batchIndex: (iteration - batchResults.count) / batchSize,
+                batchSize: batchResults.count,
+                newPathsInBatch: newPathsInBatch,
+                totalCorpusSize: batchCorpusSize,
+                elapsed: batchElapsed,
+                failureCount: failures.count,
+                hangCount: hangs.count
+            )
+            await pluginManager.notifyBatchComplete(context: batchContext)
 
             // let coverageEnd = CFAbsoluteTimeGetCurrent()
             // timeInCoverage += coverageEnd - coverageStart
@@ -830,11 +882,13 @@ public actor FuzzEngine<each Input: Fuzzable & Codable & Sendable> {
 
         let duration = dateClient.now().timeIntervalSince(startTime)
 
-        // Report plateau detector statistics if verbose
-        if config.verbose && config.plateauConfig.enabled {
-            let pStats = plateauDetector.stats()
-            print("[Fuzz] Plateau detector: \(pStats.totalDiscoveries) discoveries in \(pStats.totalIterations) iterations")
-            print("[Fuzz] Discovery rate: \(String(format: "%.4f", pStats.overallRate)) overall, \(String(format: "%.4f", pStats.windowRate)) recent")
+        // Report stopping plugin statistics if verbose
+        if config.verbose && pluginManager.hasStoppingPlugins {
+            let stoppingStats = pluginManager.stoppingStats()
+            for stats in stoppingStats {
+                let details = stats.details.map { "\($0.key)=\($0.value)" }.joined(separator: ", ")
+                print("[Fuzz] \(stats.pluginId): \(details)")
+            }
         }
 
         // Report hang statistics if any were detected
@@ -843,7 +897,8 @@ public actor FuzzEngine<each Input: Fuzzable & Codable & Sendable> {
         }
 
         let finalCorpusCount = await finalCorpus.count()
-        let plateauStats = config.plateauConfig.enabled ? plateauDetector.stats() : nil
+        // Get plateau stats from the plateau detector plugin if present
+        let plateauStats = pluginManager.getPlateauStats()
         let stats = FuzzStats(
             totalInputs: iteration,
             newPaths: finalCorpusCount,
@@ -856,26 +911,29 @@ public actor FuzzEngine<each Input: Fuzzable & Codable & Sendable> {
             hangs: hangs.count
         )
 
-        // Detect coverage gaps if enabled
-//        let gapStart = CFAbsoluteTimeGetCurrent()
-        var coverageGapReport: CoverageGapReport?
-        if config.detectCoverageGaps {
-            let totalCoverage = await finalCorpus.totalCoverage()
-            let totalCoveredIndices = totalCoverage.executedIndices
-            let detector = CoverageGapDetector(config: config.coverageGapConfig)
+        // Run analysis plugins
+        let totalCoverage = await finalCorpus.totalCoverage()
+        let totalCoveredIndices = totalCoverage.executedIndices
 
-            // if config.verbose {
-            //     print("[Fuzz] Gap detection: corpus covered \(totalCoveredIndices.count) edges, total edges: \(SanCovCounters.totalEdgeCount)")
-            // }
+        let analysisContext = FuzzPluginContext.AnalysisContext(
+            totalCoveredIndices: totalCoveredIndices,
+            corpusSize: finalCorpusCount,
+            duration: duration,
+            projectPath: config.projectPath
+        )
 
-            coverageGapReport = await detector.detect(from: totalCoveredIndices, projectPath: config.projectPath)
+        let analysisReports = await pluginManager.runAnalysis(context: analysisContext)
 
-            // if config.verbose, let report = coverageGapReport {
-            //     print("[Fuzz] \(report.detailedSummary)")
-            // }
-        }
-        // let gapEnd = CFAbsoluteTimeGetCurrent()
-        // print("[Timing] Gap detection: \(String(format: "%.3f", gapEnd - gapStart))s")
+        // Notify observers that fuzzing has ended
+        let endContext = FuzzPluginContext.EndContext(
+            totalIterations: iteration,
+            duration: duration,
+            corpusSize: finalCorpusCount,
+            failureCount: failures.count,
+            hangCount: hangs.count,
+            stopReason: stopReason
+        )
+        await pluginManager.notifyEnd(context: endContext)
 
         let finalSnapshot = await finalCorpus.snapshot()
         return FuzzResult(
@@ -884,7 +942,7 @@ public actor FuzzEngine<each Input: Fuzzable & Codable & Sendable> {
             stats: stats,
             wasRegression: false,
             coverageChanges: [],
-            coverageGapReport: coverageGapReport
+            analysisReports: analysisReports
         )
     }
 
@@ -960,20 +1018,34 @@ public actor FuzzEngine<each Input: Fuzzable & Codable & Sendable> {
             plateauStats: nil
         )
 
-        // Detect coverage gaps if enabled
-        var coverageGapReport: CoverageGapReport?
-        if config.detectCoverageGaps {
+        // Run analysis plugins if any configured
+        var analysisReports: [AnyAnalysisReport] = []
+        if !config.analysisPlugins.isEmpty {
+            let pluginManager = FuzzPluginManager(
+                observerPlugins: [],
+                stoppingPlugins: [],
+                analysisPlugins: config.analysisPlugins
+            )
+
             let totalCoveredIndices = snapshot.totalCoverage.executedIndices
-            let detector = CoverageGapDetector(config: config.coverageGapConfig)
 
             if config.verbose {
-                print("[Regression] Gap detection: corpus covered \(totalCoveredIndices.count) edges, total edges: \(SanCovCounters.totalEdgeCount)")
+                print("[Regression] Running analysis: corpus covered \(totalCoveredIndices.count) edges, total edges: \(SanCovCounters.totalEdgeCount)")
             }
 
-            coverageGapReport = await detector.detect(from: totalCoveredIndices, projectPath: config.projectPath)
+            let analysisContext = FuzzPluginContext.AnalysisContext(
+                totalCoveredIndices: totalCoveredIndices,
+                corpusSize: snapshot.count,
+                duration: duration,
+                projectPath: config.projectPath
+            )
 
-            if config.verbose, let report = coverageGapReport {
-                print("[Regression] \(report.detailedSummary)")
+            analysisReports = await pluginManager.runAnalysis(context: analysisContext)
+
+            if config.verbose {
+                for report in analysisReports {
+                    print("[Regression] \(report.summary)")
+                }
             }
         }
 
@@ -984,7 +1056,7 @@ public actor FuzzEngine<each Input: Fuzzable & Codable & Sendable> {
             stats: stats,
             wasRegression: true,
             coverageChanges: coverageChanges,
-            coverageGapReport: coverageGapReport
+            analysisReports: analysisReports
         )
     }
 
