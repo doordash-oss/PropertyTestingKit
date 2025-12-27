@@ -41,77 +41,72 @@ static uint32_t *g_guards_start = NULL;
 static uint32_t *g_guards_end = NULL;
 static size_t g_guard_count = 0;
 
-// MARK: - Task-Keyed Coverage Registry (Lock-Free)
+// MARK: - Lock-Free Hash Tables using ConcurrencyKit ck_ht
+//
+// Design: Use ck_ht (BSD licensed, battle-tested) for truly lock-free operations.
+// - ck_ht_get_spmc: lock-free lookup (single-producer-multi-consumer)
+// - ck_ht_set_spmc: lock-free insert/replace
+// - ck_ht_remove_spmc: lock-free delete
+// - Automatic resizing with safe memory reclamation
 
-// Registry size: Increased from 512 to support more parallel test execution.
-// Each concurrent measurement context (task with active beginMeasurement/endMeasurement)
-// needs one slot. With parallel tests, each test can have many concurrent tasks.
-// Example: 30 tests × 50 concurrent seeds = 1500 slots needed.
-#define MAX_TASK_ENTRIES 2048
+#include "include/ck/ck_ht.h"
+#include <pthread.h>
 
-typedef struct {
-    _Atomic(void*) task_id;          // Swift task pointer (atomic for lock-free access)
-    _Atomic(uint8_t*) coverage_map;  // Coverage bitmap for this task (atomic)
-} TaskCoverageEntry;
+// Memory allocator for ck_ht
+static void* ck_malloc_wrapper(size_t size) { return malloc(size); }
+static void ck_free_wrapper(void* ptr, size_t size, bool defer) {
+    (void)size; (void)defer;
+    free(ptr);
+}
 
-// Registry of per-task coverage maps (lock-free)
-static TaskCoverageEntry g_task_registry[MAX_TASK_ENTRIES];
-static _Atomic(size_t) g_task_registry_count = 0;
+static struct ck_malloc ck_allocator = {
+    .malloc = ck_malloc_wrapper,
+    .free = ck_free_wrapper
+};
+
+// MARK: - Striped Locks for Reduced Contention
+//
+// Instead of a single global mutex, we use N striped locks.
+// The hash value determines which stripe to lock, allowing concurrent
+// writes to different keys as long as they hash to different stripes.
+
+#define STRIPE_COUNT 64
+#define STRIPE_MASK (STRIPE_COUNT - 1)
+
+// Get stripe index from hash value
+static inline size_t get_stripe_index(uint64_t hash) {
+    return (size_t)(hash & STRIPE_MASK);
+}
+
+// Coverage registry: task_id -> coverage_map
+static ck_ht_t g_coverage_ht;
+static bool g_coverage_ht_initialized = false;
+static pthread_mutex_t g_coverage_init_mutex = PTHREAD_MUTEX_INITIALIZER;
+static pthread_mutex_t g_coverage_stripe_mutexes[STRIPE_COUNT];
+static pthread_mutex_t g_coverage_resize_mutex = PTHREAD_MUTEX_INITIALIZER;  // Global lock for resize operations
+static bool g_coverage_stripes_initialized = false;
 
 // Thread-local fallback for non-async contexts
 static _Thread_local uint8_t *tls_coverage_map = NULL;
 static _Thread_local size_t tls_coverage_map_size = 0;
 
-// MARK: - Per-Task Measurement Context Registry (Lock-Free)
-// Measurement contexts are tracked per-task to avoid TLS interference
-// when multiple Swift tasks run on the same thread.
-// Uses atomics for lock-free reads in the hot path.
-
-typedef struct {
-    _Atomic(void*) task_id;              // Swift task pointer (atomic for lock-free access)
-    _Atomic(void*) measurement_context;  // The measurement context ID (atomic)
-} TaskMeasurementEntry;
-
-// Registry size: Increased from 512 to support more parallel test execution.
-// Must be at least as large as MAX_TASK_ENTRIES since each measurement context
-// needs both a task→context mapping and a context→map mapping.
-#define MAX_TASK_MEASUREMENT_ENTRIES 2048
-
-static TaskMeasurementEntry g_task_measurement_registry[MAX_TASK_MEASUREMENT_ENTRIES];
+// Measurement registry: task_id -> measurement_context
+static ck_ht_t g_measurement_ht;
+static bool g_measurement_ht_initialized = false;
+static pthread_mutex_t g_measurement_init_mutex = PTHREAD_MUTEX_INITIALIZER;
+static pthread_mutex_t g_measurement_stripe_mutexes[STRIPE_COUNT];
+static pthread_mutex_t g_measurement_resize_mutex = PTHREAD_MUTEX_INITIALIZER;  // Global lock for resize operations
+static bool g_measurement_stripes_initialized = false;
 
 // Thread-local pseudo-task ID for synchronous code outside async contexts
 static _Thread_local void* tls_sync_pseudo_task = NULL;
 
-// Thread-local cache for coverage map lookup.
-// We cache the task pointer and its corresponding coverage map to avoid
-// repeated O(512) linear scans in the hot path.
-//
-// Safety: Swift task pointers CAN be reused after a task completes.
-// However, within a single thread's execution of trace_pc_guard callbacks,
-// the task pointer will remain valid. The cache is only used for the
-// duration of consecutive callbacks on the same thread, which is safe.
-//
-// The cache is invalidated when:
-// 1. The task pointer changes (detected on each lookup)
-// 2. A measurement context ends (explicit invalidation)
-// 3. A task map is cleaned up (we don't track this - but the task pointer
-//    would have changed anyway before the slot could be reused)
+// Thread-local cache for coverage map lookup (avoids rwlock acquisition in hot path)
+// The cache is invalidated when task changes or measurement context ends
 static _Thread_local void* tls_cached_task = NULL;
 static _Thread_local uint8_t* tls_cached_task_map = NULL;
 static _Thread_local void* tls_cached_measurement_context = NULL;
 static _Thread_local uint8_t* tls_cached_coverage_map = NULL;
-
-// Thread-local cache for measurement context registry slot.
-// Caches the slot index for the current task to avoid O(512) scans
-// in set/get_measurement_context_for_task.
-static _Thread_local void* tls_cached_mctx_task = NULL;
-static _Thread_local size_t tls_cached_mctx_slot = SIZE_MAX;
-
-// Thread-local cache for task coverage registry slot.
-// Caches the slot index to avoid O(512) scans in find_or_create_task_map.
-// Unlike mctx cache, this caches by slot (not task) since measurement contexts
-// change each iteration but we want to reuse the same slot.
-static _Thread_local size_t tls_cached_task_registry_slot = SIZE_MAX;
 
 // Get or create a pseudo-task ID for synchronous code
 static void* get_sync_pseudo_task(void) {
@@ -133,311 +128,266 @@ static void* get_current_task_for_measurement(void) {
     return get_sync_pseudo_task();
 }
 
-// Get measurement context for a task (lock-free)
-static void* get_measurement_context_for_task(void* task_id) {
-    if (task_id == NULL) return NULL;
+// MARK: - ck_ht-based Lock-Free Hash Table Operations
+//
+// All operations are lock-free using ck_ht's SPMC (single-producer-multi-consumer) API.
+// Initialization uses a mutex for one-time setup only.
 
-    // FAST PATH: Check cached slot for this task
-    if (task_id == tls_cached_mctx_task && tls_cached_mctx_slot < MAX_TASK_MEASUREMENT_ENTRIES) {
-        void* stored_task = atomic_load_explicit(&g_task_measurement_registry[tls_cached_mctx_slot].task_id, memory_order_acquire);
-        if (stored_task == task_id) {
-            return atomic_load_explicit(&g_task_measurement_registry[tls_cached_mctx_slot].measurement_context, memory_order_acquire);
+// Initial capacity for hash tables - large enough to avoid resizes
+// ck_ht resizes at 50% load, so this handles up to ~2000 concurrent measurements
+#define CK_HT_INITIAL_CAPACITY 4096
+
+// Debug logging control - set to 1 to enable
+#define CK_HT_DEBUG_LOGGING 1
+
+// Lazy initialization of hash tables and stripe mutexes
+static void ensure_measurement_ht(void) {
+    if (!g_measurement_ht_initialized) {
+        pthread_mutex_lock(&g_measurement_init_mutex);
+        if (!g_measurement_ht_initialized) {
+            // Initialize stripe mutexes
+            if (!g_measurement_stripes_initialized) {
+                for (size_t i = 0; i < STRIPE_COUNT; i++) {
+                    pthread_mutex_init(&g_measurement_stripe_mutexes[i], NULL);
+                }
+                g_measurement_stripes_initialized = true;
+            }
+            // Start with large capacity to avoid resizes during typical usage
+            // ck_ht resizes at 50% load, so this handles up to ~2000 concurrent measurements
+            ck_ht_init(&g_measurement_ht, CK_HT_MODE_DIRECT, NULL, &ck_allocator, CK_HT_INITIAL_CAPACITY, 0);
+            g_measurement_ht_initialized = true;
+#if CK_HT_DEBUG_LOGGING
+            fprintf(stderr, "[CK_HT DEBUG] INIT measurement_ht: capacity=%d (requested)\n",
+                    CK_HT_INITIAL_CAPACITY);
+#endif
         }
-        // Slot was reused by another task, invalidate cache
-        tls_cached_mctx_task = NULL;
-        tls_cached_mctx_slot = SIZE_MAX;
+        pthread_mutex_unlock(&g_measurement_init_mutex);
     }
+}
 
-    // SLOW PATH: Lock-free scan of all slots
-    for (size_t i = 0; i < MAX_TASK_MEASUREMENT_ENTRIES; i++) {
-        void* stored_task = atomic_load_explicit(&g_task_measurement_registry[i].task_id, memory_order_acquire);
-        if (stored_task == task_id) {
-            // Cache this slot for future lookups
-            tls_cached_mctx_task = task_id;
-            tls_cached_mctx_slot = i;
-            return atomic_load_explicit(&g_task_measurement_registry[i].measurement_context, memory_order_acquire);
+static void ensure_coverage_ht(void) {
+    if (!g_coverage_ht_initialized) {
+        pthread_mutex_lock(&g_coverage_init_mutex);
+        if (!g_coverage_ht_initialized) {
+            // Initialize stripe mutexes
+            if (!g_coverage_stripes_initialized) {
+                for (size_t i = 0; i < STRIPE_COUNT; i++) {
+                    pthread_mutex_init(&g_coverage_stripe_mutexes[i], NULL);
+                }
+                g_coverage_stripes_initialized = true;
+            }
+            // Start with large capacity to avoid resizes during typical usage
+            ck_ht_init(&g_coverage_ht, CK_HT_MODE_DIRECT, NULL, &ck_allocator, CK_HT_INITIAL_CAPACITY, 0);
+            g_coverage_ht_initialized = true;
+#if CK_HT_DEBUG_LOGGING
+            fprintf(stderr, "[CK_HT DEBUG] INIT coverage_ht: capacity=%d (requested)\n",
+                    CK_HT_INITIAL_CAPACITY);
+#endif
         }
+        pthread_mutex_unlock(&g_coverage_init_mutex);
+    }
+}
+
+// MARK: - Measurement Context Registry Operations (lock-free with ck_ht)
+
+// Get measurement context for a task (lock-free lookup)
+static void* get_measurement_context_for_task(void* task_id) {
+    if (task_id == NULL || !g_measurement_ht_initialized) return NULL;
+
+    ck_ht_entry_t entry;
+    ck_ht_hash_t h;
+
+    ck_ht_hash_direct(&h, &g_measurement_ht, (uintptr_t)task_id);
+    ck_ht_entry_key_set_direct(&entry, (uintptr_t)task_id);
+
+    if (ck_ht_get_spmc(&g_measurement_ht, h, &entry)) {
+        return (void*)ck_ht_entry_value_direct(&entry);
     }
     return NULL;
 }
 
-// Debug counter for tracking registry exhaustion
+// Debug counter for tracking registry exhaustion (kept for API compatibility)
 static _Atomic(size_t) g_measurement_registry_failures = 0;
 
-// Get the count of measurement registry failures (for debugging)
 size_t sancov_get_measurement_registry_failures(void) {
     return atomic_load(&g_measurement_registry_failures);
 }
 
-// Set measurement context for a task (lock-free using CAS)
-// Returns true on success, false if registry is full
+// Check if hash table is near resize threshold (40% of capacity)
+// ck_ht resizes at 50%, so 40% gives us headroom
+static inline bool ck_ht_near_resize(ck_ht_t *ht) {
+    // Use public API to get entry count
+    // Capacity is known to be CK_HT_INITIAL_CAPACITY (we never resize)
+    size_t entries = ck_ht_count(ht);
+    return (entries * 5) > (CK_HT_INITIAL_CAPACITY * 2);  // > 40%
+}
+
+#if CK_HT_DEBUG_LOGGING
+// Track peak entries for each hash table
+static _Atomic size_t g_measurement_peak_entries = 0;
+static _Atomic size_t g_coverage_peak_entries = 0;
+
+static inline void log_ht_stats(const char* operation, ck_ht_t *ht, const char* ht_name) {
+    size_t entries = ck_ht_count(ht);
+    // We know capacity is CK_HT_INITIAL_CAPACITY (4096)
+    size_t capacity = CK_HT_INITIAL_CAPACITY;
+    double load = (double)entries / (double)capacity * 100.0;
+
+    // Track peak entries
+    _Atomic size_t *peak = (ht == &g_measurement_ht) ? &g_measurement_peak_entries : &g_coverage_peak_entries;
+    size_t current_peak = atomic_load(peak);
+    while (entries > current_peak) {
+        if (atomic_compare_exchange_weak(peak, &current_peak, entries)) {
+            // New peak! Always log this
+            fprintf(stderr, "[CK_HT DEBUG] NEW PEAK %s: entries=%zu capacity=%zu load=%.1f%%\n",
+                    ht_name, entries, capacity, load);
+            break;
+        }
+    }
+
+    // Only log periodically to avoid flooding
+    static _Atomic size_t log_counter = 0;
+    size_t count = atomic_fetch_add(&log_counter, 1);
+
+    // Log every 1000 operations or if near resize threshold
+    bool near_resize = (entries * 2) > capacity;  // >50% = resize territory
+    if (count % 1000 == 0 || near_resize) {
+        fprintf(stderr, "[CK_HT DEBUG] %s %s: entries=%zu peak=%zu capacity=%zu load=%.1f%% %s\n",
+                operation, ht_name, entries, atomic_load(peak), capacity, load,
+                near_resize ? "⚠️ NEAR RESIZE!" : "");
+    }
+}
+#else
+#define log_ht_stats(op, ht, name) ((void)0)
+#endif
+
+// Set measurement context for a task
+// Uses striped locks - atomic counters in ck_ht now prevent n_entries drift
 static bool set_measurement_context_for_task(void* task_id, void* context) {
     if (task_id == NULL) return false;
 
-    // FAST PATH 1: Check if we have a cached slot for this exact task
-    if (task_id == tls_cached_mctx_task && tls_cached_mctx_slot < MAX_TASK_MEASUREMENT_ENTRIES) {
-        void* stored_task = atomic_load_explicit(&g_task_measurement_registry[tls_cached_mctx_slot].task_id, memory_order_acquire);
-        if (stored_task == task_id) {
-            // Update existing entry directly
-            atomic_store_explicit(&g_task_measurement_registry[tls_cached_mctx_slot].measurement_context, context, memory_order_release);
-            return true;
-        }
-        // Slot was cleared or reused, try to reclaim it
-        void* expected = NULL;
-        if (atomic_compare_exchange_strong_explicit(
-                &g_task_measurement_registry[tls_cached_mctx_slot].task_id,
-                &expected,
-                task_id,
-                memory_order_acq_rel,
-                memory_order_acquire)) {
-            // Successfully reclaimed the slot
-            atomic_store_explicit(&g_task_measurement_registry[tls_cached_mctx_slot].measurement_context, context, memory_order_release);
-            tls_cached_mctx_task = task_id;
-            return true;
-        }
-        // Slot was taken by another task, invalidate cache
-        tls_cached_mctx_task = NULL;
-        tls_cached_mctx_slot = SIZE_MAX;
-    }
+    ensure_measurement_ht();
 
-    // SLOW PATH: Check if entry already exists
-    for (size_t i = 0; i < MAX_TASK_MEASUREMENT_ENTRIES; i++) {
-        void* stored_task = atomic_load_explicit(&g_task_measurement_registry[i].task_id, memory_order_acquire);
-        if (stored_task == task_id) {
-            // Update existing entry and cache the slot
-            atomic_store_explicit(&g_task_measurement_registry[i].measurement_context, context, memory_order_release);
-            tls_cached_mctx_task = task_id;
-            tls_cached_mctx_slot = i;
-            return true;
-        }
-    }
+    ck_ht_entry_t entry;
+    ck_ht_hash_t h;
 
-    // Not found, try to claim a free slot
-    for (size_t i = 0; i < MAX_TASK_MEASUREMENT_ENTRIES; i++) {
-        void* expected = NULL;
-        if (atomic_compare_exchange_strong_explicit(
-                &g_task_measurement_registry[i].task_id,
-                &expected,
-                task_id,
-                memory_order_acq_rel,
-                memory_order_acquire)) {
-            // Successfully claimed this slot, cache it
-            atomic_store_explicit(&g_task_measurement_registry[i].measurement_context, context, memory_order_release);
-            tls_cached_mctx_task = task_id;
-            tls_cached_mctx_slot = i;
-            return true;
-        }
-        // If CAS failed because another thread added our task_id, update it
-        if (expected == task_id) {
-            atomic_store_explicit(&g_task_measurement_registry[i].measurement_context, context, memory_order_release);
-            tls_cached_mctx_task = task_id;
-            tls_cached_mctx_slot = i;
-            return true;
-        }
+    ck_ht_hash_direct(&h, &g_measurement_ht, (uintptr_t)task_id);
+    ck_ht_entry_set_direct(&entry, h, (uintptr_t)task_id, (uintptr_t)context);
+
+    // Log BEFORE operation
+    log_ht_stats("SET_BEFORE", &g_measurement_ht, "measurement");
+
+    // Use striped lock for reduced contention
+    size_t stripe = get_stripe_index(h.value);
+    pthread_mutex_lock(&g_measurement_stripe_mutexes[stripe]);
+    bool success = ck_ht_set_spmc(&g_measurement_ht, h, &entry);
+    // Log AFTER operation
+    log_ht_stats("SET_AFTER", &g_measurement_ht, "measurement");
+    pthread_mutex_unlock(&g_measurement_stripe_mutexes[stripe]);
+
+    if (!success) {
+        atomic_fetch_add(&g_measurement_registry_failures, 1);
+        return false;
     }
-    // No free slots - track the failure
-    atomic_fetch_add(&g_measurement_registry_failures, 1);
-    return false;
+    return true;
 }
 
-// Remove measurement context for a task (lock-free using CAS)
-// Note: We intentionally DO NOT invalidate tls_cached_mctx_slot here.
-// Keeping the slot cached allows set_measurement_context_for_task to
-// reclaim the same slot on the next iteration without scanning.
+// Remove measurement context for a task
+// Uses striped locks - atomic counters in ck_ht now prevent n_entries drift
 static void remove_measurement_context_for_task(void* task_id) {
-    if (task_id == NULL) return;
+    if (task_id == NULL || !g_measurement_ht_initialized) return;
 
-    // FAST PATH: Check cached slot first
-    if (task_id == tls_cached_mctx_task && tls_cached_mctx_slot < MAX_TASK_MEASUREMENT_ENTRIES) {
-        void* stored_task = atomic_load_explicit(&g_task_measurement_registry[tls_cached_mctx_slot].task_id, memory_order_acquire);
-        if (stored_task == task_id) {
-            // Clear the measurement context first, then the task_id
-            atomic_store_explicit(&g_task_measurement_registry[tls_cached_mctx_slot].measurement_context, NULL, memory_order_release);
-            atomic_compare_exchange_strong_explicit(
-                &g_task_measurement_registry[tls_cached_mctx_slot].task_id,
-                &stored_task,
-                NULL,
-                memory_order_acq_rel,
-                memory_order_acquire);
-            // Keep the slot cached for quick reclaim on next set
-            return;
-        }
-    }
+    ck_ht_entry_t entry;
+    ck_ht_hash_t h;
 
-    // SLOW PATH: Scan all slots
-    for (size_t i = 0; i < MAX_TASK_MEASUREMENT_ENTRIES; i++) {
-        void* stored_task = atomic_load_explicit(&g_task_measurement_registry[i].task_id, memory_order_acquire);
-        if (stored_task == task_id) {
-            // Clear the measurement context first, then the task_id
-            atomic_store_explicit(&g_task_measurement_registry[i].measurement_context, NULL, memory_order_release);
-            // Use CAS to clear task_id (another thread might have already done it)
-            atomic_compare_exchange_strong_explicit(
-                &g_task_measurement_registry[i].task_id,
-                &stored_task,
-                NULL,
-                memory_order_acq_rel,
-                memory_order_acquire);
-            // Cache this slot for quick reclaim
-            tls_cached_mctx_task = task_id;
-            tls_cached_mctx_slot = i;
-            return;
-        }
-    }
+    ck_ht_hash_direct(&h, &g_measurement_ht, (uintptr_t)task_id);
+    ck_ht_entry_key_set_direct(&entry, (uintptr_t)task_id);
+
+    size_t stripe = get_stripe_index(h.value);
+    pthread_mutex_lock(&g_measurement_stripe_mutexes[stripe]);
+    ck_ht_remove_spmc(&g_measurement_ht, h, &entry);
+    pthread_mutex_unlock(&g_measurement_stripe_mutexes[stripe]);
 }
 
-// Find or create a coverage map for the given task (lock-free).
-// Uses atomic operations to ensure thread safety without locks.
-//
-// Memory safety: Coverage maps are never freed during runtime to prevent
-// use-after-free races. Maps are reused when slots are reclaimed, and all
-// memory is freed on process exit. This bounds memory usage to
-// MAX_TASK_ENTRIES * g_guard_count bytes (~50MB worst case).
+// MARK: - Coverage Map Registry Operations (lock-free with ck_ht)
+
+// Find or create a coverage map for the given task
+// Coverage maps are cached and reused to avoid repeated allocation
+// Uses lock-free reads, striped locks for writes (large initial capacity avoids resizes)
 static uint8_t* find_or_create_task_map(void* task_id) {
     if (task_id == NULL || g_guard_count == 0) return NULL;
 
-    // FAST PATH: Try to reclaim the cached slot if it's free
-    // This is the common case for sequential fuzzing iterations on the same thread
-    if (tls_cached_task_registry_slot < MAX_TASK_ENTRIES) {
-        void* expected = NULL;
-        if (atomic_compare_exchange_strong_explicit(
-                &g_task_registry[tls_cached_task_registry_slot].task_id,
-                &expected,
-                task_id,
-                memory_order_acq_rel,
-                memory_order_acquire)) {
-            // Successfully reclaimed the cached slot
-            uint8_t* existing_map = atomic_load_explicit(&g_task_registry[tls_cached_task_registry_slot].coverage_map, memory_order_acquire);
-            if (existing_map != NULL) {
-                // Reuse existing map - just clear it
-                memset(existing_map, 0, g_guard_count);
-                return existing_map;
-            }
-            // No existing map (shouldn't happen since we cache after first use)
-            uint8_t* new_map = (uint8_t*)calloc(g_guard_count, 1);
-            if (new_map == NULL) {
-                atomic_store_explicit(&g_task_registry[tls_cached_task_registry_slot].task_id, NULL, memory_order_release);
-                tls_cached_task_registry_slot = SIZE_MAX;
-                return NULL;
-            }
-            atomic_store_explicit(&g_task_registry[tls_cached_task_registry_slot].coverage_map, new_map, memory_order_release);
-            return new_map;
-        }
-        // Cached slot was taken by another thread, invalidate and continue to slow path
-        tls_cached_task_registry_slot = SIZE_MAX;
+    ensure_coverage_ht();
+
+    ck_ht_entry_t entry;
+    ck_ht_hash_t h;
+
+    // Lock-free lookup first (fast path for existing entries)
+    ck_ht_hash_direct(&h, &g_coverage_ht, (uintptr_t)task_id);
+    ck_ht_entry_key_set_direct(&entry, (uintptr_t)task_id);
+
+    if (ck_ht_get_spmc(&g_coverage_ht, h, &entry)) {
+        return (uint8_t*)ck_ht_entry_value_direct(&entry);
     }
 
-    // SLOW PATH: Search all slots for existing entry
-    for (size_t i = 0; i < MAX_TASK_ENTRIES; i++) {
-        void* stored_task = atomic_load_explicit(&g_task_registry[i].task_id, memory_order_acquire);
-        if (stored_task == task_id) {
-            // Found existing entry, cache slot and return its coverage map
-            tls_cached_task_registry_slot = i;
-            uint8_t* map = atomic_load_explicit(&g_task_registry[i].coverage_map, memory_order_acquire);
-            if (map != NULL) {
-                return map;
-            }
-            // Map not set yet (shouldn't happen), fall through to claim a slot
-        }
+    // Need to insert - allocate new coverage map
+    uint8_t* new_map = (uint8_t*)calloc(g_guard_count, 1);
+    if (new_map == NULL) {
+        return NULL;
     }
 
-    // Not found, try to claim a free slot
-    for (size_t i = 0; i < MAX_TASK_ENTRIES; i++) {
-        void* expected = NULL;
-        if (atomic_compare_exchange_strong_explicit(
-                &g_task_registry[i].task_id,
-                &expected,
-                task_id,
-                memory_order_acq_rel,
-                memory_order_acquire)) {
-            // Successfully claimed this slot, cache it
-            tls_cached_task_registry_slot = i;
+    // Log BEFORE acquiring lock
+    log_ht_stats("COVERAGE_INSERT_BEFORE", &g_coverage_ht, "coverage");
 
-            // Check if there's an existing map we can reuse (from a previous task)
-            uint8_t* existing_map = atomic_load_explicit(&g_task_registry[i].coverage_map, memory_order_acquire);
-            if (existing_map != NULL) {
-                // Reuse existing map - just clear it
-                memset(existing_map, 0, g_guard_count);
-                return existing_map;
-            }
+    // Use striped lock for reduced contention
+    size_t stripe = get_stripe_index(h.value);
+    pthread_mutex_lock(&g_coverage_stripe_mutexes[stripe]);
 
-            // No existing map, allocate a new one
-            uint8_t* new_map = (uint8_t*)calloc(g_guard_count, 1);
-            if (new_map == NULL) {
-                // Allocation failed, release the slot
-                atomic_store_explicit(&g_task_registry[i].task_id, NULL, memory_order_release);
-                tls_cached_task_registry_slot = SIZE_MAX;
-                return NULL;
-            }
-            atomic_store_explicit(&g_task_registry[i].coverage_map, new_map, memory_order_release);
-
-            // Update hint counter
-            size_t count = atomic_load_explicit(&g_task_registry_count, memory_order_relaxed);
-            if (i >= count) {
-                atomic_store_explicit(&g_task_registry_count, i + 1, memory_order_relaxed);
-            }
-            return new_map;
-        }
-
-        // CAS failed - check if another thread added our task_id
-        if (expected == task_id) {
-            // Another thread added an entry for our task, cache and use their map
-            tls_cached_task_registry_slot = i;
-            uint8_t* map = atomic_load_explicit(&g_task_registry[i].coverage_map, memory_order_acquire);
-            // Spin-wait briefly if map isn't set yet (another thread is setting it)
-            int spin_count = 0;
-            while (map == NULL && spin_count < 1000) {
-                map = atomic_load_explicit(&g_task_registry[i].coverage_map, memory_order_acquire);
-                spin_count++;
-            }
-            if (map != NULL) {
-                return map;
-            }
-            // Spin limit reached, fall through to try another slot
-        }
+    // Double-check after acquiring lock (another thread may have inserted)
+    ck_ht_entry_key_set_direct(&entry, (uintptr_t)task_id);
+    if (ck_ht_get_spmc(&g_coverage_ht, h, &entry)) {
+        pthread_mutex_unlock(&g_coverage_stripe_mutexes[stripe]);
+        free(new_map);
+        return (uint8_t*)ck_ht_entry_value_direct(&entry);
     }
 
-    // No free slots available
-    return NULL;
+    // Insert our new map
+    ck_ht_entry_set_direct(&entry, h, (uintptr_t)task_id, (uintptr_t)new_map);
+    bool success = ck_ht_set_spmc(&g_coverage_ht, h, &entry);
+
+    // Log AFTER operation
+    log_ht_stats("COVERAGE_INSERT_AFTER", &g_coverage_ht, "coverage");
+
+    pthread_mutex_unlock(&g_coverage_stripe_mutexes[stripe]);
+
+    if (!success) {
+        free(new_map);
+        return NULL;
+    }
+
+    return new_map;
 }
 
-// Mark a task map entry as available for reuse (lock-free).
-// The coverage map memory is NOT freed - it will be reused by the next task
-// that claims this slot. This prevents use-after-free races.
-// Note: We keep tls_cached_task_registry_slot valid so the next find_or_create_task_map
-// can reclaim the same slot without scanning.
+// Remove a task's coverage map entry (striped lock)
 static void cleanup_task_map(void* task_id) {
-    if (task_id == NULL) return;
+    if (task_id == NULL || !g_coverage_ht_initialized) return;
 
-    // FAST PATH: Check cached slot first
-    if (tls_cached_task_registry_slot < MAX_TASK_ENTRIES) {
-        void* stored_task = atomic_load_explicit(&g_task_registry[tls_cached_task_registry_slot].task_id, memory_order_acquire);
-        if (stored_task == task_id) {
-            // Found the entry at cached slot - clear it but KEEP the slot cached for reclaim
-            atomic_compare_exchange_strong_explicit(
-                    &g_task_registry[tls_cached_task_registry_slot].task_id,
-                    &stored_task,
-                    NULL,
-                    memory_order_acq_rel,
-                    memory_order_acquire);
-            return;
-        }
-    }
+    ck_ht_entry_t entry;
+    ck_ht_hash_t h;
 
-    // SLOW PATH: Scan all slots
-    for (size_t i = 0; i < MAX_TASK_ENTRIES; i++) {
-        void* stored_task = atomic_load_explicit(&g_task_registry[i].task_id, memory_order_acquire);
-        if (stored_task == task_id) {
-            // Found the entry - atomically clear the task_id to mark slot as available
-            // Cache this slot for quick reclaim on next find_or_create_task_map
-            tls_cached_task_registry_slot = i;
-            atomic_compare_exchange_strong_explicit(
-                    &g_task_registry[i].task_id,
-                    &stored_task,
-                    NULL,
-                    memory_order_acq_rel,
-                    memory_order_acquire);
-            // If CAS failed, another thread already cleaned up - that's fine
-            return;
+    ck_ht_hash_direct(&h, &g_coverage_ht, (uintptr_t)task_id);
+    ck_ht_entry_key_set_direct(&entry, (uintptr_t)task_id);
+
+    size_t stripe = get_stripe_index(h.value);
+    pthread_mutex_lock(&g_coverage_stripe_mutexes[stripe]);
+    bool removed = ck_ht_remove_spmc(&g_coverage_ht, h, &entry);
+    pthread_mutex_unlock(&g_coverage_stripe_mutexes[stripe]);
+
+    if (removed) {
+        // Entry was found and removed - free the coverage map
+        uint8_t* map = (uint8_t*)ck_ht_entry_value_direct(&entry);
+        if (map != NULL) {
+            free(map);
         }
     }
 }
@@ -447,9 +397,8 @@ static void cleanup_task_map(void* task_id) {
 // Measurement contexts are now tracked per-task to avoid TLS interference
 // when multiple Swift tasks run on the same thread.
 
-// Measurement context structure - stores slot index for O(1) lookup even after task hop
+// Measurement context structure - caches coverage map pointer for fast access
 typedef struct {
-    size_t slot_index;      // Index in g_task_registry (for O(1) map lookup)
     uint8_t* coverage_map;  // Direct pointer to coverage map (cached for speed)
 } MeasurementContextData;
 
@@ -458,26 +407,21 @@ void* sancov_begin_measurement(void) {
     MeasurementContextData* ctx = (MeasurementContextData*)malloc(sizeof(MeasurementContextData));
     if (ctx == NULL) return NULL;
 
-    ctx->slot_index = SIZE_MAX;
     ctx->coverage_map = NULL;
 
     // Associate this measurement context with the current task
     // This is critical for coverage isolation - if it fails, we can't guarantee isolation
     void* task = get_current_task_for_measurement();
     if (!set_measurement_context_for_task(task, ctx)) {
-        // Registration failed (registry full) - clean up and return NULL
-        // Without task→context mapping, coverage writes after task hops go to wrong map
+        // Registration failed - clean up and return NULL
         free(ctx);
         return NULL;
     }
 
-    // Pre-warm the cache by creating the coverage map now.
-    // This avoids O(512) scans when sancov_reset_counters is called immediately after.
+    // Pre-warm the cache by creating the coverage map now
     if (g_guard_count > 0) {
         uint8_t* map = find_or_create_task_map(ctx);
         if (map != NULL) {
-            // Store the slot index and map in the context for O(1) lookup after task hop
-            ctx->slot_index = tls_cached_task_registry_slot;
             ctx->coverage_map = map;
 
             // Populate TLS caches for the current thread (may help if no hop occurs)
@@ -533,8 +477,6 @@ void sancov_reset_counters_with_context(void* context) {
     // SLOW PATH: Look up the map (should rarely happen)
     uint8_t* map = find_or_create_task_map(context);
     if (map != NULL) {
-        // Cache for next time
-        ctx->slot_index = tls_cached_task_registry_slot;
         ctx->coverage_map = map;
         memset(map, 0, g_guard_count);
     }
@@ -553,7 +495,6 @@ const uint8_t* sancov_get_counters_with_context(void* context) {
     // SLOW PATH: Look up the map
     uint8_t* map = find_or_create_task_map(context);
     if (map != NULL) {
-        ctx->slot_index = tls_cached_task_registry_slot;
         ctx->coverage_map = map;
     }
     return map;
@@ -686,18 +627,10 @@ static uint8_t* get_current_coverage_map(void) {
         }
     }
 
-    // No measurement context - use the task's map directly
-    if (task != NULL) {
-        uint8_t* map = find_or_create_task_map(task);
-        if (map != NULL) {
-            // Cache for next time
-            tls_cached_task = task;
-            tls_cached_task_map = map;
-            return map;
-        }
-    }
-
-    // Fallback to thread-local storage when registry is full
+    // No measurement context - use thread-local storage directly
+    // We don't create task-keyed entries in the hash table because they would
+    // never be cleaned up (we don't have a hook for task completion).
+    // TLS is fine here since coverage outside of measurements isn't isolated anyway.
     ensure_tls_coverage_map();
     tls_cached_task = task;
     tls_cached_task_map = tls_coverage_map;
