@@ -31,20 +31,20 @@ packages:
 
 targets:
   # C target for value profile hooks
-  ValueProfileHooks:
+  SanCovHooks:
     type: library.static
     platform: macOS
     sources:
-      - path: Sources/ValueProfileHooks
+      - path: Sources/SanCovHooks
         excludes:
           - "**/include/**"
     settings:
       base:
-        PRODUCT_NAME: ValueProfileHooks
+        PRODUCT_NAME: SanCovHooks
         PUBLIC_HEADERS_FOLDER_PATH: $(CONTENTS_FOLDER_PATH)/Headers
-        MODULEMAP_FILE: $(SRCROOT)/Sources/ValueProfileHooks/include/module.modulemap
+        MODULEMAP_FILE: $(SRCROOT)/Sources/SanCovHooks/include/module.modulemap
         HEADER_SEARCH_PATHS:
-          - $(SRCROOT)/Sources/ValueProfileHooks/include
+          - $(SRCROOT)/Sources/SanCovHooks/include
 
   # C++ target for LLVM symbolizer
   CLLVMSymbolizer:
@@ -75,7 +75,7 @@ targets:
     sources:
       - path: Sources/PropertyTestingKit
     dependencies:
-      - target: ValueProfileHooks
+      - target: SanCovHooks
         link: true
       - target: CLLVMSymbolizer
         link: true
@@ -90,7 +90,7 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.propertytestingkit.framework
         HEADER_SEARCH_PATHS:
           - $(SRCROOT)/Sources/CLLVMSymbolizer/include
-          - $(SRCROOT)/Sources/ValueProfileHooks/include
+          - $(SRCROOT)/Sources/SanCovHooks/include
         LIBRARY_SEARCH_PATHS:
           - /opt/homebrew/opt/llvm/lib
         LD_RUNPATH_SEARCH_PATHS: >-
@@ -101,7 +101,7 @@ targets:
           -lLLVM
         SWIFT_INCLUDE_PATHS:
           - $(SRCROOT)/Sources/CLLVMSymbolizer/include
-          - $(SRCROOT)/Sources/ValueProfileHooks/include
+          - $(SRCROOT)/Sources/SanCovHooks/include
         CLANG_CXX_LANGUAGE_STANDARD: c++17
         GCC_ENABLE_CPP_EXCEPTIONS: NO
         GCC_ENABLE_CPP_RTTI: NO
@@ -141,7 +141,7 @@ targets:
         # Paths to C module headers for Swift import
         SWIFT_INCLUDE_PATHS:
           - $(SRCROOT)/Sources/CLLVMSymbolizer/include
-          - $(SRCROOT)/Sources/ValueProfileHooks/include
+          - $(SRCROOT)/Sources/SanCovHooks/include
         # Link against UBSan runtime
         OTHER_LDFLAGS: >-
           $(inherited)
@@ -171,7 +171,7 @@ targets:
           -sanitize-coverage=edge,trace-cmp,pc-table
         SWIFT_INCLUDE_PATHS:
           - $(SRCROOT)/Sources/CLLVMSymbolizer/include
-          - $(SRCROOT)/Sources/ValueProfileHooks/include
+          - $(SRCROOT)/Sources/SanCovHooks/include
         OTHER_LDFLAGS: >-
           $(inherited)
           -L$(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin
@@ -200,7 +200,7 @@ targets:
           -sanitize-coverage=edge,trace-cmp,pc-table
         SWIFT_INCLUDE_PATHS:
           - $(SRCROOT)/Sources/CLLVMSymbolizer/include
-          - $(SRCROOT)/Sources/ValueProfileHooks/include
+          - $(SRCROOT)/Sources/SanCovHooks/include
         OTHER_LDFLAGS: >-
           $(inherited)
           -L$(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin
@@ -234,7 +234,7 @@ targets:
           -sanitize-coverage=edge,trace-cmp,pc-table
         SWIFT_INCLUDE_PATHS:
           - $(SRCROOT)/Sources/CLLVMSymbolizer/include
-          - $(SRCROOT)/Sources/ValueProfileHooks/include
+          - $(SRCROOT)/Sources/SanCovHooks/include
         OTHER_LDFLAGS: >-
           $(inherited)
           -L$(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin
@@ -251,7 +251,6 @@ schemes:
         PropertyTestingKitTests: [test]
         SanCovTests: [test]
         TSanTests: [test]
-        CoverageBenchmarks: [run]
     test:
       targets:
         - PropertyTestingKitTests

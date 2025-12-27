@@ -77,6 +77,7 @@ let package = Package(
                 .product(name: "FunctionSpy", package: "FunctionSpy"),
 //                .product(name: "Benchmark", package: "package-benchmark")
             ],
+            exclude: ["Corpus", "Fuzzing/Corpus"],
             swiftSettings: [
                 // Enable sanitizer coverage for SanCov source mapping tests
                 .unsafeFlags([
@@ -92,6 +93,7 @@ let package = Package(
                 .product(name: "Dependencies", package: "swift-dependencies"),
                 .product(name: "FunctionSpy", package: "FunctionSpy"),
             ],
+            exclude: ["Corpus"],
             swiftSettings: [
                 // Enable sanitizer coverage for SanCov source mapping tests
                 .unsafeFlags([
@@ -106,6 +108,7 @@ let package = Package(
                 "PropertyTestingKit",
                 .product(name: "Dependencies", package: "swift-dependencies"),
             ],
+            exclude: ["Corpus"],
             swiftSettings: [
                 // Enable sanitizer coverage
                 .unsafeFlags([
@@ -159,6 +162,7 @@ package.targets += [
             "PropertyTestingKit",
         ],
         path: "Benchmarks/CoverageBenchmarks",
+        exclude: ["Corpus"],
         swiftSettings: [
             // Enable sanitizer coverage so we have realistic counter counts
             // Note: sanitize-coverage requires a sanitizer to be enabled
