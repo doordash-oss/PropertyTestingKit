@@ -64,27 +64,14 @@ static struct ck_malloc ck_allocator = {
     .free = ck_free_wrapper
 };
 
-// MARK: - Striped Locks for Reduced Contention
+// MARK: - Lock-Free Hash Table State
 //
-// Instead of a single global mutex, we use N striped locks.
-// The hash value determines which stripe to lock, allowing concurrent
-// writes to different keys as long as they hash to different stripes.
-
-#define STRIPE_COUNT 64
-#define STRIPE_MASK (STRIPE_COUNT - 1)
-
-// Get stripe index from hash value
-static inline size_t get_stripe_index(uint64_t hash) {
-    return (size_t)(hash & STRIPE_MASK);
-}
+// ck_ht operations are lock-free for reads. For writes, we rely on ck_ht's
+// internal handling. Initialization uses pthread_once for thread-safety.
 
 // Coverage registry: task_id -> coverage_map
 static ck_ht_t g_coverage_ht;
-static bool g_coverage_ht_initialized = false;
-static pthread_mutex_t g_coverage_init_mutex = PTHREAD_MUTEX_INITIALIZER;
-static pthread_mutex_t g_coverage_stripe_mutexes[STRIPE_COUNT];
-static pthread_mutex_t g_coverage_resize_mutex = PTHREAD_MUTEX_INITIALIZER;  // Global lock for resize operations
-static bool g_coverage_stripes_initialized = false;
+static pthread_once_t g_coverage_ht_once = PTHREAD_ONCE_INIT;
 
 // Thread-local fallback for non-async contexts
 static _Thread_local uint8_t *tls_coverage_map = NULL;
@@ -92,11 +79,7 @@ static _Thread_local size_t tls_coverage_map_size = 0;
 
 // Measurement registry: task_id -> measurement_context
 static ck_ht_t g_measurement_ht;
-static bool g_measurement_ht_initialized = false;
-static pthread_mutex_t g_measurement_init_mutex = PTHREAD_MUTEX_INITIALIZER;
-static pthread_mutex_t g_measurement_stripe_mutexes[STRIPE_COUNT];
-static pthread_mutex_t g_measurement_resize_mutex = PTHREAD_MUTEX_INITIALIZER;  // Global lock for resize operations
-static bool g_measurement_stripes_initialized = false;
+static pthread_once_t g_measurement_ht_once = PTHREAD_ONCE_INIT;
 
 // Thread-local pseudo-task ID for synchronous code outside async contexts
 static _Thread_local void* tls_sync_pseudo_task = NULL;
@@ -140,59 +123,39 @@ static void* get_current_task_for_measurement(void) {
 // Debug logging control - set to 1 to enable
 #define CK_HT_DEBUG_LOGGING 1
 
-// Lazy initialization of hash tables and stripe mutexes
-static void ensure_measurement_ht(void) {
-    if (!g_measurement_ht_initialized) {
-        pthread_mutex_lock(&g_measurement_init_mutex);
-        if (!g_measurement_ht_initialized) {
-            // Initialize stripe mutexes
-            if (!g_measurement_stripes_initialized) {
-                for (size_t i = 0; i < STRIPE_COUNT; i++) {
-                    pthread_mutex_init(&g_measurement_stripe_mutexes[i], NULL);
-                }
-                g_measurement_stripes_initialized = true;
-            }
-            // Start with large capacity to avoid resizes during typical usage
-            // ck_ht resizes at 50% load, so this handles up to ~2000 concurrent measurements
-            ck_ht_init(&g_measurement_ht, CK_HT_MODE_DIRECT, NULL, &ck_allocator, CK_HT_INITIAL_CAPACITY, 0);
-            g_measurement_ht_initialized = true;
+// One-time initialization functions for pthread_once
+static void init_measurement_ht(void) {
+    ck_ht_init(&g_measurement_ht, CK_HT_MODE_DIRECT, NULL, &ck_allocator, CK_HT_INITIAL_CAPACITY, 0);
 #if CK_HT_DEBUG_LOGGING
-            fprintf(stderr, "[CK_HT DEBUG] INIT measurement_ht: capacity=%d (requested)\n",
-                    CK_HT_INITIAL_CAPACITY);
+    fprintf(stderr, "[CK_HT DEBUG] INIT measurement_ht: capacity=%d (requested)\n",
+            CK_HT_INITIAL_CAPACITY);
 #endif
-        }
-        pthread_mutex_unlock(&g_measurement_init_mutex);
-    }
 }
 
-static void ensure_coverage_ht(void) {
-    if (!g_coverage_ht_initialized) {
-        pthread_mutex_lock(&g_coverage_init_mutex);
-        if (!g_coverage_ht_initialized) {
-            // Initialize stripe mutexes
-            if (!g_coverage_stripes_initialized) {
-                for (size_t i = 0; i < STRIPE_COUNT; i++) {
-                    pthread_mutex_init(&g_coverage_stripe_mutexes[i], NULL);
-                }
-                g_coverage_stripes_initialized = true;
-            }
-            // Start with large capacity to avoid resizes during typical usage
-            ck_ht_init(&g_coverage_ht, CK_HT_MODE_DIRECT, NULL, &ck_allocator, CK_HT_INITIAL_CAPACITY, 0);
-            g_coverage_ht_initialized = true;
+static void init_coverage_ht(void) {
+    ck_ht_init(&g_coverage_ht, CK_HT_MODE_DIRECT, NULL, &ck_allocator, CK_HT_INITIAL_CAPACITY, 0);
 #if CK_HT_DEBUG_LOGGING
-            fprintf(stderr, "[CK_HT DEBUG] INIT coverage_ht: capacity=%d (requested)\n",
-                    CK_HT_INITIAL_CAPACITY);
+    fprintf(stderr, "[CK_HT DEBUG] INIT coverage_ht: capacity=%d (requested)\n",
+            CK_HT_INITIAL_CAPACITY);
 #endif
-        }
-        pthread_mutex_unlock(&g_coverage_init_mutex);
-    }
+}
+
+// Lazy initialization using pthread_once (lock-free after first call)
+static inline void ensure_measurement_ht(void) {
+    pthread_once(&g_measurement_ht_once, init_measurement_ht);
+}
+
+static inline void ensure_coverage_ht(void) {
+    pthread_once(&g_coverage_ht_once, init_coverage_ht);
 }
 
 // MARK: - Measurement Context Registry Operations (lock-free with ck_ht)
 
 // Get measurement context for a task (lock-free lookup)
 static void* get_measurement_context_for_task(void* task_id) {
-    if (task_id == NULL || !g_measurement_ht_initialized) return NULL;
+    if (task_id == NULL) return NULL;
+
+    ensure_measurement_ht();
 
     ck_ht_entry_t entry;
     ck_ht_hash_t h;
@@ -261,8 +224,7 @@ static inline void log_ht_stats(const char* operation, ck_ht_t *ht, const char* 
 #define log_ht_stats(op, ht, name) ((void)0)
 #endif
 
-// Set measurement context for a task
-// Uses striped locks - atomic counters in ck_ht now prevent n_entries drift
+// Set measurement context for a task (lock-free write)
 static bool set_measurement_context_for_task(void* task_id, void* context) {
     if (task_id == NULL) return false;
 
@@ -274,16 +236,9 @@ static bool set_measurement_context_for_task(void* task_id, void* context) {
     ck_ht_hash_direct(&h, &g_measurement_ht, (uintptr_t)task_id);
     ck_ht_entry_set_direct(&entry, h, (uintptr_t)task_id, (uintptr_t)context);
 
-    // Log BEFORE operation
     log_ht_stats("SET_BEFORE", &g_measurement_ht, "measurement");
-
-    // Use striped lock for reduced contention
-    size_t stripe = get_stripe_index(h.value);
-    pthread_mutex_lock(&g_measurement_stripe_mutexes[stripe]);
     bool success = ck_ht_set_spmc(&g_measurement_ht, h, &entry);
-    // Log AFTER operation
     log_ht_stats("SET_AFTER", &g_measurement_ht, "measurement");
-    pthread_mutex_unlock(&g_measurement_stripe_mutexes[stripe]);
 
     if (!success) {
         atomic_fetch_add(&g_measurement_registry_failures, 1);
@@ -292,10 +247,11 @@ static bool set_measurement_context_for_task(void* task_id, void* context) {
     return true;
 }
 
-// Remove measurement context for a task
-// Uses striped locks - atomic counters in ck_ht now prevent n_entries drift
+// Remove measurement context for a task (lock-free write)
 static void remove_measurement_context_for_task(void* task_id) {
-    if (task_id == NULL || !g_measurement_ht_initialized) return;
+    if (task_id == NULL) return;
+
+    ensure_measurement_ht();
 
     ck_ht_entry_t entry;
     ck_ht_hash_t h;
@@ -303,17 +259,13 @@ static void remove_measurement_context_for_task(void* task_id) {
     ck_ht_hash_direct(&h, &g_measurement_ht, (uintptr_t)task_id);
     ck_ht_entry_key_set_direct(&entry, (uintptr_t)task_id);
 
-    size_t stripe = get_stripe_index(h.value);
-    pthread_mutex_lock(&g_measurement_stripe_mutexes[stripe]);
     ck_ht_remove_spmc(&g_measurement_ht, h, &entry);
-    pthread_mutex_unlock(&g_measurement_stripe_mutexes[stripe]);
 }
 
 // MARK: - Coverage Map Registry Operations (lock-free with ck_ht)
 
 // Find or create a coverage map for the given task
-// Coverage maps are cached and reused to avoid repeated allocation
-// Uses lock-free reads, striped locks for writes (large initial capacity avoids resizes)
+// Lock-free: uses ck_ht_put_spmc which only inserts if key doesn't exist
 static uint8_t* find_or_create_task_map(void* task_id) {
     if (task_id == NULL || g_guard_count == 0) return NULL;
 
@@ -336,41 +288,32 @@ static uint8_t* find_or_create_task_map(void* task_id) {
         return NULL;
     }
 
-    // Log BEFORE acquiring lock
     log_ht_stats("COVERAGE_INSERT_BEFORE", &g_coverage_ht, "coverage");
 
-    // Use striped lock for reduced contention
-    size_t stripe = get_stripe_index(h.value);
-    pthread_mutex_lock(&g_coverage_stripe_mutexes[stripe]);
-
-    // Double-check after acquiring lock (another thread may have inserted)
-    ck_ht_entry_key_set_direct(&entry, (uintptr_t)task_id);
-    if (ck_ht_get_spmc(&g_coverage_ht, h, &entry)) {
-        pthread_mutex_unlock(&g_coverage_stripe_mutexes[stripe]);
-        free(new_map);
-        return (uint8_t*)ck_ht_entry_value_direct(&entry);
-    }
-
-    // Insert our new map
+    // Try to insert using put (fails if key already exists)
     ck_ht_entry_set_direct(&entry, h, (uintptr_t)task_id, (uintptr_t)new_map);
-    bool success = ck_ht_set_spmc(&g_coverage_ht, h, &entry);
+    bool inserted = ck_ht_put_spmc(&g_coverage_ht, h, &entry);
 
-    // Log AFTER operation
     log_ht_stats("COVERAGE_INSERT_AFTER", &g_coverage_ht, "coverage");
 
-    pthread_mutex_unlock(&g_coverage_stripe_mutexes[stripe]);
-
-    if (!success) {
+    if (!inserted) {
+        // Another thread beat us - free our map and return existing one
         free(new_map);
-        return NULL;
+        ck_ht_entry_key_set_direct(&entry, (uintptr_t)task_id);
+        if (ck_ht_get_spmc(&g_coverage_ht, h, &entry)) {
+            return (uint8_t*)ck_ht_entry_value_direct(&entry);
+        }
+        return NULL;  // Shouldn't happen, but handle gracefully
     }
 
     return new_map;
 }
 
-// Remove a task's coverage map entry (striped lock)
+// Remove a task's coverage map entry (lock-free write)
 static void cleanup_task_map(void* task_id) {
-    if (task_id == NULL || !g_coverage_ht_initialized) return;
+    if (task_id == NULL) return;
+
+    ensure_coverage_ht();
 
     ck_ht_entry_t entry;
     ck_ht_hash_t h;
@@ -378,10 +321,7 @@ static void cleanup_task_map(void* task_id) {
     ck_ht_hash_direct(&h, &g_coverage_ht, (uintptr_t)task_id);
     ck_ht_entry_key_set_direct(&entry, (uintptr_t)task_id);
 
-    size_t stripe = get_stripe_index(h.value);
-    pthread_mutex_lock(&g_coverage_stripe_mutexes[stripe]);
     bool removed = ck_ht_remove_spmc(&g_coverage_ht, h, &entry);
-    pthread_mutex_unlock(&g_coverage_stripe_mutexes[stripe]);
 
     if (removed) {
         // Entry was found and removed - free the coverage map

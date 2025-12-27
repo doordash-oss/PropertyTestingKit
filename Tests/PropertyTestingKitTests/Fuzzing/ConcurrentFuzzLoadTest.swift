@@ -1,5 +1,6 @@
 import Testing
 @testable import PropertyTestingKit
+import Foundation
 
 @Suite("Concurrent Fuzz Load Test")
 struct ConcurrentFuzzLoadTest {
@@ -64,7 +65,7 @@ struct ConcurrentFuzzLoadTest {
 
     @Test("20 concurrent fuzzers with batched mutations")
     func twentyConcurrentFuzzersWithBatching() async throws {
-        let concurrentEngines = 20
+        let concurrentEngines = 200
         let iterationsPerEngine = 1000
 
         await withTaskGroup(of: Void.self) { group in
@@ -77,7 +78,7 @@ struct ConcurrentFuzzLoadTest {
                     let engine = FuzzEngine<Int>(config: config)
                     let _ = await engine.run { input in
                         do {
-                            try expensiveValidation(input)
+                            try await asyncValidation(input)
                         } catch {
                             print("threw error \(error)")
                         }
@@ -91,6 +92,10 @@ struct ConcurrentFuzzLoadTest {
         // With 20 engines * 8 batch size = up to 160 concurrent measurements
         #expect(true, "20 concurrent fuzzers with batching completed successfully")
     }
+}
+
+func asyncValidation(_ input: Int) async throws {
+    try await Task.sleep(for: Duration.seconds(1))
 }
 
 func expensiveValidation(_ input: Int) throws {
