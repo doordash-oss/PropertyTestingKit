@@ -240,9 +240,16 @@ public actor FuzzEngine<each Input: Fuzzable & Codable & Sendable> {
         additionalSeeds: [(repeat each Input)] = [],
         test: @escaping @Sendable ((repeat each Input)) async throws -> Void
     ) async -> FuzzResult<repeat each Input> {
+        // Start pre-warming the source location cache if gap detection is enabled.
+        // This runs dladdr calls in the background so they complete by the time
+        // gap detection needs them at the end of the fuzz run.
+        if config.detectCoverageGaps {
+            await SanCovCounters.startPreWarmingSourceLocations()
+        }
+
         // No lock needed - SanitizerCoverage uses task-keyed maps that provide
         // true per-task isolation, even when tasks share threads.
-        await runWithMode(additionalSeeds: additionalSeeds, test: test)
+        return await runWithMode(additionalSeeds: additionalSeeds, test: test)
     }
 
     /// Internal dispatch based on corpus mode.

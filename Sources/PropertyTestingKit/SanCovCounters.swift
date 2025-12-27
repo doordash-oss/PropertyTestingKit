@@ -449,6 +449,92 @@ public struct SanCovSourceLocation: Sendable {
 // Type alias to avoid ambiguity with C struct
 private typealias SanCovSourceLocation_C = SanCovHooks.SanCovSourceLocation
 
+// MARK: - Source Location Cache
+
+/// Actor-based cache for dladdr-based source locations.
+/// Pre-warming this cache in the background hides the latency of dladdr calls
+/// by running them in parallel with the main fuzzing loop.
+private actor SourceLocationCache {
+    static let shared = SourceLocationCache()
+
+    private var cache: [Int: SanCovSourceLocation] = [:]
+    private var preWarmTask: Task<Void, Never>?
+    private var isPreWarmed = false
+
+    /// Get a cached location, or nil if not cached.
+    func get(_ edgeIndex: Int) -> SanCovSourceLocation? {
+        cache[edgeIndex]
+    }
+
+    /// Cache a location for an edge index.
+    func set(_ edgeIndex: Int, _ location: SanCovSourceLocation) {
+        cache[edgeIndex] = location
+    }
+
+    /// Get a location, using cache if available, otherwise doing dladdr lookup.
+    func getOrLoad(_ edgeIndex: Int) -> SanCovSourceLocation? {
+        // Check cache first
+        if let cached = cache[edgeIndex] {
+            return cached
+        }
+
+        // Cache miss - do the expensive dladdr call
+        var cLocation = SanCovSourceLocation_C()
+        guard sancov_get_source_location(edgeIndex, &cLocation) else {
+            return nil
+        }
+        let location = SanCovSourceLocation(from: cLocation, dwarfLocation: nil)
+
+        // Cache for future lookups
+        cache[edgeIndex] = location
+        return location
+    }
+
+    /// Check if the cache has been fully pre-warmed.
+    var isFullyWarmed: Bool {
+        isPreWarmed
+    }
+
+    /// Start pre-warming the cache in the background.
+    /// This runs dladdr for all edges asynchronously, so by the time
+    /// gap detection needs the data, it's already cached.
+    func startPreWarming() {
+        guard preWarmTask == nil else { return }
+
+        preWarmTask = Task.detached(priority: .utility) {
+            let total = SanCovCounters.totalEdgeCount
+            guard total > 0 else { return }
+
+            for edgeIndex in 0..<total {
+                if Task.isCancelled { break }
+
+                // Do the lookup which will cache as a side effect
+                _ = await SourceLocationCache.shared.getOrLoad(edgeIndex)
+            }
+
+            await SourceLocationCache.shared.markPreWarmed()
+        }
+    }
+
+    /// Mark the cache as fully pre-warmed.
+    private func markPreWarmed() {
+        isPreWarmed = true
+    }
+
+    /// Wait for pre-warming to complete (with timeout).
+    func awaitPreWarming(timeout: Duration = .milliseconds(100)) async {
+        guard let task = preWarmTask else { return }
+
+        // Race between task completion and timeout
+        await withTaskGroup(of: Void.self) { group in
+            group.addTask { await task.value }
+            group.addTask { try? await Task.sleep(for: timeout) }
+            await group.next()
+            group.cancelAll()
+        }
+    }
+}
+
 // MARK: - DWARF Symbolizer Integration
 
 import MachO
@@ -928,19 +1014,33 @@ extension SanCovCounters {
         return SanCovSourceLocation(from: cLocation, dwarfLocation: dwarfLocation)
     }
 
-    /// Get source location info synchronously (no DWARF).
+    /// Get source location info with caching (no DWARF).
     ///
-    /// This is faster than the async version when you don't need line numbers.
-    /// Uses dladdr for function-level info only.
+    /// Uses a shared cache to avoid repeated dladdr calls. When pre-warming
+    /// is active, most lookups will be cache hits.
     ///
     /// - Parameter edgeIndex: The edge index to look up.
     /// - Returns: Source location info, or nil if unavailable.
-    public static func getSourceLocationSync(for edgeIndex: Int) -> SanCovSourceLocation? {
-        var cLocation = SanCovSourceLocation_C()
-        guard sancov_get_source_location(edgeIndex, &cLocation) else {
-            return nil
-        }
-        return SanCovSourceLocation(from: cLocation, dwarfLocation: nil)
+    public static func getSourceLocationSync(for edgeIndex: Int) async -> SanCovSourceLocation? {
+        await SourceLocationCache.shared.getOrLoad(edgeIndex)
+    }
+
+    /// Start pre-warming the source location cache in the background.
+    ///
+    /// Call this at the start of a fuzz run to pre-populate the dladdr cache
+    /// asynchronously. By the time gap detection runs at the end, the cache
+    /// will be fully populated, eliminating dladdr latency.
+    ///
+    /// This is safe to call multiple times - subsequent calls are no-ops.
+    public static func startPreWarmingSourceLocations() async {
+        await SourceLocationCache.shared.startPreWarming()
+    }
+
+    /// Wait for source location pre-warming to complete.
+    ///
+    /// - Parameter timeout: Maximum time to wait (default 100ms).
+    public static func awaitSourceLocationPreWarming(timeout: Duration = .milliseconds(100)) async {
+        await SourceLocationCache.shared.awaitPreWarming(timeout: timeout)
     }
 
     /// Batch look up DWARF source locations for multiple PC addresses.

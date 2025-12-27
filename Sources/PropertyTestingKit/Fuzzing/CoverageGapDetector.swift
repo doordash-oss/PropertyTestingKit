@@ -266,7 +266,7 @@ public struct CoverageGapDetector: Sendable {
         // Process covered edges with DWARF-resolved source paths
         for (edgeIndex, pc) in coveredEdgePCs {
             // Get dladdr info for function start address
-            guard let dlAddrLocation = SanCovCounters.getSourceLocationSync(for: edgeIndex) else {
+            guard let dlAddrLocation = await SanCovCounters.getSourceLocationSync(for: edgeIndex) else {
                 continue
             }
 
@@ -428,7 +428,7 @@ public struct CoverageGapDetector: Sendable {
             // #if DEBUG
             // let dladdrStart = CFAbsoluteTimeGetCurrent()
             // #endif
-            guard let location = SanCovCounters.getSourceLocationSync(for: edgeIndex) else {
+            guard let location = await SanCovCounters.getSourceLocationSync(for: edgeIndex) else {
                 // #if DEBUG
                 // step2DladdrTime += CFAbsoluteTimeGetCurrent() - dladdrStart
                 // step2EdgesDladdrd += 1
