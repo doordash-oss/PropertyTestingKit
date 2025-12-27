@@ -116,12 +116,13 @@ static void* get_current_task_for_measurement(void) {
 // All operations are lock-free using ck_ht's SPMC (single-producer-multi-consumer) API.
 // Initialization uses a mutex for one-time setup only.
 
-// Initial capacity for hash tables - large enough to avoid resizes
-// ck_ht resizes at 50% load, so this handles up to ~2000 concurrent measurements
-#define CK_HT_INITIAL_CAPACITY 4096
+// Initial capacity for hash tables
+// ck_ht resizes at 50% load. Resize is now safe with the resize_in_progress flag.
+// Start small and grow as needed.
+#define CK_HT_INITIAL_CAPACITY 256
 
 // Debug logging control - set to 1 to enable
-#define CK_HT_DEBUG_LOGGING 1
+#define CK_HT_DEBUG_LOGGING 0
 
 // One-time initialization functions for pthread_once
 static void init_measurement_ht(void) {
@@ -190,10 +191,12 @@ static inline bool ck_ht_near_resize(ck_ht_t *ht) {
 static _Atomic size_t g_measurement_peak_entries = 0;
 static _Atomic size_t g_coverage_peak_entries = 0;
 
+// Get actual capacity from the map (requires access to internal struct)
+extern size_t ck_ht_capacity(ck_ht_t *ht);
+
 static inline void log_ht_stats(const char* operation, ck_ht_t *ht, const char* ht_name) {
     size_t entries = ck_ht_count(ht);
-    // We know capacity is CK_HT_INITIAL_CAPACITY (4096)
-    size_t capacity = CK_HT_INITIAL_CAPACITY;
+    size_t capacity = ck_ht_capacity(ht);  // Get actual capacity
     double load = (double)entries / (double)capacity * 100.0;
 
     // Track peak entries
@@ -236,6 +239,10 @@ static bool set_measurement_context_for_task(void* task_id, void* context) {
     ck_ht_hash_direct(&h, &g_measurement_ht, (uintptr_t)task_id);
     ck_ht_entry_set_direct(&entry, h, (uintptr_t)task_id, (uintptr_t)context);
 
+#if CK_HT_DEBUG_LOGGING
+    fprintf(stderr, "[CK_HT DEBUG] measurement_ht SET key=0x%lx (task) value=0x%lx (ctx) hash=0x%lx\n",
+            (unsigned long)task_id, (unsigned long)context, (unsigned long)h.value);
+#endif
     log_ht_stats("SET_BEFORE", &g_measurement_ht, "measurement");
     bool success = ck_ht_set_spmc(&g_measurement_ht, h, &entry);
     log_ht_stats("SET_AFTER", &g_measurement_ht, "measurement");
@@ -290,6 +297,10 @@ static uint8_t* find_or_create_task_map(void* task_id) {
 
     log_ht_stats("COVERAGE_INSERT_BEFORE", &g_coverage_ht, "coverage");
 
+#if CK_HT_DEBUG_LOGGING
+    fprintf(stderr, "[CK_HT DEBUG] coverage_ht PUT key=0x%lx (ctx) value=0x%lx (map) hash=0x%lx\n",
+            (unsigned long)task_id, (unsigned long)new_map, (unsigned long)h.value);
+#endif
     // Try to insert using put (fails if key already exists)
     ck_ht_entry_set_direct(&entry, h, (uintptr_t)task_id, (uintptr_t)new_map);
     bool inserted = ck_ht_put_spmc(&g_coverage_ht, h, &entry);

@@ -28,6 +28,9 @@
 #define CK_HT_H
 
 #include "ck_pr.h"
+#include <pthread.h>
+#include <stdatomic.h>
+#include <sched.h>
 
 #define CK_F_HT
 #if defined(CK_F_PR_LOAD_64) && defined(CK_F_PR_STORE_64)
@@ -106,8 +109,20 @@ struct ck_ht {
 	unsigned int mode;
 	uint64_t seed;
 	ck_ht_hash_cb_t *h;
+	/* Resize synchronization - writers spin while resize is in progress */
+	_Atomic bool resize_in_progress;
+	pthread_mutex_t resize_mutex;
 };
 typedef struct ck_ht ck_ht_t;
+
+/* Spin-wait helper for writers to wait during resize */
+CK_CC_INLINE static void
+ck_ht_wait_for_resize(struct ck_ht *table)
+{
+	while (atomic_load_explicit(&table->resize_in_progress, memory_order_acquire)) {
+		sched_yield();
+	}
+}
 
 struct ck_ht_stat {
 	uint64_t probe_maximum;

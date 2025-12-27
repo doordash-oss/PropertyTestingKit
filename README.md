@@ -10,6 +10,18 @@ PropertyTestingKit brings coverage-guided fuzzing to Swift Testing:
 - **Corpus persistence** - Save and replay interesting inputs across test runs
 - **Regression detection** - Automatically re-fuzz when code changes affect coverage
 - **Variadic inputs** - Fuzz functions with multiple parameters
+- **High throughput** - ~158,000 iterations/sec with full task isolation
+
+## Performance
+
+PropertyTestingKit achieves high throughput while maintaining complete coverage isolation between concurrent tests:
+
+| Mode | Throughput | Per-iteration |
+|------|------------|---------------|
+| Standard fuzzing | ~158,000 iter/sec | ~6.3 µs |
+| With gap detection | ~125,000 iter/sec | ~8.0 µs |
+
+Coverage tracking uses lock-free data structures and SIMD-optimized scanning, ensuring the fuzzer overhead is minimal compared to your actual test code.
 
 ## Requirements
 

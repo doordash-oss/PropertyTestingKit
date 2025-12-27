@@ -27,6 +27,8 @@
 #define CK_HT_IM
 #include "include/ck/ck_ht.h"
 
+#include <stdio.h>  /* for fprintf/stderr in debug logging */
+
 /*
  * This implementation borrows several techniques from Josh Dybnis's
  * nbds library which can be found at http://code.google.com/p/nbds
@@ -268,6 +270,10 @@ ck_ht_init(struct ck_ht *table,
 	} else {
 		table->h = h;
 	}
+
+	/* Initialize resize synchronization */
+	atomic_init(&table->resize_in_progress, false);
+	pthread_mutex_init(&table->resize_mutex, NULL);
 
 	table->map = ck_ht_map_create(table, entries);
 	return table->map != NULL;
@@ -605,6 +611,14 @@ ck_ht_count(struct ck_ht *table)
 	return CK_HT_TYPE_LOAD(&map->n_entries);
 }
 
+size_t
+ck_ht_capacity(struct ck_ht *table)
+{
+	struct ck_ht_map *map = ck_pr_load_ptr(&table->map);
+
+	return (size_t)map->capacity;
+}
+
 bool
 ck_ht_next(struct ck_ht *table,
     struct ck_ht_iterator *i,
@@ -661,15 +675,30 @@ ck_ht_grow_spmc(struct ck_ht *table, CK_HT_TYPE capacity)
 	size_t k, i, j, offset;
 	CK_HT_TYPE probes;
 
-restart:
+	/* Serialize resize operations - only one thread can resize at a time */
+	pthread_mutex_lock(&table->resize_mutex);
+
 	map = table->map;
 
-	if (map->capacity >= capacity)
+	/* Check if resize is still needed (another thread may have done it) */
+	if (map->capacity >= capacity) {
+		pthread_mutex_unlock(&table->resize_mutex);
 		return false;
+	}
 
+	/* Signal to writers that resize is in progress - they will spin-wait */
+	atomic_store_explicit(&table->resize_in_progress, true, memory_order_release);
+
+	/* Brief pause to let in-flight writers complete */
+	ck_pr_fence_store();
+
+restart:
 	update = ck_ht_map_create(table, capacity);
-	if (update == NULL)
+	if (update == NULL) {
+		atomic_store_explicit(&table->resize_in_progress, false, memory_order_release);
+		pthread_mutex_unlock(&table->resize_mutex);
 		return false;
+	}
 
 	for (k = 0; k < map->capacity; k++) {
 		previous = &map->entries[k];
@@ -737,6 +766,10 @@ restart:
 	ck_pr_fence_store();
 	ck_pr_store_ptr_unsafe(&table->map, update);
 	ck_ht_map_destroy(table->m, map, true);
+
+	/* Resize complete - allow writers to proceed */
+	atomic_store_explicit(&table->resize_in_progress, false, memory_order_release);
+	pthread_mutex_unlock(&table->resize_mutex);
 	return true;
 }
 
@@ -747,6 +780,9 @@ ck_ht_remove_spmc(struct ck_ht *table,
 {
 	struct ck_ht_map *map;
 	struct ck_ht_entry *candidate, snapshot;
+
+	/* Wait if resize is in progress */
+	ck_ht_wait_for_resize(table);
 
 	map = table->map;
 
@@ -826,6 +862,9 @@ ck_ht_set_spmc(struct ck_ht *table,
 	bool empty = false;
 
 	for (;;) {
+		/* Wait if resize is in progress */
+		ck_ht_wait_for_resize(table);
+
 		map = table->map;
 
 		if (table->mode & CK_HT_MODE_BYTESTRING) {
@@ -962,6 +1001,9 @@ ck_ht_put_spmc(struct ck_ht *table,
 	CK_HT_TYPE probes, probes_wr;
 
 	for (;;) {
+		/* Wait if resize is in progress */
+		ck_ht_wait_for_resize(table);
+
 		map = table->map;
 
 		if (table->mode & CK_HT_MODE_BYTESTRING) {
@@ -1029,5 +1071,6 @@ ck_ht_destroy(struct ck_ht *table)
 {
 
 	ck_ht_map_destroy(table->m, table->map, false);
+	pthread_mutex_destroy(&table->resize_mutex);
 	return;
 }
