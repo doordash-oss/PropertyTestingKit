@@ -185,112 +185,6 @@ public struct SanCovCounters: Sendable {
         return SparseCoverage(indices: indices, counts: counts)
     }
 
-    // MARK: - Comparison
-
-    /// Compute the difference between this snapshot and an earlier one.
-    ///
-    /// - Parameter earlier: The earlier snapshot to compare against.
-    /// - Returns: A diff showing what changed between the two snapshots.
-    public func difference(from earlier: SanCovCounters) -> SanCovDiff {
-        let maxCount = max(counters.count, earlier.counters.count)
-
-        var changed: [Int] = []
-        var newlyCovered: [Int] = []
-
-        for i in 0..<maxCount {
-            let before = i < earlier.counters.count ? earlier.counters[i] : 0
-            let after = i < counters.count ? counters[i] : 0
-
-            if after != before {
-                changed.append(i)
-                if before == 0 && after > 0 {
-                    newlyCovered.append(i)
-                }
-            }
-        }
-
-        return SanCovDiff(
-            changedIndices: changed,
-            newlyCoveredIndices: newlyCovered,
-            before: earlier,
-            after: self
-        )
-    }
-}
-
-// MARK: - SanCovDiff
-
-/// The difference between two SanCovCounters snapshots.
-public struct SanCovDiff: Sendable {
-    /// Indices of counters that changed.
-    public let changedIndices: [Int]
-
-    /// Indices of counters that went from 0 to non-zero.
-    public let newlyCoveredIndices: [Int]
-
-    /// The earlier snapshot.
-    public let before: SanCovCounters
-
-    /// The later snapshot.
-    public let after: SanCovCounters
-
-    /// Number of edges that changed.
-    public var changedCount: Int { changedIndices.count }
-
-    /// Number of edges that were newly covered.
-    public var newlyCoveredCount: Int { newlyCoveredIndices.count }
-
-    /// Whether any coverage changed between the snapshots.
-    public var hasChanges: Bool { !changedIndices.isEmpty }
-}
-
-// MARK: - Convenience API
-
-/// Execute a closure and capture the coverage that changed (context-isolated).
-///
-/// This uses SanitizerCoverage with measurement contexts, providing true
-/// per-call isolation. Multiple sync tests can run in parallel without
-/// coverage contamination.
-///
-/// ```swift
-/// let diff = measureSanCoverage {
-///     myFunction()
-/// }
-/// print("Covered \(diff?.newlyCoveredCount ?? 0) new edges")
-/// ```
-///
-/// - Parameter body: The code to measure.
-/// - Returns: The coverage diff, or `nil` if SanCov unavailable.
-@discardableResult
-public func measureSanCoverage(_ body: () throws -> Void) rethrows -> SanCovDiff? {
-    guard SanCovCounters.isAvailable else { return nil }
-    guard let context = SanCovCounters.beginMeasurement() else { return nil }
-    defer { SanCovCounters.endMeasurement(context) }
-
-    let before = SanCovCounters.snapshot()
-    try body()
-    let after = SanCovCounters.snapshot()
-
-    guard let before = before, let after = after else { return nil }
-    return after.difference(from: before)
-}
-
-/// Execute an async closure and capture the coverage that changed (context-isolated).
-///
-/// - Note: Coverage remains isolated to the measurement context even across
-///   suspension points where the task may hop threads.
-@discardableResult
-public func measureSanCoverage(_ body: () async throws -> Void) async rethrows -> SanCovDiff? {
-    guard SanCovCounters.isAvailable else { return nil }
-    guard let context = SanCovCounters.beginMeasurement() else { return nil }
-    defer { SanCovCounters.endMeasurement(context) }
-
-    let before = SanCovCounters.snapshot()
-    try await body()
-    let after = SanCovCounters.snapshot()
-
-    guard let before = before, let after = after else { return nil }
-    return after.difference(from: before)
 }
 
 // MARK: - Source Location Mapping
@@ -639,7 +533,7 @@ extension SanCovCounters {
     ///
     /// - Parameter edgeIndex: The edge index to look up.
     /// - Returns: The PC value, or 0 if unavailable.
-    public static func getPC(for edgeIndex: Int) -> UInt {
+    static func getPC(for edgeIndex: Int) -> UInt {
         UInt(sancov_get_pc(edgeIndex))
     }
 
@@ -652,7 +546,7 @@ extension SanCovCounters {
     ///   - edgeIndex: The edge index to look up.
     ///   - includeDWARF: Whether to include DWARF debug info (slower but has line numbers).
     /// - Returns: Source location info, or nil if unavailable.
-    public static func getSourceLocation(for edgeIndex: Int, includeDWARF: Bool = true) async -> SanCovSourceLocation? {
+    static func getSourceLocation(for edgeIndex: Int, includeDWARF: Bool = true) async -> SanCovSourceLocation? {
         var cLocation = SanCovSourceLocation_C()
         guard sancov_get_source_location(edgeIndex, &cLocation) else {
             return nil
@@ -670,7 +564,7 @@ extension SanCovCounters {
     ///
     /// - Parameter edgeIndex: The edge index to look up.
     /// - Returns: Source location info, or nil if unavailable.
-    public static func getSourceLocationSync(for edgeIndex: Int) async -> SanCovSourceLocation? {
+    public static func getSourceLocation(for edgeIndex: Int) async -> SanCovSourceLocation? {
         await SourceLocationCache.shared.getOrLoad(edgeIndex)
     }
 
@@ -712,7 +606,7 @@ extension SanCovCounters {
     /// - Parameter includeStdlib: If `false` (default), filters out Swift stdlib functions.
     ///   Some toolchains instrument specialized stdlib code which pollutes coverage data.
     /// - Returns: Array of source locations for covered edges.
-    public static func getCoveredLocations(includeStdlib: Bool = false) async -> [SanCovSourceLocation] {
+    static func getCoveredLocations(includeStdlib: Bool = false) async -> [SanCovSourceLocation] {
         // First, get the count
         let count = sancov_get_covered_locations(nil, 0)
         guard count > 0 else { return [] }

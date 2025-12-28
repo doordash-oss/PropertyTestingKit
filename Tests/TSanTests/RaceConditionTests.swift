@@ -15,47 +15,6 @@ import Foundation
 @Suite("SanCovCounters Race Detection")
 struct SanCovCountersRaceTests {
 
-    @Test("Concurrent coverage measurements")
-    func concurrentCoverageMeasurements() async {
-        // Multiple concurrent coverage measurements
-        await withTaskGroup(of: SanCovDiff?.self) { group in
-            for i in 0..<20 {
-                group.addTask {
-                    measureSanCoverage {
-                        // Do some work that generates coverage
-                        var sum = 0
-                        for j in 0..<(i + 1) * 10 {
-                            sum += j
-                        }
-                        _ = sum
-                    }
-                }
-            }
-
-            for await _ in group {}
-        }
-    }
-
-    @Test("Concurrent source coverage measurements")
-    func concurrentSourceCoverageMeasurements() async {
-        // Multiple concurrent source-level coverage measurements
-        await withTaskGroup(of: SanCovSourceCoverage?.self) { group in
-            for i in 0..<10 {
-                group.addTask {
-                    await measureSanCovSourceCoverage {
-                        var sum = 0
-                        for j in 0..<(i + 1) * 5 {
-                            sum += j
-                        }
-                        _ = sum
-                    }
-                }
-            }
-
-            for await _ in group {}
-        }
-    }
-
     @Test("Concurrent getSourceLocation calls")
     func concurrentGetSourceLocation() async {
         guard SanCovCounters.isAvailable else { return }
@@ -78,11 +37,10 @@ struct SanCovCountersRaceTests {
     @Test("Concurrent getCoveredLocations calls")
     func concurrentGetCoveredLocations() async {
         // First generate some coverage
-        _ = measureSanCoverage {
-            var x = 0
-            for i in 0..<100 { x += i }
-            _ = x
-        }
+        SanCovCounters.reset()
+        var x = 0
+        for i in 0..<100 { x += i }
+        _ = x
 
         // Then concurrently get covered locations
         await withTaskGroup(of: [SanCovSourceLocation].self) { group in
@@ -201,11 +159,10 @@ struct CoverageGapDetectorRaceTests {
         let detector = CoverageGapDetector()
 
         // Generate some coverage first
-        _ = measureSanCoverage {
-            var x = 0
-            for i in 0..<50 { x += i }
-            _ = x
-        }
+        SanCovCounters.reset()
+        var x = 0
+        for i in 0..<50 { x += i }
+        _ = x
 
         // Get covered indices
         guard let snapshot = SanCovCounters.snapshot() else { return }
@@ -303,61 +260,6 @@ struct CoverageSignatureRaceTests {
     }
 }
 
-// MARK: - Measurement Function Concurrency Tests
-
-@Suite("Measurement Functions Race Detection")
-struct MeasurementRaceTests {
-
-    @Test("Interleaved measureSanCoverage calls")
-    func interleavedMeasurements() async {
-        // This tests the most common race condition scenario:
-        // multiple tests measuring coverage simultaneously
-        await withTaskGroup(of: Void.self) { group in
-            for taskId in 0..<20 {
-                group.addTask {
-                    for iteration in 0..<10 {
-                        let diff = measureSanCoverage {
-                            // Each task does slightly different work
-                            var result = taskId * iteration
-                            for i in 0..<(taskId + 1) * 5 {
-                                result += i
-                                if result > 1000 {
-                                    result = result % 1000
-                                }
-                            }
-                            _ = result
-                        }
-
-                        // Verify we got a result (coverage should be available)
-                        if SanCovCounters.isAvailable {
-                            _ = diff
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    @Test("Interleaved async measureSanCoverage calls")
-    func interleavedAsyncMeasurements() async {
-        await withTaskGroup(of: Void.self) { group in
-            for taskId in 0..<10 {
-                group.addTask {
-                    for _ in 0..<5 {
-                        let diff = await measureSanCoverage {
-                            try? await Task.sleep(nanoseconds: UInt64.random(in: 1000...10000))
-                            var x = taskId
-                            for i in 0..<20 { x += i }
-                            _ = x
-                        }
-                        _ = diff
-                    }
-                }
-            }
-        }
-    }
-}
-
 // MARK: - High Contention Stress Tests
 
 @Suite("High Contention Stress Tests")
@@ -367,28 +269,15 @@ struct HighContentionTests {
     func maximumConcurrentOperations() async {
         // Stress test with maximum concurrency
         await withTaskGroup(of: Void.self) { group in
-            // 50 tasks doing coverage measurements
+            // 50 tasks doing coverage snapshots
             for i in 0..<50 {
                 group.addTask {
                     for _ in 0..<20 {
-                        _ = measureSanCoverage {
-                            var x = i
-                            for j in 0..<10 { x += j }
-                            _ = x
-                        }
-                    }
-                }
-            }
-
-            // 10 tasks doing source coverage measurements
-            for i in 0..<10 {
-                group.addTask {
-                    for _ in 0..<5 {
-                        _ = await measureSanCovSourceCoverage {
-                            var x = i
-                            for j in 0..<10 { x += j }
-                            _ = x
-                        }
+                        SanCovCounters.reset()
+                        var x = i
+                        for j in 0..<10 { x += j }
+                        _ = x
+                        _ = SanCovCounters.snapshotCoveredArrays()
                     }
                 }
             }
@@ -424,11 +313,10 @@ struct HighContentionTests {
                 group.addTask {
                     for j in 0..<10 {
                         // Measure coverage
-                        _ = measureSanCoverage {
-                            var x = i * j
-                            for k in 0..<20 { x += k }
-                            _ = x
-                        }
+                        SanCovCounters.reset()
+                        var x = i * j
+                        for k in 0..<20 { x += k }
+                        _ = x
 
                         // Create signature from snapshot if available
                         let signature: CoverageSignature
