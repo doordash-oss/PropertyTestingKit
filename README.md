@@ -9,7 +9,6 @@ PropertyTestingKit brings coverage-guided fuzzing to Swift Testing:
 - **Coverage-guided fuzzing** - Automatically discover inputs that exercise new code paths
 - **Corpus persistence** - Save and replay interesting inputs across test runs
 - **Regression detection** - Automatically re-fuzz when code changes affect coverage
-- **Variadic inputs** - Fuzz functions with multiple parameters
 - **High throughput** - ~158,000 iterations/sec with full task isolation
 
 ## Performance
@@ -19,7 +18,6 @@ PropertyTestingKit achieves high throughput while maintaining complete coverage 
 | Mode | Throughput | Per-iteration |
 |------|------------|---------------|
 | Standard fuzzing | ~158,000 iter/sec | ~6.3 µs |
-| With gap detection | ~125,000 iter/sec | ~8.0 µs |
 
 Coverage tracking uses lock-free data structures and SIMD-optimized scanning, ensuring the fuzzer overhead is minimal compared to your actual test code.
 
@@ -37,7 +35,7 @@ Add PropertyTestingKit to your `Package.swift`:
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/YOUR_ORG/PropertyTestingKit.git", from: "1.0.0"),
+    .package(url: "https://github.com/alex-reilly-dd/PropertyTestingKit.git", from: "1.0.0"),
 ],
 targets: [
     .testTarget(
@@ -80,7 +78,7 @@ import PropertyTestingKit
 2. Runs each input and captures coverage
 3. Inputs that hit new code paths are saved to the corpus
 4. Mutates interesting inputs to discover more paths
-5. Stops when coverage plateaus or limits are reached
+5. Stops when time or iteration limits are reached
 6. Saves minimal corpus to disk for future runs
 
 **On subsequent runs:**
@@ -255,7 +253,7 @@ struct Config {
 
 // Config.fuzz generates all combinations automatically
 @Test func testAllConfigs() throws {
-    try fuzz { (config: Config) in
+    try fuzz { config in
         MyService(config: config).validate()
     }
 }
@@ -329,12 +327,12 @@ When a hang is detected:
 
 ### Coverage Gap Detection
 
-Find functions with incomplete test coverage:
+Find functions with incomplete test coverage using the coverage gap analysis plugin:
 
 ```swift
 @Test func testParser() throws {
     try fuzz(
-        detectCoverageGaps: true
+        analysisPlugins: [.coverageGaps()]
     ) { (input: String) in
         parse(input)
     }
@@ -352,110 +350,102 @@ This helps identify:
 - Dead code or unreachable paths
 - Areas needing additional seeds or mutators
 
+See [Plugins](#plugins) for more details on the plugin system.
+
+### Plugins
+
+The fuzzer supports a plugin system for customizing behavior. Plugins are grouped into three categories:
+
+#### Observer Plugins
+
+Receive lifecycle notifications during fuzzing (read-only, don't influence behavior):
+
+```swift
+try fuzz(
+    observerPlugins: [MyLoggingPlugin()]
+) { input in ... }
+```
+
+Observer plugins implement `FuzzObserverPlugin` and receive callbacks for:
+- `onStart(context:)` - Fuzzing started
+- `onIteration(context:)` - Each iteration completed
+- `onBatchComplete(context:)` - Batch of mutations completed
+- `onEnd(context:)` - Fuzzing ended
+
+#### Stopping Condition Plugins
+
+Control when fuzzing should stop:
+
+```swift
+// Use default plateau detection (stops when no new coverage is found)
+try fuzz { input in ... }
+
+// Disable automatic stopping (only iteration/time limits apply)
+try fuzz(stoppingPlugins: []) { input in ... }
+
+// Custom stopping configuration
+try fuzz(
+    stoppingPlugins: [.plateauDetector(windowSize: 200, minDiscoveryRate: 0.01)]
+) { input in ... }
+```
+
+#### Analysis Plugins
+
+Run after fuzzing completes to analyze results:
+
+```swift
+try fuzz(
+    analysisPlugins: [.coverageGaps()]
+) { input in ... }
+```
+
+#### Built-in Plugins
+
+| Plugin | Type | Description |
+|--------|------|-------------|
+| `PlateauDetectorPlugin` | Stopping | Stops fuzzing when coverage discovery rate drops below threshold. **Enabled by default.** |
+| `CoverageGapPlugin` | Analysis | Detects partially-covered functions and reports uncovered regions. |
+
+**Plateau Detector Configuration:**
+
+```swift
+.plateauDetector(
+    windowSize: 100,        // Iterations per window (default: maxIterations/10)
+    minDiscoveryRate: 0.001, // Stop if rate drops below this (default: 0.001)
+    confirmationWindows: 3   // Consecutive low windows before stopping (default: 3)
+)
+```
+
+**Coverage Gap Configuration:**
+
+```swift
+.coverageGaps(
+    minCoveragePercentage: 5.0,  // Only report functions with >5% coverage
+    excludedPathPrefixes: [],     // Paths to exclude from analysis
+    onlyReportSignificant: true   // Filter to significant gaps only
+)
+```
+
 ### Building with Coverage
 
-Coverage instrumentation must be enabled:
+Your test target must be compiled with SanitizerCoverage flags. Add these to your `Package.swift`:
+
+```swift
+.testTarget(
+    name: "MyTests",
+    dependencies: ["PropertyTestingKit"],
+    swiftSettings: [
+        .unsafeFlags([
+            "-sanitize-coverage=edge,pc-table"
+        ])
+    ]
+)
+```
+
+Then run tests normally:
 
 ```bash
-swift test --enable-code-coverage
-```
-
-## Additional Features
-
-### Measure Coverage
-
-The simplest way to see what code a test exercises:
-
-```swift
-import PropertyTestingKit
-
-@Test func testUserCreation() throws {
-    let (result, coverage) = try measureSourceCoverage {
-        UserService().createUser(id: "123", name: "Alice")
-    }
-
-    #expect(result == true)
-
-    // See exactly what executed
-    for region in coverage.executedRegions {
-        print("\(region.filename):\(region.lineStart) - \(region.executionCount)x")
-    }
-}
-```
-
-### Counter-Level Coverage
-
-For lightweight coverage detection without source mapping:
-
-```swift
-import PropertyTestingKit
-
-@Test func testCodePathA() {
-    let diff = measureCoverage {
-        myFunction(usePathA: true)
-    }
-
-    print("Executed \(diff?.executedRegions ?? 0) new code regions")
-}
-```
-
-### Coverage Trait for Test Suites
-
-Apply the `.coverage` trait to generate per-test profraw files:
-
-```swift
-import Testing
-import PropertyTestingKit
-
-@Suite(.serialized, .coverage)
-struct MyFeatureTests {
-    @Test func testFeatureA() { ... }
-    @Test func testFeatureB() { ... }
-}
-```
-
-> **Note:** Use `.serialized` with `.coverage` because LLVM profile counters are global state.
-
-Run with coverage enabled:
-
-```bash
-swift test --enable-code-coverage
-```
-
-### Source-Level Coverage API
-
-Get detailed coverage with file and line information:
-
-```swift
-let reader = try InMemoryCoverageReader.loadFromCurrentProcess()
-let coverage = reader.resolveCoverage()
-
-for function in coverage.functions {
-    print("\(function.name): \(function.executionCount) executions")
-
-    for region in function.regions {
-        print("  \(region.filename):\(region.lineStart)-\(region.lineEnd)")
-        print("  Executed: \(region.executionCount)x")
-    }
-}
-```
-
-### Filtering Coverage
-
-Focus on your project's code, excluding dependencies:
-
-```swift
-let (_, coverage) = try measureSourceCoverage {
-    myFunction()
-}
-
-// Already filtered by default - excludes /usr, /System, .build/checkouts/, etc.
-print("Project functions: \(coverage.functions.count)")
-
-// Or include everything
-let (_, fullCoverage) = try measureSourceCoverage(includeAllFiles: true) {
-    myFunction()
-}
+swift test
 ```
 
 ## API Reference
@@ -476,12 +466,20 @@ let (_, fullCoverage) = try measureSourceCoverage(includeAllFiles: true) {
 | `Corpus` | Collection of interesting inputs with coverage signatures |
 | `CorpusMode` | Controls corpus behavior (`.auto`, `.refuzzReplace`, `.refuzzExtend`, `.regressionOnly`) |
 
-### Coverage Measurement
+### Plugin Protocols
 
-| Function | Description |
+| Protocol | Description |
 |----------|-------------|
-| `measureCoverage(_:)` | Lightweight counter-level diff |
-| `measureSourceCoverage(_:)` | Full source-level coverage with file/line info |
+| `FuzzObserverPlugin` | Receives lifecycle notifications (start, iteration, batch, end) |
+| `StoppingConditionPlugin` | Determines when fuzzing should stop |
+| `AnalysisPlugin` | Runs post-fuzzing analysis and generates reports |
+
+### Built-in Plugins
+
+| Plugin | Description |
+|--------|-------------|
+| `.plateauDetector()` | Stops when coverage discovery plateaus (default stopping condition) |
+| `.coverageGaps()` | Detects functions with incomplete coverage |
 
 ### Macros
 
@@ -491,11 +489,11 @@ let (_, fullCoverage) = try measureSourceCoverage(includeAllFiles: true) {
 
 ## How It Works
 
-PropertyTestingKit uses LLVM's coverage instrumentation directly:
+PropertyTestingKit uses SanitizerCoverage with custom task-based isolation:
 
-1. **Counter Access**: Reads LLVM's in-memory coverage counters via `__llvm_profile_*` runtime functions
-2. **Coverage Mapping**: Parses `__llvm_covmap` sections from the binary to map counters to source locations
-3. **Difference-Based**: Snapshots counters before/after code execution to isolate what each test exercises
+1. **Edge Instrumentation**: Uses `-sanitize-coverage=edge` which inserts `__sanitizer_cov_trace_pc_guard` callbacks at every branch
+2. **Task-Keyed Isolation**: Coverage maps are keyed by `swift_task_getCurrent()`, providing true per-task isolation even when Swift Testing runs tasks on shared threads
+3. **Source Mapping**: DWARF debug info is parsed via LLVM to map program counters to file:line locations
 4. **Corpus Management**: Saves inputs that discover new coverage, replays them on subsequent runs
 
 The fuzzer follows an AFL-inspired approach:
@@ -507,9 +505,18 @@ The fuzzer follows an AFL-inspired approach:
 
 ## License
 
-MIT License. See [LICENSE](LICENSE) for details.
+Apache 2.0 License. See [LICENSE](LICENSE) for details.
 
 ## Acknowledgments
 
-- Uses [LLVMCoverageKit](https://github.com/alex-reilly-dd/LLVMCoverageKit) for coverage mapping parsing
-- Built on LLVM's coverage infrastructure
+### Research
+
+- **Miller et al. 1990** - ["An Empirical Study of the Reliability of UNIX Utilities"](https://pages.cs.wisc.edu/~bart/fuzz/fuzz.html) - The original fuzz testing paper that introduced random input testing and timeout-based hang detection
+- **Zalewski (AFL)** - [American Fuzzy Lop](https://lcamtuf.coredump.cx/afl/) - Coverage-guided fuzzing techniques and corpus management strategies
+- **Elhage 2020** - ["Property Testing Like AFL"](https://blog.nelhage.com/post/property-testing-like-afl/) - Plateau detection algorithm for knowing when to stop fuzzing
+
+### Libraries
+
+- **[ConcurrencyKit](https://github.com/concurrencykit/ck)** - Lock-free hash table (`ck_ht`) used for task-keyed coverage maps, enabling high-throughput concurrent fuzzing
+- Uses **SanitizerCoverage** (`__sanitizer_cov_trace_pc_guard`) for edge instrumentation with custom task-keyed isolation via `swift_task_getCurrent()`
+- **LLVM** for DWARF-based source symbolication (mapping PCs to file:line locations)
