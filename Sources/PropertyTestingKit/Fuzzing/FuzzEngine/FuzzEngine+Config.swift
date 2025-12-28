@@ -57,8 +57,8 @@ extension FuzzEngine {
         public var observerPlugins: [any FuzzObserverPlugin]
 
         /// Stopping condition plugins that determine when fuzzing should stop.
-        /// Default: `[.plateauDetector()]` for adaptive early stopping.
-        /// Pass an empty array to disable automatic stopping (only iteration/time limits apply).
+        /// Default: empty (only iteration/time limits apply).
+        /// Use `.plateauDetector()` to enable adaptive early stopping.
         public var stoppingPlugins: [any StoppingConditionPlugin]
 
         /// Analysis plugins that run after fuzzing completes.
@@ -94,14 +94,8 @@ extension FuzzEngine {
                 : max(1, mutationBatchSize)
             self.projectPath = projectPath
             self.observerPlugins = observerPlugins
-            // Default to plateau detector for adaptive early stopping
-            self.stoppingPlugins = stoppingPlugins ?? [
-                PlateauDetectorPlugin(config: .init(
-                    windowSize: max(1, min(500, maxIterations / 10)),
-                    minDiscoveryRate: 0.001,
-                    confirmationWindows: 3
-                ))
-            ]
+            // Default to no stopping plugins (only iteration/time limits apply)
+            self.stoppingPlugins = stoppingPlugins ?? []
             self.analysisPlugins = analysisPlugins
         }
     }

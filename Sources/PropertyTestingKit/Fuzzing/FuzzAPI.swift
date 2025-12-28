@@ -89,8 +89,9 @@ import Dependencies
 ///   - mutationBatchSize: Number of mutations to run in parallel per batch.
 ///     0 = auto-tune based on test cost (default), 1 = sequential, 4-16 = manual batching.
 ///   - observerPlugins: Plugins that receive lifecycle notifications (start, batch complete, end).
-///   - stoppingPlugins: Plugins that determine when to stop fuzzing. Pass nil for defaults
-///     (plateau detection), or an empty array to disable automatic stopping.
+///   - stoppingPlugins: Plugins that determine when to stop fuzzing.
+///     Default: empty (only iteration/time limits apply).
+///     Use `.plateauDetector()` for adaptive early stopping.
 ///   - analysisPlugins: Plugins that run after fuzzing completes. Use `.coverageGaps()`
 ///     to enable coverage gap detection.
 ///   - filePath: Source file path (auto-filled).
@@ -157,8 +158,9 @@ public func fuzz<each Input: Fuzzable & Codable & Sendable, each M: Mutator>(
 ///   - mutationBatchSize: Number of mutations to run in parallel per batch.
 ///     0 = auto-tune based on test cost (default), 1 = sequential, 4-16 = manual batching.
 ///   - observerPlugins: Plugins that receive lifecycle notifications (start, batch complete, end).
-///   - stoppingPlugins: Plugins that determine when to stop fuzzing. Pass nil for defaults
-///     (plateau detection), or an empty array to disable automatic stopping.
+///   - stoppingPlugins: Plugins that determine when to stop fuzzing.
+///     Default: empty (only iteration/time limits apply).
+///     Use `.plateauDetector()` for adaptive early stopping.
 ///   - analysisPlugins: Plugins that run after fuzzing completes. Use `.coverageGaps()`
 ///     to enable coverage gap detection.
 ///   - filePath: Source file path (auto-filled).

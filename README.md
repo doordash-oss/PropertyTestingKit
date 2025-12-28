@@ -23,9 +23,8 @@ Coverage tracking uses lock-free data structures and SIMD-optimized scanning, en
 
 ## Requirements
 
-- macOS 15.0+ / iOS 18.0+
-- Swift 6.0+
-- Xcode 16.0+
+- macOS 26+ / iOS 26+
+- Swift 6.3+
 
 ## Installation
 
@@ -377,13 +376,13 @@ Observer plugins implement `FuzzObserverPlugin` and receive callbacks for:
 Control when fuzzing should stop:
 
 ```swift
-// Use default plateau detection (stops when no new coverage is found)
+// Default: only iteration/time limits apply
 try fuzz { input in ... }
 
-// Disable automatic stopping (only iteration/time limits apply)
-try fuzz(stoppingPlugins: []) { input in ... }
+// Enable plateau detection (stops when no new coverage is found)
+try fuzz(stoppingPlugins: [.plateauDetector()]) { input in ... }
 
-// Custom stopping configuration
+// Custom plateau detection configuration
 try fuzz(
     stoppingPlugins: [.plateauDetector(windowSize: 200, minDiscoveryRate: 0.01)]
 ) { input in ... }
@@ -403,7 +402,7 @@ try fuzz(
 
 | Plugin | Type | Description |
 |--------|------|-------------|
-| `PlateauDetectorPlugin` | Stopping | Stops fuzzing when coverage discovery rate drops below threshold. **Enabled by default.** |
+| `PlateauDetectorPlugin` | Stopping | Stops fuzzing when coverage discovery rate drops below threshold. |
 | `CoverageGapPlugin` | Analysis | Detects partially-covered functions and reports uncovered regions. |
 
 **Plateau Detector Configuration:**
@@ -478,7 +477,7 @@ swift test
 
 | Plugin | Description |
 |--------|-------------|
-| `.plateauDetector()` | Stops when coverage discovery plateaus (default stopping condition) |
+| `.plateauDetector()` | Stops when coverage discovery plateaus |
 | `.coverageGaps()` | Detects functions with incomplete coverage |
 
 ### Macros
