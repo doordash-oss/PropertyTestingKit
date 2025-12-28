@@ -43,6 +43,14 @@
 		6273FEB12F0115E100DE1516 /* CoverageGapReport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6273FEB02F0115DD00DE1516 /* CoverageGapReport.swift */; };
 		6273FEB32F01160300DE1516 /* CoverageGap.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6273FEB22F0115FF00DE1516 /* CoverageGap.swift */; };
 		6273FEB52F01161E00DE1516 /* UncoveredRegion.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6273FEB42F01161900DE1516 /* UncoveredRegion.swift */; };
+		6273FEB82F019BDD00DE1516 /* Double+Fuzzable.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6273FEB72F019BD700DE1516 /* Double+Fuzzable.swift */; };
+		6273FEBA2F019BF800DE1516 /* UInt+Fuzzable.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6273FEB92F019BF200DE1516 /* UInt+Fuzzable.swift */; };
+		6273FEBC2F019C1900DE1516 /* Character+Fuzzable.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6273FEBB2F019C1900DE1516 /* Character+Fuzzable.swift */; };
+		6273FEBE2F019C3500DE1516 /* Array+Fuzzable.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6273FEBD2F019C3500DE1516 /* Array+Fuzzable.swift */; };
+		6273FEC02F019C4500DE1516 /* Optional+Fuzzable.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6273FEBF2F019C4500DE1516 /* Optional+Fuzzable.swift */; };
+		6273FEC22F019C7000DE1516 /* String+Fuzzable.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6273FEC12F019C6A00DE1516 /* String+Fuzzable.swift */; };
+		6273FEC42F019C9900DE1516 /* Int+Fuzzable.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6273FEC32F019C9200DE1516 /* Int+Fuzzable.swift */; };
+		6273FEC62F019CC800DE1516 /* Bool+Fuzzable.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6273FEC52F019CC100DE1516 /* Bool+Fuzzable.swift */; };
 		6A740B41AAC5C975B6E33B2B /* Fuzzable.swift in Sources */ = {isa = PBXBuildFile; fileRef = A66767AE7FB6E54944E7BCD8 /* Fuzzable.swift */; };
 		6B81F710C9EAE2B9786DFD16 /* TaskResults.swift in Sources */ = {isa = PBXBuildFile; fileRef = B155EAF0286844D09A5709EC /* TaskResults.swift */; };
 		6C92AFA4A8A89008D14C5645 /* SanCovIsolationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 34658F2420967EA35E38058D /* SanCovIsolationTests.swift */; };
@@ -212,6 +220,14 @@
 		6273FEB02F0115DD00DE1516 /* CoverageGapReport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoverageGapReport.swift; sourceTree = "<group>"; };
 		6273FEB22F0115FF00DE1516 /* CoverageGap.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoverageGap.swift; sourceTree = "<group>"; };
 		6273FEB42F01161900DE1516 /* UncoveredRegion.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UncoveredRegion.swift; sourceTree = "<group>"; };
+		6273FEB72F019BD700DE1516 /* Double+Fuzzable.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Double+Fuzzable.swift"; sourceTree = "<group>"; };
+		6273FEB92F019BF200DE1516 /* UInt+Fuzzable.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "UInt+Fuzzable.swift"; sourceTree = "<group>"; };
+		6273FEBB2F019C1900DE1516 /* Character+Fuzzable.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Character+Fuzzable.swift"; sourceTree = "<group>"; };
+		6273FEBD2F019C3500DE1516 /* Array+Fuzzable.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Array+Fuzzable.swift"; sourceTree = "<group>"; };
+		6273FEBF2F019C4500DE1516 /* Optional+Fuzzable.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Optional+Fuzzable.swift"; sourceTree = "<group>"; };
+		6273FEC12F019C6A00DE1516 /* String+Fuzzable.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "String+Fuzzable.swift"; sourceTree = "<group>"; };
+		6273FEC32F019C9200DE1516 /* Int+Fuzzable.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Int+Fuzzable.swift"; sourceTree = "<group>"; };
+		6273FEC52F019CC100DE1516 /* Bool+Fuzzable.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Bool+Fuzzable.swift"; sourceTree = "<group>"; };
 		683A330BCB90F626B21D2422 /* CustomFuzzableTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CustomFuzzableTests.swift; sourceTree = "<group>"; };
 		6B4DC0FA0EFB0DDF25E4C353 /* CLLVMSymbolizer.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = CLLVMSymbolizer.cpp; sourceTree = "<group>"; };
 		6B7DA3E55A8132FE210D8EAF /* CoverageCountersClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoverageCountersClient.swift; sourceTree = "<group>"; };
@@ -402,6 +418,22 @@
 			path = CoverageGap;
 			sourceTree = "<group>";
 		};
+		6273FEB62F019BA900DE1516 /* Fuzzable */ = {
+			isa = PBXGroup;
+			children = (
+				6273FEC52F019CC100DE1516 /* Bool+Fuzzable.swift */,
+				6273FEC32F019C9200DE1516 /* Int+Fuzzable.swift */,
+				6273FEC12F019C6A00DE1516 /* String+Fuzzable.swift */,
+				6273FEB92F019BF200DE1516 /* UInt+Fuzzable.swift */,
+				6273FEB72F019BD700DE1516 /* Double+Fuzzable.swift */,
+				A66767AE7FB6E54944E7BCD8 /* Fuzzable.swift */,
+				6273FEBF2F019C4500DE1516 /* Optional+Fuzzable.swift */,
+				6273FEBB2F019C1900DE1516 /* Character+Fuzzable.swift */,
+				6273FEBD2F019C3500DE1516 /* Array+Fuzzable.swift */,
+			);
+			path = Fuzzable;
+			sourceTree = "<group>";
+		};
 		7397170BA7D821E3A51C70A8 /* DWARF */ = {
 			isa = PBXGroup;
 			children = (
@@ -442,9 +474,9 @@
 		8E0551F1E322C33BFF09CCAE /* Fuzzing */ = {
 			isa = PBXGroup;
 			children = (
+				6273FEB62F019BA900DE1516 /* Fuzzable */,
 				6273FEAF2F0115C700DE1516 /* CoverageGap */,
 				9BD8E7DDBFB1256A08DEBE05 /* CoverageSignature.swift */,
-				A66767AE7FB6E54944E7BCD8 /* Fuzzable.swift */,
 				A18400D950AE2D1D13443E9A /* FuzzAPI.swift */,
 				D51DB081E26BBC926EBD26BD /* Mutator.swift */,
 				E0ABBB2AC9890A3F64DAF698 /* SaturationPlateauDetector.swift */,
@@ -825,6 +857,7 @@
 				F997A4DDB225D63D65B476AA /* Corpus.swift in Sources */,
 				0469AB3AB668C05713B4CEEC /* CorpusClient.swift in Sources */,
 				A8AB88E38D9F9BBE8CCCD77B /* CorpusCoder.swift in Sources */,
+				6273FEB82F019BDD00DE1516 /* Double+Fuzzable.swift in Sources */,
 				60F4B0B951427866AB7380DC /* CorpusEntry.swift in Sources */,
 				29AD704E75D749B097C95BAA /* CorpusEntryType.swift in Sources */,
 				432A7C1997D44CD9561448F1 /* CorpusMode.swift in Sources */,
@@ -834,6 +867,7 @@
 				2D13E3F40413B09CF072BD8E /* CoverageGapDetector.swift in Sources */,
 				8D27AFB1254FC22918527BA3 /* CoverageGapPlugin.swift in Sources */,
 				52C260E19A743BA5BCADC703 /* CoverageSignature.swift in Sources */,
+				6273FEC22F019C7000DE1516 /* String+Fuzzable.swift in Sources */,
 				6273FEA82F010DB300DE1516 /* DWARFSymbolizerHelper.swift in Sources */,
 				E22FD5BA11720007BFEC6E1E /* DWARFSourceLocation.swift in Sources */,
 				6273FEB12F0115E100DE1516 /* CoverageGapReport.swift in Sources */,
@@ -843,13 +877,16 @@
 				A11656F32C1DA89DAC5AE4B1 /* EnvironmentClient.swift in Sources */,
 				6273FEAA2F010DF200DE1516 /* SparseCoverage.swift in Sources */,
 				995888DFC95845A88625B91A /* FailureInfo.swift in Sources */,
+				6273FEBA2F019BF800DE1516 /* UInt+Fuzzable.swift in Sources */,
 				D3BBDD6471BDB998F4979E48 /* FileManagerClient.swift in Sources */,
 				413720205EA64C2558BD9F04 /* FuzzAPI.swift in Sources */,
 				8B77076135753B47C626A029 /* FuzzEngine+Config.swift in Sources */,
 				B0B276C037B14EAA3010672E /* FuzzEngine.swift in Sources */,
 				6273FEB32F01160300DE1516 /* CoverageGap.swift in Sources */,
+				6273FEC42F019C9900DE1516 /* Int+Fuzzable.swift in Sources */,
 				FCEEBF191CE51978D06E85E9 /* FuzzObserverPlugin.swift in Sources */,
 				A791F464FE3BDDB8A76320B5 /* FuzzPlugin.swift in Sources */,
+				6273FEBC2F019C1900DE1516 /* Character+Fuzzable.swift in Sources */,
 				472EBAA0C21986A90E121C90 /* FuzzPluginManager.swift in Sources */,
 				125D3FB66141B63E3542572E /* FuzzResult.swift in Sources */,
 				6A740B41AAC5C975B6E33B2B /* Fuzzable.swift in Sources */,
@@ -863,8 +900,11 @@
 				F5E12565A5E3B3F657133645 /* STADSPlateauDetectorPlugin.swift in Sources */,
 				5605B6F68948A32A75666D62 /* SanCovCounters.swift in Sources */,
 				9B7DC07539CBF59272EDCC37 /* SaturationPlateauDetector.swift in Sources */,
+				6273FEC62F019CC800DE1516 /* Bool+Fuzzable.swift in Sources */,
 				FCC9ADA20072098BFAD48EBE /* SaturationPlateauDetectorPlugin.swift in Sources */,
 				F854221602A30DC642BC0670 /* SimpleCoveragePlateauDetector.swift in Sources */,
+				6273FEC02F019C4500DE1516 /* Optional+Fuzzable.swift in Sources */,
+				6273FEBE2F019C3500DE1516 /* Array+Fuzzable.swift in Sources */,
 				A03C312DFD232E75A523A81F /* StoppingConditionPlugin.swift in Sources */,
 				6B81F710C9EAE2B9786DFD16 /* TaskResults.swift in Sources */,
 				04F603A50F9051E3053336BD /* TestCaseShrinker.swift in Sources */,

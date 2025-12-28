@@ -106,6 +106,10 @@ struct FuzzPluginManager: @unchecked Sendable {
     /// - Parameter context: Analysis context with coverage data.
     /// - Returns: Array of type-erased analysis reports.
     func runAnalysis(context: FuzzPluginContext.AnalysisContext) async -> [AnyAnalysisReport] {
+        // Ensure DWARF source location cache is ready before analysis
+        // (pre-warming started at fuzzing begin, this ensures it's complete)
+        await SanCovCounters.awaitSourceLocationPreWarming()
+
         var reports: [AnyAnalysisReport] = []
 
         for plugin in analysisPlugins {

@@ -521,11 +521,9 @@ struct RegressionModeTests {
         let mockClient = CoverageCountersClient(
             snapshot: snapshotFn,
             snapshotCoveredArrays: { SparseCoverage(indices: [], counts: []) },
-            reset: {},
             isAvailable: { true },
             beginMeasurement: { SanCovCounters.MeasurementContext.testInstance() },
             endMeasurement: { _ in },
-            resetWithContext: { _ in },
             snapshotCoveredArraysWithContext: { _ in SparseCoverage(indices: [], counts: []) }
         )
         let version1 = await CorpusSchema.currentVersion(using: mockClient)
@@ -563,11 +561,9 @@ struct RegressionModeTests {
         let mockClient = CoverageCountersClient(
             snapshot: { nil },
             snapshotCoveredArrays: { nil },
-            reset: {},
             isAvailable: { false },
             beginMeasurement: { nil },
             endMeasurement: { _ in },
-            resetWithContext: { _ in },
             snapshotCoveredArraysWithContext: { _ in nil }
         )
         let version = await CorpusSchema.currentVersion(using: mockClient)

@@ -486,7 +486,7 @@ let benchmarks: @Sendable () -> Void = {
     // Instead we benchmark operations with pre-created data.
 
     Benchmark(
-        "SanCovCounters.reset()",
+        "SanCovCounters.beginMeasurement/endMeasurement",
         configuration: .init(
             metrics: [.wallClock],
             warmupIterations: 100,
@@ -494,7 +494,9 @@ let benchmarks: @Sendable () -> Void = {
         )
     ) { benchmark in
         for _ in benchmark.scaledIterations {
-            SanCovCounters.reset()
+            if let context = SanCovCounters.beginMeasurement() {
+                SanCovCounters.endMeasurement(context)
+            }
         }
     }
 
@@ -782,13 +784,13 @@ let benchmarks: @Sendable () -> Void = {
 
             // Process all Int.fuzz seeds (21 values)
             for input in Int.fuzz {
-                // 1. Reset coverage
-                SanCovCounters.reset()
+                // 1. Begin measurement context
+                guard let context = SanCovCounters.beginMeasurement() else { continue }
 
                 // 2. Run test
                 blackHole(try? parseAndValidate(input))
 
-                // 3. Snapshot coverage
+                // 3. Snapshot coverage (using public API)
                 if let sparse = SanCovCounters.snapshotCoveredArrays() {
                     // 4. Create signature
                     let sig = CoverageSignature(sparse: sparse)
@@ -796,12 +798,15 @@ let benchmarks: @Sendable () -> Void = {
                     // 5. Add to corpus if interesting
                     blackHole(await corpus.addIfInteresting(input: input, signature: sig))
                 }
+
+                // 6. End measurement context
+                SanCovCounters.endMeasurement(context)
             }
         }
     }
 
     Benchmark(
-        "Single seed iteration: reset + test + snapshot + signature + corpus",
+        "Single seed iteration: context + test + snapshot + signature + corpus",
         configuration: .init(
             metrics: [.wallClock],
             warmupIterations: 100,
@@ -811,13 +816,13 @@ let benchmarks: @Sendable () -> Void = {
         let corpus = Corpus<Int>(schemaVersion: "bench-v1")
 
         for _ in benchmark.scaledIterations {
-            // 1. Reset coverage
-            SanCovCounters.reset()
+            // 1. Begin measurement context
+            guard let context = SanCovCounters.beginMeasurement() else { continue }
 
             // 2. Run test
             blackHole(try? parseAndValidate(42))
 
-            // 3. Snapshot coverage
+            // 3. Snapshot coverage (using public API)
             if let sparse = SanCovCounters.snapshotCoveredArrays() {
                 // 4. Create signature
                 let sig = CoverageSignature(sparse: sparse)
@@ -825,6 +830,9 @@ let benchmarks: @Sendable () -> Void = {
                 // 5. Add to corpus if interesting
                 blackHole(await corpus.addIfInteresting(input: 42, signature: sig))
             }
+
+            // 6. End measurement context
+            SanCovCounters.endMeasurement(context)
         }
     }
 

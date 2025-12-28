@@ -26,7 +26,7 @@ struct SanCovCountersRaceTests {
         await withTaskGroup(of: SanCovSourceLocation?.self) { group in
             for i in 0..<min(100, totalEdges) {
                 group.addTask {
-                    await SanCovCounters.getSourceLocation(for: i, includeDWARF: true)
+                    await SanCovCounters.getSourceLocation(for: i)
                 }
             }
 
@@ -36,11 +36,12 @@ struct SanCovCountersRaceTests {
 
     @Test("Concurrent getCoveredLocations calls")
     func concurrentGetCoveredLocations() async {
-        // First generate some coverage
-        SanCovCounters.reset()
+        // Generate some coverage using a measurement context
+        guard let context = SanCovCounters.beginMeasurement() else { return }
         var x = 0
         for i in 0..<100 { x += i }
         _ = x
+        SanCovCounters.endMeasurement(context)
 
         // Then concurrently get covered locations
         await withTaskGroup(of: [SanCovSourceLocation].self) { group in
@@ -64,6 +65,26 @@ struct SanCovCountersRaceTests {
             }
 
             for await _ in group {}
+        }
+    }
+
+    @Test("Concurrent measurement contexts")
+    func concurrentMeasurementContexts() async {
+        await withTaskGroup(of: Void.self) { group in
+            for i in 0..<20 {
+                group.addTask {
+                    guard let context = SanCovCounters.beginMeasurement() else { return }
+                    defer { SanCovCounters.endMeasurement(context) }
+
+                    // Do some work
+                    var sum = i
+                    for j in 0..<50 { sum += j }
+                    _ = sum
+
+                    // Get coverage
+                    _ = SanCovCounters.snapshotCoveredArrays(with: context)
+                }
+            }
         }
     }
 }
@@ -158,11 +179,12 @@ struct CoverageGapDetectorRaceTests {
     func concurrentGapDetection() async {
         let detector = CoverageGapDetector()
 
-        // Generate some coverage first
-        SanCovCounters.reset()
+        // Generate some coverage using measurement context
+        guard let context = SanCovCounters.beginMeasurement() else { return }
         var x = 0
         for i in 0..<50 { x += i }
         _ = x
+        SanCovCounters.endMeasurement(context)
 
         // Get covered indices
         guard let snapshot = SanCovCounters.snapshot() else { return }
@@ -267,27 +289,19 @@ struct HighContentionTests {
 
     @Test("Maximum concurrent coverage operations", .timeLimit(.minutes(1)))
     func maximumConcurrentOperations() async {
-        // Stress test with maximum concurrency
+        // Stress test with maximum concurrency using measurement contexts
         await withTaskGroup(of: Void.self) { group in
-            // 50 tasks doing coverage snapshots
+            // 50 tasks doing coverage measurements with contexts
             for i in 0..<50 {
                 group.addTask {
                     for _ in 0..<20 {
-                        SanCovCounters.reset()
+                        guard let context = SanCovCounters.beginMeasurement() else { continue }
+                        defer { SanCovCounters.endMeasurement(context) }
+
                         var x = i
                         for j in 0..<10 { x += j }
                         _ = x
-                        _ = SanCovCounters.snapshotCoveredArrays()
-                    }
-                }
-            }
-
-            // 10 tasks doing resets
-            for _ in 0..<10 {
-                group.addTask {
-                    for _ in 0..<10 {
-                        SanCovCounters.reset()
-                        try? await Task.sleep(nanoseconds: 1000)
+                        _ = SanCovCounters.snapshotCoveredArrays(with: context)
                     }
                 }
             }
@@ -312,19 +326,20 @@ struct HighContentionTests {
             for i in 0..<30 {
                 group.addTask {
                     for j in 0..<10 {
-                        // Measure coverage
-                        SanCovCounters.reset()
+                        // Measure coverage with context
+                        guard let context = SanCovCounters.beginMeasurement() else { continue }
                         var x = i * j
                         for k in 0..<20 { x += k }
                         _ = x
 
-                        // Create signature from snapshot if available
+                        // Create signature from context
                         let signature: CoverageSignature
-                        if let snapshot = SanCovCounters.snapshot() {
-                            signature = CoverageSignature(snapshot: snapshot)
+                        if let coverage = SanCovCounters.snapshotCoveredArrays(with: context) {
+                            signature = CoverageSignature(sparse: coverage)
                         } else {
                             signature = makeSignature(indices: [i, j])
                         }
+                        SanCovCounters.endMeasurement(context)
 
                         // Add to corpus
                         await corpus.add(input: i * 100 + j, signature: signature)

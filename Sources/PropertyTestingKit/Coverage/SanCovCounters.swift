@@ -35,15 +35,16 @@ private let functionSizeLookup = FunctionSizeLookupHelper()
 /// ## Usage
 ///
 /// ```swift
-/// // Reset coverage for this task
-/// SanCovCounters.reset()
+/// // Begin isolated measurement
+/// guard let context = SanCovCounters.beginMeasurement() else { return }
+/// defer { SanCovCounters.endMeasurement(context) }
 ///
 /// // Run code under test
 /// myFunction()
 ///
-/// // Get coverage for this task only
-/// let snapshot = SanCovCounters.snapshot()
-/// print("Covered \(snapshot?.coveredCount ?? 0) edges")
+/// // Get coverage for this context
+/// let coverage = SanCovCounters.snapshotCoveredArrays(with: context)
+/// print("Covered \(coverage?.indices.count ?? 0) edges")
 /// ```
 ///
 /// ## Build Requirements
@@ -104,16 +105,6 @@ public struct SanCovCounters: Sendable {
     /// Get the total number of instrumented edges.
     public static var totalEdgeCount: Int {
         sancov_get_counter_count()
-    }
-
-    /// Reset coverage counters for the current task.
-    ///
-    /// This only affects the current Swift task's coverage map.
-    /// Other tasks running concurrently are not affected.
-    ///
-    /// - Note: In non-async contexts, falls back to thread-local storage.
-    public static func reset() {
-        sancov_reset_counters()
     }
 
     /// Get the number of edges covered by the current task.
@@ -458,16 +449,6 @@ extension SanCovCounters {
     // These methods operate directly on a measurement context, bypassing TLS lookup.
     // This is critical for Swift concurrency where tasks can hop between threads.
 
-    /// Reset coverage counters for a specific measurement context.
-    ///
-    /// This method uses the context directly, avoiding O(512) registry scans
-    /// that would otherwise occur after a Swift task hops between threads.
-    ///
-    /// - Parameter context: The measurement context to reset.
-    public static func reset(with context: MeasurementContext) {
-        sancov_reset_counters_with_context(context.rawContext)
-    }
-
     /// Get covered indices for a specific measurement context.
     ///
     /// This method uses the context directly, avoiding TLS lookup overhead.
@@ -475,7 +456,7 @@ extension SanCovCounters {
     ///
     /// - Parameter context: The measurement context to snapshot.
     /// - Returns: SparseCoverage with parallel indices/counts arrays, or nil if unavailable.
-    public static func snapshotCoveredArrays(with context: MeasurementContext) -> SparseCoverage? {
+    static func snapshotCoveredArrays(with context: MeasurementContext) -> SparseCoverage? {
         guard isAvailable else { return nil }
 
         let maxEntries = 8192
@@ -546,7 +527,7 @@ extension SanCovCounters {
     ///   - edgeIndex: The edge index to look up.
     ///   - includeDWARF: Whether to include DWARF debug info (slower but has line numbers).
     /// - Returns: Source location info, or nil if unavailable.
-    static func getSourceLocation(for edgeIndex: Int, includeDWARF: Bool = true) async -> SanCovSourceLocation? {
+    func getSourceLocation(for edgeIndex: Int, includeDWARF: Bool = true) async -> SanCovSourceLocation? {
         var cLocation = SanCovSourceLocation_C()
         guard sancov_get_source_location(edgeIndex, &cLocation) else {
             return nil
@@ -564,7 +545,7 @@ extension SanCovCounters {
     ///
     /// - Parameter edgeIndex: The edge index to look up.
     /// - Returns: Source location info, or nil if unavailable.
-    public static func getSourceLocation(for edgeIndex: Int) async -> SanCovSourceLocation? {
+    static func getSourceLocation(for edgeIndex: Int) async -> SanCovSourceLocation? {
         await SourceLocationCache.shared.getOrLoad(edgeIndex)
     }
 
@@ -575,14 +556,14 @@ extension SanCovCounters {
     /// will be fully populated, eliminating dladdr latency.
     ///
     /// This is safe to call multiple times - subsequent calls are no-ops.
-    public static func startPreWarmingSourceLocations() async {
+    static func startPreWarmingSourceLocations() async {
         await SourceLocationCache.shared.startPreWarming()
     }
 
     /// Wait for source location pre-warming to complete.
     ///
     /// - Parameter timeout: Maximum time to wait (default 100ms).
-    public static func awaitSourceLocationPreWarming(timeout: Duration = .milliseconds(100)) async {
+    static func awaitSourceLocationPreWarming(timeout: Duration = .milliseconds(100)) async {
         await SourceLocationCache.shared.awaitPreWarming(timeout: timeout)
     }
 
@@ -593,7 +574,7 @@ extension SanCovCounters {
     ///
     /// - Parameter pcs: Array of program counter addresses to look up.
     /// - Returns: Dictionary mapping PCs to their DWARF source locations.
-    public static func getDWARFLocations(for pcs: [UInt]) async -> [UInt: DWARFSourceLocation] {
+    static func getDWARFLocations(for pcs: [UInt]) async -> [UInt: DWARFSourceLocation] {
         await dwarfSymbolizerHelper.lookupBatch(pcs: pcs)
     }
 
@@ -636,18 +617,7 @@ extension SanCovCounters {
     ///
     /// When `true`, `getSourceLocation` and `getCoveredLocations` will include
     /// line and column numbers. When `false`, only function-level info is available.
-    public static func lineNumbersAvailable() async -> Bool {
+    static func lineNumbersAvailable() async -> Bool {
         await dwarfSymbolizerHelper.isAvailable
-    }
-
-    // MARK: - Debug API
-
-    /// Get the number of measurement registry failures.
-    ///
-    /// This counts how many times `beginMeasurement()` returned nil due to
-    /// the measurement registry being full. If this is non-zero during test runs,
-    /// increase `MAX_TASK_MEASUREMENT_ENTRIES` in SanCovHooks.c.
-    public static var measurementRegistryFailures: Int {
-        Int(sancov_get_measurement_registry_failures())
     }
 }

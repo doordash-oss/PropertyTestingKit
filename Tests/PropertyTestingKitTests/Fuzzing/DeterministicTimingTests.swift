@@ -33,11 +33,9 @@ private func makeMockCoverageClient(
             return SanCovCounters(counters: counters)
         },
         snapshotCoveredArrays: snapshotCoveredArraysClosure,
-        reset: {},
         isAvailable: { true },
         beginMeasurement: { SanCovCounters.MeasurementContext.testInstance() },
         endMeasurement: { _ in },
-        resetWithContext: { _ in },
         snapshotCoveredArraysWithContext: { _ in snapshotCoveredArraysClosure() }
     )
 }

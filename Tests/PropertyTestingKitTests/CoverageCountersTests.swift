@@ -13,7 +13,6 @@ struct SanCovCoverageTests {
             return
         }
 
-        SanCovCounters.reset()
         guard let snapshot = SanCovCounters.snapshot() else {
             Issue.record("Failed to get SanCov snapshot")
             return
@@ -21,6 +20,29 @@ struct SanCovCoverageTests {
 
         #expect(snapshot.count > 0)
         print("Captured \(snapshot.count) counters")
+    }
+
+    @Test("Measurement context provides isolated coverage")
+    func testMeasurementContext() {
+        guard SanCovCounters.isAvailable else {
+            Issue.record("SanCov counters not available")
+            return
+        }
+
+        guard let context = SanCovCounters.beginMeasurement() else {
+            Issue.record("Failed to begin measurement")
+            return
+        }
+        defer { SanCovCounters.endMeasurement(context) }
+
+        // Do some work
+        var sum = 0
+        for i in 0..<100 { sum += i }
+        _ = sum
+
+        // Get coverage from this context
+        let coverage = SanCovCounters.snapshotCoveredArrays(with: context)
+        #expect(coverage != nil, "Should get coverage from context")
     }
 }
 

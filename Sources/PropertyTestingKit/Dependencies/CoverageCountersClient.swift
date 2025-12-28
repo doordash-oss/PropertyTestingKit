@@ -33,10 +33,6 @@ public struct CoverageCountersClient: Sendable {
     /// Note: This is synchronous since the underlying SanCov implementation uses task-local data.
     public var snapshotCoveredArrays: @Sendable () -> SparseCoverage?
 
-    /// Reset coverage counters for the current task only.
-    /// Other concurrent tasks are not affected.
-    public var reset: @Sendable () -> Void
-
     /// Check if coverage instrumentation is available.
     public var isAvailable: @Sendable () -> Bool
 
@@ -48,10 +44,6 @@ public struct CoverageCountersClient: Sendable {
     /// End a measurement context and clean up resources.
     /// This frees the coverage map slot for reuse by other tasks.
     public var endMeasurement: @Sendable (SanCovCounters.MeasurementContext) -> Void
-
-    /// Reset counters using a specific measurement context.
-    /// This bypasses TLS lookup, providing O(1) performance even after task hops.
-    public var resetWithContext: @Sendable (SanCovCounters.MeasurementContext) -> Void
 
     /// Get covered indices using a specific measurement context.
     /// This bypasses TLS lookup, providing O(1) performance even after task hops.
@@ -66,7 +58,6 @@ public struct CoverageCountersClient: Sendable {
             "snapshotCoveredArrays",
             placeholder: nil
         ),
-        reset: @escaping @Sendable () -> Void = unimplemented("reset"),
         isAvailable: @escaping @Sendable () -> Bool = unimplemented(
             "isAvailable",
             placeholder: false
@@ -78,9 +69,6 @@ public struct CoverageCountersClient: Sendable {
         endMeasurement: @escaping @Sendable (SanCovCounters.MeasurementContext) -> Void = unimplemented(
             "endMeasurement"
         ),
-        resetWithContext: @escaping @Sendable (SanCovCounters.MeasurementContext) -> Void = unimplemented(
-            "resetWithContext"
-        ),
         snapshotCoveredArraysWithContext: @escaping @Sendable (SanCovCounters.MeasurementContext) -> SparseCoverage? = unimplemented(
             "snapshotCoveredArraysWithContext",
             placeholder: nil
@@ -88,11 +76,9 @@ public struct CoverageCountersClient: Sendable {
     ) {
         self.snapshot = snapshot
         self.snapshotCoveredArrays = snapshotCoveredArrays
-        self.reset = reset
         self.isAvailable = isAvailable
         self.beginMeasurement = beginMeasurement
         self.endMeasurement = endMeasurement
-        self.resetWithContext = resetWithContext
         self.snapshotCoveredArraysWithContext = snapshotCoveredArraysWithContext
     }
 }
@@ -103,11 +89,9 @@ extension CoverageCountersClient: DependencyKey {
     public static let liveValue = CoverageCountersClient(
         snapshot: { SanCovCounters.snapshot() },
         snapshotCoveredArrays: { SanCovCounters.snapshotCoveredArrays() },
-        reset: { SanCovCounters.reset() },
         isAvailable: { SanCovCounters.isAvailable },
         beginMeasurement: { SanCovCounters.beginMeasurement() },
         endMeasurement: { SanCovCounters.endMeasurement($0) },
-        resetWithContext: { SanCovCounters.reset(with: $0) },
         snapshotCoveredArraysWithContext: { SanCovCounters.snapshotCoveredArrays(with: $0) }
     )
 

@@ -31,11 +31,9 @@ private func makeMockCoverageClient(
             return SanCovCounters(counters: counters)
         },
         snapshotCoveredArrays: snapshotCoveredArraysClosure,
-        reset: {},
         isAvailable: { true },
         beginMeasurement: { SanCovCounters.MeasurementContext.testInstance() },
         endMeasurement: { _ in },
-        resetWithContext: { _ in },
         snapshotCoveredArraysWithContext: { _ in snapshotCoveredArraysClosure() }
     )
 }
@@ -45,11 +43,9 @@ private func makeNilCoverageClient() -> CoverageCountersClient {
     return CoverageCountersClient(
         snapshot: { nil },
         snapshotCoveredArrays: { nil },
-        reset: {},
         isAvailable: { true },
         beginMeasurement: { SanCovCounters.MeasurementContext.testInstance() },
         endMeasurement: { _ in },
-        resetWithContext: { _ in },
         snapshotCoveredArraysWithContext: { _ in nil }
     )
 }
@@ -353,11 +349,9 @@ struct FuzzEngineTests {
             $0.coverageCounters = CoverageCountersClient(
                 snapshot: { SanCovCounters(counters: testCounters) },
                 snapshotCoveredArrays: snapshotCoveredArraysFn,
-                reset: {},
                 isAvailable: { true },
                 beginMeasurement: { SanCovCounters.MeasurementContext.testInstance() },
                 endMeasurement: { _ in },
-                resetWithContext: { _ in },
                 snapshotCoveredArraysWithContext: { _ in snapshotCoveredArraysFn() }
             )
             $0.corpusPersistence = CorpusPersistenceClient(
@@ -416,11 +410,9 @@ struct FuzzEngineTests {
             $0.coverageCounters = CoverageCountersClient(
                 snapshot: snapshotFn,
                 snapshotCoveredArrays: snapshotCoveredArraysFn,
-                reset: {},
                 isAvailable: { true },
                 beginMeasurement: { SanCovCounters.MeasurementContext.testInstance() },
                 endMeasurement: { _ in },
-                resetWithContext: { _ in },
                 snapshotCoveredArraysWithContext: { _ in snapshotCoveredArraysFn() }
             )
             $0.corpusPersistence = CorpusPersistenceClient(
@@ -573,11 +565,9 @@ struct FuzzEngineTests {
             $0.coverageCounters = CoverageCountersClient(
                 snapshot: snapshotFn,
                 snapshotCoveredArrays: snapshotCoveredArraysFn,
-                reset: {},
                 isAvailable: { true },
                 beginMeasurement: { SanCovCounters.MeasurementContext.testInstance() },
                 endMeasurement: { _ in },
-                resetWithContext: { _ in },
                 snapshotCoveredArraysWithContext: { _ in snapshotCoveredArraysFn() }
             )
             $0.corpusPersistence = CorpusPersistenceClient(
@@ -611,11 +601,9 @@ struct FuzzEngineTests {
             $0.coverageCounters = CoverageCountersClient(
                 snapshot: snapshotFn,
                 snapshotCoveredArrays: { nil },
-                reset: {},
                 isAvailable: { true },
                 beginMeasurement: { SanCovCounters.MeasurementContext.testInstance() },
                 endMeasurement: { _ in },
-                resetWithContext: { _ in },
                 snapshotCoveredArraysWithContext: { _ in nil }
             )
         } operation: {
@@ -645,11 +633,9 @@ struct FuzzEngineTests {
             $0.coverageCounters = CoverageCountersClient(
                 snapshot: snapshotFn,
                 snapshotCoveredArrays: { nil },
-                reset: {},
                 isAvailable: { true },
                 beginMeasurement: { SanCovCounters.MeasurementContext.testInstance() },
                 endMeasurement: { _ in },
-                resetWithContext: { _ in },
                 snapshotCoveredArraysWithContext: { _ in nil }
             )
         } operation: {
@@ -685,11 +671,9 @@ struct FuzzEngineTests {
             $0.coverageCounters = CoverageCountersClient(
                 snapshot: snapshotFn,
                 snapshotCoveredArrays: { nil },
-                reset: {},
                 isAvailable: { true },
                 beginMeasurement: { SanCovCounters.MeasurementContext.testInstance() },
                 endMeasurement: { _ in },
-                resetWithContext: { _ in },
                 snapshotCoveredArraysWithContext: { _ in nil }
             )
         } operation: {
@@ -750,11 +734,9 @@ struct FuzzEngineTests {
                     return SanCovCounters(counters: counters)
                 },
                 snapshotCoveredArrays: snapshotCoveredArraysFn,
-                reset: {},
                 isAvailable: { true },
                 beginMeasurement: { SanCovCounters.MeasurementContext.testInstance() },
                 endMeasurement: { _ in },
-                resetWithContext: { _ in },
                 snapshotCoveredArraysWithContext: { _ in snapshotCoveredArraysFn() }
             )
             $0.corpusPersistence = CorpusPersistenceClient(
@@ -851,11 +833,9 @@ struct FuzzEngineTests {
                     return SanCovCounters(counters: counters)
                 },
                 snapshotCoveredArrays: snapshotCoveredArraysFn,
-                reset: {},
                 isAvailable: { true },
                 beginMeasurement: { SanCovCounters.MeasurementContext.testInstance() },
                 endMeasurement: { _ in },
-                resetWithContext: { _ in },
                 snapshotCoveredArraysWithContext: { _ in snapshotCoveredArraysFn() }
             )
             $0.corpusPersistence = CorpusPersistenceClient(
