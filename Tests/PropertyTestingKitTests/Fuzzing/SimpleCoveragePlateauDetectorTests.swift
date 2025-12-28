@@ -1,5 +1,5 @@
 //
-//  CoveragePlateauDetectorTests.swift
+//  SimpleCoveragePlateauDetectorTests.swift
 //  PropertyTestingKit
 //
 
@@ -7,18 +7,18 @@ import Testing
 import Foundation
 @testable import PropertyTestingKit
 
-@Suite("CoveragePlateauDetector")
-struct CoveragePlateauDetectorTests {
+@Suite("SimpleCoveragePlateauDetector")
+struct SimpleCoveragePlateauDetectorTests {
 
     @Test("Detector starts in non-plateau state")
     func testInitialState() async {
-        let config = CoveragePlateauDetector.Config(
+        let config = SimpleCoveragePlateauDetector.Config(
             windowSize: 10,
             minDiscoveryRate: 0.01,
             confirmationWindows: 2,
             enabled: true
         )
-        let detector = CoveragePlateauDetector(config: config)
+        let detector = SimpleCoveragePlateauDetector(config: config)
 
         #expect(!detector.hasPlateaued)
         let stats = detector.stats()
@@ -28,13 +28,13 @@ struct CoveragePlateauDetectorTests {
 
     @Test("Detector detects plateau after no discoveries")
     func testDetectsPlateau() async {
-        let config = CoveragePlateauDetector.Config(
+        let config = SimpleCoveragePlateauDetector.Config(
             windowSize: 5,
             minDiscoveryRate: 0.01,
             confirmationWindows: 2,
             enabled: true
         )
-        var detector = CoveragePlateauDetector(config: config)
+        var detector = SimpleCoveragePlateauDetector(config: config)
 
         // Record many non-discoveries
         for _ in 0..<20 {
@@ -46,13 +46,13 @@ struct CoveragePlateauDetectorTests {
 
     @Test("Detector does not plateau with continuous discoveries")
     func testNoPlateauWithDiscoveries() async {
-        let config = CoveragePlateauDetector.Config(
+        let config = SimpleCoveragePlateauDetector.Config(
             windowSize: 10,
             minDiscoveryRate: 0.05,
             confirmationWindows: 2,
             enabled: true
         )
-        var detector = CoveragePlateauDetector(config: config)
+        var detector = SimpleCoveragePlateauDetector(config: config)
 
         // Record discoveries at a good rate
         for i in 0..<50 {
@@ -64,13 +64,13 @@ struct CoveragePlateauDetectorTests {
 
     @Test("Detector respects enabled flag")
     func testDisabledDetector() async {
-        let config = CoveragePlateauDetector.Config(
+        let config = SimpleCoveragePlateauDetector.Config(
             windowSize: 5,
             minDiscoveryRate: 0.01,
             confirmationWindows: 2,
             enabled: false
         )
-        var detector = CoveragePlateauDetector(config: config)
+        var detector = SimpleCoveragePlateauDetector(config: config)
 
         // Record many non-discoveries
         for _ in 0..<100 {
@@ -83,13 +83,13 @@ struct CoveragePlateauDetectorTests {
 
     @Test("Stats track discoveries correctly")
     func testStatsTracking() async {
-        let config = CoveragePlateauDetector.Config(
+        let config = SimpleCoveragePlateauDetector.Config(
             windowSize: 10,
             minDiscoveryRate: 0.01,
             confirmationWindows: 2,
             enabled: true
         )
-        var detector = CoveragePlateauDetector(config: config)
+        var detector = SimpleCoveragePlateauDetector(config: config)
 
         detector.record(discoveredNewCoverage: true)
         detector.record(discoveredNewCoverage: false)
@@ -105,13 +105,13 @@ struct CoveragePlateauDetectorTests {
 
     @Test("Summary includes rate information")
     func testSummary() async {
-        let config = CoveragePlateauDetector.Config(
+        let config = SimpleCoveragePlateauDetector.Config(
             windowSize: 10,
             minDiscoveryRate: 0.01,
             confirmationWindows: 2,
             enabled: true
         )
-        var detector = CoveragePlateauDetector(config: config)
+        var detector = SimpleCoveragePlateauDetector(config: config)
 
         for _ in 0..<15 {
             detector.record(discoveredNewCoverage: false)
@@ -123,13 +123,13 @@ struct CoveragePlateauDetectorTests {
 
     @Test("Plateau resets after discovery burst")
     func testPlateauResets() async {
-        let config = CoveragePlateauDetector.Config(
+        let config = SimpleCoveragePlateauDetector.Config(
             windowSize: 5,
             minDiscoveryRate: 0.01,
             confirmationWindows: 1,
             enabled: true
         )
-        var detector = CoveragePlateauDetector(config: config)
+        var detector = SimpleCoveragePlateauDetector(config: config)
 
         // Record non-discoveries to approach plateau
         for _ in 0..<10 {

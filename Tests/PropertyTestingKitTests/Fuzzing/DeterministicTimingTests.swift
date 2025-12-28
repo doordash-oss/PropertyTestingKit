@@ -240,10 +240,10 @@ struct DeterministicTimingTests {
         }
     }
 
-    // MARK: - CoveragePlateauDetector Duration Tests
+    // MARK: - SimpleCoveragePlateauDetector Duration Tests
 
-    @Suite("CoveragePlateauDetector Duration")
-    struct CoveragePlateauDetectorDurationTests {
+    @Suite("SimpleCoveragePlateauDetector Duration")
+    struct SimpleCoveragePlateauDetectorDurationTests {
 
         @Test("PlateauStats duration tracks elapsed time")
         func testDurationTracking() async {
@@ -252,13 +252,13 @@ struct DeterministicTimingTests {
             let stats = withDependencies {
                 $0.dateClient = DateClient(now: { currentTime.value })
             } operation: {
-                let config = CoveragePlateauDetector.Config(
+                let config = SimpleCoveragePlateauDetector.Config(
                     windowSize: 10,
                     minDiscoveryRate: 0.01,
                     confirmationWindows: 2,
                     enabled: true
                 )
-                var detector = CoveragePlateauDetector(config: config)
+                var detector = SimpleCoveragePlateauDetector(config: config)
 
                 // First record sets startTime
                 detector.record(discoveredNewCoverage: true)
@@ -284,8 +284,8 @@ struct DeterministicTimingTests {
             let stats = withDependencies {
                 $0.dateClient = DateClient.constant(Date())
             } operation: {
-                let config = CoveragePlateauDetector.Config(enabled: true)
-                let detector = CoveragePlateauDetector(config: config)
+                let config = SimpleCoveragePlateauDetector.Config(enabled: true)
+                let detector = SimpleCoveragePlateauDetector(config: config)
                 return detector.stats()
             }
 
@@ -299,13 +299,13 @@ struct DeterministicTimingTests {
             let stats = withDependencies {
                 $0.dateClient = DateClient(now: { currentTime.value })
             } operation: {
-                let config = CoveragePlateauDetector.Config(
+                let config = SimpleCoveragePlateauDetector.Config(
                     windowSize: 100,
                     minDiscoveryRate: 0.001,
                     confirmationWindows: 10,
                     enabled: true
                 )
-                var detector = CoveragePlateauDetector(config: config)
+                var detector = SimpleCoveragePlateauDetector(config: config)
 
                 // Record 10 discoveries over 20 seconds
                 for _ in 0..<10 {

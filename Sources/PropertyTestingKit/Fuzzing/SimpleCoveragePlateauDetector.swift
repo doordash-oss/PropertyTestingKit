@@ -1,38 +1,30 @@
 //
-//  CoveragePlateauDetector.swift
+//  SimpleCoveragePlateauDetector.swift
 //  PropertyTestingKit
 //
-//  Adaptive early stopping based on coverage discovery rate.
-//
-//  Based on insights from:
-//  - Böhme (2020) - Entropic: Information-theoretic perspective on fuzzer efficiency
-//  - Elhage (2020) - Property Testing Like AFL: Stop when coverage plateaus
+//  Simple adaptive early stopping based on coverage discovery rate.
 //
 
 import Foundation
 import Dependencies
 
-/// Detects when fuzzing has reached a coverage plateau and should stop early.
+/// Simple heuristic plateau detector using sliding window rate tracking.
 ///
-/// Instead of simply counting iterations without new coverage, this detector
-/// tracks the actual discovery rate over a sliding window and uses statistical
-/// analysis to detect when the rate has dropped below a threshold.
+/// Uses a sliding window to track the rate of new coverage discoveries.
+/// When the discovery rate drops below a threshold for several consecutive
+/// windows, fuzzing is considered to have plateaued.
 ///
 /// ## Algorithm
 ///
-/// 1. Track coverage discoveries in a sliding window
+/// 1. Track coverage discoveries in a sliding window (ring buffer)
 /// 2. Compute discovery rate as (discoveries / window_size)
-/// 3. Track rate trend over time (exponential moving average)
-/// 4. Detect plateau when:
-///    - Rate falls below minimum threshold
-///    - Rate trend shows sustained decline
-///    - Confidence in plateau is high enough
+/// 3. Use exponential moving average to smooth rate fluctuations
+/// 4. Detect plateau when rate falls below threshold for N consecutive windows
 ///
-/// ## Reference
-///
-/// This approach is inspired by entropic fuzzing (Böhme 2020) which uses
-/// information-theoretic principles to measure fuzzing progress.
-public struct CoveragePlateauDetector: Sendable {
+/// For more statistically principled stopping criteria, see:
+/// - ``STADSPlateauDetector`` - Good-Turing estimator (Böhme 2018)
+/// - ``SaturationPlateauDetector`` - Saturation-based metrics (Green Fuzzing, ISSTA 2023)
+public struct SimpleCoveragePlateauDetector: Sendable {
     @Dependency(\.dateClient) var dateClient
 
     /// Configuration for plateau detection.

@@ -9,7 +9,7 @@ PropertyTestingKit brings coverage-guided fuzzing to Swift Testing:
 - **Coverage-guided fuzzing** - Automatically discover inputs that exercise new code paths
 - **Corpus persistence** - Save and replay interesting inputs across test runs
 - **Regression detection** - Automatically re-fuzz when code changes affect coverage
-- **High throughput** - ~158,000 iterations/sec with full task isolation
+- **High throughput** - ~168,000 iterations/sec with full task isolation
 
 ## Performance
 
@@ -17,7 +17,7 @@ PropertyTestingKit achieves high throughput while maintaining complete coverage 
 
 | Mode | Throughput | Per-iteration |
 |------|------------|---------------|
-| Standard fuzzing | ~158,000 iter/sec | ~6.3 µs |
+| Standard fuzzing | ~168,000 iter/sec | ~5.9 µs |
 
 Coverage tracking uses lock-free data structures and SIMD-optimized scanning, ensuring the fuzzer overhead is minimal compared to your actual test code.
 
@@ -512,7 +512,7 @@ Apache 2.0 License. See [LICENSE](LICENSE) for details.
 
 - **Miller et al. 1990** - ["An Empirical Study of the Reliability of UNIX Utilities"](https://pages.cs.wisc.edu/~bart/fuzz/fuzz.html) - The original fuzz testing paper that introduced random input testing and timeout-based hang detection
 - **Zalewski (AFL)** - [American Fuzzy Lop](https://lcamtuf.coredump.cx/afl/) - Coverage-guided fuzzing techniques and corpus management strategies
-- **Elhage 2020** - ["Property Testing Like AFL"](https://blog.nelhage.com/post/property-testing-like-afl/) - Plateau detection algorithm for knowing when to stop fuzzing
+- **Elhage 2020** - ["Property Testing Like AFL"](https://blog.nelhage.com/post/property-testing-like-afl/) - Workflow combining property testing with coverage-guided fuzzing, including stopping when coverage stops improving
 
 ### Libraries
 

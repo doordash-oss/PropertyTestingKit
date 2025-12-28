@@ -218,10 +218,6 @@ public struct CoverageGapDetector: Sendable {
     ///   - projectPath: Optional project root path to filter to project files only.
     /// - Returns: A report of detected coverage gaps.
     public func detect(from coveredIndices: Set<Int>, projectPath: String? = nil) async -> CoverageGapReport {
-        #if DEBUG
-        SanCovCounters.resetDlAddrCallCount()
-        #endif
-
         guard SanCovCounters.isAvailable else {
             return CoverageGapReport(
                 gaps: [],
@@ -489,16 +485,6 @@ public struct CoverageGapDetector: Sendable {
                 functionEdges[edge.key] = info
             }
         }
-
-        // #if DEBUG
-        // print("[GapDetector] Step 1 (covered edges dladdr): \(String(format: "%.3f", step1End - step1Start))s")
-        // print("[GapDetector] Step 2 total: \(String(format: "%.3f", step2FirstPassEnd - step2Start))s")
-        // print("[GapDetector]   - PC filter time: \(String(format: "%.3f", step2PCFilterTime))s (\(step2EdgesPCFiltered) edges filtered out)")
-        // print("[GapDetector]   - dladdr time: \(String(format: "%.3f", step2DladdrTime))s (\(step2EdgesDladdrd) calls)")
-        // print("[GapDetector]   - Function filter time: \(String(format: "%.3f", step2FunctionFilterTime))s (\(step2EdgesFunctionFiltered) edges filtered out)")
-        // print("[GapDetector] Edges scanned: \(totalEdges), uncovered edges in report: \(uncoveredEdgesNeedingDWARF.count)")
-        // print("[GapDetector] Total dladdr calls: \(SanCovCounters.dlAddrCallCount)")
-        // #endif
 
         // Analyze each function and detect gaps
         var gaps: [CoverageGap] = []

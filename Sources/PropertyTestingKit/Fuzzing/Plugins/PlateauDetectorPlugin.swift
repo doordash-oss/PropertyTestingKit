@@ -9,8 +9,13 @@ import Foundation
 
 /// Stopping condition plugin that stops fuzzing when coverage plateaus.
 ///
-/// This plugin wraps `CoveragePlateauDetector` to provide early stopping
-/// when the fuzzer stops discovering new coverage paths.
+/// This plugin wraps ``SimpleCoveragePlateauDetector`` to provide early stopping
+/// when the fuzzer stops discovering new coverage paths. Uses a simple sliding
+/// window heuristic to detect when discovery rate drops.
+///
+/// For more sophisticated stopping criteria, see:
+/// - ``STADSPlateauDetectorPlugin`` - Good-Turing estimator (Böhme 2018)
+/// - ``SaturationPlateauDetectorPlugin`` - Saturation-based metrics (Green Fuzzing, ISSTA 2023)
 ///
 /// Usage:
 /// ```swift
@@ -20,7 +25,7 @@ public struct PlateauDetectorPlugin: StoppingConditionPlugin, @unchecked Sendabl
     public let id: String = "plateauDetector"
     public let priority: Int
 
-    private var detector: CoveragePlateauDetector
+    private var detector: SimpleCoveragePlateauDetector
 
     /// Create a plateau detector plugin.
     ///
@@ -28,10 +33,10 @@ public struct PlateauDetectorPlugin: StoppingConditionPlugin, @unchecked Sendabl
     ///   - config: Configuration for plateau detection.
     ///   - priority: Plugin priority (higher runs first). Default is 100.
     public init(
-        config: CoveragePlateauDetector.Config = .init(),
+        config: SimpleCoveragePlateauDetector.Config = .init(),
         priority: Int = 100
     ) {
-        self.detector = CoveragePlateauDetector(config: config)
+        self.detector = SimpleCoveragePlateauDetector(config: config)
         self.priority = priority
     }
 
@@ -97,7 +102,7 @@ extension StoppingConditionPlugin where Self == PlateauDetectorPlugin {
     /// - Parameter config: The plateau detector configuration.
     /// - Returns: A configured plateau detector plugin.
     public static func plateauDetector(
-        config: CoveragePlateauDetector.Config
+        config: SimpleCoveragePlateauDetector.Config
     ) -> PlateauDetectorPlugin {
         PlateauDetectorPlugin(config: config)
     }

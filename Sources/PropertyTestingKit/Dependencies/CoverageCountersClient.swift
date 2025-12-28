@@ -20,7 +20,7 @@ import IssueReporting
 /// .testTarget(
 ///     name: "MyTests",
 ///     swiftSettings: [
-///         .unsafeFlags(["-sanitize-coverage=edge,trace-cmp"])
+///         .unsafeFlags(["-sanitize-coverage=edge,pc-table"])
 ///     ]
 /// )
 /// ```

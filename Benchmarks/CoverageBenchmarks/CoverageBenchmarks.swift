@@ -480,19 +480,6 @@ let benchmarks: @Sendable () -> Void = {
         }
     }
 
-    Benchmark(
-        "SanCovCounters.currentCoveredCount",
-        configuration: .init(
-            metrics: [.wallClock],
-            warmupIterations: 100,
-            scalingFactor: .kilo
-        )
-    ) { benchmark in
-        for _ in benchmark.scaledIterations {
-            blackHole(SanCovCounters.currentCoveredCount)
-        }
-    }
-
     // MARK: - Coverage Snapshot Benchmarks
     // Note: SanCovCounters.snapshot() is not benchmarked directly because
     // the benchmark binary itself is instrumented, creating millions of edges.
@@ -586,7 +573,7 @@ let benchmarks: @Sendable () -> Void = {
     // MARK: - Plateau Detection Benchmarks
 
     Benchmark(
-        "CoveragePlateauDetector.record - no discovery",
+        "SimpleCoveragePlateauDetector.record - no discovery",
         configuration: .init(
             metrics: [.wallClock],
             warmupIterations: 100,
@@ -594,7 +581,7 @@ let benchmarks: @Sendable () -> Void = {
         )
     ) { benchmark async in
         for _ in benchmark.scaledIterations {
-            var detector = CoveragePlateauDetector()
+            var detector = SimpleCoveragePlateauDetector()
             for _ in 0..<100 {
                 detector.record(discoveredNewCoverage: false)
             }
@@ -603,7 +590,7 @@ let benchmarks: @Sendable () -> Void = {
     }
 
     Benchmark(
-        "CoveragePlateauDetector.record - mixed discovery",
+        "SimpleCoveragePlateauDetector.record - mixed discovery",
         configuration: .init(
             metrics: [.wallClock],
             warmupIterations: 100,
@@ -611,7 +598,7 @@ let benchmarks: @Sendable () -> Void = {
         )
     ) { benchmark async in
         for _ in benchmark.scaledIterations {
-            var detector = CoveragePlateauDetector()
+            var detector = SimpleCoveragePlateauDetector()
             for i in 0..<100 {
                 detector.record(discoveredNewCoverage: i % 10 == 0)
             }

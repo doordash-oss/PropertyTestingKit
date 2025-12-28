@@ -11,46 +11,16 @@
 
 import Foundation
 import SanCovHooks
+import MachO
 
-// MARK: - SparseCoverage
+/// Global instance for DWARF symbolization.
+private let dwarfSymbolizerHelper = DWARFSymbolizerHelper()
 
-/// Efficient representation of sparse coverage data using parallel arrays.
-///
-/// This is significantly faster than `[Int: UInt8]` because it avoids
-/// Dictionary hashing overhead. The indices and counts arrays are parallel:
-/// `counts[i]` is the hit count for edge `indices[i]`.
-public struct SparseCoverage: Sendable {
-    /// Edge indices that were executed.
-    public let indices: [UInt32]
-
-    /// Hit counts for each edge (parallel to indices).
-    public let counts: [UInt8]
-
-    /// Number of covered edges.
-    public var count: Int { indices.count }
-
-    /// Whether any edges were covered.
-    public var isEmpty: Bool { indices.isEmpty }
-
-    /// Create from parallel arrays.
-    public init(indices: [UInt32], counts: [UInt8]) {
-        precondition(indices.count == counts.count, "indices and counts must have same length")
-        self.indices = indices
-        self.counts = counts
-    }
-
-    /// Create an empty sparse coverage.
-    public init() {
-        self.indices = []
-        self.counts = []
-    }
-}
-
-// MARK: - SanCovCounters
+/// Global actor instance for function size lookup.
+private let functionSizeLookup = FunctionSizeLookupHelper()
 
 /// A snapshot of coverage counters with task-level isolation.
 ///
-/// Unlike `CoverageCounters` which uses LLVM's global profile counters,
 /// `SanCovCounters` uses SanitizerCoverage's trace_pc_guard callbacks with
 /// task-keyed maps. This provides true per-task isolation even when
 /// Swift Testing runs tasks on shared threads.
@@ -84,7 +54,7 @@ public struct SparseCoverage: Sendable {
 ///     name: "MyTests",
 ///     swiftSettings: [
 ///         .unsafeFlags([
-///             "-sanitize-coverage=edge,trace-cmp"
+///             "-sanitize-coverage=edge,pc-table"
 ///         ])
 ///     ]
 /// )
@@ -136,16 +106,6 @@ public struct SanCovCounters: Sendable {
         sancov_get_counter_count()
     }
 
-    /// Get the number of dladdr calls made (for profiling gap detection).
-    public static var dlAddrCallCount: Int {
-        Int(sancov_get_dladdr_call_count())
-    }
-
-    /// Reset the dladdr call counter.
-    public static func resetDlAddrCallCount() {
-        sancov_reset_dladdr_call_count()
-    }
-
     /// Reset coverage counters for the current task.
     ///
     /// This only affects the current Swift task's coverage map.
@@ -160,7 +120,7 @@ public struct SanCovCounters: Sendable {
     ///
     /// This only counts coverage from the current Swift task.
     /// Coverage from other concurrent tasks is not included.
-    public static var currentCoveredCount: Int {
+    static var currentCoveredCount: Int {
         sancov_get_covered_count()
     }
 
@@ -367,7 +327,7 @@ private func demangle(_ mangledName: String) -> String {
 ///
 /// - Parameter functionName: The demangled function name to check.
 /// - Returns: `true` if this appears to be a stdlib function.
-public func isStdlibFunction(_ functionName: String) -> Bool {
+func isStdlibFunction(_ functionName: String) -> Bool {
     // Swift stdlib functions
     functionName.hasPrefix("Swift.") ||
     functionName.hasPrefix("(extension in Swift)") ||
@@ -534,342 +494,6 @@ private actor SourceLocationCache {
         }
     }
 }
-
-// MARK: - DWARF Symbolizer Integration
-
-import MachO
-
-/// Helper for DWARF-based line number resolution.
-/// Lazily initializes the symbolizer on first use.
-/// Actor-isolated to provide thread-safe access without locks.
-private actor DWARFSymbolizerActor {
-    private var _symbolizer: DWARFSymbolizer?
-    private var _binaryPath: String?
-    private var _slide: Int = 0
-    private var _initialized = false
-
-    /// Get or create the shared symbolizer for the current process.
-    var shared: DWARFSymbolizer? {
-        if !_initialized {
-            _initialized = true
-            initializeSymbolizer()
-        }
-        return _symbolizer
-    }
-
-    /// Get the ASLR slide for converting runtime addresses to file offsets.
-    var slide: Int {
-        if !_initialized {
-            _initialized = true
-            initializeSymbolizer()
-        }
-        return _slide
-    }
-
-    private func initializeSymbolizer() {
-        // Find the main executable path
-        guard let path = findMainBinaryPath() else {
-            #if DEBUG
-            print("[DWARFSymbolizer] Could not find main binary path")
-            #endif
-            return
-        }
-        _binaryPath = path
-
-        // Find the slide for this binary
-        _slide = findSlide(for: path)
-
-        #if DEBUG
-        print("[DWARFSymbolizer] Binary: \(path)")
-        print("[DWARFSymbolizer] Slide: 0x\(String(_slide, radix: 16))")
-        #endif
-
-        // Create symbolizer
-        do {
-            _symbolizer = try DWARFSymbolizer(path: path)
-            #if DEBUG
-            print("[DWARFSymbolizer] Initialized successfully")
-            #endif
-        } catch {
-            #if DEBUG
-            print("[DWARFSymbolizer] Failed to initialize: \(error)")
-            #endif
-            // Symbolizer unavailable - that's okay, we fall back to dladdr
-        }
-    }
-
-    private func findMainBinaryPath() -> String? {
-        // Find the test binary by looking for .xctest bundle
-        // The first image is often swiftpm-testing-helper, not the actual tests
-        for i in 0..<_dyld_image_count() {
-            guard let name = _dyld_get_image_name(i) else { continue }
-            let path = String(cString: name)
-
-            // Look for .xctest bundle (Swift PM test binary)
-            if path.contains(".xctest/") {
-                return path
-            }
-        }
-
-        // Fallback: first image
-        guard _dyld_image_count() > 0,
-              let name = _dyld_get_image_name(0) else {
-            return nil
-        }
-        return String(cString: name)
-    }
-
-    private func findSlide(for path: String) -> Int {
-        for i in 0..<_dyld_image_count() {
-            guard let name = _dyld_get_image_name(i) else { continue }
-            if String(cString: name) == path {
-                return _dyld_get_image_vmaddr_slide(i)
-            }
-        }
-        return 0
-    }
-
-    /// Convert a runtime PC address to a file offset.
-    /// Uses overflow-safe arithmetic since TSan can change memory layout
-    /// in ways that make address calculations overflow.
-    func runtimeToFileOffset(_ pc: UInt) -> UInt64 {
-        let pcValue = UInt64(pc)
-        let slideValue = UInt64(bitPattern: Int64(slide))
-        // Use wrapping subtraction to avoid overflow trap
-        return pcValue &- slideValue
-    }
-
-    /// Look up DWARF info for a PC address.
-    func lookup(pc: UInt) async -> DWARFSourceLocation? {
-        guard let symbolizer = shared else {
-            return nil
-        }
-        let fileOffset = runtimeToFileOffset(pc)
-        return await symbolizer.lookup(address: fileOffset)
-    }
-
-    /// Batch look up DWARF info for multiple PC addresses.
-    /// Much faster than individual lookups due to reduced actor overhead.
-    func lookupBatch(pcs: [UInt]) async -> [UInt: DWARFSourceLocation] {
-        guard let symbolizer = shared else {
-            return [:]
-        }
-
-        // Convert runtime PCs to file offsets
-        let addresses = pcs.map { runtimeToFileOffset($0) }
-
-        // Batch lookup
-        let results = await symbolizer.lookup(addresses: addresses)
-
-        // Map back to runtime PCs
-        var pcResults: [UInt: DWARFSourceLocation] = [:]
-        pcResults.reserveCapacity(results.count)
-        for (i, pc) in pcs.enumerated() {
-            let fileOffset = addresses[i]
-            if let location = results[fileOffset] {
-                pcResults[pc] = location
-            }
-        }
-        return pcResults
-    }
-
-    /// Check if the symbolizer is available.
-    var isAvailable: Bool {
-        shared != nil
-    }
-}
-
-/// Global actor instance for DWARF symbolization.
-private let dwarfSymbolizerHelper = DWARFSymbolizerActor()
-
-// MARK: - Function Size Lookup
-
-/// Helper for looking up function sizes from the Mach-O symbol table.
-/// Parses the symbol table once, then provides O(log n) lookups.
-private actor FunctionSizeLookupActor {
-    /// Sorted array of (address, size) for binary search
-    private var _functionBounds: [(address: UInt, size: UInt)] = []
-    private var _initialized = false
-    private var _slide: Int = 0
-
-    /// Initialize and parse the symbol table.
-    private func initialize() {
-        guard !_initialized else { return }
-        _initialized = true
-
-        // Find the test binary
-        var targetImageIndex: UInt32 = 0
-        for i in 0..<_dyld_image_count() {
-            guard let name = _dyld_get_image_name(i) else { continue }
-            let path = String(cString: name)
-            if path.contains(".xctest/") {
-                targetImageIndex = i
-                break
-            }
-        }
-
-        guard let headerRaw = _dyld_get_image_header(targetImageIndex) else {
-            return
-        }
-        _slide = _dyld_get_image_vmaddr_slide(targetImageIndex)
-
-        // Cast to 64-bit header (we're always on 64-bit Apple Silicon)
-        let header = UnsafeRawPointer(headerRaw).assumingMemoryBound(to: mach_header_64.self)
-
-        // Parse symbol table from Mach-O header
-        var symbols: [(address: UInt, name: String)] = []
-
-        // Iterate load commands to find LC_SYMTAB
-        var commandPtr = UnsafeRawPointer(header).advanced(by: MemoryLayout<mach_header_64>.size)
-        for _ in 0..<header.pointee.ncmds {
-            let command = commandPtr.assumingMemoryBound(to: load_command.self).pointee
-
-            if command.cmd == LC_SYMTAB {
-                let symtabCmd = commandPtr.assumingMemoryBound(to: symtab_command.self).pointee
-
-                // Get pointers to symbol table and string table
-                let linkeditBase = findLinkeditBase(header: header)
-                guard linkeditBase != nil else { break }
-
-                let symtabPtr = linkeditBase!.advanced(by: Int(symtabCmd.symoff))
-                    .assumingMemoryBound(to: nlist_64.self)
-                let strtabPtr = linkeditBase!.advanced(by: Int(symtabCmd.stroff))
-                    .assumingMemoryBound(to: CChar.self)
-
-                // Extract function symbols (type 0x0f = N_SECT, external or local)
-                for i in 0..<Int(symtabCmd.nsyms) {
-                    let nlist = symtabPtr[i]
-                    let type = nlist.n_type & UInt8(N_TYPE)
-
-                    // Only include defined symbols in a section (functions/data)
-                    if type == UInt8(N_SECT) {
-                        let nameOffset = Int(nlist.n_un.n_strx)
-                        let name = String(cString: strtabPtr.advanced(by: nameOffset))
-
-                        // Filter to likely function symbols (not empty, not metadata)
-                        if !name.isEmpty && !name.hasPrefix("_$s") == false {
-                            let address = UInt(nlist.n_value) + UInt(bitPattern: _slide)
-                            symbols.append((address: address, name: name))
-                        }
-                    }
-                }
-                break
-            }
-
-            commandPtr = commandPtr.advanced(by: Int(command.cmdsize))
-        }
-
-        // Sort by address
-        symbols.sort { $0.address < $1.address }
-
-        // Compute sizes as gaps between adjacent symbols
-        _functionBounds.reserveCapacity(symbols.count)
-        for i in 0..<symbols.count {
-            let address = symbols[i].address
-            let size: UInt
-            if i + 1 < symbols.count {
-                size = symbols[i + 1].address - address
-            } else {
-                size = 4096  // Default for last symbol
-            }
-            _functionBounds.append((address: address, size: size))
-        }
-
-        #if DEBUG
-        print("[FunctionSizeLookup] Parsed \(_functionBounds.count) symbols from symbol table")
-        #endif
-    }
-
-    /// Find the base address where linkedit segment is mapped.
-    /// For a loaded binary, the linkedit data is at: slide + vmaddr
-    private func findLinkeditBase(header: UnsafePointer<mach_header_64>) -> UnsafeRawPointer? {
-        var commandPtr = UnsafeRawPointer(header).advanced(by: MemoryLayout<mach_header_64>.size)
-        var linkeditVMAddr: UInt64 = 0
-        var linkeditFileOff: UInt64 = 0
-
-        for _ in 0..<header.pointee.ncmds {
-            let command = commandPtr.assumingMemoryBound(to: load_command.self).pointee
-
-            if command.cmd == LC_SEGMENT_64 {
-                let segment = commandPtr.assumingMemoryBound(to: segment_command_64.self).pointee
-                let segname = withUnsafeBytes(of: segment.segname) { ptr -> String in
-                    let bytes = ptr.bindMemory(to: CChar.self)
-                    return String(cString: bytes.baseAddress!)
-                }
-                if segname == "__LINKEDIT" {
-                    linkeditVMAddr = segment.vmaddr
-                    linkeditFileOff = segment.fileoff
-                }
-            }
-
-            commandPtr = commandPtr.advanced(by: Int(command.cmdsize))
-        }
-
-        guard linkeditVMAddr > 0 else { return nil }
-
-        // The linkedit base for offset lookups is: slide + linkedit_vmaddr - linkedit_fileoff
-        let slide = UInt64(bitPattern: Int64(_slide))
-        let linkeditBase = slide + linkeditVMAddr - linkeditFileOff
-        return UnsafeRawPointer(bitPattern: UInt(linkeditBase))
-    }
-
-    /// Look up the size of a function given its start address.
-    /// Returns nil if the address is not found.
-    func getSize(forFunctionAt address: UInt) -> UInt? {
-        if !_initialized {
-            initialize()
-        }
-
-        // Binary search for the address
-        var low = 0
-        var high = _functionBounds.count - 1
-
-        while low <= high {
-            let mid = (low + high) / 2
-            let entry = _functionBounds[mid]
-
-            if entry.address == address {
-                return entry.size
-            } else if entry.address < address {
-                low = mid + 1
-            } else {
-                high = mid - 1
-            }
-        }
-
-        return nil
-    }
-
-    /// Get sizes for multiple function addresses at once.
-    /// More efficient than individual lookups due to reduced actor overhead.
-    func getSizes(forFunctionsAt addresses: [UInt]) -> [UInt: UInt] {
-        if !_initialized {
-            initialize()
-        }
-
-        var result: [UInt: UInt] = [:]
-        result.reserveCapacity(addresses.count)
-
-        for address in addresses {
-            if let size = getSize(forFunctionAt: address) {
-                result[address] = size
-            }
-        }
-
-        return result
-    }
-
-    /// Check if the lookup table is available.
-    var isAvailable: Bool {
-        if !_initialized {
-            initialize()
-        }
-        return !_functionBounds.isEmpty
-    }
-}
-
-/// Global actor instance for function size lookup.
-private let functionSizeLookup = FunctionSizeLookupActor()
 
 extension SanCovCounters {
     /// Get the size of a function given its start address.
@@ -1132,153 +756,4 @@ extension SanCovCounters {
     public static var measurementRegistryFailures: Int {
         Int(sancov_get_measurement_registry_failures())
     }
-}
-
-/// Coverage result with source-mapped locations (task-isolated).
-///
-/// When DWARF debug info is available, locations include line numbers,
-/// enabling line-level coverage analysis.
-public struct SanCovSourceCoverage: Sendable {
-    /// All covered source locations.
-    public let coveredLocations: [SanCovSourceLocation]
-
-    /// Number of edges covered.
-    public var coveredCount: Int { coveredLocations.count }
-
-    /// Whether line numbers are available in the coverage data.
-    public var hasLineNumbers: Bool {
-        coveredLocations.contains { $0.line != nil }
-    }
-
-    /// Coverage grouped by file.
-    public var byFile: [String: [SanCovSourceLocation]] {
-        Dictionary(grouping: coveredLocations.filter { $0.filename != nil }) {
-            $0.filename!
-        }
-    }
-
-    /// Coverage grouped by function.
-    public var byFunction: [String: [SanCovSourceLocation]] {
-        Dictionary(grouping: coveredLocations.filter { $0.functionName != nil }) {
-            $0.functionName!
-        }
-    }
-
-    /// Coverage grouped by file and line (file:line -> locations).
-    ///
-    /// Only includes locations that have line numbers.
-    public var byFileLine: [String: [SanCovSourceLocation]] {
-        Dictionary(grouping: coveredLocations.filter { $0.filename != nil && $0.line != nil }) {
-            "\($0.filename!):\($0.line!)"
-        }
-    }
-
-    /// Get all unique files that were covered.
-    public var coveredFiles: Set<String> {
-        Set(coveredLocations.compactMap { $0.filename })
-    }
-
-    /// Get all unique functions that were covered.
-    public var coveredFunctions: Set<String> {
-        Set(coveredLocations.compactMap { $0.functionName })
-    }
-
-    /// Get all unique lines that were covered, grouped by file.
-    ///
-    /// Returns a dictionary mapping file paths to sets of covered line numbers.
-    public var coveredLinesByFile: [String: Set<Int>] {
-        var result: [String: Set<Int>] = [:]
-        for loc in coveredLocations {
-            guard let file = loc.filename, let line = loc.line else { continue }
-            result[file, default: []].insert(line)
-        }
-        return result
-    }
-
-    /// Get a summary of covered lines per file.
-    ///
-    /// Returns formatted strings like "MyFile.swift: lines 10, 15, 20-25"
-    public var lineCoverageSummary: [String] {
-        coveredLinesByFile.map { (file, lines) in
-            let sortedLines = lines.sorted()
-            let ranges = collapseToRanges(sortedLines)
-            let rangeStr = ranges.map { range in
-                range.count == 1 ? "\(range.lowerBound)" : "\(range.lowerBound)-\(range.upperBound)"
-            }.joined(separator: ", ")
-            return "\(URL(fileURLWithPath: file).lastPathComponent): lines \(rangeStr)"
-        }.sorted()
-    }
-}
-
-/// Collapse consecutive integers into ranges.
-private func collapseToRanges(_ sorted: [Int]) -> [ClosedRange<Int>] {
-    guard !sorted.isEmpty else { return [] }
-
-    var ranges: [ClosedRange<Int>] = []
-    var start = sorted[0]
-    var end = sorted[0]
-
-    for i in 1..<sorted.count {
-        if sorted[i] == end + 1 {
-            end = sorted[i]
-        } else {
-            ranges.append(start...end)
-            start = sorted[i]
-            end = sorted[i]
-        }
-    }
-    ranges.append(start...end)
-    return ranges
-}
-
-/// Measure coverage with source location mapping (context-isolated).
-///
-/// This combines context-isolated SanCov coverage with source location mapping.
-/// Coverage is isolated to a unique measurement context, allowing parallel test execution
-/// without contamination - even for synchronous tests.
-///
-/// ```swift
-/// let coverage = measureSanCovSourceCoverage {
-///     myFunction()
-/// }
-/// for file in coverage?.coveredFiles ?? [] {
-///     print("Covered: \(file)")
-/// }
-/// ```
-///
-/// - Parameter body: The code to measure.
-/// - Returns: Source-mapped coverage, or nil if SanCov unavailable.
-@discardableResult
-public func measureSanCovSourceCoverage(_ body: () throws -> Void) async rethrows -> SanCovSourceCoverage? {
-    guard SanCovCounters.isAvailable else { return nil }
-    guard let context = SanCovCounters.beginMeasurement() else { return nil }
-    defer { SanCovCounters.endMeasurement(context) }
-
-    // Reset context-isolated counters
-    SanCovCounters.reset()
-
-    // Run the code
-    try body()
-
-    // Get source-mapped coverage
-    let locations = await SanCovCounters.getCoveredLocations()
-    return SanCovSourceCoverage(coveredLocations: locations)
-}
-
-/// Measure coverage with source location mapping (context-isolated, async body).
-@discardableResult
-public func measureSanCovSourceCoverage(_ body: () async throws -> Void) async rethrows -> SanCovSourceCoverage? {
-    guard SanCovCounters.isAvailable else { return nil }
-    guard let context = SanCovCounters.beginMeasurement() else { return nil }
-    defer { SanCovCounters.endMeasurement(context) }
-
-    // Reset context-isolated counters
-    SanCovCounters.reset()
-
-    // Run the code
-    try await body()
-
-    // Get source-mapped coverage
-    let locations = await SanCovCounters.getCoveredLocations()
-    return SanCovSourceCoverage(coveredLocations: locations)
 }

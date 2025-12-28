@@ -48,20 +48,13 @@
 //     range boundaries (100, 200), length variants (abcde), and arithmetic
 //     relationship values (3, 7, 77, 1155)
 //
-//  2. Value profile guidance: Uses -sanitize-coverage=trace-cmp to capture
-//     comparison operands. Directly tries constant values from comparisons.
-//
-//  3. Priority chaining: When an input makes value profile progress, it's
-//     prioritized for mutation next. Saved targets from that test are used
-//     to generate follow-up mutations, enabling incremental constraint solving.
-//
-//  4. Modulo-aware mutations: For small targets, try target + k*modulus
+//  2. Modulo-aware mutations: For small targets, try target + k*modulus
 //     for common moduli (10, 100, 256, 1000, etc.)
 //
-//  5. Coordinated pair mutations: For (Int, Int) constraints like a+b==target,
+//  3. Coordinated pair mutations: For (Int, Int) constraints like a+b==target,
 //     set both values together to satisfy the constraint.
 //
-//  6. Divisibility-aware mutations: Try nearby multiples of 7, 11, 13, 77
+//  4. Divisibility-aware mutations: Try nearby multiples of 7, 11, 13, 77
 //
 //  ## Known Limitations
 //

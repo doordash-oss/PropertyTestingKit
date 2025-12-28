@@ -15,24 +15,6 @@ import Foundation
 @Suite("SanCovCounters Race Detection")
 struct SanCovCountersRaceTests {
 
-    @Test("Concurrent reset and snapshot operations")
-    func concurrentResetAndSnapshot() async {
-        // Exercise concurrent reset/snapshot which access global counter state
-        await withTaskGroup(of: Void.self) { group in
-            for _ in 0..<10 {
-                group.addTask {
-                    SanCovCounters.reset()
-                }
-                group.addTask {
-                    _ = SanCovCounters.snapshot()
-                }
-                group.addTask {
-                    _ = SanCovCounters.currentCoveredCount
-                }
-            }
-        }
-    }
-
     @Test("Concurrent coverage measurements")
     func concurrentCoverageMeasurements() async {
         // Multiple concurrent coverage measurements

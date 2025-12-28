@@ -137,7 +137,7 @@ targets:
           $(inherited)
           -g
           -sanitize=undefined
-          -sanitize-coverage=edge,trace-cmp,pc-table
+          -sanitize-coverage=edge,pc-table
         # Paths to C module headers for Swift import
         SWIFT_INCLUDE_PATHS:
           - $(SRCROOT)/Sources/CLLVMSymbolizer/include
@@ -168,7 +168,7 @@ targets:
           $(inherited)
           -g
           -sanitize=undefined
-          -sanitize-coverage=edge,trace-cmp,pc-table
+          -sanitize-coverage=edge,pc-table
         SWIFT_INCLUDE_PATHS:
           - $(SRCROOT)/Sources/CLLVMSymbolizer/include
           - $(SRCROOT)/Sources/SanCovHooks/include
@@ -197,7 +197,7 @@ targets:
           $(inherited)
           -g
           -sanitize=thread
-          -sanitize-coverage=edge,trace-cmp,pc-table
+          -sanitize-coverage=edge,pc-table
         SWIFT_INCLUDE_PATHS:
           - $(SRCROOT)/Sources/CLLVMSymbolizer/include
           - $(SRCROOT)/Sources/SanCovHooks/include
@@ -231,7 +231,7 @@ targets:
           $(inherited)
           -g
           -sanitize=undefined
-          -sanitize-coverage=edge,trace-cmp,pc-table
+          -sanitize-coverage=edge,pc-table
         SWIFT_INCLUDE_PATHS:
           - $(SRCROOT)/Sources/CLLVMSymbolizer/include
           - $(SRCROOT)/Sources/SanCovHooks/include

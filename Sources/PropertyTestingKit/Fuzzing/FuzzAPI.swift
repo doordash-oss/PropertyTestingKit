@@ -67,7 +67,7 @@ import Dependencies
 ///
 /// ## Requirements
 ///
-/// - Build with sanitizer coverage: `-sanitize-coverage=edge,trace-cmp`
+/// - Build with sanitizer coverage: `-sanitize-coverage=edge,pc-table`
 /// - Input type must conform to `Fuzzable & Codable`
 /// - **Coverage isolation**: The fuzzer uses task-keyed coverage maps that provide
 ///   true per-task isolation. Multiple fuzz tests can run concurrently without
