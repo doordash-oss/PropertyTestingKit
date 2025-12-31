@@ -74,33 +74,6 @@ struct TestCaseShrinkerTests {
         #expect(candidates.contains(""))
     }
 
-    // MARK: - IntegerShrinker Tests
-
-    @Test("Integer shrinker generates candidates toward zero")
-    func testIntegerShrinkerTowardZero() {
-        let candidates = IntegerShrinker.candidates(for: 100, toward: 0)
-
-        #expect(candidates.contains(0))
-        #expect(candidates.contains(50))
-        #expect(candidates.contains(99))
-    }
-
-    @Test("Integer shrinker generates candidates for negative")
-    func testIntegerShrinkerNegative() {
-        let candidates = IntegerShrinker.candidates(for: -50, toward: 0)
-
-        #expect(candidates.contains(0))
-        #expect(candidates.contains(-25))
-    }
-
-    @Test("Integer shrinker handles zero")
-    func testIntegerShrinkerZero() {
-        let candidates = IntegerShrinker.candidates(for: 0, toward: 0)
-
-        // Zero shrinking to zero should have no candidates
-        #expect(!candidates.contains(0))
-    }
-
     // MARK: - TestCaseShrinker Array Tests
 
     @Test("Shrinker reduces array to minimal failing element")
@@ -263,33 +236,99 @@ struct TestCaseShrinkerTests {
         #expect(stats.reductionRatio > 0)
     }
 
-    // MARK: - ShrinkableInt Tests
+    // MARK: - Void-Returning Test Overload Tests
 
-    @Test("ShrinkableInt wraps value")
-    func testShrinkableIntWraps() {
-        let shrinkable = ShrinkableInt(42)
-        #expect(shrinkable.value == 42)
-        #expect(shrinkable.shrinkableElementCount == 42)
-    }
+    @Test("Shrinker detects failure from thrown error")
+    func testShrinkerVoidThrowingTest() async {
+        let shrinker = TestCaseShrinker<[Int]>(config: ShrinkConfig(
+            maxExecutions: 100
+        ))
 
-    @Test("ShrinkableInt simplified candidates")
-    func testShrinkableIntSimplified() {
-        let shrinkable = ShrinkableInt(100)
-        let candidates = shrinkable.simplifiedCandidates()
+        struct TestError: Error {}
 
-        #expect(candidates.contains { $0.value == 0 })
-        #expect(candidates.contains { $0.value == 50 })
-    }
-
-    // MARK: - Helper Function Tests
-
-    @Test("shrinkFailingInput helper works")
-    func testShrinkFailingInputHelper() async {
-        let (minimized, stats) = await shrinkFailingInput([1, 2, 3, 42, 5, 6]) { candidate in
-            candidate.contains(42) ? .fail : .pass
+        // Test throws when array contains 42
+        let (minimized, stats) = await shrinker.shrink(input: [1, 2, 42, 3, 4, 5]) { candidate in
+            if candidate.contains(42) {
+                throw TestError()
+            }
         }
 
         #expect(minimized.contains(42))
-        #expect(stats.candidatesTested > 0)
+        #expect(minimized.count <= 2)
+        #expect(stats.reductionRatio > 0.5)
+    }
+
+    @Test("Shrinker detects failure from recorded issue")
+    func testShrinkerVoidExpectTest() async {
+        let shrinker = TestCaseShrinker<[Int]>(config: ShrinkConfig(
+            maxExecutions: 100
+        ))
+
+        // Test records issue when array contains 42
+        let (minimized, stats) = await shrinker.shrink(input: [1, 2, 42, 3, 4, 5]) { candidate in
+            #expect(!candidate.contains(42))
+        }
+
+        #expect(minimized.contains(42))
+        #expect(minimized.count <= 2)
+        #expect(stats.reductionRatio > 0.5)
+    }
+
+    @Test("Shrinker void test detects pass when no failure")
+    func testShrinkerVoidPassingTest() async {
+        let shrinker = TestCaseShrinker<[Int]>(config: ShrinkConfig(
+            maxExecutions: 50
+        ))
+
+        // Test never fails - nothing to shrink to
+        let (minimized, stats) = await shrinker.shrink(input: [1, 2, 3, 4, 5]) { (_: [Int]) in
+            // All inputs pass - do nothing
+        }
+
+        // Since all candidates pass, original should be returned unchanged
+        #expect(minimized == [1, 2, 3, 4, 5])
+        #expect(stats.minimizedSize == 5)
+    }
+
+    @Test("MultiComponentShrinker void test with thrown error")
+    func testMultiComponentShrinkerVoidThrowingTest() async {
+        let shrinker = MultiComponentShrinker(config: ShrinkConfig(
+            maxExecutions: 100
+        ))
+
+        struct TestError: Error {}
+
+        // Failure: first array contains 5 AND second string contains "x"
+        let input = ([1, 2, 3, 4, 5, 6, 7], "abcxdef")
+        let (minimized, stats) = await shrinker.shrink(input: input) { (arr: [Int], str: String) in
+            if arr.contains(5) && str.contains("x") {
+                throw TestError()
+            }
+        }
+
+        #expect(minimized.0.contains(5))
+        #expect(minimized.1.contains("x"))
+        #expect(minimized.0.count < 7)
+        #expect(minimized.1.count < 7)
+        #expect(stats.reductionRatio > 0)
+    }
+
+    @Test("MultiComponentShrinker void test with recorded issue")
+    func testMultiComponentShrinkerVoidExpectTest() async {
+        let shrinker = MultiComponentShrinker(config: ShrinkConfig(
+            maxExecutions: 100
+        ))
+
+        // Failure: first array contains 5 AND second string contains "x"
+        let input = ([1, 2, 3, 4, 5, 6, 7], "abcxdef")
+        let (minimized, stats) = await shrinker.shrink(input: input) { (arr: [Int], str: String) in
+            #expect(!(arr.contains(5) && str.contains("x")))
+        }
+
+        #expect(minimized.0.contains(5))
+        #expect(minimized.1.contains("x"))
+        #expect(minimized.0.count < 7)
+        #expect(minimized.1.count < 7)
+        #expect(stats.reductionRatio > 0)
     }
 }

@@ -24,13 +24,18 @@ public struct FuzzResult<each Input: Codable & Sendable>: Sendable {
     /// Reports from analysis plugins.
     public let analysisReports: [AnyAnalysisReport]
 
+    /// Shrinking statistics for each failure (parallel array with failures).
+    /// Only populated if shrinking was performed.
+    public let shrinkingStats: [ShrinkStats]
+
     public init(
         corpus: CorpusSnapshot<repeat each Input>,
         failures: [(input: (repeat each Input), error: Error)],
         stats: FuzzStats,
         wasRegression: Bool,
         coverageChanges: [(input: (repeat each Input), expected: CoverageSignature, actual: CoverageSignature)],
-        analysisReports: [AnyAnalysisReport] = []
+        analysisReports: [AnyAnalysisReport] = [],
+        shrinkingStats: [ShrinkStats] = []
     ) {
         self.corpus = corpus
         self.failures = failures
@@ -38,6 +43,7 @@ public struct FuzzResult<each Input: Codable & Sendable>: Sendable {
         self.wasRegression = wasRegression
         self.coverageChanges = coverageChanges
         self.analysisReports = analysisReports
+        self.shrinkingStats = shrinkingStats
     }
 
     /// Get a specific analysis report by plugin ID.

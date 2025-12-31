@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import Testing
 
 /// Analysis plugin that detects coverage gaps in partially-covered functions.
 ///

@@ -94,6 +94,8 @@ import Dependencies
 ///     Use `.plateauDetector()` for adaptive early stopping.
 ///   - analysisPlugins: Plugins that run after fuzzing completes. Use `.coverageGaps()`
 ///     to enable coverage gap detection.
+///   - shrinkingPlugin: Plugin for shrinking failing inputs to minimal reproducing cases.
+///     Use `.default()` to enable shrinking with default settings.
 ///   - filePath: Source file path (auto-filled).
 ///   - function: Test function name (auto-filled).
 ///   - test: The test closure receiving fuzzed inputs.
@@ -111,6 +113,7 @@ public func fuzz<each Input: Fuzzable & Codable & Sendable, each M: Mutator>(
     observerPlugins: [any FuzzObserverPlugin] = [],
     stoppingPlugins: [any StoppingConditionPlugin]? = nil,
     analysisPlugins: [any AnalysisPlugin] = [],
+    shrinkingPlugin: (any ShrinkingPlugin)? = nil,
     filePath: StaticString = #filePath,
     function: StaticString = #function,
     line: Int = #line,
@@ -128,7 +131,8 @@ public func fuzz<each Input: Fuzzable & Codable & Sendable, each M: Mutator>(
         projectPath: projectPath(from: filePath),
         observerPlugins: observerPlugins,
         stoppingPlugins: stoppingPlugins,
-        analysisPlugins: analysisPlugins
+        analysisPlugins: analysisPlugins,
+        shrinkingPlugin: shrinkingPlugin
     )
 
     let engine = FuzzEngine<repeat each Input>(
@@ -163,6 +167,8 @@ public func fuzz<each Input: Fuzzable & Codable & Sendable, each M: Mutator>(
 ///     Use `.plateauDetector()` for adaptive early stopping.
 ///   - analysisPlugins: Plugins that run after fuzzing completes. Use `.coverageGaps()`
 ///     to enable coverage gap detection.
+///   - shrinkingPlugin: Plugin for shrinking failing inputs to minimal reproducing cases.
+///     Use `.default()` to enable shrinking with default settings.
 ///   - filePath: Source file path (auto-filled).
 ///   - function: Test function name (auto-filled).
 ///   - test: The test closure receiving fuzzed inputs.
@@ -179,6 +185,7 @@ public func fuzz<each Input: Fuzzable & Codable & Sendable>(
     observerPlugins: [any FuzzObserverPlugin] = [],
     stoppingPlugins: [any StoppingConditionPlugin]? = nil,
     analysisPlugins: [any AnalysisPlugin] = [],
+    shrinkingPlugin: (any ShrinkingPlugin)? = nil,
     filePath: StaticString = #filePath,
     function: StaticString = #function,
     line: Int = #line,
@@ -196,7 +203,8 @@ public func fuzz<each Input: Fuzzable & Codable & Sendable>(
         projectPath: projectPath(from: filePath),
         observerPlugins: observerPlugins,
         stoppingPlugins: stoppingPlugins,
-        analysisPlugins: analysisPlugins
+        analysisPlugins: analysisPlugins,
+        shrinkingPlugin: shrinkingPlugin
     )
 
     let engine = FuzzEngine<repeat each Input>(

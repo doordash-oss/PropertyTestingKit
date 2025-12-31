@@ -20,9 +20,23 @@ struct FuzzPluginManager: @unchecked Sendable {
     /// Analysis plugins (post-fuzzing analysis).
     private let analysisPlugins: [any AnalysisPlugin]
 
+    /// Shrinking plugin for minimizing failing inputs.
+    private let shrinkingPlugin: (any ShrinkingPlugin)?
+
     /// Whether any stopping plugins are configured.
     var hasStoppingPlugins: Bool {
         !stoppingConditions.isEmpty
+    }
+
+    /// Whether shrinking is enabled.
+    var hasShrinkingEnabled: Bool {
+        shrinkingPlugin?.isEnabled ?? false
+    }
+
+    /// Get the shrinking configuration (if available).
+    var shrinkingConfig: ShrinkConfig? {
+        guard let plugin = shrinkingPlugin, plugin.isEnabled else { return nil }
+        return plugin.config
     }
 
     /// Initialize the plugin manager with plugin arrays.
@@ -31,14 +45,17 @@ struct FuzzPluginManager: @unchecked Sendable {
     ///   - observerPlugins: Observer plugins for lifecycle notifications.
     ///   - stoppingPlugins: Stopping condition plugins.
     ///   - analysisPlugins: Analysis plugins.
+    ///   - shrinkingPlugin: Plugin for shrinking failing inputs.
     init(
         observerPlugins: [any FuzzObserverPlugin],
         stoppingPlugins: [any StoppingConditionPlugin],
-        analysisPlugins: [any AnalysisPlugin]
+        analysisPlugins: [any AnalysisPlugin],
+        shrinkingPlugin: (any ShrinkingPlugin)? = nil
     ) {
         self.observers = observerPlugins.sorted { $0.priority > $1.priority }
         self.stoppingConditions = stoppingPlugins.sorted { $0.priority > $1.priority }
         self.analysisPlugins = analysisPlugins.sorted { $0.priority > $1.priority }
+        self.shrinkingPlugin = shrinkingPlugin
     }
 
     // MARK: - Observer Lifecycle
@@ -157,5 +174,26 @@ struct FuzzPluginManager: @unchecked Sendable {
             }
         }
         return nil
+    }
+
+    // MARK: - Shrinking
+
+    /// Notify the shrinking plugin that shrinking is starting.
+    func notifyShrinkingStart(originalSize: Int, error: Error) async {
+        await shrinkingPlugin?.onShrinkingStart(originalSize: originalSize, error: error)
+    }
+
+    /// Notify the shrinking plugin of progress.
+    func notifyShrinkingProgress(candidatesTested: Int, currentSize: Int, originalSize: Int) async {
+        await shrinkingPlugin?.onShrinkingProgress(
+            candidatesTested: candidatesTested,
+            currentSize: currentSize,
+            originalSize: originalSize
+        )
+    }
+
+    /// Notify the shrinking plugin that shrinking is complete.
+    func notifyShrinkingComplete(stats: ShrinkStats) async {
+        await shrinkingPlugin?.onShrinkingComplete(stats: stats)
     }
 }

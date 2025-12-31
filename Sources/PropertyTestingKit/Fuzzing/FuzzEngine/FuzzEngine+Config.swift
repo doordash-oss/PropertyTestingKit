@@ -66,6 +66,13 @@ extension FuzzEngine {
         /// Use `.coverageGaps()` to enable coverage gap detection.
         public var analysisPlugins: [any AnalysisPlugin]
 
+        /// Shrinking plugin for minimizing failing inputs.
+        /// When enabled, failing inputs are reduced to minimal reproducing cases
+        /// using delta debugging.
+        /// Default: nil (no shrinking).
+        /// Use `.default()` to enable shrinking with default settings.
+        public var shrinkingPlugin: (any ShrinkingPlugin)?
+
         public init(
             maxIterations: Int = 10_000,
             maxDuration: TimeInterval = 60,
@@ -78,7 +85,8 @@ extension FuzzEngine {
             projectPath: String? = nil,
             observerPlugins: [any FuzzObserverPlugin] = [],
             stoppingPlugins: [any StoppingConditionPlugin]? = nil,
-            analysisPlugins: [any AnalysisPlugin] = []
+            analysisPlugins: [any AnalysisPlugin] = [],
+            shrinkingPlugin: (any ShrinkingPlugin)? = nil
         ) {
             self.maxIterations = maxIterations
             self.maxDuration = maxDuration
@@ -97,6 +105,7 @@ extension FuzzEngine {
             // Default to no stopping plugins (only iteration/time limits apply)
             self.stoppingPlugins = stoppingPlugins ?? []
             self.analysisPlugins = analysisPlugins
+            self.shrinkingPlugin = shrinkingPlugin
         }
     }
 }

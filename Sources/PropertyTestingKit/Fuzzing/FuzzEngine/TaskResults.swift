@@ -15,9 +15,9 @@ struct SeedTaskResult: Sendable {
     let timeout: TimeInterval
 }
 
-/// Metadata for a batch entry (input stored separately due to generic constraints).
-struct BatchEntryMeta: Sendable {
-    let index: Int
+/// A batch entry containing both input and metadata.
+struct BatchEntry<each Input: Fuzzable & Codable & Sendable>: Sendable {
+    let input: (repeat each Input)
     let parentIndex: Int?
     let isMutation: Bool
 }
