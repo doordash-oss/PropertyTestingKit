@@ -645,7 +645,7 @@ struct FuzzAPIPropertyTests {
             )
             $0.environment = EnvironmentClient(environment: { [:] })
         } operation: {
-            try await fuzz(iterations: 20, duration: 5) { (input: Int) in
+            try await fuzz(iterations: 20, duration: .seconds(5)) { (input: Int) in
                 _ = input > 0 ? "positive" : "non-positive"
             }
         }
@@ -664,7 +664,7 @@ struct FuzzAPIPropertyTests {
             $0.environment = EnvironmentClient(environment: { [:] })
         } operation: {
             // Use refuzzReplace to always start fresh (ignore any saved corpus)
-            try await fuzz(seeds: ["custom1", "custom2", "custom3"], iterations: 50, duration: 5, corpusMode: .refuzzReplace) { (input: String) in
+            try await fuzz(seeds: ["custom1", "custom2", "custom3"], iterations: 50, duration: .seconds(5), corpusMode: .refuzzReplace) { (input: String) in
                 // Just exercise the input - no actor involvement
                 _ = input.count
             }

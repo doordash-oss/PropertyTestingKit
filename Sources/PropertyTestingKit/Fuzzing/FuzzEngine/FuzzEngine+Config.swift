@@ -12,7 +12,7 @@ extension FuzzEngine {
         public var maxIterations: Int
 
         /// Maximum time to spend fuzzing.
-        public var maxDuration: TimeInterval
+        public var maxDuration: Duration
 
         /// Probability of generating fresh vs mutating (0.0-1.0).
         /// Higher = more fresh generation.
@@ -35,7 +35,7 @@ extension FuzzEngine {
         /// Default: nil (no per-input timeout, only overall duration limit applies).
         ///
         /// Based on Miller 1990 "Fuzz" paper which used 5-minute timeouts to detect hangs.
-        public var perInputTimeout: TimeInterval?
+        public var perInputTimeout: Duration?
 
         /// Number of inputs to test in parallel during the mutation phase.
         /// Higher values increase parallelism but may reduce coverage guidance accuracy
@@ -75,12 +75,12 @@ extension FuzzEngine {
 
         public init(
             maxIterations: Int = 10_000,
-            maxDuration: TimeInterval = 60,
+            maxDuration: Duration = .seconds(60),
             generationRatio: Double = 0.3,
             minimizeCorpus: Bool = true,
             verbose: Bool = false,
             corpusMode: CorpusMode? = nil,
-            perInputTimeout: TimeInterval? = nil,
+            perInputTimeout: Duration? = nil,
             mutationBatchSize: Int = 0,
             projectPath: String? = nil,
             observerPlugins: [any FuzzObserverPlugin] = [],

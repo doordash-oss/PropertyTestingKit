@@ -36,12 +36,14 @@
 		472EBAA0C21986A90E121C90 /* FuzzPluginManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2AF56A3C5CC98C189D94FACC /* FuzzPluginManager.swift */; };
 		4B46C972C1518B04075D7EED /* DWARFSymbolizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3F1917814603DE56511E5F24 /* DWARFSymbolizer.swift */; };
 		4EB9436B27158A5C6839F9BA /* DWARFSymbolizerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1E97A029218EB361C14F01D /* DWARFSymbolizerTests.swift */; };
+		509CC5C943C5ECF47E29EF7C /* PropertyTestingKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 2595E9AD80DBFC77F241A7E7 /* PropertyTestingKit.framework */; };
 		5118F45702A081DEB42B60AA /* DateClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8DCFCD27F236B21539FDC070 /* DateClient.swift */; };
 		52C260E19A743BA5BCADC703 /* CoverageSignature.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BD8E7DDBFB1256A08DEBE05 /* CoverageSignature.swift */; };
 		589D0164A415C152CDD4B160 /* Benchmark in Frameworks */ = {isa = PBXBuildFile; productRef = E6A87E5EFC33D405ECEDD0E1 /* Benchmark */; };
 		5CE75ACE29DD3F8860FAA19D /* STADSPlateauDetector.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1733E8C2C5D2FC2BC7394036 /* STADSPlateauDetector.swift */; };
 		60F4B0B951427866AB7380DC /* CorpusEntry.swift in Sources */ = {isa = PBXBuildFile; fileRef = D708E6A5A1B65DA927AFEA9E /* CorpusEntry.swift */; };
 		61031F0CE3C1B19C1D04DF89 /* PropertyTestingKit.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 2595E9AD80DBFC77F241A7E7 /* PropertyTestingKit.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		63529CA3B2D9F29C8601810D /* PropertyTestingKit.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 2595E9AD80DBFC77F241A7E7 /* PropertyTestingKit.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		6632F732A4FAECE34A80F544 /* ShrinkStats.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C98CB65B3ADE29BB300C7EA /* ShrinkStats.swift */; };
 		67B2DBE808E07482177746DF /* UInt+Fuzzable.swift in Sources */ = {isa = PBXBuildFile; fileRef = 029261475F37B2CCF9E0B0F7 /* UInt+Fuzzable.swift */; };
 		6B3E9990299CD5D8B12A316E /* Int+Fuzzable.swift in Sources */ = {isa = PBXBuildFile; fileRef = D22DDC98AF9435971589CF56 /* Int+Fuzzable.swift */; };
@@ -72,6 +74,7 @@
 		A1B5C9D7B4345854FF5D488A /* PropertyTestingKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 2595E9AD80DBFC77F241A7E7 /* PropertyTestingKit.framework */; };
 		A36B305BD1D1ED9AD7FA7393 /* Double+Fuzzable.swift in Sources */ = {isa = PBXBuildFile; fileRef = 96C9C5A0907E3C1FF9A53837 /* Double+Fuzzable.swift */; };
 		A37D8BF967DDC59F6674C589 /* CartesianProduct.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3DC7247C29C4368A12DBDC7 /* CartesianProduct.swift */; };
+		A4917FD92F876D60CD8646DC /* FuzzerStressTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E6E3AD5DC96FE62C844BFA88 /* FuzzerStressTests.swift */; };
 		A791F464FE3BDDB8A76320B5 /* FuzzPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = C46A7E2288E1AE7A59B100CF /* FuzzPlugin.swift */; };
 		A8AB88E38D9F9BBE8CCCD77B /* CorpusCoder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3FFCEA0CB033829BFBAEFA52 /* CorpusCoder.swift */; };
 		A971C2C46510D47C1A1C3FE0 /* Bool+Fuzzable.swift in Sources */ = {isa = PBXBuildFile; fileRef = C13A3C0DDB843401611C6BCC /* Bool+Fuzzable.swift */; };
@@ -94,6 +97,7 @@
 		CD4CF90D44574C94590CCE3F /* DeterministicTimingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5DE9A7DAD99528274ED05439 /* DeterministicTimingTests.swift */; };
 		CF148FE630379ED6CAF42AA4 /* SimpleCoveragePlateauDetectorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3B56C4B9B3773FB6734D0821 /* SimpleCoveragePlateauDetectorTests.swift */; };
 		CFEE279397531A3509632FAA /* FunctionSpy in Frameworks */ = {isa = PBXBuildFile; productRef = F0BEB91D5B04B84629BA665A /* FunctionSpy */; };
+		D050028AE7CF7F83205D5C4E /* HardToFuzzFunctions.swift in Sources */ = {isa = PBXBuildFile; fileRef = CCEE0E1BF3B9166CBA9A3C59 /* HardToFuzzFunctions.swift */; };
 		D0C65F0813EFB9C22E7A24EC /* DWARFSymbolizerError.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2671C4A43D9243DDBC246A9 /* DWARFSymbolizerError.swift */; };
 		D304EFC84705417D212EA91D /* CoverageSignatureTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09F9A66C1671353C4CCF4F16 /* CoverageSignatureTests.swift */; };
 		D3BBDD6471BDB998F4979E48 /* FileManagerClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A5FD30F272F4610F9D0637A /* FileManagerClient.swift */; };
@@ -141,6 +145,13 @@
 			remoteGlobalIDString = 05E982383D21A29F788C71F5;
 			remoteInfo = CLLVMSymbolizer;
 		};
+		5526981A9F0018240DD7A826 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 93269515397F3B540BE8A95E /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 3158F44FBF717D69B2A46E2E;
+			remoteInfo = PropertyTestingKit;
+		};
 		67AF272922F6EC84F10C5334 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 93269515397F3B540BE8A95E /* Project object */;
@@ -165,6 +176,17 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXCopyFilesBuildPhase section */
+		1858EF307BE382B917F18073 /* Embed Frameworks */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 10;
+			files = (
+				63529CA3B2D9F29C8601810D /* PropertyTestingKit.framework in Embed Frameworks */,
+			);
+			name = "Embed Frameworks";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		8E8DF323649F55BBD87DBBEF /* Embed Frameworks */ = {
 			isa = PBXCopyFilesBuildPhase;
 			buildActionMask = 2147483647;
@@ -205,6 +227,7 @@
 		021ACDF8BE3B266FA44EEDBD /* CoverageBenchmarks */ = {isa = PBXFileReference; includeInIndex = 0; path = CoverageBenchmarks; sourceTree = BUILT_PRODUCTS_DIR; };
 		029261475F37B2CCF9E0B0F7 /* UInt+Fuzzable.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "UInt+Fuzzable.swift"; sourceTree = "<group>"; };
 		06D254C3EBFD9F80B874BBEB /* AnalysisPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnalysisPlugin.swift; sourceTree = "<group>"; };
+		08D9F63994131BD074E1BE90 /* StressTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = StressTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		09F9A66C1671353C4CCF4F16 /* CoverageSignatureTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoverageSignatureTests.swift; sourceTree = "<group>"; };
 		0A1857217E99772D144C79B7 /* ShrinkResult.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShrinkResult.swift; sourceTree = "<group>"; };
 		0A401389A02B82B842F9ED0F /* Shrinkable.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Shrinkable.swift; sourceTree = "<group>"; };
@@ -278,6 +301,7 @@
 		C8D72A5EBCA28D84F6AECC0B /* Data+Shrinkable.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Data+Shrinkable.swift"; sourceTree = "<group>"; };
 		CB119BBD24F520783D33BA6F /* SanCovHooks.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = SanCovHooks.c; sourceTree = "<group>"; };
 		CBD2703ECFC03CDB4AF0A1EC /* SeededRandomNumberGenerator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SeededRandomNumberGenerator.swift; sourceTree = "<group>"; };
+		CCEE0E1BF3B9166CBA9A3C59 /* HardToFuzzFunctions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HardToFuzzFunctions.swift; sourceTree = "<group>"; };
 		CE00ADF599F29D727647ECE4 /* Array+Fuzzable.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Array+Fuzzable.swift"; sourceTree = "<group>"; };
 		CF44990BD642A0A6FBF94C6F /* SaturationPlateauDetectorPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaturationPlateauDetectorPlugin.swift; sourceTree = "<group>"; };
 		CF7909559B042C15C36EAABE /* PropertyTestingKitTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = PropertyTestingKitTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -294,6 +318,7 @@
 		DF69D0BBA6357FA0A5F78ABC /* ck_ht.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = ck_ht.c; sourceTree = "<group>"; };
 		E0ABBB2AC9890A3F64DAF698 /* SaturationPlateauDetector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaturationPlateauDetector.swift; sourceTree = "<group>"; };
 		E3286F279F14B496AD89F0BE /* MultiComponentShrinker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MultiComponentShrinker.swift; sourceTree = "<group>"; };
+		E6E3AD5DC96FE62C844BFA88 /* FuzzerStressTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FuzzerStressTests.swift; sourceTree = "<group>"; };
 		E710A18D4C3A68A36CF37040 /* CoverageGap.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoverageGap.swift; sourceTree = "<group>"; };
 		EF7AA1611BFAAB73EE70CA85 /* libCLLVMSymbolizer.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = libCLLVMSymbolizer.a; sourceTree = BUILT_PRODUCTS_DIR; };
 		EF833B020283C4892D55D53C /* CoverageBenchmarks.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoverageBenchmarks.swift; sourceTree = "<group>"; };
@@ -309,6 +334,14 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
+		46649763F0389B97CACC72DE /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				509CC5C943C5ECF47E29EF7C /* PropertyTestingKit.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		57F978D7FFE93A2742DD54C9 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -404,6 +437,7 @@
 				BDDFFD2714DEB826C97E5A69 /* PropertyTestingKitTests */,
 				3FC766561AF37D20D5723CE6 /* SanCovHooks */,
 				C57630F4E61E4FE3B2C652DC /* SanCovTests */,
+				CFEBB383E2A4D3C0FFC7FC4F /* StressTests */,
 				1FF8C783A0FF8DC59C8B97F5 /* TSanTests */,
 				3A8850690985797B04B95710 /* Frameworks */,
 				242BA066D9B0C1EE32B183C1 /* Products */,
@@ -419,6 +453,7 @@
 				2595E9AD80DBFC77F241A7E7 /* PropertyTestingKit.framework */,
 				CF7909559B042C15C36EAABE /* PropertyTestingKitTests.xctest */,
 				805D70C5E70888046E92D052 /* SanCovTests.xctest */,
+				08D9F63994131BD074E1BE90 /* StressTests.xctest */,
 				1B7FA0AAC10E7E2DB5FD6CDE /* TSanTests.xctest */,
 			);
 			name = Products;
@@ -595,6 +630,16 @@
 			);
 			name = SanCovTests;
 			path = Tests/SanCovTests;
+			sourceTree = "<group>";
+		};
+		CFEBB383E2A4D3C0FFC7FC4F /* StressTests */ = {
+			isa = PBXGroup;
+			children = (
+				E6E3AD5DC96FE62C844BFA88 /* FuzzerStressTests.swift */,
+				CCEE0E1BF3B9166CBA9A3C59 /* HardToFuzzFunctions.swift */,
+			);
+			name = StressTests;
+			path = Tests/StressTests;
 			sourceTree = "<group>";
 		};
 		D90E9AECF33092EB6E4921C9 /* CoverageBenchmarks */ = {
@@ -777,6 +822,26 @@
 			productReference = 1B7FA0AAC10E7E2DB5FD6CDE /* TSanTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
 		};
+		D4538A35BACFC3EADBA7A08C /* StressTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 8083F2345F7DC62495A61A4D /* Build configuration list for PBXNativeTarget "StressTests" */;
+			buildPhases = (
+				BE1DF3B91A85EA95DDF2C09F /* Sources */,
+				46649763F0389B97CACC72DE /* Frameworks */,
+				1858EF307BE382B917F18073 /* Embed Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				262D309FD6AE92B2135A9D59 /* PBXTargetDependency */,
+			);
+			name = StressTests;
+			packageProductDependencies = (
+			);
+			productName = StressTests;
+			productReference = 08D9F63994131BD074E1BE90 /* StressTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 		E50766C553D412A57A53F038 /* PropertyTestingKitTests */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = DA62F1D8A65E7BD1CCEAC4B9 /* Build configuration list for PBXNativeTarget "PropertyTestingKitTests" */;
@@ -832,6 +897,7 @@
 				E50766C553D412A57A53F038 /* PropertyTestingKitTests */,
 				5FED955AC4DD9D722F6367E3 /* SanCovHooks */,
 				00E9596C140254811771B723 /* SanCovTests */,
+				D4538A35BACFC3EADBA7A08C /* StressTests */,
 				B0BE09FFE9F586EDF3FC5EB9 /* TSanTests */,
 			);
 		};
@@ -876,6 +942,15 @@
 			buildActionMask = 2147483647;
 			files = (
 				DB3B9AFA08DCD50172E473CB /* CLLVMSymbolizer.cpp in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		BE1DF3B91A85EA95DDF2C09F /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A4917FD92F876D60CD8646DC /* FuzzerStressTests.swift in Sources */,
+				D050028AE7CF7F83205D5C4E /* HardToFuzzFunctions.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -987,6 +1062,11 @@
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
+		262D309FD6AE92B2135A9D59 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 3158F44FBF717D69B2A46E2E /* PropertyTestingKit */;
+			targetProxy = 5526981A9F0018240DD7A826 /* PBXContainerItemProxy */;
+		};
 		2AC0ACFBCD7D232DEAF7CAA0 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			target = 5FED955AC4DD9D722F6367E3 /* SanCovHooks */;
@@ -1020,6 +1100,25 @@
 /* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
+		15AB768F7A96BF87B397813C /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				COMBINE_HIDPI_IMAGES = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) $(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin";
+				OTHER_LDFLAGS = "$(inherited) -L$(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin -lclang_rt.ubsan_osx_dynamic";
+				OTHER_SWIFT_FLAGS = "$(inherited) -g -sanitize=undefined -sanitize-coverage=edge,pc-table";
+				PRODUCT_BUNDLE_IDENTIFIER = com.propertytestingkit.stresstests;
+				PRODUCT_NAME = StressTests;
+				SDKROOT = macosx;
+				SWIFT_INCLUDE_PATHS = (
+					"$(SRCROOT)/Sources/CLLVMSymbolizer/include",
+					"$(SRCROOT)/Sources/SanCovHooks/include",
+				);
+			};
+			name = Debug;
+		};
 		1631B0C9FAEE3A3AA2EF9880 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -1219,6 +1318,25 @@
 				SKIP_INSTALL = YES;
 			};
 			name = Debug;
+		};
+		7EB552DF9CA6F9EB6FFB31FE /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				COMBINE_HIDPI_IMAGES = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) $(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin";
+				OTHER_LDFLAGS = "$(inherited) -L$(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin -lclang_rt.ubsan_osx_dynamic";
+				OTHER_SWIFT_FLAGS = "$(inherited) -g -sanitize=undefined -sanitize-coverage=edge,pc-table";
+				PRODUCT_BUNDLE_IDENTIFIER = com.propertytestingkit.stresstests;
+				PRODUCT_NAME = StressTests;
+				SDKROOT = macosx;
+				SWIFT_INCLUDE_PATHS = (
+					"$(SRCROOT)/Sources/CLLVMSymbolizer/include",
+					"$(SRCROOT)/Sources/SanCovHooks/include",
+				);
+			};
+			name = Release;
 		};
 		8332C4FA10B751A8AD2AB47B /* Release */ = {
 			isa = XCBuildConfiguration;
@@ -1503,6 +1621,15 @@
 			buildConfigurations = (
 				685DF0E044D52CFD2386D3B9 /* Debug */,
 				1631B0C9FAEE3A3AA2EF9880 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		8083F2345F7DC62495A61A4D /* Build configuration list for PBXNativeTarget "StressTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				15AB768F7A96BF87B397813C /* Debug */,
+				7EB552DF9CA6F9EB6FFB31FE /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;

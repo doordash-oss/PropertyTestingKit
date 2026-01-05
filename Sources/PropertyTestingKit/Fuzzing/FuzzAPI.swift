@@ -106,8 +106,8 @@ public func fuzz<each Input: Fuzzable & Codable & Sendable, each M: Mutator>(
     using mutators: repeat each M,
     seeds: [(repeat each Input)] = [],
     iterations: Int = 10_000,
-    duration: TimeInterval = 60,
-    perInputTimeout: TimeInterval? = nil,
+    duration: Duration = .seconds(60),
+    perInputTimeout: Duration? = nil,
     corpusMode: CorpusMode? = nil,
     mutationBatchSize: Int = 0,
     observerPlugins: [any FuzzObserverPlugin] = [],
@@ -178,8 +178,8 @@ public func fuzz<each Input: Fuzzable & Codable & Sendable, each M: Mutator>(
 public func fuzz<each Input: Fuzzable & Codable & Sendable>(
     seeds: [(repeat each Input)] = [],
     iterations: Int = 10_000,
-    duration: TimeInterval = 60,
-    perInputTimeout: TimeInterval? = nil,
+    duration: Duration = .seconds(60),
+    perInputTimeout: Duration? = nil,
     corpusMode: CorpusMode? = nil,
     mutationBatchSize: Int = 0,
     observerPlugins: [any FuzzObserverPlugin] = [],
@@ -432,7 +432,7 @@ extension FuzzEngine.Config {
         }
 
         if let duration = env["FUZZ_DURATION"].flatMap(TimeInterval.init) {
-            config.maxDuration = duration
+            config.maxDuration = .seconds(duration)
         }
 
         if env["FUZZ_VERBOSE"] != nil {

@@ -211,6 +211,37 @@ targets:
         PRODUCT_NAME: TSanTests
         PRODUCT_BUNDLE_IDENTIFIER: com.propertytestingkit.tsantests
 
+  # Stress tests for fuzzer coverage capabilities
+  StressTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - path: Tests/StressTests
+        excludes:
+          - "**/Corpus/**"
+    dependencies:
+      - target: PropertyTestingKit
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        OTHER_SWIFT_FLAGS: >-
+          $(inherited)
+          -g
+          -sanitize=undefined
+          -sanitize-coverage=edge,pc-table
+        SWIFT_INCLUDE_PATHS:
+          - $(SRCROOT)/Sources/CLLVMSymbolizer/include
+          - $(SRCROOT)/Sources/SanCovHooks/include
+        OTHER_LDFLAGS: >-
+          $(inherited)
+          -L$(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin
+          -lclang_rt.ubsan_osx_dynamic
+        LD_RUNPATH_SEARCH_PATHS: >-
+          $(inherited)
+          $(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin
+        PRODUCT_NAME: StressTests
+        PRODUCT_BUNDLE_IDENTIFIER: com.propertytestingkit.stresstests
+
   # Coverage benchmarks
   CoverageBenchmarks:
     type: tool
@@ -251,11 +282,13 @@ schemes:
         PropertyTestingKitTests: [test]
         SanCovTests: [test]
         TSanTests: [test]
+        StressTests: [test]
     test:
       targets:
         - PropertyTestingKitTests
         - SanCovTests
         - TSanTests
+        - StressTests
       gatherCoverageData: false
   CoverageBenchmarks:
     build:

@@ -237,7 +237,7 @@ let benchmarks: @Sendable () -> Void = {
         for _ in benchmark.scaledIterations {
             let config = FuzzEngine<Int>.Config(
                 maxIterations: 100,
-                maxDuration: 1,
+                maxDuration: .seconds(1),
                 corpusMode: .refuzzReplace,
                 stoppingPlugins: []
             )
@@ -261,7 +261,7 @@ let benchmarks: @Sendable () -> Void = {
         for _ in benchmark.scaledIterations {
             let config = FuzzEngine<Int>.Config(
                 maxIterations: 100,
-                maxDuration: 1,
+                maxDuration: .seconds(1),
                 corpusMode: .refuzzReplace,
                 stoppingPlugins: [],
                 analysisPlugins: [.coverageGaps()]
@@ -286,7 +286,7 @@ let benchmarks: @Sendable () -> Void = {
         for _ in benchmark.scaledIterations {
             let config = FuzzEngine<String>.Config(
                 maxIterations: 100,
-                maxDuration: 1,
+                maxDuration: .seconds(1),
                 corpusMode: .refuzzReplace,
                 stoppingPlugins: []
             )
@@ -357,7 +357,7 @@ let benchmarks: @Sendable () -> Void = {
         for _ in benchmark.scaledIterations {
             let config = FuzzEngine<Int>.Config(
                 maxIterations: 100,
-                maxDuration: 5,
+                maxDuration: .seconds(5),
                 corpusMode: .refuzzReplace,
                 stoppingPlugins: [],
                 analysisPlugins: [.coverageGaps()]
@@ -382,7 +382,7 @@ let benchmarks: @Sendable () -> Void = {
         for _ in benchmark.scaledIterations {
             let config = FuzzEngine<EmptyFuzzable>.Config(
                 maxIterations: 10,
-                maxDuration: 1,
+                maxDuration: .seconds(1),
                 corpusMode: .refuzzReplace,
                 stoppingPlugins: []
             )
@@ -729,7 +729,7 @@ let benchmarks: @Sendable () -> Void = {
         for _ in benchmark.scaledIterations {
             let config = FuzzEngine<Int>.Config(
                 maxIterations: 10,
-                maxDuration: 1,
+                maxDuration: .seconds(1),
                 corpusMode: .refuzzReplace,
                 stoppingPlugins: []
             )
@@ -754,7 +754,7 @@ let benchmarks: @Sendable () -> Void = {
         for _ in benchmark.scaledIterations {
             let config = FuzzEngine<Int>.Config(
                 maxIterations: 50,
-                maxDuration: 1,
+                maxDuration: .seconds(1),
                 corpusMode: .refuzzReplace,
                 stoppingPlugins: []
             )
@@ -894,7 +894,7 @@ let benchmarks: @Sendable () -> Void = {
         for _ in benchmark.scaledIterations {
             let config = FuzzEngine<Int>.Config(
                 maxIterations: 100,
-                maxDuration: 30,
+                maxDuration: .seconds(30),
                 corpusMode: .refuzzReplace,
                 stoppingPlugins: []
             )
@@ -918,7 +918,7 @@ let benchmarks: @Sendable () -> Void = {
         for _ in benchmark.scaledIterations {
             let config = FuzzEngine<Int>.Config(
                 maxIterations: 100,
-                maxDuration: 30,
+                maxDuration: .seconds(30),
                 corpusMode: .refuzzReplace,
                 mutationBatchSize: 1,  // Force sequential execution
                 stoppingPlugins: []
@@ -943,7 +943,7 @@ let benchmarks: @Sendable () -> Void = {
         for _ in benchmark.scaledIterations {
             let config = FuzzEngine<Int>.Config(
                 maxIterations: 100,
-                maxDuration: 30,
+                maxDuration: .seconds(30),
                 corpusMode: .refuzzReplace,
                 mutationBatchSize: 16,
                 stoppingPlugins: []

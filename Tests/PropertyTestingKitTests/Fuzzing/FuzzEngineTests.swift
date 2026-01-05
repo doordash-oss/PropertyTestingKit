@@ -97,7 +97,7 @@ struct FuzzEngineTests {
         } operation: {
             let config = FuzzEngine<Int>.Config(
                 maxIterations: 30,
-                maxDuration: 5,
+                maxDuration: .seconds(5),
                 minimizeCorpus: false,
                 verbose: false,
                 stoppingPlugins: []
@@ -123,7 +123,7 @@ struct FuzzEngineTests {
         } operation: {
             let config = FuzzEngine<Int>.Config(
                 maxIterations: 20,
-                maxDuration: 3,
+                maxDuration: .seconds(3),
                 verbose: false
             )
 
@@ -149,7 +149,7 @@ struct FuzzEngineTests {
         } operation: {
             let config = FuzzEngine<Int>.Config(
                 maxIterations: 50,  // Higher than Int.fuzz count (21) to allow some fuzzing
-                maxDuration: 60,
+                maxDuration: .seconds(60),
                 verbose: false,
                 stoppingPlugins: []
             )
@@ -171,7 +171,7 @@ struct FuzzEngineTests {
         } operation: {
             let config = FuzzEngine<Int>.Config(
                 maxIterations: 20,
-                maxDuration: 5,
+                maxDuration: .seconds(5),
                 verbose: false
             )
 
@@ -194,7 +194,7 @@ struct FuzzEngineTests {
         } operation: {
             let config = FuzzEngine<Int>.Config(
                 maxIterations: 50,
-                maxDuration: 5,
+                maxDuration: .seconds(5),
                 verbose: true,
                 stoppingPlugins: []
             )
@@ -216,7 +216,7 @@ struct FuzzEngineTests {
         } operation: {
             let config = FuzzEngine<Int>.Config(
                 maxIterations: 1_000_000,
-                maxDuration: 0.001,
+                maxDuration: .seconds(0.001),
                 verbose: true,
                 stoppingPlugins: []
             )
@@ -240,7 +240,7 @@ struct FuzzEngineTests {
         } operation: {
             let config = FuzzEngine<Int>.Config(
                 maxIterations: 50,
-                maxDuration: 5,
+                maxDuration: .seconds(5),
                 verbose: false
             )
 
@@ -276,7 +276,7 @@ struct FuzzEngineTests {
         } operation: {
             let config = FuzzEngine<Int>.Config(
                 maxIterations: 30,
-                maxDuration: 5,
+                maxDuration: .seconds(5),
                 minimizeCorpus: true,
                 verbose: true
             )
@@ -367,7 +367,7 @@ struct FuzzEngineTests {
 
             let config = FuzzEngine<Int>.Config(
                 maxIterations: 30,
-                maxDuration: 5,
+                maxDuration: .seconds(5),
                 verbose: true
             )
 
@@ -424,7 +424,7 @@ struct FuzzEngineTests {
         } operation: {
             let config = FuzzEngine<Int>.Config(
                 maxIterations: 20,
-                maxDuration: 5,
+                maxDuration: .seconds(5),
                 verbose: true
             )
 
@@ -459,7 +459,7 @@ struct FuzzEngineTests {
         } operation: {
             let config = FuzzEngine<Int>.Config(
                 maxIterations: 20,
-                maxDuration: 5,
+                maxDuration: .seconds(5),
                 verbose: true
             )
 
@@ -484,7 +484,7 @@ struct FuzzEngineTests {
         } operation: {
             let config = FuzzEngine<Int>.Config(
                 maxIterations: 100,
-                maxDuration: 10,
+                maxDuration: .seconds(10),
                 generationRatio: 0.5,
                 verbose: true,
                 stoppingPlugins: []
@@ -521,7 +521,7 @@ struct FuzzEngineTests {
         } operation: {
             let config = FuzzEngine<Int>.Config(
                 maxIterations: 20,
-                maxDuration: 5,
+                maxDuration: .seconds(5),
                 verbose: true
             )
 
@@ -579,7 +579,7 @@ struct FuzzEngineTests {
         } operation: {
             let config = FuzzEngine<Int>.Config(
                 maxIterations: 10,
-                maxDuration: 5,
+                maxDuration: .seconds(5),
                 verbose: true
             )
 
@@ -609,7 +609,7 @@ struct FuzzEngineTests {
         } operation: {
             let config = FuzzEngine<Int>.Config(
                 maxIterations: 10,
-                maxDuration: 5,
+                maxDuration: .seconds(5),
                 verbose: false
             )
 
@@ -641,7 +641,7 @@ struct FuzzEngineTests {
         } operation: {
             let config = FuzzEngine<Int>.Config(
                 maxIterations: 10,
-                maxDuration: 5,
+                maxDuration: .seconds(5),
                 verbose: false
             )
 
@@ -679,7 +679,7 @@ struct FuzzEngineTests {
         } operation: {
             let config = FuzzEngine<Int>.Config(
                 maxIterations: 5,
-                maxDuration: 5,
+                maxDuration: .seconds(5),
                 verbose: false
             )
 
@@ -748,7 +748,7 @@ struct FuzzEngineTests {
         } operation: {
             let config = FuzzEngine<Int>.Config(
                 maxIterations: 30,
-                maxDuration: 5,
+                maxDuration: .seconds(5),
                 verbose: true
             )
 
@@ -772,7 +772,7 @@ struct FuzzEngineTests {
         } operation: {
             let config = FuzzEngine<Int>.Config(
                 maxIterations: 20,  // Will do seeds + iterations
-                maxDuration: 10,
+                maxDuration: .seconds(10),
                 generationRatio: 1.0,  // Always generate fresh
                 minimizeCorpus: false,
                 verbose: true,
@@ -847,7 +847,7 @@ struct FuzzEngineTests {
         } operation: {
             let config = FuzzEngine<Int>.Config(
                 maxIterations: 10,
-                maxDuration: 5,
+                maxDuration: .seconds(5),
                 verbose: true
             )
 
@@ -874,7 +874,7 @@ struct FuzzEngineTests {
         } operation: {
             let config = FuzzEngine<EmptyFuzzable>.Config(
                 maxIterations: 10,
-                maxDuration: 1,
+                maxDuration: .seconds(1),
                 verbose: false,
                 stoppingPlugins: []
             )
@@ -899,7 +899,7 @@ struct FuzzEngineTests {
         } operation: {
             let config = FuzzEngine<EmptyMutationsFuzzable>.Config(
                 maxIterations: 20,
-                maxDuration: 5,
+                maxDuration: .seconds(5),
                 generationRatio: 0.0,  // Force mutation path
                 verbose: false,
                 stoppingPlugins: []

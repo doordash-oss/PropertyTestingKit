@@ -32,7 +32,7 @@ struct FuzzAPITests {
         } operation: {
             let config = FuzzEngine<String>.Config(
                 maxIterations: 100,
-                maxDuration: 5,
+                maxDuration: .seconds(5),
                 generationRatio: 0.2,
                 minimizeCorpus: true,
                 verbose: true,
@@ -118,7 +118,7 @@ struct FuzzAPITests {
         } operation: {
             let config = FuzzEngine<String>.Config(
                 maxIterations: 50,
-                maxDuration: 5,
+                maxDuration: .seconds(5),
                 verbose: false,
                 stoppingPlugins: []
             )
@@ -150,7 +150,7 @@ struct FuzzAPITests {
             try await fuzz(
                 seeds: ["0", "-0", "-1", "abc", String(Int.max)],
                 iterations: 50,
-                duration: 5
+                duration: .seconds(5)
             ) { input in
                 let parsed = NumberParser.parse(input)
 
@@ -201,7 +201,7 @@ struct FuzzAPITests {
             let config: FuzzEngine<String>.Config = .fromEnvironment()
 
             #expect(config.maxIterations == 500)
-            #expect(config.maxDuration == 30)
+            #expect(config.maxDuration == .seconds(30))
             #expect(config.verbose == true)
         }
     }
@@ -214,7 +214,7 @@ struct FuzzAPITests {
             let config: FuzzEngine<String>.Config = .fromEnvironment()
 
             #expect(config.maxIterations == 10_000)
-            #expect(config.maxDuration == 60)
+            #expect(config.maxDuration == .seconds(60))
             #expect(config.verbose == false)
         }
     }
@@ -233,7 +233,7 @@ struct FuzzAPITests {
         } operation: {
             let config = FuzzEngine<Bool>.Config(
                 maxIterations: 10,
-                maxDuration: 5,
+                maxDuration: .seconds(5),
                 verbose: false
             )
 
@@ -275,7 +275,7 @@ struct FuzzAPITests {
             } operation: {
                 // This will throw because the test always fails
                 // Note: Seeds are required to provide type context for the variadic generic
-                _ = try await fuzz(seeds: [true, false], iterations: 10, duration: 5) { _ in
+                _ = try await fuzz(seeds: [true, false], iterations: 10, duration: .seconds(5)) { _ in
                     throw TestFailure()
                 }
             }
@@ -299,7 +299,7 @@ struct FuzzAPITests {
                 delete: { _ in }
             )
         } operation: {
-            try await fuzz(seeds: ["a", "ab", "abc"], iterations: 20, duration: 5) { input in
+            try await fuzz(seeds: ["a", "ab", "abc"], iterations: 20, duration: .seconds(5)) { input in
                 _ = input.count
             }
         }
@@ -338,7 +338,7 @@ struct FuzzAPITests {
             )
         } operation: {
             // Use seeds that include the corpus entry so it gets tested
-            try await fuzz(seeds: ["from_corpus"], iterations: 20, duration: 5) { input in
+            try await fuzz(seeds: ["from_corpus"], iterations: 20, duration: .seconds(5)) { input in
                 await seenInputs.update { $0.append(input) }
             }
         }

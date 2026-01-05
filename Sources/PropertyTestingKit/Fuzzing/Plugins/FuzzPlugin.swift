@@ -36,7 +36,7 @@ public enum FuzzPluginContext {
         /// Maximum number of iterations configured.
         public let maxIterations: Int
         /// Maximum duration in seconds.
-        public let maxDuration: TimeInterval
+        public let maxDuration: Duration
         /// Number of inputs per batch.
         public let batchSize: Int
         /// How the corpus is being handled.
@@ -46,7 +46,7 @@ public enum FuzzPluginContext {
 
         public init(
             maxIterations: Int,
-            maxDuration: TimeInterval,
+            maxDuration: Duration,
             batchSize: Int,
             corpusMode: CorpusMode,
             seedCount: Int

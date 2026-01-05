@@ -49,6 +49,7 @@ public actor FuzzEngine<each Input: Fuzzable & Codable & Sendable> {
     @Dependency(\.corpusPersistence) private var corpusPersistenceClient
     @Dependency(\.coverageCounters) private var coverageCounters
     @Dependency(\.corpusRegistry) private var corpusRegistry
+    @Dependency(\.continuousClockClient) private var clockClient
 
     // MARK: - Random Helpers (use injected RNG for determinism)
 
@@ -366,7 +367,7 @@ public actor FuzzEngine<each Input: Fuzzable & Codable & Sendable> {
         let schemaVersion = await CorpusSchema.currentVersion()
         let corpus: CorpusClient<repeat each Input> = corpusRegistry.get(schemaVersion: schemaVersion)
         var failures: [(input: (repeat each Input), error: Error)] = []
-        var hangs: [(input: (repeat each Input), timeout: TimeInterval)] = []
+        var hangs: [(input: (repeat each Input), timeout: Duration)] = []
         var iterationsSinceNewCoverage = 0
         var totalMutations = 0
         var totalGenerations = 0
@@ -435,7 +436,7 @@ public actor FuzzEngine<each Input: Fuzzable & Codable & Sendable> {
 
         while iteration < config.maxIterations {
             // Check stopping conditions before generating batch
-            if dateClient.now().timeIntervalSince(startTime) >= config.maxDuration {
+            if Duration.seconds(dateClient.now().timeIntervalSince(startTime)) >= config.maxDuration {
                 if config.verbose {
                     print("[Fuzz] Time limit reached after \(iteration) iterations")
                 }
@@ -564,35 +565,19 @@ public actor FuzzEngine<each Input: Fuzzable & Codable & Sendable> {
                         }
                         defer { coverageClient.endMeasurement(context) }
 
-                        // No reset needed - map is already zero from calloc in beginMeasurement
-
                         var testError: (any Error)?
                         var timedOut = false
 
-                        if let timeout = perTimeout {
-                            do {
-                                try await withThrowingTaskGroup(of: Void.self) { timeoutGroup in
-                                    timeoutGroup.addTask {
-                                        try await test(entry.input)
-                                    }
-                                    timeoutGroup.addTask {
-                                        try await Task.sleep(nanoseconds: UInt64(timeout * 1_000_000_000))
-                                        throw HangDetectedError(timeout: timeout)
-                                    }
-                                    _ = try await timeoutGroup.next()
-                                    timeoutGroup.cancelAll()
+                        do {
+                            if let timeout = perTimeout {
+                                timedOut = try await runWithTimeout(timeout: timeout, clock: self.clockClient) {
+                                    try await test(entry.input)
                                 }
-                            } catch is HangDetectedError {
-                                timedOut = true
-                            } catch {
-                                testError = error
-                            }
-                        } else {
-                            do {
+                            } else {
                                 try await test(entry.input)
-                            } catch {
-                                testError = error
                             }
+                        } catch {
+                            testError = error
                         }
 
                         // Get coverage snapshot using context-aware API (O(1) even after task hop)
@@ -619,9 +604,6 @@ public actor FuzzEngine<each Input: Fuzzable & Codable & Sendable> {
                 return results.sorted { $0.index < $1.index }
             }
 
-
-            // // Process results sequentially to update corpus and state
-
             // First pass: handle errors/hangs and collect coverage candidates
             typealias CandidateEntry = Corpus<repeat each Input>.CandidateEntry
             var candidates: [CandidateEntry] = []
@@ -632,7 +614,7 @@ public actor FuzzEngine<each Input: Fuzzable & Codable & Sendable> {
 
                 // Handle test errors and hangs
                 if result.timedOut {
-                    let timeout = config.perInputTimeout ?? 0
+                    let timeout = config.perInputTimeout ?? .seconds(0)
                     hangs.append((entry.input, timeout))
                     if verbose {
                         print("[Fuzz] Hang detected: input timed out after \(timeout)s, iteration \(iteration + resultIdx + 1)")
@@ -725,8 +707,6 @@ public actor FuzzEngine<each Input: Fuzzable & Codable & Sendable> {
                 }
             }
         }
-        // let saveEnd = CFAbsoluteTimeGetCurrent()
-        // print("[Timing] Save corpus: \(String(format: "%.3f", saveEnd - saveStart))s")
 
         let duration = dateClient.now().timeIntervalSince(startTime)
 
@@ -1200,4 +1180,24 @@ enum FuzzPluginAction {
 
 protocol EventBasedPlugin {
     mutating func handle<each T>(event: PluginEvent<repeat each T>) async throws -> [FuzzPluginAction]
+}
+
+func runWithTimeout<C: Clock>(
+    timeout: Duration,
+    clock: C,
+    _ task: @Sendable @escaping () async throws -> Void
+) async rethrows -> Bool where C.Duration == Duration {
+    return try await withThrowingTaskGroup(of: Bool.self) { timeoutGroup in
+        timeoutGroup.addTask {
+            try await task()
+            return false
+        }
+        timeoutGroup.addTask {
+            try await clock.sleep(for: timeout)
+            return true
+        }
+        let didHang = try await timeoutGroup.next()
+        timeoutGroup.cancelAll()
+        return didHang ?? false
+    }
 }

@@ -351,7 +351,7 @@ struct MutatorFuzzEngineTests {
 
             let config = FuzzEngine<String>.Config(
                 maxIterations: 10,
-                maxDuration: 1,
+                maxDuration: .seconds(1),
                 stoppingPlugins: []
             )
 
@@ -384,7 +384,7 @@ struct MutatorFuzzEngineTests {
 
             let config = FuzzEngine<String>.Config(
                 maxIterations: 20,
-                maxDuration: 2,
+                maxDuration: .seconds(2),
                 stoppingPlugins: []
             )
 
@@ -434,7 +434,7 @@ struct MutatorPublicAPITests {
             try await fuzz(
                 using: mutator,
                 iterations: 10,
-                duration: 1
+                duration: .seconds(1)
             ) { (input: String) in
                 await testedInputs.update { $0.append(input) }
             }
@@ -467,7 +467,7 @@ struct MutatorPublicAPITests {
             try await fuzz(
                 using: String.mutators(.empty),
                 iterations: 10,
-                duration: 1
+                duration: .seconds(1)
             ) { (input: String) in
                 await testedInputs.update { $0.append(input) }
             }
@@ -507,7 +507,7 @@ struct MutatorPublicAPITests {
             try await fuzz(
                 using: stringMutator, intMutator,
                 iterations: 20,
-                duration: 2
+                duration: .seconds(2)
             ) { (str: String, num: Int) in
                 await testedInputs.update { $0.append((str, num)) }
             }
@@ -546,7 +546,7 @@ struct MutatorPublicAPITests {
             try await fuzz(
                 using: String.mutators(.empty), Int.mutators(.boundaries),
                 iterations: 50,
-                duration: 3
+                duration: .seconds(3)
             ) { (str: String, num: Int) in
                 await testedInputs.update { $0.append((str, num)) }
             }
@@ -589,7 +589,7 @@ struct MutatorPublicAPITests {
             try await fuzz(
                 using: String.mutators(.empty, .sql, .xss),
                 iterations: 500,
-                duration: 5
+                duration: .seconds(5)
             ) { (input: String) in
                 await testedInputs.update { $0.append(input) }
             }

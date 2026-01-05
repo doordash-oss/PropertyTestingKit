@@ -57,6 +57,20 @@
             buildForAnalyzing = "NO">
             <BuildableReference
                BuildableIdentifier = "primary"
+               BlueprintIdentifier = "D4538A35BACFC3EADBA7A08C"
+               BuildableName = "StressTests.xctest"
+               BlueprintName = "StressTests"
+               ReferencedContainer = "container:PropertyTestingKit.xcodeproj">
+            </BuildableReference>
+         </BuildActionEntry>
+         <BuildActionEntry
+            buildForTesting = "YES"
+            buildForRunning = "NO"
+            buildForProfiling = "NO"
+            buildForArchiving = "NO"
+            buildForAnalyzing = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
                BlueprintIdentifier = "B0BE09FFE9F586EDF3FC5EB9"
                BuildableName = "TSanTests.xctest"
                BlueprintName = "TSanTests"
@@ -111,6 +125,17 @@
                BlueprintIdentifier = "B0BE09FFE9F586EDF3FC5EB9"
                BuildableName = "TSanTests.xctest"
                BlueprintName = "TSanTests"
+               ReferencedContainer = "container:PropertyTestingKit.xcodeproj">
+            </BuildableReference>
+         </TestableReference>
+         <TestableReference
+            skipped = "NO"
+            parallelizable = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "D4538A35BACFC3EADBA7A08C"
+               BuildableName = "StressTests.xctest"
+               BlueprintName = "StressTests"
                ReferencedContainer = "container:PropertyTestingKit.xcodeproj">
             </BuildableReference>
          </TestableReference>

@@ -122,15 +122,3 @@ public struct FuzzStats: Sendable {
         self.hangs = hangs
     }
 }
-
-/// Error indicating that a test execution timed out (potential infinite loop or deadlock).
-///
-/// Based on Miller 1990 "Fuzz" paper which introduced timeout-based hang detection.
-public struct HangDetectedError: Error, LocalizedError, Sendable {
-    /// The timeout duration that was exceeded.
-    public let timeout: TimeInterval
-
-    public var errorDescription: String? {
-        "Test execution timed out after \(String(format: "%.2f", timeout)) seconds (potential hang)"
-    }
-}

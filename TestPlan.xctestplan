@@ -1,0 +1,31 @@
+{
+  "configurations" : [
+    {
+      "id" : "041E239A-9F68-4243-98F0-D0C9AF8F7DF7",
+      "name" : "Configuration 1",
+      "options" : {
+
+      }
+    }
+  ],
+  "defaultOptions" : {
+    "testTimeoutsEnabled" : true
+  },
+  "testTargets" : [
+    {
+      "target" : {
+        "containerPath" : "container:PropertyTestingKit.xcodeproj",
+        "identifier" : "B0BE09FFE9F586EDF3FC5EB9",
+        "name" : "TSanTests"
+      }
+    },
+    {
+      "target" : {
+        "containerPath" : "container:PropertyTestingKit.xcodeproj",
+        "identifier" : "00E9596C140254811771B723",
+        "name" : "SanCovTests"
+      }
+    }
+  ],
+  "version" : 1
+}

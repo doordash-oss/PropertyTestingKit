@@ -36,7 +36,7 @@ struct CustomFuzzableTests {
         } operation: {
             let config = FuzzEngine<TestConfig>.Config(
                 maxIterations: 30,
-                maxDuration: 5,
+                maxDuration: .seconds(5),
                 verbose: false
             )
 

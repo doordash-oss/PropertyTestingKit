@@ -7,6 +7,7 @@
 
 import Testing
 import Foundation
+import Clocks
 import Dependencies
 import FunctionSpy
 @testable import PropertyTestingKit
@@ -75,7 +76,7 @@ struct DeterministicTimingTests {
             } operation: {
                 let config = FuzzEngine<SingleSeedInt>.Config(
                     maxIterations: 1000,
-                    maxDuration: 10,
+                    maxDuration: .seconds(10),
                     verbose: false,
                     mutationBatchSize: 1  // Use batch size 1 for precise time limit testing
                 )
@@ -109,7 +110,7 @@ struct DeterministicTimingTests {
             } operation: {
                 let config = FuzzEngine<SingleSeedInt>.Config(
                     maxIterations: 5,
-                    maxDuration: 100,
+                    maxDuration: .seconds(100),
                     verbose: false
                 )
 
@@ -141,7 +142,7 @@ struct DeterministicTimingTests {
             } operation: {
                 let config = FuzzEngine<SingleSeedInt>.Config(
                     maxIterations: 5,
-                    maxDuration: 1000,  // Very long time limit
+                    maxDuration: .seconds(1000),  // Very long time limit
                     verbose: false
                 )
 
@@ -461,6 +462,200 @@ struct DeterministicTimingTests {
             // Duration should reflect all tests across both components
             let expectedDuration = Double(stats.candidatesTested) * 0.75
             #expect(stats.duration == expectedDuration)
+        }
+    }
+
+    // MARK: - runWithTimeout Tests
+
+    @Suite("runWithTimeout")
+    struct RunWithTimeoutTests {
+
+        @Test("returns false when task completes before timeout")
+        func testCompletesInTime() async throws {
+            let testClock = TestClock()
+
+            let timedOut = try await runWithTimeout(
+                timeout: .seconds(10),
+                clock: testClock
+            ) {
+                // Task completes immediately without awaiting
+            }
+
+            #expect(!timedOut, "Task that completes before timeout should return false")
+        }
+
+        @Test("returns true when timeout fires first")
+        func testExceedsTimeout() async throws {
+            let testClock = TestClock()
+            let taskStarted = SyncBox(false)
+
+            async let result: Bool = runWithTimeout(
+                timeout: .seconds(1),
+                clock: testClock
+            ) {
+                taskStarted.update { $0 = true }
+                // Task tries to sleep for much longer than timeout
+                try await Task.sleep(for: .seconds(100))
+            }
+
+            // Wait for task to start
+            while !taskStarted.value {
+                await Task.yield()
+            }
+
+            // Advance clock past the timeout
+            await testClock.advance(by: .seconds(2))
+
+            let timedOut = try await result
+            #expect(timedOut, "When timeout fires first, should return true")
+        }
+
+        @Test("propagates errors from task")
+        func testPropagatesErrors() async {
+            struct TestError: Error {}
+            let testClock = TestClock()
+
+            do {
+                _ = try await runWithTimeout(
+                    timeout: .seconds(10),
+                    clock: testClock
+                ) {
+                    throw TestError()
+                }
+                Issue.record("Should have thrown TestError")
+            } catch is TestError {
+                // Expected
+            } catch {
+                Issue.record("Unexpected error type: \(error)")
+            }
+        }
+    }
+
+    // MARK: - FuzzEngine Per-Input Timeout Tests
+
+    @Suite("FuzzEngine Per-Input Timeout")
+    struct FuzzEnginePerInputTimeoutTests {
+
+        @Test("cancels slow inputs")
+        func testFuzzEnginePerInputTimeout() async {
+            let testClock = TestClock()
+            let inputsTested = SyncBox<[Int]>([])
+            let inputsCompleted = SyncBox<[Int]>([])
+
+            async let result = withDependencies {
+                $0.coverageCounters = makeMockCoverageClient {
+                    [UInt64](repeating: 1, count: 100)
+                }
+                $0.continuousClockClient = testClock
+            } operation: {
+                let config = FuzzEngine<Int>.Config(
+                    maxIterations: 3,
+                    maxDuration: .seconds(300),
+                    verbose: false,
+                    perInputTimeout: .seconds(1)
+                )
+
+                let engine = FuzzEngine<Int>(config: config, corpusDirectory: nil)
+                return await engine.run { input in
+                    inputsTested.update { $0.append(input) }
+                    // All inputs try to sleep longer than timeout
+                    try await Task.sleep(for: .seconds(100))
+                    inputsCompleted.update { $0.append(input) }
+                }
+            }
+
+            // Wait for first input to be tested
+            while inputsTested.value.isEmpty {
+                await Task.yield()
+            }
+
+            // Advance clock past the per-input timeout multiple times
+            // to allow the fuzzer to process multiple inputs
+            for _ in 0..<10 {
+                await testClock.advance(by: .seconds(2))
+                await Task.yield()
+            }
+
+            let finalResult = await result
+
+            #expect(finalResult.stats.totalInputs > 0, "Should have tested inputs")
+            #expect(!inputsTested.value.isEmpty, "Should have started testing inputs")
+            // All inputs should timeout since they sleep for 100s but timeout is 1s
+            #expect(inputsCompleted.value.isEmpty, "All inputs should timeout")
+        }
+
+        @Test("allows all inputs to complete without perInputTimeout")
+        func testNoTimeoutAllowsAllInputs() async {
+            let completedInputs = SyncBox(0)
+
+            let result = await withDependencies {
+                $0.coverageCounters = makeMockCoverageClient {
+                    var counters = [UInt64](repeating: 0, count: 100)
+                    counters[completedInputs.value % 100] = 1
+                    return counters
+                }
+                // No clock override needed - perInputTimeout is nil so clock isn't used
+            } operation: {
+                let config = FuzzEngine<Int>.Config(
+                    maxIterations: 3,
+                    maxDuration: .seconds(30),
+                    verbose: false,
+                    perInputTimeout: nil  // No timeout
+                )
+
+                let engine = FuzzEngine<Int>(config: config, corpusDirectory: nil)
+                return await engine.run { _ in
+                    completedInputs.update { $0 += 1 }
+                }
+            }
+
+            #expect(completedInputs.value > 0, "All tests should complete without timeout")
+            #expect(result.stats.totalInputs > 0)
+        }
+
+        @Test("only affects slow inputs")
+        func testTimeoutOnlyAffectsSlowInputs() async {
+            let testClock = TestClock()
+            let fastCompleted = SyncBox(0)
+            let slowStarted = SyncBox(0)
+
+            async let result = withDependencies {
+                $0.coverageCounters = makeMockCoverageClient {
+                    [UInt64](repeating: 1, count: 100)
+                }
+                $0.continuousClockClient = testClock
+            } operation: {
+                let config = FuzzEngine<Int>.Config(
+                    maxIterations: 5,
+                    maxDuration: .seconds(300),
+                    verbose: false,
+                    perInputTimeout: .seconds(1)
+                )
+
+                let engine = FuzzEngine<Int>(config: config, corpusDirectory: nil)
+                return await engine.run { input in
+                    if input == 0 {
+                        // Fast input - completes immediately
+                        fastCompleted.update { $0 += 1 }
+                    } else {
+                        // Slow inputs - will timeout
+                        slowStarted.update { $0 += 1 }
+                        try await Task.sleep(for: .seconds(100))
+                    }
+                }
+            }
+
+            // Advance clock to trigger timeouts for slow inputs
+            for _ in 0..<10 {
+                await testClock.advance(by: .seconds(2))
+                await Task.yield()
+            }
+
+            let finalResult = await result
+
+            #expect(finalResult.stats.totalInputs > 0, "Should have tested inputs")
+            // Input 0 should complete since it's fast (doesn't await the clock)
+            #expect(fastCompleted.value >= 1, "Fast input (0) should complete")
         }
     }
 }
