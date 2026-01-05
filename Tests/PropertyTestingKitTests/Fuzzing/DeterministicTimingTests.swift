@@ -465,6 +465,44 @@ struct DeterministicTimingTests {
         }
     }
 
+    // MARK: - awaitSourceLocationPreWarming Tests
+
+    @Suite("awaitSourceLocationPreWarming")
+    struct AwaitSourceLocationPreWarmingTests {
+
+        @Test("completes without hanging when prewarming finishes")
+        func testCompletesWhenPrewarmingFinishes() async {
+            // Start prewarming
+            await SanCovCounters.startPreWarmingSourceLocations()
+
+            // Should complete (either prewarm finishes or times out)
+            await SanCovCounters.awaitSourceLocationPreWarming(timeout: .seconds(5))
+
+            // If we get here, it completed successfully
+        }
+
+        @Test("respects timeout via injected clock")
+        func testRespectsTimeout() async {
+            let testClock = TestClock()
+
+            // Start prewarming first
+            await SanCovCounters.startPreWarmingSourceLocations()
+
+            // Start awaiting with injected clock
+            async let awaitTask: Void = withDependencies {
+                $0.continuousClockClient = testClock
+            } operation: {
+                await SanCovCounters.awaitSourceLocationPreWarming(timeout: .seconds(1))
+            }
+
+            // Advance clock past timeout
+            await testClock.advance(by: .seconds(2))
+
+            // Should complete due to timeout
+            await awaitTask
+        }
+    }
+
     // MARK: - runWithTimeout Tests
 
     @Suite("runWithTimeout")
@@ -474,11 +512,12 @@ struct DeterministicTimingTests {
         func testCompletesInTime() async throws {
             let testClock = TestClock()
 
-            let timedOut = try await runWithTimeout(
-                timeout: .seconds(10),
-                clock: testClock
-            ) {
-                // Task completes immediately without awaiting
+            let timedOut = try await withDependencies {
+                $0.continuousClockClient = testClock
+            } operation: {
+                try await runWithTimeout(timeout: .seconds(10)) {
+                    // Task completes immediately without awaiting
+                }
             }
 
             #expect(!timedOut, "Task that completes before timeout should return false")
@@ -489,13 +528,14 @@ struct DeterministicTimingTests {
             let testClock = TestClock()
             let taskStarted = SyncBox(false)
 
-            async let result: Bool = runWithTimeout(
-                timeout: .seconds(1),
-                clock: testClock
-            ) {
-                taskStarted.update { $0 = true }
-                // Task tries to sleep for much longer than timeout
-                try await Task.sleep(for: .seconds(100))
+            async let result: Bool = withDependencies {
+                $0.continuousClockClient = testClock
+            } operation: {
+                try await runWithTimeout(timeout: .seconds(1)) {
+                    taskStarted.update { $0 = true }
+                    // Task tries to sleep for much longer than timeout
+                    try await Task.sleep(for: .seconds(100))
+                }
             }
 
             // Wait for task to start
@@ -511,16 +551,17 @@ struct DeterministicTimingTests {
         }
 
         @Test("propagates errors from task")
-        func testPropagatesErrors() async {
+        func testPropagatesErrors() async throws {
             struct TestError: Error {}
             let testClock = TestClock()
 
             do {
-                _ = try await runWithTimeout(
-                    timeout: .seconds(10),
-                    clock: testClock
-                ) {
-                    throw TestError()
+                _ = try await withDependencies {
+                    $0.continuousClockClient = testClock
+                } operation: {
+                    try await runWithTimeout(timeout: .seconds(10)) {
+                        throw TestError()
+                    }
                 }
                 Issue.record("Should have thrown TestError")
             } catch is TestError {

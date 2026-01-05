@@ -367,15 +367,14 @@ private actor SourceLocationCache {
     }
 
     /// Wait for pre-warming to complete (with timeout).
+    ///
+    /// - Parameter timeout: Maximum time to wait for pre-warming.
     func awaitPreWarming(timeout: Duration = .milliseconds(100)) async {
         guard let task = preWarmTask else { return }
 
         // Race between task completion and timeout
-        await withTaskGroup(of: Void.self) { group in
-            group.addTask { await task.value }
-            group.addTask { try? await Task.sleep(for: timeout) }
-            await group.next()
-            group.cancelAll()
+        _ = try? await runWithTimeout(timeout: timeout) {
+            await task.value
         }
     }
 }
@@ -563,7 +562,9 @@ extension SanCovCounters {
     /// Wait for source location pre-warming to complete.
     ///
     /// - Parameter timeout: Maximum time to wait (default 100ms).
-    static func awaitSourceLocationPreWarming(timeout: Duration = .milliseconds(100)) async {
+    static func awaitSourceLocationPreWarming(
+        timeout: Duration = .milliseconds(100)
+    ) async {
         await SourceLocationCache.shared.awaitPreWarming(timeout: timeout)
     }
 

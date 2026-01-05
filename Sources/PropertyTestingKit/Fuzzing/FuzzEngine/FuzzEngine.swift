@@ -49,7 +49,6 @@ public actor FuzzEngine<each Input: Fuzzable & Codable & Sendable> {
     @Dependency(\.corpusPersistence) private var corpusPersistenceClient
     @Dependency(\.coverageCounters) private var coverageCounters
     @Dependency(\.corpusRegistry) private var corpusRegistry
-    @Dependency(\.continuousClockClient) private var clockClient
 
     // MARK: - Random Helpers (use injected RNG for determinism)
 
@@ -112,45 +111,7 @@ public actor FuzzEngine<each Input: Fuzzable & Codable & Sendable> {
     private static func extractMutatorSeeds<each M: Mutator>(
         mutators: (repeat each M)
     ) -> [(repeat each Input)] where (repeat (each M).Value) == (repeat each Input) {
-        // Get seed arrays for each mutator
-        var counts: [Int] = []
-        (repeat counts.append((each mutators).seeds.count))
-
-        // If any array is empty, return empty result
-        guard !counts.contains(0) else { return [] }
-
-        // Calculate total combinations
-        let total = counts.reduce(1, *)
-        var results: [(repeat each Input)] = []
-
-        // Collect all seed arrays
-        var allSeeds: [Any] = []
-        (repeat allSeeds.append((each mutators).seeds))
-
-        for i in 0..<total {
-            // Calculate indices for this combination
-            var indices: [Int] = []
-            var remaining = i
-            for count in counts.reversed() {
-                indices.insert(remaining % count, at: 0)
-                remaining /= count
-            }
-
-            // Build the tuple for this combination
-            var indexIterator = indices.makeIterator()
-            var seedArrayIterator = allSeeds.makeIterator()
-
-            func getValue<U>(_: U.Type) -> U {
-                let idx = indexIterator.next()!
-                let seedArray = seedArrayIterator.next()! as! [U]
-                return seedArray[idx]
-            }
-
-            let tuple: (repeat each Input) = (repeat getValue((each Input).self))
-            results.append(tuple)
-        }
-
-        return results
+        cartesianProduct(repeat (each mutators).seeds)
     }
 
     /// Mutate an input using the provided mutators.
@@ -570,7 +531,7 @@ public actor FuzzEngine<each Input: Fuzzable & Codable & Sendable> {
 
                         do {
                             if let timeout = perTimeout {
-                                timedOut = try await runWithTimeout(timeout: timeout, clock: self.clockClient) {
+                                timedOut = try await runWithTimeout(timeout: timeout) {
                                     try await test(entry.input)
                                 }
                             } else {
@@ -893,37 +854,7 @@ public actor FuzzEngine<each Input: Fuzzable & Codable & Sendable> {
 
     /// Generate the cartesian product of fuzz values for all input types.
     private func cartesianProductFuzz() -> [(repeat each Input)] {
-        // Get fuzz arrays for each type
-        var counts: [Int] = []
-        (repeat counts.append((each Input).fuzz.count))
-
-        // If any array is empty, return empty result
-        guard !counts.contains(0) else { return [] }
-
-        // Calculate total combinations
-        let total = counts.reduce(1, *)
-        var results: [(repeat each Input)] = []
-
-        for i in 0..<total {
-            // Calculate indices for this combination
-            var indices: [Int] = []
-            var remaining = i
-            for count in counts.reversed() {
-                indices.insert(remaining % count, at: 0)
-                remaining /= count
-            }
-
-            // Build the tuple for this combination
-            var indexIterator = indices.makeIterator()
-            func getValue<U: Fuzzable>(_: U.Type) -> U {
-                U.fuzz[indexIterator.next()!]
-            }
-
-            let tuple: (repeat each Input) = (repeat getValue((each Input).self))
-            results.append(tuple)
-        }
-
-        return results
+        cartesianProduct(repeat (each Input).fuzz)
     }
 
     /// Mutate a variadic input by randomly selecting one component to mutate.
@@ -1182,17 +1113,17 @@ protocol EventBasedPlugin {
     mutating func handle<each T>(event: PluginEvent<repeat each T>) async throws -> [FuzzPluginAction]
 }
 
-func runWithTimeout<C: Clock>(
+func runWithTimeout(
     timeout: Duration,
-    clock: C,
     _ task: @Sendable @escaping () async throws -> Void
-) async rethrows -> Bool where C.Duration == Duration {
+) async rethrows -> Bool {
+    @Dependency(\.continuousClockClient) var clock
     return try await withThrowingTaskGroup(of: Bool.self) { timeoutGroup in
         timeoutGroup.addTask {
             try await task()
             return false
         }
-        timeoutGroup.addTask {
+        timeoutGroup.addTask { [clock] in
             try await clock.sleep(for: timeout)
             return true
         }
