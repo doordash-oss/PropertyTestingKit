@@ -576,7 +576,6 @@ public actor FuzzEngine<each Input: Fuzzable & Codable & Sendable> {
         }
 
         // Phase 3: Minimize corpus
-        // let minimizeStart = CFAbsoluteTimeGetCurrent()
         var finalCorpus = corpus
         let corpusCountBeforeMinimize = await corpus.count()
         if config.minimizeCorpus && corpusCountBeforeMinimize > 1 {
@@ -587,11 +586,8 @@ public actor FuzzEngine<each Input: Fuzzable & Codable & Sendable> {
                 print("[Fuzz] Minimized corpus: \(corpusCountBeforeMinimize) -> \(finalCount)")
             }
         }
-        // let minimizeEnd = CFAbsoluteTimeGetCurrent()
-        // print("[Timing] Minimize corpus: \(String(format: "%.3f", minimizeEnd - minimizeStart))s")
 
         // Phase 4: Save corpus
-        // let saveStart = CFAbsoluteTimeGetCurrent()
         if let directory = corpusDirectory {
             do {
                 let snapshotToSave = await finalCorpus.snapshot()
@@ -694,8 +690,6 @@ public actor FuzzEngine<each Input: Fuzzable & Codable & Sendable> {
             guard let context = coverageCounters.beginMeasurement() else { continue }
             defer { coverageCounters.endMeasurement(context) }
 
-            // No reset needed - map is already zero from calloc in beginMeasurement
-
             var testError: Error?
             do {
                 try await test(entry.input)
@@ -785,223 +779,6 @@ public actor FuzzEngine<each Input: Fuzzable & Codable & Sendable> {
             coverageChanges: coverageChanges,
             analysisReports: analysisReports
         )
-    }
-
-    // MARK: - Variadic Helpers
-
-    /// Generate the cartesian product of fuzz values for all input types.
-    private func cartesianProductFuzz() -> [(repeat each Input)] {
-        cartesianProduct(repeat (each Input).fuzz)
-    }
-
-    /// Mutate a variadic input by randomly selecting one component to mutate.
-    private func mutateInput(_ input: (repeat each Input)) -> [(repeat each Input)] {
-        // Collect all possible mutations
-        var results: [(repeat each Input)] = []
-
-        // Strategy 1: Single-component mutations (original behavior)
-        var componentIndex = 0
-        func tryMutate<U: Fuzzable>(_ value: U, atIndex index: Int) {
-            let mutations = value.mutate()
-            for mutated in mutations {
-                // Create a new tuple with this component mutated
-                if let newTuple = createMutatedTuple(input, mutating: index, with: mutated) {
-                    results.append(newTuple)
-                }
-            }
-            componentIndex += 1
-        }
-
-        componentIndex = 0
-        (repeat tryMutate(each input, atIndex: componentIndex))
-
-        // Strategy 2: Multi-component mutations (mutate 2 components together)
-        results.append(contentsOf: multiComponentMutations(input))
-
-        // Strategy 3: Arithmetic relationship mutations for (Int, Int) pairs
-        results.append(contentsOf: arithmeticRelationshipMutations(input))
-
-        return results
-    }
-
-    /// Generate mutations where multiple components change together.
-    /// This helps find correlated input combinations.
-    private func multiComponentMutations(_ input: (repeat each Input)) -> [(repeat each Input)] {
-        var results: [(repeat each Input)] = []
-
-        // Extract values into arrays for manipulation
-        var values: [Any] = []
-        (repeat values.append(each input))
-
-        guard values.count >= 2 else { return [] }
-
-        // For each pair of components, try mutating both
-        for i in 0..<values.count {
-            for j in (i + 1)..<values.count {
-                // Try swapping values if they're the same type
-                if type(of: values[i]) == type(of: values[j]) {
-                    if let newTuple = createSwappedTuple(input, swapping: i, with: j) {
-                        results.append(newTuple)
-                    }
-                }
-            }
-        }
-
-        return results
-    }
-
-    /// Generate arithmetic relationship mutations for Int pairs.
-    /// Tries relationships like b = a*k + c that help crack checksum-style conditions.
-    private func arithmeticRelationshipMutations(_ input: (repeat each Input)) -> [(repeat each Input)] {
-        var results: [(repeat each Input)] = []
-
-        // Extract values to find Int pairs
-        var values: [Any] = []
-        var indices: [Int] = []
-        var componentIdx = 0
-
-        func collectValue<V>(_ value: V) {
-            values.append(value)
-            indices.append(componentIdx)
-            componentIdx += 1
-        }
-        (repeat collectValue(each input))
-
-        // Find all Int values and their indices
-        var intPairs: [(index: Int, value: Int)] = []
-        for (idx, value) in zip(indices, values) {
-            if let intVal = value as? Int {
-                intPairs.append((idx, intVal))
-            }
-        }
-
-        // For each pair of Ints, generate relationship-based mutations
-        guard intPairs.count >= 2 else { return [] }
-
-        for i in 0..<intPairs.count {
-            for j in (i + 1)..<intPairs.count {
-                let (idxA, a) = intPairs[i]
-                let (idxB, _) = intPairs[j]
-
-                // Generate b values based on relationships with a
-                let derivedBValues = arithmeticDerivations(from: a)
-
-                for newB in derivedBValues {
-                    if let newTuple = createMutatedTuple(input, mutating: idxB, with: newB) {
-                        results.append(newTuple)
-                    }
-                }
-
-                // Also try the reverse: derive a from current b
-                let (_, b) = intPairs[j]
-                let derivedAValues = arithmeticDerivations(from: b)
-                for newA in derivedAValues {
-                    if let newTuple = createMutatedTuple(input, mutating: idxA, with: newA) {
-                        results.append(newTuple)
-                    }
-                }
-            }
-        }
-
-        return results
-    }
-
-    /// Generate single-component mutations (mutate one input field at a time).
-    /// Uses parameter pack expansion to avoid type erasure.
-    private func singleComponentMutations(_ input: (repeat each Input)) -> [(repeat each Input)] {
-        let count = Self.inputCount(for: repeat each input)
-
-        // For each position, create a tuple of arrays where:
-        // - The mutated position contains all mutations from Fuzzable.mutate()
-        // - Other positions contain just the original value wrapped in an array
-        let positionsMutated: [(repeat [each Input])] = (0..<count).map { replacementIndex in
-            var currentIndex = 0
-            return (repeat {
-                defer { currentIndex += 1 }
-                if currentIndex == replacementIndex {
-                    return (each input).mutate()
-                } else {
-                    return [(each input)]
-                }
-            }())
-        }
-
-        // Use cartesianProduct to expand each position's arrays into full tuples
-        return positionsMutated.flatMap(cartesianProduct)
-    }
-
-    /// Generate derived values based on common arithmetic relationships.
-    private func arithmeticDerivations(from value: Int) -> [Int] {
-        var derived: [Int] = []
-
-        // Linear relationships: b = a * k + c
-        let multipliers = [1, 2, 3, 5, 7, 10]
-        let offsets = [-3, -1, 0, 1, 3]
-
-        for k in multipliers {
-            for c in offsets {
-                // b = a * k + c (with overflow protection)
-                let (product, overflow1) = value.multipliedReportingOverflow(by: k)
-                guard !overflow1 else { continue }
-                let (result, overflow2) = product.addingReportingOverflow(c)
-                guard !overflow2 else { continue }
-                derived.append(result)
-            }
-        }
-
-        // Also include the value itself, negation, and simple offsets
-        derived.append(value)
-        if value != Int.min { derived.append(-value) }
-        if value != Int.max { derived.append(value + 1) }
-        if value != Int.min { derived.append(value - 1) }
-
-        return Array(Set(derived)) // Deduplicate
-    }
-
-    /// Create a tuple with two components swapped.
-    private func createSwappedTuple(
-        _ input: (repeat each Input),
-        swapping indexA: Int,
-        with indexB: Int
-    ) -> (repeat each Input)? {
-        var values: [Any] = []
-        (repeat values.append(each input))
-
-        guard indexA < values.count, indexB < values.count else { return nil }
-
-        // Swap the values
-        let temp = values[indexA]
-        values[indexA] = values[indexB]
-        values[indexB] = temp
-
-        // Rebuild tuple
-        var valueIterator = values.makeIterator()
-        func nextValue<V>(_: V.Type) -> V {
-            valueIterator.next()! as! V
-        }
-
-        let newTuple: (repeat each Input) = (repeat nextValue((each Input).self))
-        return newTuple
-    }
-
-    /// Create a mutated tuple at a specific index.
-    private func createMutatedTuple<U>(
-        _ input: (repeat each Input),
-        mutating targetIndex: Int,
-        with newValue: U
-    ) -> (repeat each Input)? {
-        var currentIndex = 0
-
-        func substituteIfNeeded<V: Fuzzable & Codable & Sendable>(_ value: V) -> V {
-            defer { currentIndex += 1 }
-            if currentIndex == targetIndex, let casted = newValue as? V {
-                return casted
-            }
-            return value
-        }
-
-        let newTuple: (repeat each Input) = (repeat substituteIfNeeded(each input))
-        return newTuple
     }
 }
 
