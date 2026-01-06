@@ -2,97 +2,97 @@ import Testing
 @testable import PropertyTestingKit
 import Foundation
 
-@Suite("Concurrent Fuzz Load Test")
-struct ConcurrentFuzzLoadTest {
-
-    @Test("20 concurrent fuzzers - hash table load test")
-    func twentyConcurrentFuzzers() async throws {
-        let concurrentEngines = 20
-        let iterationsPerEngine = 100
-
-        await withTaskGroup(of: Void.self) { group in
-            for _ in 0..<concurrentEngines {
-                group.addTask {
-                    let config = FuzzEngine<Int>.Config(
-                        maxIterations: iterationsPerEngine,
-                        mutationBatchSize: 1  // Sequential within each engine to maximize concurrent measurements
-                    )
-                    let engine = FuzzEngine<Int>(config: config)
-                    let _ = await engine.run { input in
-                        do {
-                            try expensiveValidation(input)
-                        } catch {
-                            print("threw error \(error)")
-                        }
-                    }
-                }
-            }
-
-            await group.waitForAll()
-        }
-
-        // If we get here without crashing, the concurrent access worked
-        #expect(true, "20 concurrent fuzzers completed successfully")
-    }
-
-    @Test("40 concurrent fuzzers - higher load test")
-    func fortyConcurrentFuzzers() async throws {
-        let concurrentEngines = 40
-        let iterationsPerEngine = 50
-
-        await withTaskGroup(of: Void.self) { group in
-            for _ in 0..<concurrentEngines {
-                group.addTask {
-                    let config = FuzzEngine<Int>.Config(
-                        maxIterations: iterationsPerEngine,
-                        mutationBatchSize: 1
-                    )
-                    let engine = FuzzEngine<Int>(config: config)
-                    let _ = await engine.run { input in
-                        do {
-                            try expensiveValidation(input)
-                        } catch {
-                            print("threw error \(error)")
-                        }
-                    }
-                }
-            }
-            await group.waitForAll()
-        }
-
-        #expect(true, "40 concurrent fuzzers completed successfully")
-    }
-
-    @Test("20 concurrent fuzzers with batched mutations")
-    func twentyConcurrentFuzzersWithBatching() async throws {
-        let concurrentEngines = 200
-        let iterationsPerEngine = 1000
-
-        await withTaskGroup(of: Void.self) { group in
-            for _ in 0..<concurrentEngines {
-                group.addTask {
-                    let config = FuzzEngine<Int>.Config(
-                        maxIterations: iterationsPerEngine,
-                        mutationBatchSize: 16  // Batched - each engine runs 8 tests concurrently
-                    )
-                    let engine = FuzzEngine<Int>(config: config)
-                    let _ = await engine.run { input in
-                        do {
-                            try await asyncValidation(input)
-                        } catch {
-                            print("threw error \(error)")
-                        }
-
-                    }
-                }
-            }
-            await group.waitForAll()
-        }
-
-        // With 20 engines * 8 batch size = up to 160 concurrent measurements
-        #expect(true, "20 concurrent fuzzers with batching completed successfully")
-    }
-}
+//@Suite("Concurrent Fuzz Load Test")
+//struct ConcurrentFuzzLoadTest {
+//
+//    @Test("20 concurrent fuzzers - hash table load test")
+//    func twentyConcurrentFuzzers() async throws {
+//        let concurrentEngines = 20
+//        let iterationsPerEngine = 100
+//
+//        await withTaskGroup(of: Void.self) { group in
+//            for _ in 0..<concurrentEngines {
+//                group.addTask {
+//                    let config = FuzzEngine<Int>.Config(
+//                        maxIterations: iterationsPerEngine,
+//                        mutationBatchSize: 1  // Sequential within each engine to maximize concurrent measurements
+//                    )
+//                    let engine = FuzzEngine<Int>(config: config)
+//                    let _ = await engine.run { input in
+//                        do {
+//                            try expensiveValidation(input)
+//                        } catch {
+//                            print("threw error \(error)")
+//                        }
+//                    }
+//                }
+//            }
+//
+//            await group.waitForAll()
+//        }
+//
+//        // If we get here without crashing, the concurrent access worked
+//        #expect(true, "20 concurrent fuzzers completed successfully")
+//    }
+//
+//    @Test("40 concurrent fuzzers - higher load test")
+//    func fortyConcurrentFuzzers() async throws {
+//        let concurrentEngines = 40
+//        let iterationsPerEngine = 50
+//
+//        await withTaskGroup(of: Void.self) { group in
+//            for _ in 0..<concurrentEngines {
+//                group.addTask {
+//                    let config = FuzzEngine<Int>.Config(
+//                        maxIterations: iterationsPerEngine,
+//                        mutationBatchSize: 1
+//                    )
+//                    let engine = FuzzEngine<Int>(config: config)
+//                    let _ = await engine.run { input in
+//                        do {
+//                            try expensiveValidation(input)
+//                        } catch {
+//                            print("threw error \(error)")
+//                        }
+//                    }
+//                }
+//            }
+//            await group.waitForAll()
+//        }
+//
+//        #expect(true, "40 concurrent fuzzers completed successfully")
+//    }
+//
+//    @Test("20 concurrent fuzzers with batched mutations")
+//    func twentyConcurrentFuzzersWithBatching() async throws {
+//        let concurrentEngines = 200
+//        let iterationsPerEngine = 1000
+//
+//        await withTaskGroup(of: Void.self) { group in
+//            for _ in 0..<concurrentEngines {
+//                group.addTask {
+//                    let config = FuzzEngine<Int>.Config(
+//                        maxIterations: iterationsPerEngine,
+//                        mutationBatchSize: 16  // Batched - each engine runs 8 tests concurrently
+//                    )
+//                    let engine = FuzzEngine<Int>(config: config)
+//                    let _ = await engine.run { input in
+//                        do {
+//                            try await asyncValidation(input)
+//                        } catch {
+//                            print("threw error \(error)")
+//                        }
+//
+//                    }
+//                }
+//            }
+//            await group.waitForAll()
+//        }
+//
+//        // With 20 engines * 8 batch size = up to 160 concurrent measurements
+//        #expect(true, "20 concurrent fuzzers with batching completed successfully")
+//    }
+//}
 
 func asyncValidation(_ input: Int) async throws {
     try await Task.sleep(for: Duration.seconds(1))

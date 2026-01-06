@@ -191,28 +191,23 @@ public func fuzz<each Input: Fuzzable & Codable & Sendable>(
     line: Int = #line,
     test: @escaping @Sendable ((repeat each Input)) async throws -> Void
 ) async throws -> FuzzResult<repeat each Input> {
-    @Dependency(\.environment) var environment
-
-    let config = FuzzEngine<repeat each Input>.Config(
-        maxIterations: iterations,
-        maxDuration: duration,
-        verbose: environment.environment()["FUZZ_VERBOSE"] != nil,
-        corpusMode: corpusMode,
+    try await fuzz(
+        using: repeat DefaultMutator<each Input>(),
+        seeds: seeds,
+        iterations: iterations,
+        duration: duration,
         perInputTimeout: perInputTimeout,
+        corpusMode: corpusMode,
         mutationBatchSize: mutationBatchSize,
-        projectPath: projectPath(from: filePath),
         observerPlugins: observerPlugins,
         stoppingPlugins: stoppingPlugins,
         analysisPlugins: analysisPlugins,
-        shrinkingPlugin: shrinkingPlugin
+        shrinkingPlugin: shrinkingPlugin,
+        filePath: filePath,
+        function: function,
+        line: line,
+        test: test
     )
-
-    let engine = FuzzEngine<repeat each Input>(
-        config: config,
-        corpusDirectory: corpusDirectory(filePath: filePath, function: function)
-    )
-
-    return try reportFuzzResult(await engine.run(additionalSeeds: seeds, test: test), filePath: filePath, line: line)
 }
 
 // MARK: - Fuzz Helpers

@@ -1,1 +1,1 @@
-{"createdAt":"2026-01-05T20:36:36Z","entries":[{"discoveredAt":"2026-01-05T20:36:36Z","entryType":"coverage","input":["IiI="],"inputReadable":[""],"signature":{"edges":[15232,15233]}}],"schemaVersion":"v1-23026","totalCoverage":{"edges":[15232,15233]},"updatedAt":"2026-01-05T20:36:37Z"}
+{"createdAt":"2026-01-06T16:41:58Z","entries":[{"discoveredAt":"2026-01-06T16:41:58Z","entryType":"coverage","input":["IiI="],"inputReadable":[""],"signature":{"edges":[14904,14905]}}],"schemaVersion":"v1-22698","totalCoverage":{"edges":[14904,14905]},"updatedAt":"2026-01-06T16:41:58Z"}

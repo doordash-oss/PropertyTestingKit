@@ -373,7 +373,7 @@ private actor SourceLocationCache {
         guard let task = preWarmTask else { return }
 
         // Race between task completion and timeout
-        _ = try? await runWithTimeout(timeout: timeout) {
+        _ = await runWithTimeout(timeout: timeout) {
             await task.value
         }
     }

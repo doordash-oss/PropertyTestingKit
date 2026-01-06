@@ -104,6 +104,7 @@
 		D5304C43DD6EFBF89321404D /* PropertyTestingKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 2595E9AD80DBFC77F241A7E7 /* PropertyTestingKit.framework */; };
 		DB3B9AFA08DCD50172E473CB /* CLLVMSymbolizer.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 6B4DC0FA0EFB0DDF25E4C353 /* CLLVMSymbolizer.cpp */; };
 		DB71EBF35575DA1DEA31C0F0 /* Macros.swift in Sources */ = {isa = PBXBuildFile; fileRef = D9AB1FE9A26A576DB0D5550E /* Macros.swift */; };
+		DE91A730EDEC7C073B4D166F /* ContinuousClockClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4A90F27F22BE17810AE1B6F /* ContinuousClockClient.swift */; };
 		E05A1921A081B8C834B8A921 /* String+Shrinkable.swift in Sources */ = {isa = PBXBuildFile; fileRef = F9091C3EF601AF281CEC4E3A /* String+Shrinkable.swift */; };
 		E22FD5BA11720007BFEC6E1E /* DWARFSourceLocation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 801978DFD141E3190DC8219D /* DWARFSourceLocation.swift */; };
 		E580739238EA1DCDBB49D4E5 /* Character+Fuzzable.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9090D11CEB59C93417F2F4F6 /* Character+Fuzzable.swift */; };
@@ -285,6 +286,7 @@
 		A18400D950AE2D1D13443E9A /* FuzzAPI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FuzzAPI.swift; sourceTree = "<group>"; };
 		A1C4EDCAB19E2F65E521C289 /* String+Fuzzable.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "String+Fuzzable.swift"; sourceTree = "<group>"; };
 		A3DC7247C29C4368A12DBDC7 /* CartesianProduct.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CartesianProduct.swift; sourceTree = "<group>"; };
+		A4A90F27F22BE17810AE1B6F /* ContinuousClockClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContinuousClockClient.swift; sourceTree = "<group>"; };
 		A5A7DD272E538B8E8CFE5C75 /* CoverageGapDetectorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoverageGapDetectorTests.swift; sourceTree = "<group>"; };
 		ACE4D8AA0A411B9988FA7E7C /* FuzzEngine+Config.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "FuzzEngine+Config.swift"; sourceTree = "<group>"; };
 		AF1E91685C6019AA1D8E23F9 /* Synchronized.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Synchronized.swift; sourceTree = "<group>"; };
@@ -393,6 +395,7 @@
 		1030A957868366F4FD9125D1 /* Dependencies */ = {
 			isa = PBXGroup;
 			children = (
+				A4A90F27F22BE17810AE1B6F /* ContinuousClockClient.swift */,
 				FFF4F63E42A1153F798F4A15 /* CorpusClient.swift */,
 				8FED37BAA14224125F5AD7CA /* CorpusPersistenceClient.swift */,
 				6B7DA3E55A8132FE210D8EAF /* CoverageCountersClient.swift */,
@@ -993,6 +996,7 @@
 				A971C2C46510D47C1A1C3FE0 /* Bool+Fuzzable.swift in Sources */,
 				A37D8BF967DDC59F6674C589 /* CartesianProduct.swift in Sources */,
 				E580739238EA1DCDBB49D4E5 /* Character+Fuzzable.swift in Sources */,
+				DE91A730EDEC7C073B4D166F /* ContinuousClockClient.swift in Sources */,
 				F997A4DDB225D63D65B476AA /* Corpus.swift in Sources */,
 				0469AB3AB668C05713B4CEEC /* CorpusClient.swift in Sources */,
 				A8AB88E38D9F9BBE8CCCD77B /* CorpusCoder.swift in Sources */,
