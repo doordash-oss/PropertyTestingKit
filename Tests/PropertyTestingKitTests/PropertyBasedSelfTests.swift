@@ -515,7 +515,7 @@ struct RegressionModeTests {
     @Test("CorpusSchema detects version changes")
     func testSchemaVersioning() async throws {
         // Create a mock client with known counter count
-        let (snapshotSpy, snapshotFn) = spy { () async -> SanCovCounters? in
+        let (snapshotSpy, snapshotFn) = spy { () -> SanCovCounters? in
             SanCovCounters(counters: [UInt64](repeating: 0, count: 100))
         }
         let mockClient = CoverageCountersClient(
@@ -526,7 +526,7 @@ struct RegressionModeTests {
             endMeasurement: { _ in },
             snapshotCoveredArraysWithContext: { _ in SparseCoverage(indices: [], counts: []) }
         )
-        let version1 = await CorpusSchema.currentVersion(using: mockClient)
+        let version1 = CorpusSchema.currentVersion(using: mockClient)
 
         // Version should be in expected format
         #expect(version1 == "v1-100", "Version should be 'v1-100' for 100 counters")
@@ -566,7 +566,7 @@ struct RegressionModeTests {
             endMeasurement: { _ in },
             snapshotCoveredArraysWithContext: { _ in nil }
         )
-        let version = await CorpusSchema.currentVersion(using: mockClient)
+        let version = CorpusSchema.currentVersion(using: mockClient)
         #expect(version == "unknown", "Should return 'unknown' when coverage unavailable")
     }
 }

@@ -40,7 +40,6 @@ import Testing
 ///
 public actor FuzzEngine<each Input: Fuzzable & Codable & Sendable> {
     /// Type-erased mutator functions for each input component.
-    /// When nil, uses the type's Fuzzable conformance.
     public typealias MutatorSeeds = @Sendable () -> [(repeat each Input)]
     public typealias MutatorMutate = @Sendable ((repeat each Input)) -> [(repeat each Input)]
 
@@ -68,14 +67,20 @@ public actor FuzzEngine<each Input: Fuzzable & Codable & Sendable> {
 
     private let config: Config
     private let corpusDirectory: URL?
-    private let mutatorSeeds: MutatorSeeds?
-    private let mutatorMutate: MutatorMutate?
+    private let mutatorSeeds: MutatorSeeds
+    private let mutatorMutate: MutatorMutate
 
+    /// Initialize with default mutators derived from `Fuzzable` conformance.
+    ///
+    /// - Parameters:
+    ///   - config: Fuzzing configuration.
+    ///   - corpusDirectory: Where to save/load the corpus.
     public init(config: Config = Config(), corpusDirectory: URL? = nil) {
-        self.config = config
-        self.corpusDirectory = corpusDirectory
-        self.mutatorSeeds = nil
-        self.mutatorMutate = nil
+        self.init(
+            mutators: (repeat DefaultMutator<each Input>()),
+            config: config,
+            corpusDirectory: corpusDirectory
+        )
     }
 
     /// Initialize with custom mutators.
@@ -114,79 +119,38 @@ public actor FuzzEngine<each Input: Fuzzable & Codable & Sendable> {
         cartesianProduct(repeat (each mutators).seeds)
     }
 
+    /// Count the number of elements in a parameter pack.
+    private static func inputCount(for input: repeat each Input) -> Int {
+        var count = 0
+        (repeat { _ = each input; count += 1 }())
+        return count
+    }
+
     /// Mutate an input using the provided mutators.
+    /// Uses parameter pack expansion to avoid type erasure.
     private static func mutateWithMutators<each M: Mutator>(
         input: (repeat each Input),
         mutators: (repeat each M)
     ) -> [(repeat each Input)] where (repeat (each M).Value) == (repeat each Input) {
-        var results: [(repeat each Input)] = []
+        let count = inputCount(for: repeat each input)
 
-        // Collect mutators into array for indexed access
-        var mutatorArray: [Any] = []
-        (repeat mutatorArray.append(each mutators))
-
-        // For each component, try mutating it while keeping others the same
-        var componentIndex = 0
-
-        func tryMutateComponent<V: Sendable>(_ value: V, index: Int) {
-            // Get the mutator for this component
-            guard index < mutatorArray.count else { return }
-
-            // We need to find the mutator that matches this type
-            let mutator = mutatorArray[index]
-
-            // Use type casting to call mutate
-            if let typedMutator = mutator as? AnyMutator<V> {
-                let mutations = typedMutator.mutate(value)
-                for mutated in mutations {
-                    if let newTuple = createMutatedTuple(input, mutating: index, with: mutated) {
-                        results.append(newTuple)
-                    }
+        // For each position, create a tuple of arrays where:
+        // - The mutated position contains all mutations from the mutator
+        // - Other positions contain just the original value wrapped in an array
+        let positionsMutated: [(repeat [each Input])] = (0..<count).map { replacementIndex in
+            var currentIndex = 0
+            return (repeat {
+                defer { currentIndex += 1 }
+                if currentIndex == replacementIndex {
+                    return (each mutators).mutate(each input)
+                } else {
+                    return [(each input)]
                 }
-            } else {
-                // Try to extract mutations dynamically
-                // This handles cases where the mutator type doesn't exactly match AnyMutator
-                for mutatorCandidate in mutatorArray {
-                    if let singleMutator = mutatorCandidate as? SingleMutator<V> {
-                        if mutatorArray.firstIndex(where: { ($0 as AnyObject) === (singleMutator as AnyObject) }) == index {
-                            let mutations = singleMutator.mutate(value)
-                            for mutated in mutations {
-                                if let newTuple = createMutatedTuple(input, mutating: index, with: mutated) {
-                                    results.append(newTuple)
-                                }
-                            }
-                            break
-                        }
-                    }
-                }
-            }
+            }())
         }
 
-        // Iterate through each component
-        componentIndex = 0
-        (repeat { tryMutateComponent(each input, index: componentIndex); componentIndex += 1 }())
-
-        return results
-    }
-
-    /// Create a mutated tuple at a specific index (static version).
-    private static func createMutatedTuple<U>(
-        _ input: (repeat each Input),
-        mutating targetIndex: Int,
-        with newValue: U
-    ) -> (repeat each Input)? {
-        var currentIndex = 0
-
-        func substituteIfNeeded<V: Fuzzable & Codable & Sendable>(_ value: V) -> V {
-            defer { currentIndex += 1 }
-            if currentIndex == targetIndex, let casted = newValue as? V {
-                return casted
-            }
-            return value
-        }
-
-        let newTuple: (repeat each Input) = (repeat substituteIfNeeded(each input))
-        return newTuple
+        // Use cartesianProduct to expand each position's arrays into full tuples
+        return positionsMutated.flatMap(cartesianProduct)
     }
 
     // MARK: - Fuzzing
@@ -257,7 +221,7 @@ public actor FuzzEngine<each Input: Fuzzable & Codable & Sendable> {
                 if config.verbose {
                     print("[Fuzz] Mode: regressionOnly - no corpus found, nothing to regress")
                 }
-                return await makeEmptyRegressionResult()
+                return .empty
             }
             do {
                 let savedSnapshot: CorpusSnapshot<repeat each Input> = try corpusPersistenceClient.loadSnapshot(from: directory)
@@ -266,7 +230,7 @@ public actor FuzzEngine<each Input: Fuzzable & Codable & Sendable> {
                 if config.verbose {
                     print("[Fuzz] Mode: regressionOnly - failed to load corpus: \(error)")
                 }
-                return await makeEmptyRegressionResult()
+                return .empty
             }
         }
 
@@ -291,33 +255,6 @@ public actor FuzzEngine<each Input: Fuzzable & Codable & Sendable> {
         return await runFuzzing(additionalSeeds: additionalSeeds, test: test)
     }
 
-    /// Create an empty result for regression-only mode when no corpus exists.
-    private func makeEmptyRegressionResult() async -> FuzzResult<repeat each Input> {
-        let emptySnapshot = CorpusSnapshot<repeat each Input>(
-            entries: [],
-            schemaVersion: await CorpusSchema.currentVersion(),
-            createdAt: dateClient.now(),
-            updatedAt: dateClient.now(),
-            totalCoverage: CoverageSignature(edges: [])
-        )
-        let emptyStats = FuzzStats(
-            totalInputs: 0,
-            newPaths: 0,
-            mutations: 0,
-            generations: 0,
-            duration: 0,
-            stopReason: .regression,
-            plateauStats: nil
-        )
-        return FuzzResult(
-            corpus: emptySnapshot,
-            failures: [],
-            stats: emptyStats,
-            wasRegression: true,
-            coverageChanges: []
-        )
-    }
-
     // MARK: - Fuzz Mode
 
     private func runFuzzing(
@@ -325,7 +262,7 @@ public actor FuzzEngine<each Input: Fuzzable & Codable & Sendable> {
         test: @escaping @Sendable ((repeat each Input)) async throws -> Void
     ) async -> FuzzResult<repeat each Input> {
         let startTime = dateClient.now()
-        let schemaVersion = await CorpusSchema.currentVersion()
+        let schemaVersion = CorpusSchema.currentVersion()
         let corpus: CorpusClient<repeat each Input> = corpusRegistry.get(schemaVersion: schemaVersion)
         var failures: [(input: (repeat each Input), error: Error)] = []
         var hangs: [(input: (repeat each Input), timeout: Duration)] = []
@@ -343,7 +280,7 @@ public actor FuzzEngine<each Input: Fuzzable & Codable & Sendable> {
         )
 
         // Build seed queue: default seeds + user-provided additional seeds
-        let defaultSeeds = mutatorSeeds?() ?? cartesianProductFuzz()
+        let defaultSeeds = mutatorSeeds()
         var seedQueue = defaultSeeds + additionalSeeds
         let initialSeedCount = seedQueue.count
 
@@ -365,7 +302,7 @@ public actor FuzzEngine<each Input: Fuzzable & Codable & Sendable> {
         let randomClient = random
 
         // Early exit if no seeds and no way to generate inputs
-        if seedQueue.isEmpty && (mutatorSeeds?() ?? cartesianProductFuzz()).isEmpty {
+        if seedQueue.isEmpty && mutatorSeeds().isEmpty {
             if config.verbose {
                 print("[Fuzz] No seeds and no mutations possible - exiting early")
             }
@@ -445,7 +382,7 @@ public actor FuzzEngine<each Input: Fuzzable & Codable & Sendable> {
             // Get corpus state once for the entire batch (1 actor hop instead of ~400)
             let corpusState = await corpus.batchState()
 
-            for batchIdx in 0..<currentBatchSize {
+            for _ in 0..<currentBatchSize {
                 let input: (repeat each Input)
                 let parentIndex: Int?
                 var isMutation = false
@@ -462,7 +399,7 @@ public actor FuzzEngine<each Input: Fuzzable & Codable & Sendable> {
 
                     if shouldGenerate {
                         // Generate fresh input
-                        let fuzzValues = mutatorSeeds?() ?? cartesianProductFuzz()
+                        let fuzzValues = mutatorSeeds()
                         guard let fuzzValue = randomClient({ rng in fuzzValues.randomElement(using: &rng) }) else {
                             continue
                         }
@@ -474,7 +411,7 @@ public actor FuzzEngine<each Input: Fuzzable & Codable & Sendable> {
                         let selectedIndex = corpusState.selectForMutation()!
 
                         let parent = corpusState.entries[selectedIndex].input
-                        let mutations = mutatorMutate?(parent) ?? mutateInput(parent)
+                        let mutations = mutatorMutate(parent)
 
                         if let m = randomClient({ rng in mutations.randomElement(using: &rng) }) {
                             input = m
@@ -483,7 +420,7 @@ public actor FuzzEngine<each Input: Fuzzable & Codable & Sendable> {
                             isMutation = true
                         } else {
                             // Mutations exhausted - fall back to generation
-                            let fuzzValues = mutatorSeeds?() ?? cartesianProductFuzz()
+                            let fuzzValues = mutatorSeeds()
                             guard let fuzzValue = randomClient({ rng in fuzzValues.randomElement(using: &rng) }) else {
                                 continue
                             }
@@ -970,24 +907,27 @@ public actor FuzzEngine<each Input: Fuzzable & Codable & Sendable> {
     }
 
     /// Generate single-component mutations (mutate one input field at a time).
+    /// Uses parameter pack expansion to avoid type erasure.
     private func singleComponentMutations(_ input: (repeat each Input)) -> [(repeat each Input)] {
-        var results: [(repeat each Input)] = []
-        var componentIndex = 0
+        let count = Self.inputCount(for: repeat each input)
 
-        func tryMutate<U: Fuzzable>(_ value: U, atIndex index: Int) {
-            let mutations = value.mutate()
-            for mutated in mutations {
-                if let newTuple = createMutatedTuple(input, mutating: index, with: mutated) {
-                    results.append(newTuple)
+        // For each position, create a tuple of arrays where:
+        // - The mutated position contains all mutations from Fuzzable.mutate()
+        // - Other positions contain just the original value wrapped in an array
+        let positionsMutated: [(repeat [each Input])] = (0..<count).map { replacementIndex in
+            var currentIndex = 0
+            return (repeat {
+                defer { currentIndex += 1 }
+                if currentIndex == replacementIndex {
+                    return (each input).mutate()
+                } else {
+                    return [(each input)]
                 }
-            }
-            componentIndex += 1
+            }())
         }
 
-        componentIndex = 0
-        (repeat tryMutate(each input, atIndex: componentIndex))
-
-        return results
+        // Use cartesianProduct to expand each position's arrays into full tuples
+        return positionsMutated.flatMap(cartesianProduct)
     }
 
     /// Generate derived values based on common arithmetic relationships.

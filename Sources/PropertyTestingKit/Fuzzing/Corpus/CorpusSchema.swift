@@ -12,19 +12,19 @@ public enum CorpusSchema {
     ///
     /// This creates a hash of the coverage structure so we can detect
     /// when code changes invalidate the corpus.
-    public static func currentVersion() async -> String {
+    public static func currentVersion() -> String {
         @Dependency(\.coverageCounters) var coverageCounters
-        return await currentVersion(using: coverageCounters)
+        return currentVersion(using: coverageCounters)
     }
 
     /// Generate a schema version using a specific coverage counters client.
     /// This overload enables testing with mocked dependencies.
-    public static func currentVersion(using coverageCounters: CoverageCountersClient) async -> String {
+    public static func currentVersion(using coverageCounters: CoverageCountersClient) -> String {
         // Use a hash of:
         // 1. Number of counters
         // 2. Build timestamp or similar
 
-        guard let counters = await coverageCounters.snapshot() else {
+        guard let counters = coverageCounters.snapshot() else {
             return "unknown"
         }
 
@@ -35,7 +35,7 @@ public enum CorpusSchema {
 
     /// Check if a schema version is compatible with the current code.
     public static func isCompatible(_ version: String) async -> Bool {
-        let current = await currentVersion()
+        let current = currentVersion()
         return version == current
     }
 }

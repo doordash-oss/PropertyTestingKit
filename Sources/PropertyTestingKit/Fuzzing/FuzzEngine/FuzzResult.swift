@@ -3,6 +3,7 @@
 //  Copyright © 2025 DoorDash. All rights reserved.
 //
 import Foundation
+import Dependencies
 
 /// The result of a fuzz test run.
 public struct FuzzResult<each Input: Codable & Sendable>: Sendable {
@@ -120,5 +121,35 @@ public struct FuzzStats: Sendable {
         self.plateauStats = plateauStats
         self.failures = failures
         self.hangs = hangs
+    }
+}
+
+extension FuzzResult {
+    static var empty: Self {
+        @Dependency(\.dateClient) var dateClient
+
+        let emptySnapshot = CorpusSnapshot<repeat each Input>(
+            entries: [],
+            schemaVersion: CorpusSchema.currentVersion(),
+            createdAt: dateClient.now(),
+            updatedAt: dateClient.now(),
+            totalCoverage: CoverageSignature(edges: [])
+        )
+        let emptyStats = FuzzStats(
+            totalInputs: 0,
+            newPaths: 0,
+            mutations: 0,
+            generations: 0,
+            duration: 0,
+            stopReason: .regression,
+            plateauStats: nil
+        )
+        return FuzzResult(
+            corpus: emptySnapshot,
+            failures: [],
+            stats: emptyStats,
+            wasRegression: true,
+            coverageChanges: []
+        )
     }
 }

@@ -515,7 +515,7 @@ struct DeterministicTimingTests {
             let timedOut = try await withDependencies {
                 $0.continuousClockClient = testClock
             } operation: {
-                try await runWithTimeout(timeout: .seconds(10)) {
+                await runWithTimeout(timeout: .seconds(10)) {
                     // Task completes immediately without awaiting
                 }
             }

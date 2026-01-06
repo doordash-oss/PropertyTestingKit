@@ -396,7 +396,7 @@ struct FuzzEngineTests {
         """
         let corpusData = Data(oldCorpusJSON.utf8)
 
-        let (snapshotSpy, snapshotFn) = spy { () async -> SanCovCounters? in
+        let (snapshotSpy, snapshotFn) = spy { () -> SanCovCounters? in
             FuzzEngineTests.makeCounters(1)
         }
         // makeCounters(1) creates counters[1]=2, so snapshotCoveredArrays returns [1] = 2
@@ -538,7 +538,7 @@ struct FuzzEngineTests {
         let corpusDir = URL(fileURLWithPath: "/test/fuzz-regression-success")
 
         // Use 100 counters so schema version is "v1-100"
-        let (snapshotSpy, snapshotFn) = spy { () async -> SanCovCounters? in
+        let (snapshotSpy, snapshotFn) = spy { () -> SanCovCounters? in
             SanCovCounters(counters: [UInt64](repeating: 0, count: 100))
         }
         // All zeros means empty SparseCoverage
@@ -595,7 +595,7 @@ struct FuzzEngineTests {
 
     @Test("FuzzEngine handles coverage unavailable - test succeeds")
     func testCoverageUnavailableSuccess() async throws {
-        let (snapshotSpy, snapshotFn) = spy { () async -> SanCovCounters? in nil }
+        let (snapshotSpy, snapshotFn) = spy { () -> SanCovCounters? in nil }
 
         let result = await withDependencies {
             $0.coverageCounters = CoverageCountersClient(
@@ -627,7 +627,7 @@ struct FuzzEngineTests {
     func testCoverageUnavailableWithError() async throws {
         struct TestError: Error {}
 
-        let (snapshotSpy, snapshotFn) = spy { () async -> SanCovCounters? in nil }
+        let (snapshotSpy, snapshotFn) = spy { () -> SanCovCounters? in nil }
 
         let result = await withDependencies {
             $0.coverageCounters = CoverageCountersClient(
@@ -662,7 +662,7 @@ struct FuzzEngineTests {
         // - reset() is called before each test
         // - snapshot() is called after each test
         // If snapshot always returns nil, no coverage is ever recorded
-        let (snapshotSpy, snapshotFn) = spy { () async -> SanCovCounters? in
+        let (snapshotSpy, snapshotFn) = spy { () -> SanCovCounters? in
             // Always return nil to simulate coverage unavailable
             return nil
         }

@@ -26,7 +26,7 @@ import IssueReporting
 /// ```
 public struct CoverageCountersClient: Sendable {
     /// Get a snapshot of current coverage counters for this task.
-    public var snapshot: @Sendable () async -> SanCovCounters?
+    public var snapshot: @Sendable () -> SanCovCounters?
 
     /// Get only the covered (non-zero) edges as parallel arrays.
     /// This is the fastest way to get sparse coverage data.
@@ -50,7 +50,7 @@ public struct CoverageCountersClient: Sendable {
     public var snapshotCoveredArraysWithContext: @Sendable (SanCovCounters.MeasurementContext) -> SparseCoverage?
 
     public init(
-        snapshot: @escaping @Sendable () async -> SanCovCounters? = unimplemented(
+        snapshot: @escaping @Sendable () -> SanCovCounters? = unimplemented(
             "snapshot",
             placeholder: nil
         ),
