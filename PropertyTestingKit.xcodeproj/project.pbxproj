@@ -27,6 +27,7 @@
 		2791D860E1AFB4810E51C213 /* DefaultShrinkingPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = D9B8430D41323168F71EBA35 /* DefaultShrinkingPlugin.swift */; };
 		286622DA029C3AC20D7DA262 /* PropertyTestingKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 2595E9AD80DBFC77F241A7E7 /* PropertyTestingKit.framework */; };
 		29AD704E75D749B097C95BAA /* CorpusEntryType.swift in Sources */ = {isa = PBXBuildFile; fileRef = 49412A507ECD93C3E85C649B /* CorpusEntryType.swift */; };
+		2DC1B96A3FA7B3578DB69E7F /* PropertyTestingKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 2595E9AD80DBFC77F241A7E7 /* PropertyTestingKit.framework */; };
 		2E6CDCBF7B91A07E9402C82F /* ConcurrentFuzzLoadTest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00EBA13944AF0B757005638A /* ConcurrentFuzzLoadTest.swift */; };
 		3AE90F2D2F5E78080AAB081C /* FuzzAPITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 99DF2D2D7A9C78BEFDA1C9FF /* FuzzAPITests.swift */; };
 		40BBDB105DB39C8B70D658CE /* EventBasedPlateauDetectorPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = DCDB2199470F533775067DB9 /* EventBasedPlateauDetectorPlugin.swift */; };
@@ -39,6 +40,7 @@
 		509CC5C943C5ECF47E29EF7C /* PropertyTestingKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 2595E9AD80DBFC77F241A7E7 /* PropertyTestingKit.framework */; };
 		5118F45702A081DEB42B60AA /* DateClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8DCFCD27F236B21539FDC070 /* DateClient.swift */; };
 		52C260E19A743BA5BCADC703 /* CoverageSignature.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BD8E7DDBFB1256A08DEBE05 /* CoverageSignature.swift */; };
+		534C8AE7D3768059DDAEA18D /* Benchmark in Frameworks */ = {isa = PBXBuildFile; productRef = FD911ACF527827DA331405BD /* Benchmark */; };
 		589D0164A415C152CDD4B160 /* Benchmark in Frameworks */ = {isa = PBXBuildFile; productRef = E6A87E5EFC33D405ECEDD0E1 /* Benchmark */; };
 		5CE75ACE29DD3F8860FAA19D /* STADSPlateauDetector.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1733E8C2C5D2FC2BC7394036 /* STADSPlateauDetector.swift */; };
 		60F4B0B951427866AB7380DC /* CorpusEntry.swift in Sources */ = {isa = PBXBuildFile; fileRef = D708E6A5A1B65DA927AFEA9E /* CorpusEntry.swift */; };
@@ -110,6 +112,7 @@
 		E580739238EA1DCDBB49D4E5 /* Character+Fuzzable.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9090D11CEB59C93417F2F4F6 /* Character+Fuzzable.swift */; };
 		E5CE85300E9595AE8CF1F398 /* UncoveredRegion.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9DA6786D89438D0199BF0412 /* UncoveredRegion.swift */; };
 		E6964DD309352DC4A763CFE1 /* AnyShrinkable.swift in Sources */ = {isa = PBXBuildFile; fileRef = 13045E2C359AB3AFCD8C3FF9 /* AnyShrinkable.swift */; };
+		E7500FB62C682AC6EC216A82 /* ProfiledBenchmark.swift in Sources */ = {isa = PBXBuildFile; fileRef = 72EFC8FC26036551EE41795E /* ProfiledBenchmark.swift */; };
 		E94E382B579A8EAEA05F2A12 /* ShrinkingPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = 19A4AA0D8D28393DDC7CDD33 /* ShrinkingPlugin.swift */; };
 		EDA4F3DF2A8772887434F792 /* Testing.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 3F5DD8CB2128FA92846AA71F /* Testing.framework */; };
 		F175208C6823ED3BC2A92224 /* PropertyTestingKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 2595E9AD80DBFC77F241A7E7 /* PropertyTestingKit.framework */; };
@@ -125,6 +128,13 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
+		255D349771D18C694F946612 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 93269515397F3B540BE8A95E /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 3158F44FBF717D69B2A46E2E;
+			remoteInfo = PropertyTestingKit;
+		};
 		3218720DD27BCF321104A88E /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 93269515397F3B540BE8A95E /* Project object */;
@@ -260,10 +270,12 @@
 		4F25239605AF76FC51FDDF99 /* CorpusSchema.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CorpusSchema.swift; sourceTree = "<group>"; };
 		52C1DEE9A4340554236C9F32 /* SparseCoverage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SparseCoverage.swift; sourceTree = "<group>"; };
 		5305591133199EC528A0A92D /* UserService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserService.swift; sourceTree = "<group>"; };
+		5B885ACEB672DD762DA0F839 /* ProfiledBenchmark */ = {isa = PBXFileReference; includeInIndex = 0; path = ProfiledBenchmark; sourceTree = BUILT_PRODUCTS_DIR; };
 		5DE9A7DAD99528274ED05439 /* DeterministicTimingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeterministicTimingTests.swift; sourceTree = "<group>"; };
 		683A330BCB90F626B21D2422 /* CustomFuzzableTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CustomFuzzableTests.swift; sourceTree = "<group>"; };
 		6B4DC0FA0EFB0DDF25E4C353 /* CLLVMSymbolizer.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = CLLVMSymbolizer.cpp; sourceTree = "<group>"; };
 		6B7DA3E55A8132FE210D8EAF /* CoverageCountersClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoverageCountersClient.swift; sourceTree = "<group>"; };
+		72EFC8FC26036551EE41795E /* ProfiledBenchmark.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfiledBenchmark.swift; sourceTree = "<group>"; };
 		7769DE997855D0C94C1C405F /* FuzzResult.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FuzzResult.swift; sourceTree = "<group>"; };
 		797B369A783CF8DA4F7C9190 /* RaceConditionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RaceConditionTests.swift; sourceTree = "<group>"; };
 		7C98CB65B3ADE29BB300C7EA /* ShrinkStats.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShrinkStats.swift; sourceTree = "<group>"; };
@@ -369,6 +381,15 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		D400130A2A1899725FC79EB5 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				2DC1B96A3FA7B3578DB69E7F /* PropertyTestingKit.framework in Frameworks */,
+				534C8AE7D3768059DDAEA18D /* Benchmark in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		F497AFBEE2475B89F01655D3 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -436,6 +457,7 @@
 			children = (
 				A02618471FF4E5CAE16C036E /* CLLVMSymbolizer */,
 				D90E9AECF33092EB6E4921C9 /* CoverageBenchmarks */,
+				6A0D4F20DD61600A95099AA3 /* ProfiledBenchmark */,
 				7772FE8E711FE4E44FDBBA37 /* PropertyTestingKit */,
 				BDDFFD2714DEB826C97E5A69 /* PropertyTestingKitTests */,
 				3FC766561AF37D20D5723CE6 /* SanCovHooks */,
@@ -453,6 +475,7 @@
 				021ACDF8BE3B266FA44EEDBD /* CoverageBenchmarks */,
 				EF7AA1611BFAAB73EE70CA85 /* libCLLVMSymbolizer.a */,
 				FC16934A7D0ADDA3859FDFCA /* libSanCovHooks.a */,
+				5B885ACEB672DD762DA0F839 /* ProfiledBenchmark */,
 				2595E9AD80DBFC77F241A7E7 /* PropertyTestingKit.framework */,
 				CF7909559B042C15C36EAABE /* PropertyTestingKitTests.xctest */,
 				805D70C5E70888046E92D052 /* SanCovTests.xctest */,
@@ -508,6 +531,15 @@
 			);
 			name = SanCovHooks;
 			path = Sources/SanCovHooks;
+			sourceTree = "<group>";
+		};
+		6A0D4F20DD61600A95099AA3 /* ProfiledBenchmark */ = {
+			isa = PBXGroup;
+			children = (
+				72EFC8FC26036551EE41795E /* ProfiledBenchmark.swift */,
+			);
+			name = ProfiledBenchmark;
+			path = Benchmarks/ProfiledBenchmark;
 			sourceTree = "<group>";
 		};
 		7397170BA7D821E3A51C70A8 /* DWARF */ = {
@@ -866,6 +898,26 @@
 			productReference = CF7909559B042C15C36EAABE /* PropertyTestingKitTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
 		};
+		E76C26F006A15F5D25372C39 /* ProfiledBenchmark */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 997032AD1D6B890B4F7EEE22 /* Build configuration list for PBXNativeTarget "ProfiledBenchmark" */;
+			buildPhases = (
+				A090ECA68126CF60F4A053A2 /* Sources */,
+				D400130A2A1899725FC79EB5 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				E6CEC119F658F59EC9DA0F32 /* PBXTargetDependency */,
+			);
+			name = ProfiledBenchmark;
+			packageProductDependencies = (
+				FD911ACF527827DA331405BD /* Benchmark */,
+			);
+			productName = ProfiledBenchmark;
+			productReference = 5B885ACEB672DD762DA0F839 /* ProfiledBenchmark */;
+			productType = "com.apple.product-type.tool";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -896,6 +948,7 @@
 			targets = (
 				05E982383D21A29F788C71F5 /* CLLVMSymbolizer */,
 				5F7ED0684477D1C9FC1834A5 /* CoverageBenchmarks */,
+				E76C26F006A15F5D25372C39 /* ProfiledBenchmark */,
 				3158F44FBF717D69B2A46E2E /* PropertyTestingKit */,
 				E50766C553D412A57A53F038 /* PropertyTestingKitTests */,
 				5FED955AC4DD9D722F6367E3 /* SanCovHooks */,
@@ -937,6 +990,14 @@
 			files = (
 				C767CFCE0529D3F2A03C1C12 /* SanCovHooks.c in Sources */,
 				17D551F0DC9A49573320CBC2 /* ck_ht.c in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A090ECA68126CF60F4A053A2 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				E7500FB62C682AC6EC216A82 /* ProfiledBenchmark.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -1101,9 +1162,31 @@
 			target = 3158F44FBF717D69B2A46E2E /* PropertyTestingKit */;
 			targetProxy = 67AF272922F6EC84F10C5334 /* PBXContainerItemProxy */;
 		};
+		E6CEC119F658F59EC9DA0F32 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 3158F44FBF717D69B2A46E2E /* PropertyTestingKit */;
+			targetProxy = 255D349771D18C694F946612 /* PBXContainerItemProxy */;
+		};
 /* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
+		04229AFC534B07A319795F47 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				COMBINE_HIDPI_IMAGES = YES;
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) $(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin";
+				OTHER_LDFLAGS = "$(inherited) -L$(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin -lclang_rt.ubsan_osx_dynamic";
+				OTHER_SWIFT_FLAGS = "$(inherited) -g -sanitize=undefined -sanitize-coverage=edge,pc-table";
+				PRODUCT_BUNDLE_IDENTIFIER = com.propertytestingkit.ProfiledBenchmark;
+				PRODUCT_NAME = ProfiledBenchmark;
+				SDKROOT = macosx;
+				SWIFT_INCLUDE_PATHS = (
+					"$(SRCROOT)/Sources/CLLVMSymbolizer/include",
+					"$(SRCROOT)/Sources/SanCovHooks/include",
+				);
+			};
+			name = Debug;
+		};
 		15AB768F7A96BF87B397813C /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -1322,6 +1405,23 @@
 				SKIP_INSTALL = YES;
 			};
 			name = Debug;
+		};
+		6A5D53457ABCD366F5F65955 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				COMBINE_HIDPI_IMAGES = YES;
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) $(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin";
+				OTHER_LDFLAGS = "$(inherited) -L$(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin -lclang_rt.ubsan_osx_dynamic";
+				OTHER_SWIFT_FLAGS = "$(inherited) -g -sanitize=undefined -sanitize-coverage=edge,pc-table";
+				PRODUCT_BUNDLE_IDENTIFIER = com.propertytestingkit.ProfiledBenchmark;
+				PRODUCT_NAME = ProfiledBenchmark;
+				SDKROOT = macosx;
+				SWIFT_INCLUDE_PATHS = (
+					"$(SRCROOT)/Sources/CLLVMSymbolizer/include",
+					"$(SRCROOT)/Sources/SanCovHooks/include",
+				);
+			};
+			name = Release;
 		};
 		7EB552DF9CA6F9EB6FFB31FE /* Release */ = {
 			isa = XCBuildConfiguration;
@@ -1656,6 +1756,15 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;
 		};
+		997032AD1D6B890B4F7EEE22 /* Build configuration list for PBXNativeTarget "ProfiledBenchmark" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				04229AFC534B07A319795F47 /* Debug */,
+				6A5D53457ABCD366F5F65955 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
 		B7CA9713E7D8C787A61941AE /* Build configuration list for PBXNativeTarget "CoverageBenchmarks" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
@@ -1727,6 +1836,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 1210619D1E73774D621E2E7E /* XCRemoteSwiftPackageReference "FunctionSpy" */;
 			productName = FunctionSpy;
+		};
+		FD911ACF527827DA331405BD /* Benchmark */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = E3D499669E4759325EF6414E /* XCRemoteSwiftPackageReference "package-benchmark" */;
+			productName = Benchmark;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

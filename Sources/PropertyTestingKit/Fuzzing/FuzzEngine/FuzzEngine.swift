@@ -306,25 +306,7 @@ public actor FuzzEngine<each Input: Fuzzable & Codable & Sendable> {
             if config.verbose {
                 print("[Fuzz] No seeds and no mutations possible - exiting early")
             }
-            let duration = dateClient.now().timeIntervalSince(startTime)
-            let stats = FuzzStats(
-                totalInputs: 0,
-                newPaths: 0,
-                mutations: 0,
-                generations: 0,
-                duration: duration,
-                stopReason: .noSeedsAvailable,
-                failures: 0,
-                hangs: 0
-            )
-            let emptySnapshot = await corpus.snapshot()
-            return FuzzResult(
-                corpus: emptySnapshot,
-                failures: failures,
-                stats: stats,
-                wasRegression: false,
-                coverageChanges: []
-            )
+            return .empty
         }
 
         // Unified fuzzing loop: seeds and mutations processed together
@@ -357,6 +339,7 @@ public actor FuzzEngine<each Input: Fuzzable & Codable & Sendable> {
                 iterationsSinceLastDiscovery: iterationsSinceNewCoverage
             )
 
+            // TODO: Should be able to return a custom stop reason
             if let pluginStopReason = pluginManager.shouldStop(context: stoppingContext) {
                 if config.verbose {
                     print("[Fuzz] Plugin stopping condition triggered: \(pluginStopReason)")

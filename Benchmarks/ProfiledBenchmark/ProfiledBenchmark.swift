@@ -33,20 +33,11 @@ let benchmarks: @Sendable () -> Void = {
             warmupIterations: 0,
             scalingFactor: .one,
             maxDuration: .seconds(60),
-            maxIterations: 1000
+            maxIterations: 100000
         )
     ) { benchmark in
         for _ in benchmark.scaledIterations {
-            let config = FuzzEngine<Int>.Config(
-                maxIterations: 1000,
-                corpusMode: .refuzzReplace,
-                stoppingPlugins: [],  // Disable automatic stopping
-                analysisPlugins: [.coverageGaps()]  // Enable gap detection
-            )
-            let engine = FuzzEngine<Int>(config: config)
-            let _ = await engine.run { input in
-                try parseAndValidate(input)
-            }
+            blackHole(cartesianProduct([1, 2, 3], ["foo", "bar", "baz"], [true, false]))
         }
     }
 }

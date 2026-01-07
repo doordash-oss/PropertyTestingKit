@@ -167,6 +167,7 @@ package.targets += [
             // Enable sanitizer coverage so we have realistic counter counts
             // Note: sanitize-coverage requires a sanitizer to be enabled
             .unsafeFlags([
+                "-O",
                 "-sanitize=undefined",
                 "-sanitize-coverage=edge,pc-table"
             ])
@@ -193,6 +194,7 @@ package.targets += [
             // Enable sanitizer coverage so we have realistic counter counts
             // Note: sanitize-coverage requires a sanitizer to be enabled
             .unsafeFlags([
+                "-O",
                 "-sanitize=undefined",
                 "-sanitize-coverage=edge,pc-table"
             ])

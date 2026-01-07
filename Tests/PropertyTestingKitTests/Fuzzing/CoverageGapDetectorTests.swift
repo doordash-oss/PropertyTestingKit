@@ -313,4 +313,30 @@ struct CoverageGapDetectorTests {
             }
         }
     }
+
+    @Test
+    func scratchPad() async throws {
+        let config = FuzzEngine<Int>.Config(
+            maxIterations: 1000,
+            corpusMode: .refuzzReplace,
+            stoppingPlugins: [],  // Disable automatic stopping
+            analysisPlugins: [.coverageGaps()]  // Enable gap detection
+        )
+        let engine = FuzzEngine<Int>(config: config)
+        let _ = await engine.run { input in
+            try parseAndValidate(input)
+        }
+    }
+
+    func parseAndValidate(_ input: Int) throws {
+        if input == Int.min {
+            // Edge case handling
+        } else if input < 0 {
+            let _ = abs(input)
+        } else if input > 1000 {
+            let _ = input / 2
+        } else {
+            let _ = input * 2
+        }
+    }
 }
