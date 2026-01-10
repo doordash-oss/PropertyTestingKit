@@ -26,10 +26,6 @@ extern "C" {
 /// Returns true if the binary was compiled with -sanitize-coverage=inline-8bit-counters.
 bool sancov_counters_available(void);
 
-/// Reset all coverage counters to zero.
-/// Safe to call even if counters are not available (no-op).
-void sancov_reset_counters(void);
-
 /// Get the number of instrumented edges (total counter count).
 size_t sancov_get_counter_count(void);
 
@@ -119,11 +115,6 @@ void sancov_end_measurement(void* context);
 // MARK: - Context-Aware API
 // These functions operate directly on a measurement context, bypassing TLS lookup.
 // This is critical for Swift concurrency where tasks can hop between threads.
-
-/// Reset counters for a specific measurement context.
-/// This bypasses TLS lookup by using the context directly.
-/// Much faster than sancov_reset_counters when the context is known.
-void sancov_reset_counters_with_context(void* context);
 
 /// Get the counters pointer for a specific measurement context.
 /// Returns the coverage map for the context, or NULL if not found.

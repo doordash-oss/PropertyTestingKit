@@ -12,32 +12,62 @@ import Benchmark
 import Foundation
 import PropertyTestingKit
 
-/// A simple function to fuzz - parses an integer and checks bounds.
-func parseAndValidate(_ input: Int) throws {
-    if input == Int.min {
-        // Edge case handling
-    } else if input < 0 {
-        let _ = abs(input)
-    } else if input > 1000 {
-        let _ = input / 2
-    } else {
-        let _ = input * 2
-    }
-}
+///// A simple function to fuzz - parses an integer and checks bounds.
+//func parseAndValidate(_ input: Int) throws {
+//    if input == Int.min {
+//        // Edge case handling
+//    } else if input < 0 {
+//        let _ = abs(input)
+//    } else if input > 1000 {
+//        let _ = input / 2
+//    } else {
+//        let _ = input * 2
+//    }
+//}
 
 let benchmarks: @Sendable () -> Void = {
     Benchmark(
-        "fuzz(Int) - 1000 iterations, with gap detection",
+        "fuzz(Int, String, Bool, Double, UInt8) - 1000 iterations, with gap detection",
         configuration: .init(
             metrics: [.wallClock],
             warmupIterations: 0,
             scalingFactor: .one,
             maxDuration: .seconds(60),
-            maxIterations: 100000
+            maxIterations: 1000
         )
     ) { benchmark in
         for _ in benchmark.scaledIterations {
-            blackHole(cartesianProduct([1, 2, 3], ["foo", "bar", "baz"], [true, false]))
+//            let _ = try? await fuzz(
+//                iterations: 1000,
+//                corpusMode: .refuzzReplace,
+//                stoppingPlugins: [],
+//                analysisPlugins: [.coverageGaps()]
+//            ) { (i: Int, s: String, b: Bool, d: Double, u: UInt8) in
+//                // Exercise all 5 inputs with branching logic
+//                if i < 0 {
+//                    blackHole(abs(i))
+//                }
+//                if s.isEmpty {
+//                    blackHole("empty")
+//                } else if s.count > 10 {
+//                    blackHole(s.prefix(10))
+//                }
+//                if b {
+//                    blackHole(d * 2)
+//                } else {
+//                    blackHole(d / 2)
+//                }
+//                if u > 128 {
+//                    blackHole(u &- 128)
+//                }
+//            }
+            cartesianProduct(
+                Int.fuzz,
+                String.fuzz,
+                Bool.fuzz,
+                Double.fuzz,
+                UInt8.fuzz
+            )
         }
     }
 }

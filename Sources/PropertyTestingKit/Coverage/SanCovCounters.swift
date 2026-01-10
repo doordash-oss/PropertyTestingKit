@@ -13,11 +13,31 @@ import Foundation
 import SanCovHooks
 import MachO
 
-/// Global instance for DWARF symbolization.
-private let dwarfSymbolizerHelper = DWARFSymbolizerHelper()
+/// Global instance for DWARF symbolization (lazy to avoid initialization race).
+private nonisolated(unsafe) var _dwarfSymbolizerHelper: DWARFSymbolizerHelper?
+private let symbolizerInitLock = NSLock()
 
-/// Global actor instance for function size lookup.
-private let functionSizeLookup = FunctionSizeLookupHelper()
+private func getDWARFSymbolizerHelper() -> DWARFSymbolizerHelper {
+    symbolizerInitLock.lock()
+    defer { symbolizerInitLock.unlock() }
+    if _dwarfSymbolizerHelper == nil {
+        _dwarfSymbolizerHelper = DWARFSymbolizerHelper()
+    }
+    return _dwarfSymbolizerHelper!
+}
+
+/// Global actor instance for function size lookup (lazy to avoid initialization race).
+private nonisolated(unsafe) var _functionSizeLookup: FunctionSizeLookupHelper?
+private let functionSizeInitLock = NSLock()
+
+private func getFunctionSizeLookup() -> FunctionSizeLookupHelper {
+    functionSizeInitLock.lock()
+    defer { functionSizeInitLock.unlock() }
+    if _functionSizeLookup == nil {
+        _functionSizeLookup = FunctionSizeLookupHelper()
+    }
+    return _functionSizeLookup!
+}
 
 /// A snapshot of coverage counters with task-level isolation.
 ///
@@ -383,12 +403,12 @@ extension SanCovCounters {
     /// Get the size of a function given its start address.
     /// Uses the Mach-O symbol table for accurate sizes.
     public static func getFunctionSize(at address: UInt) async -> UInt? {
-        await functionSizeLookup.getSize(forFunctionAt: address)
+        await getFunctionSizeLookup().getSize(forFunctionAt: address)
     }
 
     /// Get sizes for multiple function addresses at once.
     public static func getFunctionSizes(at addresses: [UInt]) async -> [UInt: UInt] {
-        await functionSizeLookup.getSizes(forFunctionsAt: addresses)
+        await getFunctionSizeLookup().getSizes(forFunctionsAt: addresses)
     }
 }
 
@@ -533,7 +553,7 @@ extension SanCovCounters {
         }
 
         // Try to get DWARF line info (expensive - skip if not needed)
-        let dwarfLocation = includeDWARF ? await dwarfSymbolizerHelper.lookup(pc: UInt(cLocation.pc)) : nil
+        let dwarfLocation = includeDWARF ? await getDWARFSymbolizerHelper().lookup(pc: UInt(cLocation.pc)) : nil
         return SanCovSourceLocation(from: cLocation, dwarfLocation: dwarfLocation)
     }
 
@@ -576,7 +596,7 @@ extension SanCovCounters {
     /// - Parameter pcs: Array of program counter addresses to look up.
     /// - Returns: Dictionary mapping PCs to their DWARF source locations.
     static func getDWARFLocations(for pcs: [UInt]) async -> [UInt: DWARFSourceLocation] {
-        await dwarfSymbolizerHelper.lookupBatch(pcs: pcs)
+        await getDWARFSymbolizerHelper().lookupBatch(pcs: pcs)
     }
 
     /// Get source locations for all covered edges in the current task.
@@ -601,7 +621,7 @@ extension SanCovCounters {
         var results: [SanCovSourceLocation] = []
         results.reserveCapacity(filled)
         for cLoc in cLocations.prefix(filled) {
-            let dwarfLocation = await dwarfSymbolizerHelper.lookup(pc: UInt(cLoc.pc))
+            let dwarfLocation = await getDWARFSymbolizerHelper().lookup(pc: UInt(cLoc.pc))
             let location = SanCovSourceLocation(from: cLoc, dwarfLocation: dwarfLocation)
 
             // Filter out stdlib if requested
@@ -619,6 +639,6 @@ extension SanCovCounters {
     /// When `true`, `getSourceLocation` and `getCoveredLocations` will include
     /// line and column numbers. When `false`, only function-level info is available.
     static func lineNumbersAvailable() async -> Bool {
-        await dwarfSymbolizerHelper.isAvailable
+        await getDWARFSymbolizerHelper().isAvailable
     }
 }

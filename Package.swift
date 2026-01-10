@@ -20,6 +20,7 @@ let package = Package(
         .package(url: "https://github.com/swiftlang/swift-syntax.git", from: "600.0.1"),
         .package(url: "https://github.com/pointfreeco/swift-dependencies.git", from: "1.6.0"),
         .package(url: "https://github.com/twof/FunctionSpy.git", from: "1.2.0"),
+        .package(url: "https://github.com/apple/swift-collections.git", from: "1.1.0"),
         .package(path: "../../../Documents/OpenSource/package-benchmark"),
     ],
     targets: [
@@ -64,6 +65,7 @@ let package = Package(
                 "SanCovHooks",
                 "CLLVMSymbolizer",
                 .product(name: "Dependencies", package: "swift-dependencies"),
+                .product(name: "DequeModule", package: "swift-collections"),
             ],
             swiftSettings: [
                 .unsafeFlags(["-O"])  // Optimize even in debug builds

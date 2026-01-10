@@ -177,15 +177,6 @@ size_t sancov_get_measurement_registry_failures(void) {
     return atomic_load(&g_measurement_registry_failures);
 }
 
-// Check if hash table is near resize threshold (40% of capacity)
-// ck_ht resizes at 50%, so 40% gives us headroom
-static inline bool ck_ht_near_resize(ck_ht_t *ht) {
-    // Use public API to get entry count
-    // Capacity is known to be CK_HT_INITIAL_CAPACITY (we never resize)
-    size_t entries = ck_ht_count(ht);
-    return (entries * 5) > (CK_HT_INITIAL_CAPACITY * 2);  // > 40%
-}
-
 #if CK_HT_DEBUG_LOGGING
 // Track peak entries for each hash table
 static _Atomic size_t g_measurement_peak_entries = 0;
@@ -413,25 +404,6 @@ void sancov_end_measurement(void* context) {
 // MARK: - Context-Aware API
 // These functions operate directly on a measurement context, bypassing TLS lookup.
 // This is critical for Swift concurrency where tasks can hop between threads.
-
-void sancov_reset_counters_with_context(void* context) {
-    if (context == NULL || g_guard_count == 0) return;
-
-    MeasurementContextData* ctx = (MeasurementContextData*)context;
-
-    // FAST PATH: Use cached coverage map directly
-    if (ctx->coverage_map != NULL) {
-        memset(ctx->coverage_map, 0, g_guard_count);
-        return;
-    }
-
-    // SLOW PATH: Look up the map (should rarely happen)
-    uint8_t* map = find_or_create_task_map(context);
-    if (map != NULL) {
-        ctx->coverage_map = map;
-        memset(map, 0, g_guard_count);
-    }
-}
 
 const uint8_t* sancov_get_counters_with_context(void* context) {
     if (context == NULL || g_guard_count == 0) return NULL;
@@ -667,22 +639,6 @@ bool sancov_counters_available(void) {
            (g_8bit_counters_start != NULL && g_8bit_counters_end != NULL);
 }
 
-void sancov_reset_counters(void) {
-    // Reset the current context's coverage map (task-keyed or thread-local)
-    if (g_guard_count > 0) {
-        uint8_t* map = get_current_coverage_map();
-        if (map) {
-            memset(map, 0, g_guard_count);
-        }
-        return;
-    }
-
-    // Fallback: Reset global counters (inline-8bit-counters mode)
-    if (g_8bit_counters_start && g_8bit_counters_end) {
-        memset(g_8bit_counters_start, 0, g_8bit_counters_end - g_8bit_counters_start);
-    }
-}
-
 size_t sancov_get_counter_count(void) {
     // Prefer trace_pc_guard (has task/thread isolation)
     if (g_guard_count > 0) {
@@ -855,14 +811,6 @@ uintptr_t sancov_get_pc(size_t edge_index) {
 // Counter for dladdr calls (for profiling)
 static _Atomic size_t g_dladdr_call_count = 0;
 
-size_t sancov_get_dladdr_call_count(void) {
-    return atomic_load(&g_dladdr_call_count);
-}
-
-void sancov_reset_dladdr_call_count(void) {
-    atomic_store(&g_dladdr_call_count, 0);
-}
-
 bool sancov_get_source_location(size_t edge_index, SanCovSourceLocation* location) {
     if (!location) return false;
 
@@ -885,18 +833,6 @@ bool sancov_get_source_location(size_t edge_index, SanCovSourceLocation* locatio
     }
 
     return true;
-}
-
-size_t sancov_get_source_locations_batch(const size_t* edge_indices, SanCovSourceLocation* locations, size_t count) {
-    if (!edge_indices || !locations || count == 0) return 0;
-
-    size_t filled = 0;
-    for (size_t i = 0; i < count; i++) {
-        if (sancov_get_source_location(edge_indices[i], &locations[i])) {
-            filled++;
-        }
-    }
-    return filled;
 }
 
 size_t sancov_get_covered_locations(SanCovSourceLocation* locations, size_t max_locations) {

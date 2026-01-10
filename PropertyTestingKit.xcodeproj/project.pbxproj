@@ -39,6 +39,7 @@
 		4EB9436B27158A5C6839F9BA /* DWARFSymbolizerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1E97A029218EB361C14F01D /* DWARFSymbolizerTests.swift */; };
 		509CC5C943C5ECF47E29EF7C /* PropertyTestingKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 2595E9AD80DBFC77F241A7E7 /* PropertyTestingKit.framework */; };
 		5118F45702A081DEB42B60AA /* DateClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8DCFCD27F236B21539FDC070 /* DateClient.swift */; };
+		5127D413390D3FE20602F726 /* DequeModule in Frameworks */ = {isa = PBXBuildFile; productRef = ED638EEB32787F0136CC6158 /* DequeModule */; };
 		52C260E19A743BA5BCADC703 /* CoverageSignature.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BD8E7DDBFB1256A08DEBE05 /* CoverageSignature.swift */; };
 		534C8AE7D3768059DDAEA18D /* Benchmark in Frameworks */ = {isa = PBXBuildFile; productRef = FD911ACF527827DA331405BD /* Benchmark */; };
 		589D0164A415C152CDD4B160 /* Benchmark in Frameworks */ = {isa = PBXBuildFile; productRef = E6A87E5EFC33D405ECEDD0E1 /* Benchmark */; };
@@ -66,6 +67,7 @@
 		902AD170388F6A40C15ECCA5 /* MutatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C2AB425C1886E9C43DA056F /* MutatorTests.swift */; };
 		930A6CA4EA3850C7A8BF5EFF /* AnalysisPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = 06D254C3EBFD9F80B874BBEB /* AnalysisPlugin.swift */; };
 		9411D6055035E20DD3490798 /* CorpusSchema.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F25239605AF76FC51FDDF99 /* CorpusSchema.swift */; };
+		965AC1F59968645673F07841 /* corpus.json in Resources */ = {isa = PBXBuildFile; fileRef = 87C13394409DA48E4BE31930 /* corpus.json */; };
 		995888DFC95845A88625B91A /* FailureInfo.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CF3A4D9068E7899D99B8C01 /* FailureInfo.swift */; };
 		997046243B39595955A73A07 /* CoverageGap.swift in Sources */ = {isa = PBXBuildFile; fileRef = E710A18D4C3A68A36CF37040 /* CoverageGap.swift */; };
 		9B7DC07539CBF59272EDCC37 /* SaturationPlateauDetector.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0ABBB2AC9890A3F64DAF698 /* SaturationPlateauDetector.swift */; };
@@ -85,12 +87,14 @@
 		B0B276C037B14EAA3010672E /* FuzzEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4401B1A5DC7E001073C6D2B1 /* FuzzEngine.swift */; };
 		B12BA13984E49118CD620DA9 /* Shrinkable.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A401389A02B82B842F9ED0F /* Shrinkable.swift */; };
 		B269AC60201884DB429C947C /* STADSPlateauDetectorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 146B4C7BE9FB4A557084104F /* STADSPlateauDetectorTests.swift */; };
+		B26FDBA1F2F9B6BE116325A2 /* CartesianProductTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 909450826B23F3420A39E22F /* CartesianProductTests.swift */; };
 		B589BFFA6C70C0D16C75E1AD /* FuzzableProtocolTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D5B1DD3570EBB6E7D12F912 /* FuzzableProtocolTests.swift */; };
 		B658E17CCF942125EF08B2C9 /* ShrinkConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0C4FC87637FA205C20057C9 /* ShrinkConfig.swift */; };
 		BB317568B96C33EA9BBBDC4F /* PropertyTestingKit.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 2595E9AD80DBFC77F241A7E7 /* PropertyTestingKit.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		BD0CC959DAB2216FB5A5AE9E /* ShrinkResult.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A1857217E99772D144C79B7 /* ShrinkResult.swift */; };
 		BE833829B0A29D2730C9A37C /* Data+Shrinkable.swift in Sources */ = {isa = PBXBuildFile; fileRef = C8D72A5EBCA28D84F6AECC0B /* Data+Shrinkable.swift */; };
 		BEBBA20C60FAF1E749C4427D /* SanCovCounters.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A865DFA08A7E0DE3F588EDB /* SanCovCounters.swift */; };
+		BEDB0614821BD4498825DC86 /* UInt8+Fuzzable.swift in Sources */ = {isa = PBXBuildFile; fileRef = 476A4D40895FDAD411069194 /* UInt8+Fuzzable.swift */; };
 		C3CCD2C9B56E9E0FC0574642 /* CoverageGapDetector.swift in Sources */ = {isa = PBXBuildFile; fileRef = C5A515E40A855C623BC509BC /* CoverageGapDetector.swift */; };
 		C6BD19DBD991F706DF3597D2 /* Dependencies in Frameworks */ = {isa = PBXBuildFile; productRef = A493D2B71CD03B3B9D34DA14 /* Dependencies */; };
 		C767CFCE0529D3F2A03C1C12 /* SanCovHooks.c in Sources */ = {isa = PBXBuildFile; fileRef = CB119BBD24F520783D33BA6F /* SanCovHooks.c */; };
@@ -266,6 +270,7 @@
 		3FFCEA0CB033829BFBAEFA52 /* CorpusCoder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CorpusCoder.swift; sourceTree = "<group>"; };
 		40672CAD432576A4635C1676 /* STADSPlateauDetectorPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = STADSPlateauDetectorPlugin.swift; sourceTree = "<group>"; };
 		4401B1A5DC7E001073C6D2B1 /* FuzzEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FuzzEngine.swift; sourceTree = "<group>"; };
+		476A4D40895FDAD411069194 /* UInt8+Fuzzable.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "UInt8+Fuzzable.swift"; sourceTree = "<group>"; };
 		49412A507ECD93C3E85C649B /* CorpusEntryType.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CorpusEntryType.swift; sourceTree = "<group>"; };
 		4F25239605AF76FC51FDDF99 /* CorpusSchema.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CorpusSchema.swift; sourceTree = "<group>"; };
 		52C1DEE9A4340554236C9F32 /* SparseCoverage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SparseCoverage.swift; sourceTree = "<group>"; };
@@ -283,10 +288,12 @@
 		801978DFD141E3190DC8219D /* DWARFSourceLocation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DWARFSourceLocation.swift; sourceTree = "<group>"; };
 		805D70C5E70888046E92D052 /* SanCovTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = SanCovTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		807ED515190705E70EEBD7FE /* SyncBox.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncBox.swift; sourceTree = "<group>"; };
+		87C13394409DA48E4BE31930 /* corpus.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = corpus.json; sourceTree = "<group>"; };
 		8D5B1DD3570EBB6E7D12F912 /* FuzzableProtocolTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FuzzableProtocolTests.swift; sourceTree = "<group>"; };
 		8DCFCD27F236B21539FDC070 /* DateClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DateClient.swift; sourceTree = "<group>"; };
 		8FED37BAA14224125F5AD7CA /* CorpusPersistenceClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CorpusPersistenceClient.swift; sourceTree = "<group>"; };
 		9090D11CEB59C93417F2F4F6 /* Character+Fuzzable.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Character+Fuzzable.swift"; sourceTree = "<group>"; };
+		909450826B23F3420A39E22F /* CartesianProductTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CartesianProductTests.swift; sourceTree = "<group>"; };
 		94EB367A0BBDEA977C219F3A /* SimpleCoveragePlateauDetector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SimpleCoveragePlateauDetector.swift; sourceTree = "<group>"; };
 		96C9C5A0907E3C1FF9A53837 /* Double+Fuzzable.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Double+Fuzzable.swift"; sourceTree = "<group>"; };
 		99DF2D2D7A9C78BEFDA1C9FF /* FuzzAPITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FuzzAPITests.swift; sourceTree = "<group>"; };
@@ -397,6 +404,7 @@
 				8CBB720CE81E97F2750950E1 /* libSanCovHooks.a in Frameworks */,
 				79D489B6D89C771503E3F4C8 /* libCLLVMSymbolizer.a in Frameworks */,
 				C6BD19DBD991F706DF3597D2 /* Dependencies in Frameworks */,
+				5127D413390D3FE20602F726 /* DequeModule in Frameworks */,
 				EDA4F3DF2A8772887434F792 /* Testing.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -533,10 +541,19 @@
 			path = Sources/SanCovHooks;
 			sourceTree = "<group>";
 		};
+		62299BB35DD80E8D598979F5 /* ProfiledBenchmark */ = {
+			isa = PBXGroup;
+			children = (
+				87C13394409DA48E4BE31930 /* corpus.json */,
+			);
+			path = ProfiledBenchmark;
+			sourceTree = "<group>";
+		};
 		6A0D4F20DD61600A95099AA3 /* ProfiledBenchmark */ = {
 			isa = PBXGroup;
 			children = (
 				72EFC8FC26036551EE41795E /* ProfiledBenchmark.swift */,
+				FEFFD97F3AA9B5C3C871FDE0 /* Corpus */,
 			);
 			name = ProfiledBenchmark;
 			path = Benchmarks/ProfiledBenchmark;
@@ -591,6 +608,7 @@
 				22C52228B4908E47A6DF38B1 /* Optional+Fuzzable.swift */,
 				A1C4EDCAB19E2F65E521C289 /* String+Fuzzable.swift */,
 				029261475F37B2CCF9E0B0F7 /* UInt+Fuzzable.swift */,
+				476A4D40895FDAD411069194 /* UInt8+Fuzzable.swift */,
 			);
 			path = Fuzzable;
 			sourceTree = "<group>";
@@ -646,6 +664,7 @@
 		BDDFFD2714DEB826C97E5A69 /* PropertyTestingKitTests */ = {
 			isa = PBXGroup;
 			children = (
+				909450826B23F3420A39E22F /* CartesianProductTests.swift */,
 				C4C33B33085A4DB5D1981F0A /* CoverageCountersTests.swift */,
 				B64D06718A05E1272E84861D /* MockDatabase.swift */,
 				F7B5F39FFCE93451B38B3FBA /* PropertyBasedSelfTests.swift */,
@@ -739,6 +758,14 @@
 			path = Plugins;
 			sourceTree = "<group>";
 		};
+		FEFFD97F3AA9B5C3C871FDE0 /* Corpus */ = {
+			isa = PBXGroup;
+			children = (
+				62299BB35DD80E8D598979F5 /* ProfiledBenchmark */,
+			);
+			path = Corpus;
+			sourceTree = "<group>";
+		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -795,6 +822,7 @@
 			name = PropertyTestingKit;
 			packageProductDependencies = (
 				A493D2B71CD03B3B9D34DA14 /* Dependencies */,
+				ED638EEB32787F0136CC6158 /* DequeModule */,
 			);
 			productName = PropertyTestingKit;
 			productReference = 2595E9AD80DBFC77F241A7E7 /* PropertyTestingKit.framework */;
@@ -903,6 +931,7 @@
 			buildConfigurationList = 997032AD1D6B890B4F7EEE22 /* Build configuration list for PBXNativeTarget "ProfiledBenchmark" */;
 			buildPhases = (
 				A090ECA68126CF60F4A053A2 /* Sources */,
+				8F3935ADAB7B232A35538931 /* Resources */,
 				D400130A2A1899725FC79EB5 /* Frameworks */,
 			);
 			buildRules = (
@@ -940,6 +969,7 @@
 			packageReferences = (
 				1210619D1E73774D621E2E7E /* XCRemoteSwiftPackageReference "FunctionSpy" */,
 				E3D499669E4759325EF6414E /* XCRemoteSwiftPackageReference "package-benchmark" */,
+				43F21DAA57223F47B9FE88F4 /* XCRemoteSwiftPackageReference "swift-collections" */,
 				FE7753DCDC2B738759F3B507 /* XCRemoteSwiftPackageReference "swift-dependencies" */,
 			);
 			preferredProjectObjectVersion = 77;
@@ -958,6 +988,17 @@
 			);
 		};
 /* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		8F3935ADAB7B232A35538931 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				965AC1F59968645673F07841 /* corpus.json in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		590C4505F33C0477665463F3 /* Sources */ = {
@@ -1022,6 +1063,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				B26FDBA1F2F9B6BE116325A2 /* CartesianProductTests.swift in Sources */,
 				2E6CDCBF7B91A07E9402C82F /* ConcurrentFuzzLoadTest.swift in Sources */,
 				808DEDCEF3F72F26E4C97724 /* CorpusTests.swift in Sources */,
 				ADF49AE0B09D08080E515387 /* CoverageCountersTests.swift in Sources */,
@@ -1120,6 +1162,7 @@
 				6B81F710C9EAE2B9786DFD16 /* TaskResults.swift in Sources */,
 				87CB37DFCDC351E3E53BE7F1 /* TestCaseShrinker.swift in Sources */,
 				67B2DBE808E07482177746DF /* UInt+Fuzzable.swift in Sources */,
+				BEDB0614821BD4498825DC86 /* UInt8+Fuzzable.swift in Sources */,
 				E5CE85300E9595AE8CF1F398 /* UncoveredRegion.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -1803,6 +1846,14 @@
 				version = 1.2.0;
 			};
 		};
+		43F21DAA57223F47B9FE88F4 /* XCRemoteSwiftPackageReference "swift-collections" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/apple/swift-collections.git";
+			requirement = {
+				kind = exactVersion;
+				version = 1.1.0;
+			};
+		};
 		E3D499669E4759325EF6414E /* XCRemoteSwiftPackageReference "package-benchmark" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/ordo-one/package-benchmark.git";
@@ -1831,6 +1882,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = E3D499669E4759325EF6414E /* XCRemoteSwiftPackageReference "package-benchmark" */;
 			productName = Benchmark;
+		};
+		ED638EEB32787F0136CC6158 /* DequeModule */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 43F21DAA57223F47B9FE88F4 /* XCRemoteSwiftPackageReference "swift-collections" */;
+			productName = DequeModule;
 		};
 		F0BEB91D5B04B84629BA665A /* FunctionSpy */ = {
 			isa = XCSwiftPackageProductDependency;

@@ -1,4 +1,5 @@
 ## General
+- This is a testing tool, so testing is the production case for this project. Instrumentation will be part of the production environment.
 - `nonisolated(unsafe)` should not be used.
 - Force unwrapping should not be used.
 - If you believe something about the development environment (OS, tools, compiler, etc.) is blocking you, then double check that assumption. Explain what the issue is and why you believe that to be the case.
@@ -23,6 +24,8 @@
 ### Benchmarks
 - To benchmark, run `./scripts/run-benchmarks.sh`.
 - The filter flag for benchmarks requires that you match the entire name of the benchmark you want to run. Partial matches will not work, and may appear to hang.
+- You can find the calltree output in `~/Downloads/call_tree.txt`.
+- You can analyze calltrees using `./scripts/parse-call-tree.py`.
 
 ## Scripts
 - If you find yourself performing operations frequently, add a script to the `scripts` directory.

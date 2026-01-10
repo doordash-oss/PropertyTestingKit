@@ -6,6 +6,7 @@
 //
 
 import Dependencies
+import DequeModule
 import Foundation
 import Testing
 
@@ -280,8 +281,9 @@ public actor FuzzEngine<each Input: Fuzzable & Codable & Sendable> {
         )
 
         // Build seed queue: default seeds + user-provided additional seeds
+        // Using Deque for O(1) removeFirst() instead of Array's O(n)
         let defaultSeeds = mutatorSeeds()
-        var seedQueue = defaultSeeds + additionalSeeds
+        var seedQueue = Deque(defaultSeeds + additionalSeeds)
         let initialSeedCount = seedQueue.count
 
         // Notify observers that fuzzing has started

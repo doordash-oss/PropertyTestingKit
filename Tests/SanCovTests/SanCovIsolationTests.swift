@@ -40,17 +40,17 @@ actor TestResultCollector {
 /// Shared collector for the test suite
 let sharedCollector = TestResultCollector()
 
-/// Helper to get covered indices from current coverage map
-func getCoveredIndices() -> Set<Int> {
-    let bufferSize = sancov_snapshot_counters(nil, 0)
-    guard bufferSize > 0 else { return [] }
+/// Helper to get covered indices from a measurement context
+func getCoveredIndices(context: UnsafeMutableRawPointer?) -> Set<Int> {
+    let count = sancov_snapshot_covered_indices_with_context(context, nil, nil, 0)
+    guard count > 0 else { return [] }
 
-    var buffer = [UInt8](repeating: 0, count: bufferSize)
-    _ = buffer.withUnsafeMutableBufferPointer { ptr in
-        sancov_snapshot_counters(ptr.baseAddress, ptr.count)
+    var indices = [UInt32](repeating: 0, count: count)
+    _ = indices.withUnsafeMutableBufferPointer { ptr in
+        sancov_snapshot_covered_indices_with_context(context, ptr.baseAddress, nil, ptr.count)
     }
 
-    return Set(buffer.enumerated().compactMap { $0.element != 0 ? $0.offset : nil })
+    return Set(indices.map { Int($0) })
 }
 
 // MARK: - 20 Test Functions (each with unique local function)
@@ -73,9 +73,10 @@ struct TaskIsolationTests {
             else { return x * 4 }
         }
 
-        sancov_reset_counters()
+        let context = sancov_begin_measurement()
+        defer { sancov_end_measurement(context) }
         for i in 0..<100 { _ = localFunction0(i) }
-        let indices = getCoveredIndices()
+        let indices = getCoveredIndices(context: context)
         await sharedCollector.record(testName: "test0", coveredIndices: indices)
     }
 
@@ -92,9 +93,10 @@ struct TaskIsolationTests {
             }
         }
 
-        sancov_reset_counters()
+        let context = sancov_begin_measurement()
+        defer { sancov_end_measurement(context) }
         for i in 0..<100 { _ = localFunction1(i) }
-        let indices = getCoveredIndices()
+        let indices = getCoveredIndices(context: context)
         await sharedCollector.record(testName: "test1", coveredIndices: indices)
     }
 
@@ -109,9 +111,10 @@ struct TaskIsolationTests {
             return result
         }
 
-        sancov_reset_counters()
+        let context = sancov_begin_measurement()
+        defer { sancov_end_measurement(context) }
         for i in 0..<100 { _ = localFunction2(i) }
-        let indices = getCoveredIndices()
+        let indices = getCoveredIndices(context: context)
         await sharedCollector.record(testName: "test2", coveredIndices: indices)
     }
 
@@ -124,9 +127,10 @@ struct TaskIsolationTests {
             return x * x
         }
 
-        sancov_reset_counters()
+        let context = sancov_begin_measurement()
+        defer { sancov_end_measurement(context) }
         for i in -10..<110 { _ = localFunction3(i) }
-        let indices = getCoveredIndices()
+        let indices = getCoveredIndices(context: context)
         await sharedCollector.record(testName: "test3", coveredIndices: indices)
     }
 
@@ -140,9 +144,10 @@ struct TaskIsolationTests {
             return a + b + c
         }
 
-        sancov_reset_counters()
+        let context = sancov_begin_measurement()
+        defer { sancov_end_measurement(context) }
         for i in 0..<50 { _ = localFunction4(i) }
-        let indices = getCoveredIndices()
+        let indices = getCoveredIndices(context: context)
         await sharedCollector.record(testName: "test4", coveredIndices: indices)
     }
 
@@ -157,9 +162,10 @@ struct TaskIsolationTests {
             return sum
         }
 
-        sancov_reset_counters()
+        let context = sancov_begin_measurement()
+        defer { sancov_end_measurement(context) }
         for i in 0..<100 { _ = localFunction5(i) }
-        let indices = getCoveredIndices()
+        let indices = getCoveredIndices(context: context)
         await sharedCollector.record(testName: "test5", coveredIndices: indices)
     }
 
@@ -174,9 +180,10 @@ struct TaskIsolationTests {
             else { return x * 4 }
         }
 
-        sancov_reset_counters()
+        let context = sancov_begin_measurement()
+        defer { sancov_end_measurement(context) }
         for i in -20..<100 { _ = localFunction6(i) }
-        let indices = getCoveredIndices()
+        let indices = getCoveredIndices(context: context)
         await sharedCollector.record(testName: "test6", coveredIndices: indices)
     }
 
@@ -193,9 +200,10 @@ struct TaskIsolationTests {
             }
         }
 
-        sancov_reset_counters()
+        let context = sancov_begin_measurement()
+        defer { sancov_end_measurement(context) }
         for i in -10..<100 { _ = localFunction7(i) }
-        let indices = getCoveredIndices()
+        let indices = getCoveredIndices(context: context)
         await sharedCollector.record(testName: "test7", coveredIndices: indices)
     }
 
@@ -213,9 +221,10 @@ struct TaskIsolationTests {
             else { return 4 }
         }
 
-        sancov_reset_counters()
+        let context = sancov_begin_measurement()
+        defer { sancov_end_measurement(context) }
         for i in -50..<100 { _ = localFunction8(i) }
-        let indices = getCoveredIndices()
+        let indices = getCoveredIndices(context: context)
         await sharedCollector.record(testName: "test8", coveredIndices: indices)
     }
 
@@ -232,9 +241,10 @@ struct TaskIsolationTests {
             return count
         }
 
-        sancov_reset_counters()
+        let context = sancov_begin_measurement()
+        defer { sancov_end_measurement(context) }
         for i in 0..<256 { _ = localFunction9(i) }
-        let indices = getCoveredIndices()
+        let indices = getCoveredIndices(context: context)
         await sharedCollector.record(testName: "test9", coveredIndices: indices)
     }
 
@@ -257,9 +267,10 @@ struct TaskIsolationTests {
             }
         }
 
-        sancov_reset_counters()
+        let context = sancov_begin_measurement()
+        defer { sancov_end_measurement(context) }
         for i in 1..<100 { _ = localFunction10(i) }
-        let indices = getCoveredIndices()
+        let indices = getCoveredIndices(context: context)
         await sharedCollector.record(testName: "test10", coveredIndices: indices)
     }
 
@@ -277,9 +288,10 @@ struct TaskIsolationTests {
             }
         }
 
-        sancov_reset_counters()
+        let context = sancov_begin_measurement()
+        defer { sancov_end_measurement(context) }
         for i in 0..<100 { _ = localFunction11(i) }
-        let indices = getCoveredIndices()
+        let indices = getCoveredIndices(context: context)
         await sharedCollector.record(testName: "test11", coveredIndices: indices)
     }
 
@@ -293,9 +305,10 @@ struct TaskIsolationTests {
             return hundreds * 7 + tens * 3 + ones
         }
 
-        sancov_reset_counters()
+        let context = sancov_begin_measurement()
+        defer { sancov_end_measurement(context) }
         for i in 0..<1000 { _ = localFunction12(i) }
-        let indices = getCoveredIndices()
+        let indices = getCoveredIndices(context: context)
         await sharedCollector.record(testName: "test12", coveredIndices: indices)
     }
 
@@ -314,9 +327,10 @@ struct TaskIsolationTests {
             return b
         }
 
-        sancov_reset_counters()
+        let context = sancov_begin_measurement()
+        defer { sancov_end_measurement(context) }
         for i in -5..<25 { _ = localFunction13(i) }
-        let indices = getCoveredIndices()
+        let indices = getCoveredIndices(context: context)
         await sharedCollector.record(testName: "test13", coveredIndices: indices)
     }
 
@@ -335,9 +349,10 @@ struct TaskIsolationTests {
             return result
         }
 
-        sancov_reset_counters()
+        let context = sancov_begin_measurement()
+        defer { sancov_end_measurement(context) }
         for i in 0..<100 { _ = localFunction14(i) }
-        let indices = getCoveredIndices()
+        let indices = getCoveredIndices(context: context)
         await sharedCollector.record(testName: "test14", coveredIndices: indices)
     }
 
@@ -352,9 +367,10 @@ struct TaskIsolationTests {
             else { return 0 }
         }
 
-        sancov_reset_counters()
+        let context = sancov_begin_measurement()
+        defer { sancov_end_measurement(context) }
         for i in 0..<1000 { _ = localFunction15(i) }
-        let indices = getCoveredIndices()
+        let indices = getCoveredIndices(context: context)
         await sharedCollector.record(testName: "test15", coveredIndices: indices)
     }
 
@@ -372,9 +388,10 @@ struct TaskIsolationTests {
             return steps
         }
 
-        sancov_reset_counters()
+        let context = sancov_begin_measurement()
+        defer { sancov_end_measurement(context) }
         for i in 1..<50 { _ = localFunction16(i) }
-        let indices = getCoveredIndices()
+        let indices = getCoveredIndices(context: context)
         await sharedCollector.record(testName: "test16", coveredIndices: indices)
     }
 
@@ -393,9 +410,10 @@ struct TaskIsolationTests {
             }
         }
 
-        sancov_reset_counters()
+        let context = sancov_begin_measurement()
+        defer { sancov_end_measurement(context) }
         for i in 0..<70 { _ = localFunction17(i) }
-        let indices = getCoveredIndices()
+        let indices = getCoveredIndices(context: context)
         await sharedCollector.record(testName: "test17", coveredIndices: indices)
     }
 
@@ -412,9 +430,10 @@ struct TaskIsolationTests {
             }
         }
 
-        sancov_reset_counters()
+        let context = sancov_begin_measurement()
+        defer { sancov_end_measurement(context) }
         for i in -100..<100 { _ = localFunction18(i) }
-        let indices = getCoveredIndices()
+        let indices = getCoveredIndices(context: context)
         await sharedCollector.record(testName: "test18", coveredIndices: indices)
     }
 
@@ -429,9 +448,10 @@ struct TaskIsolationTests {
             else { return 3 }
         }
 
-        sancov_reset_counters()
+        let context = sancov_begin_measurement()
+        defer { sancov_end_measurement(context) }
         for i in 0..<100 { _ = localFunction19(i) }
-        let indices = getCoveredIndices()
+        let indices = getCoveredIndices(context: context)
         await sharedCollector.record(testName: "test19", coveredIndices: indices)
     }
 }

@@ -345,6 +345,44 @@ let benchmarks: @Sendable () -> Void = {
     }
 
     Benchmark(
+        "fuzz(Int, String, Bool, Double, UInt8) - 1000 iterations, with gap detection",
+        configuration: .init(
+            metrics: [.wallClock],
+            warmupIterations: 0,
+            scalingFactor: .one,
+            maxDuration: .seconds(60),
+            maxIterations: 1000
+        )
+    ) { benchmark in
+        for _ in benchmark.scaledIterations {
+            let _ = try? await fuzz(
+                iterations: 1000,
+                corpusMode: .refuzzReplace,
+                stoppingPlugins: [],
+                analysisPlugins: [.coverageGaps()]
+            ) { (i: Int, s: String, b: Bool, d: Double, u: UInt8) in
+                // Exercise all 5 inputs with branching logic
+                if i < 0 {
+                    blackHole(abs(i))
+                }
+                if s.isEmpty {
+                    blackHole("empty")
+                } else if s.count > 10 {
+                    blackHole(s.prefix(10))
+                }
+                if b {
+                    blackHole(d * 2)
+                } else {
+                    blackHole(d / 2)
+                }
+                if u > 128 {
+                    blackHole(u &- 128)
+                }
+            }
+        }
+    }
+
+    Benchmark(
         "fuzz(Int) - realistic coverage gap, with gap detection",
         configuration: .init(
             metrics: [.wallClock],
