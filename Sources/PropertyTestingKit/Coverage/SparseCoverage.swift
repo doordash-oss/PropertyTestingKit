@@ -3,17 +3,13 @@
 //  Copyright © 2025 DoorDash. All rights reserved.
 //
 
-/// Efficient representation of sparse coverage data using parallel arrays.
+/// Efficient representation of sparse coverage data.
 ///
-/// This is significantly faster than `[Int: UInt8]` because it avoids
-/// Dictionary hashing overhead. The indices and counts arrays are parallel:
-/// `counts[i]` is the hit count for edge `indices[i]`.
+/// This is significantly faster than `Set<Int>` for the common case of
+/// building coverage signatures, as it avoids hashing overhead during collection.
 public struct SparseCoverage: Sendable {
     /// Edge indices that were executed.
     public let indices: [UInt32]
-
-    /// Hit counts for each edge (parallel to indices).
-    public let counts: [UInt8]
 
     /// Number of covered edges.
     public var count: Int { indices.count }
@@ -21,16 +17,13 @@ public struct SparseCoverage: Sendable {
     /// Whether any edges were covered.
     public var isEmpty: Bool { indices.isEmpty }
 
-    /// Create from parallel arrays.
-    public init(indices: [UInt32], counts: [UInt8]) {
-        precondition(indices.count == counts.count, "indices and counts must have same length")
+    /// Create from an indices array.
+    public init(indices: [UInt32]) {
         self.indices = indices
-        self.counts = counts
     }
 
     /// Create an empty sparse coverage.
     public init() {
         self.indices = []
-        self.counts = []
     }
 }

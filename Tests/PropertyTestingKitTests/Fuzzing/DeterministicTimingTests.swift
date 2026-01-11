@@ -20,12 +20,10 @@ private func makeMockCoverageClient(
     let snapshotCoveredArraysClosure: @Sendable () -> SparseCoverage? = {
         let counters = countersGenerator()
         var indices: [UInt32] = []
-        var counts: [UInt8] = []
         for (index, count) in counters.enumerated() where count > 0 {
             indices.append(UInt32(index))
-            counts.append(UInt8(min(count, UInt64(UInt8.max))))
         }
-        return SparseCoverage(indices: indices, counts: counts)
+        return SparseCoverage(indices: indices)
     }
 
     return CoverageCountersClient(

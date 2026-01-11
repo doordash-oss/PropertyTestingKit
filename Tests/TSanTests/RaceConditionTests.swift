@@ -93,10 +93,7 @@ struct SanCovCountersRaceTests {
 
 /// Helper to create a CoverageSignature from a set of indices
 private func makeSignature(indices: [Int]) -> CoverageSignature {
-    let sparse = SparseCoverage(
-        indices: indices.map { UInt32($0) },
-        counts: [UInt8](repeating: 1, count: indices.count)
-    )
+    let sparse = SparseCoverage(indices: indices.map { UInt32($0) })
     return CoverageSignature(sparse: sparse)
 }
 

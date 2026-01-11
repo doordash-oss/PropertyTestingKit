@@ -97,7 +97,7 @@ static _Thread_local void* tls_sync_pseudo_task = NULL;
 // The cache is invalidated when task changes or measurement context ends
 static _Thread_local void* tls_cached_task = NULL;
 static _Thread_local uint8_t* tls_cached_task_map = NULL;
-static _Thread_local void* tls_cached_measurement_context = NULL;
+static _Thread_local SanCovMeasurementContext* tls_cached_measurement_context = NULL;
 static _Thread_local uint8_t* tls_cached_coverage_map = NULL;
 
 // Get or create a pseudo-task ID for synchronous code
@@ -256,19 +256,11 @@ static void cleanup_task_map(void* task_id) {
 }
 
 // MARK: - Measurement Context API
-// These functions provide isolation for measurements.
-// Measurement contexts are now tracked per-task to avoid TLS interference
-// when multiple Swift tasks run on the same thread.
 
-// Measurement context structure - caches coverage map pointer for fast access
-typedef struct {
-    uint8_t* coverage_map;  // Direct pointer to coverage map (cached for speed)
-} MeasurementContextData;
-
-void* sancov_begin_measurement(void) {
-    // Allocate the context structure
-    MeasurementContextData* ctx = (MeasurementContextData*)xmalloc(sizeof(MeasurementContextData));
+SanCovMeasurementContext* sancov_begin_measurement(void) {
+    SanCovMeasurementContext* ctx = (SanCovMeasurementContext*)xmalloc(sizeof(SanCovMeasurementContext));
     ctx->coverage_map = NULL;
+    ctx->covered_count = 0;
 
     // Associate this measurement context with the current task
     void* task = get_current_task_for_measurement();
@@ -294,122 +286,113 @@ void* sancov_begin_measurement(void) {
     return ctx;
 }
 
-void sancov_end_measurement(void* context) {
-    if (context == NULL) return;
-
-    MeasurementContextData* ctx = (MeasurementContextData*)context;
+void sancov_end_measurement(SanCovMeasurementContext* ctx) {
+    if (ctx == NULL) return;
 
     // Remove the measurement context from the current task
     void* task = get_current_task_for_measurement();
     remove_measurement_context_for_task(task);
 
     // Invalidate ALL caches since measurement is ending
-    // This ensures the next lookup will get the correct map
-    if (tls_cached_measurement_context == context) {
+    if (tls_cached_measurement_context == ctx) {
         tls_cached_measurement_context = NULL;
         tls_cached_coverage_map = NULL;
     }
-    // Also invalidate task cache since it may have pointed to measurement map
     tls_cached_task = NULL;
     tls_cached_task_map = NULL;
 
-    // Clean up the task registry entry for this context
-    cleanup_task_map(context);
+    cleanup_task_map(ctx);
     free(ctx);
 }
 
-// MARK: - Context-Aware API
-// These functions operate directly on a measurement context, bypassing TLS lookup.
-// This is critical for Swift concurrency where tasks can hop between threads.
+static const uint8_t* get_counters_with_context(SanCovMeasurementContext* ctx) {
+    if (ctx == NULL || g_guard_count == 0) return NULL;
 
-const uint8_t* sancov_get_counters_with_context(void* context) {
-    if (context == NULL || g_guard_count == 0) return NULL;
-
-    MeasurementContextData* ctx = (MeasurementContextData*)context;
-
-    // FAST PATH: Use cached coverage map directly
     if (ctx->coverage_map != NULL) {
         return ctx->coverage_map;
     }
 
-    // SLOW PATH: Look up the map
-    uint8_t* map = find_or_create_task_map(context);
+    uint8_t* map = find_or_create_task_map(ctx);
     if (map != NULL) {
         ctx->coverage_map = map;
     }
     return map;
 }
 
-size_t sancov_snapshot_covered_indices_with_context(void* context, uint32_t* indices, uint8_t* counts, size_t max_entries) {
-    const uint8_t* counters = sancov_get_counters_with_context(context);
+// Get covered count for a measurement context (O(1)).
+size_t sancov_get_covered_count_with_context(SanCovMeasurementContext* ctx) {
+    if (!ctx) return 0;
+    return ctx->covered_count;
+}
+
+// Allocate and fill an array of covered edge indices.
+//
+// Scans the coverage map and returns indices of edges that were hit (counter != 0).
+// The caller is responsible for freeing the returned array.
+// Use sancov_get_covered_count_with_context() to get the array size.
+//
+// Returns:
+//   Newly allocated array of covered indices, or NULL if none covered.
+//   Caller must free() the returned pointer.
+//
+// The SIMD path processes 16 counters at a time, skipping zero chunks entirely.
+uint32_t*   (SanCovMeasurementContext* ctx) {
+    if (!ctx) return NULL;
+
+    size_t count = ctx->covered_count;
+    if (count == 0) return NULL;
+
+    const uint8_t* counters = get_counters_with_context(ctx);
     size_t counter_count = sancov_get_counter_count();
-    if (!counters || counter_count == 0) return 0;
+    if (!counters || counter_count == 0) return NULL;
+
+    uint32_t* indices = (uint32_t*)xmalloc(count * sizeof(uint32_t));
 
 #if USE_NEON_SIMD
-    // SIMD-optimized version using ARM NEON
-    if (indices == NULL) {
-        size_t covered = 0;
-        size_t i = 0;
-        uint8x16_t zero = vdupq_n_u8(0);
-        for (; i + 16 <= counter_count; i += 16) {
-            uint8x16_t chunk = vld1q_u8(counters + i);
-            uint8x16_t cmp = vcgtq_u8(chunk, zero);
-            uint8x8_t sum8 = vadd_u8(vget_low_u8(cmp), vget_high_u8(cmp));
-            uint64_t mask = vget_lane_u64(vreinterpret_u64_u8(sum8), 0);
-            covered += __builtin_popcountll(mask) / 8;
-        }
-        for (; i < counter_count; i++) {
-            if (counters[i] > 0) covered++;
-        }
-        return covered;
-    }
 
+    // Fill mode: extract indices of non-zero counters
     size_t filled = 0;
     size_t i = 0;
     uint8x16_t zero = vdupq_n_u8(0);
-    for (; i + 16 <= counter_count && filled < max_entries; i += 16) {
+
+    for (; i + 16 <= counter_count && filled < count; i += 16) {
         uint8x16_t chunk = vld1q_u8(counters + i);
         uint8x16_t cmp = vcgtq_u8(chunk, zero);
         uint64x2_t cmp64 = vreinterpretq_u64_u8(cmp);
+
+        // Skip entirely zero chunks (common case - coverage is sparse)
         if (vgetq_lane_u64(cmp64, 0) == 0 && vgetq_lane_u64(cmp64, 1) == 0) {
             continue;
         }
-        for (size_t j = 0; j < 16 && filled < max_entries; j++) {
-            if (counters[i + j] > 0) {
+
+        // Extract individual non-zero indices from this chunk
+        for (size_t j = 0; j < 16 && filled < count; j++) {
+            if (counters[i + j] != 0) {
                 indices[filled] = (uint32_t)(i + j);
-                if (counts) counts[filled] = counters[i + j];
                 filled++;
             }
         }
     }
-    for (; i < counter_count && filled < max_entries; i++) {
-        if (counters[i] > 0) {
+
+    // Handle remaining bytes
+    for (; i < counter_count && filled < count; i++) {
+        if (counters[i] != 0) {
             indices[filled] = (uint32_t)i;
-            if (counts) counts[filled] = counters[i];
             filled++;
         }
-    }
-    return filled;
-#else
-    // Scalar fallback
-    if (indices == NULL) {
-        size_t covered = 0;
-        for (size_t i = 0; i < counter_count; i++) {
-            if (counters[i] > 0) covered++;
-        }
-        return covered;
     }
 
-    size_t filled = 0;
-    for (size_t i = 0; i < counter_count && filled < max_entries; i++) {
-        if (counters[i] > 0) {
+#else
+    // Scalar fallback for non-ARM platforms
+    for (size_t i = 0, filled = 0; i < counter_count && filled < count; i++) {
+        if (counters[i] != 0) {
             indices[filled] = (uint32_t)i;
-            if (counts) counts[filled] = counters[i];
             filled++;
         }
     }
-    return filled;
 #endif
+
+    return indices;
 }
 
 // Ensure thread-local fallback map is allocated
@@ -446,7 +429,7 @@ static uint8_t* get_current_coverage_map(void) {
 
     // Task changed - need to do full lookup
     // First check for measurement context for this task (highest priority)
-    void* measurement_ctx = get_measurement_context_for_task(task);
+    SanCovMeasurementContext* measurement_ctx = (SanCovMeasurementContext*)get_measurement_context_for_task(task);
     if (measurement_ctx != NULL) {
         // Check measurement context cache
         if (measurement_ctx == tls_cached_measurement_context && tls_cached_coverage_map != NULL) {
@@ -511,7 +494,12 @@ void __sanitizer_cov_trace_pc_guard_init(uint32_t *start, uint32_t *stop) {
 void __sanitizer_cov_trace_pc_guard(uint32_t *guard) {
     uint8_t* map = get_current_coverage_map();
     if (map && *guard < g_guard_count) {
-        map[*guard] = 1;
+        if (map[*guard] == 0) {
+            map[*guard] = 1;
+            if (tls_cached_measurement_context) {
+                tls_cached_measurement_context->covered_count++;
+            }
+        }
     }
 }
 
@@ -573,7 +561,7 @@ size_t sancov_snapshot_counters(uint8_t* buffer, size_t buffer_size) {
     return copy_size;
 }
 
-size_t sancov_snapshot_covered_indices(uint32_t* indices, uint8_t* counts, size_t max_entries) {
+size_t sancov_snapshot_covered_indices(uint32_t* indices, size_t max_entries) {
     const uint8_t* counters = sancov_get_counters();
     size_t counter_count = sancov_get_counter_count();
     if (!counters || counter_count == 0) return 0;
@@ -605,7 +593,7 @@ size_t sancov_snapshot_covered_indices(uint32_t* indices, uint8_t* counts, size_
 
         // Handle remaining bytes
         for (; i < counter_count; i++) {
-            if (counters[i] > 0) covered++;
+            if (counters[i] != 0) covered++;
         }
         return covered;
     }
@@ -627,9 +615,8 @@ size_t sancov_snapshot_covered_indices(uint32_t* indices, uint8_t* counts, size_
 
         // Extract non-zero indices from this chunk
         for (size_t j = 0; j < 16 && filled < max_entries; j++) {
-            if (counters[i + j] > 0) {
+            if (counters[i + j] != 0) {
                 indices[filled] = (uint32_t)(i + j);
-                if (counts) counts[filled] = counters[i + j];
                 filled++;
             }
         }
@@ -637,9 +624,8 @@ size_t sancov_snapshot_covered_indices(uint32_t* indices, uint8_t* counts, size_
 
     // Handle remaining bytes
     for (; i < counter_count && filled < max_entries; i++) {
-        if (counters[i] > 0) {
+        if (counters[i] != 0) {
             indices[filled] = (uint32_t)i;
-            if (counts) counts[filled] = counters[i];
             filled++;
         }
     }
@@ -650,16 +636,15 @@ size_t sancov_snapshot_covered_indices(uint32_t* indices, uint8_t* counts, size_
     if (indices == NULL) {
         size_t covered = 0;
         for (size_t i = 0; i < counter_count; i++) {
-            if (counters[i] > 0) covered++;
+            if (counters[i] != 0) covered++;
         }
         return covered;
     }
 
     size_t filled = 0;
     for (size_t i = 0; i < counter_count && filled < max_entries; i++) {
-        if (counters[i] > 0) {
+        if (counters[i] != 0) {
             indices[filled] = (uint32_t)i;
-            if (counts) counts[filled] = counters[i];
             filled++;
         }
     }
@@ -713,7 +698,7 @@ size_t sancov_get_covered_locations(SanCovSourceLocation* locations, size_t max_
 
     // First pass: count covered edges (or fill array)
     for (size_t i = 0; i < counter_count; i++) {
-        if (counters[i] > 0) {
+        if (counters[i] != 0) {
             if (locations != NULL && covered_count < max_locations) {
                 sancov_get_source_location(i, &locations[covered_count]);
             }

@@ -46,14 +46,13 @@ public struct CoverageSignature: Hashable, Sendable {
         self.edges = edges
     }
 
-    /// Create a signature from sparse coverage arrays.
+    /// Create a signature from sparse coverage data.
     ///
     /// This is the fastest way to create a signature from coverage data,
-    /// as it uses parallel arrays instead of Dictionary.
+    /// as it avoids hashing overhead during collection.
     ///
-    /// - Parameter sparse: SparseCoverage with parallel indices/counts arrays.
+    /// - Parameter sparse: SparseCoverage with indices array.
     public init(sparse: SparseCoverage) {
-        // All counts are non-zero in sparse coverage, so just collect indices
         self.edges = Set((0..<sparse.count).map { Int(sparse.indices[$0]) })
     }
 

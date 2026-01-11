@@ -17,12 +17,10 @@ private func makeMockCoverageClient(
     let snapshotCoveredArraysClosure: @Sendable () -> SparseCoverage? = {
         let counters = countersGenerator()
         var indices: [UInt32] = []
-        var counts: [UInt8] = []
         for (index, count) in counters.enumerated() where count > 0 {
             indices.append(UInt32(index))
-            counts.append(UInt8(min(count, UInt64(UInt8.max))))
         }
-        return SparseCoverage(indices: indices, counts: counts)
+        return SparseCoverage(indices: indices)
     }
 
     return CoverageCountersClient(
@@ -233,7 +231,7 @@ struct FuzzEngineTests {
         // FuzzEngine uses snapshotCoveredArrays (sync) in the hot path
         // Return counters[1]=1 to match the corpus signature
         let snapshotCoveredArraysFn: @Sendable () -> SparseCoverage? = {
-            SparseCoverage(indices: [1], counts: [1])
+            SparseCoverage(indices: [1])
         }
 
         // Test the signature creation first - use let to make it Sendable
@@ -327,7 +325,7 @@ struct FuzzEngineTests {
         }
         // makeCounters(1) creates counters[1]=2, so snapshotCoveredArrays returns [1] = 2
         let snapshotCoveredArraysFn: @Sendable () -> SparseCoverage? = {
-            SparseCoverage(indices: [1], counts: [2])
+            SparseCoverage(indices: [1])
         }
         let (loadSpy, loadFn) = spy { (_: URL) -> Data in corpusData }
         let (existsSpy, existsFn) = spy { (_: URL) -> Bool in true }
@@ -466,7 +464,7 @@ struct FuzzEngineTests {
         }
         // All zeros means empty SparseCoverage
         let snapshotCoveredArraysFn: @Sendable () -> SparseCoverage? = {
-            SparseCoverage(indices: [], counts: [])
+            SparseCoverage(indices: [])
         }
 
         // Empty corpus with matching schema version
@@ -622,7 +620,7 @@ struct FuzzEngineTests {
         // This mismatch triggers coverage change detection
         // FuzzEngine uses snapshotCoveredArrays, so provide that
         let snapshotCoveredArraysFn: @Sendable () -> SparseCoverage? = {
-            SparseCoverage(indices: [1], counts: [1])  // Different from corpus signature {5: 1}
+            SparseCoverage(indices: [1])  // Different from corpus signature {5: 1}
         }
 
         // Corpus has signature {5: 1} (bucket index 5, bucket value 1=one)
@@ -717,7 +715,7 @@ struct FuzzEngineTests {
         // All calls return counters[1]=1 to match corpus signature {1: 1}
         // FuzzEngine uses snapshotCoveredArrays in the hot path
         let snapshotCoveredArraysFn: @Sendable () -> SparseCoverage? = {
-            SparseCoverage(indices: [1], counts: [1])  // Always return matching coverage
+            SparseCoverage(indices: [1])  // Always return matching coverage
         }
 
         // Corpus with signature {1: 1}

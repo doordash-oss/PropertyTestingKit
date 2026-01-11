@@ -64,7 +64,7 @@ public struct CoverageCountersClient: Sendable {
         ),
         beginMeasurement: @escaping @Sendable () -> SanCovCounters.MeasurementContext = unimplemented(
             "beginMeasurement",
-            placeholder: nil
+            placeholder: .testInstance()
         ),
         endMeasurement: @escaping @Sendable (SanCovCounters.MeasurementContext) -> Void = unimplemented(
             "endMeasurement"

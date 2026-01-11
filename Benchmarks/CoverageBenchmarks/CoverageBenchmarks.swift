@@ -20,16 +20,13 @@ func makeSparseCoverageArrays(coveredCount: Int, totalEdges: Int) -> SparseCover
     let actualCount = min(coveredCount, totalEdges)
 
     var indices: [UInt32] = []
-    var counts: [UInt8] = []
     indices.reserveCapacity(actualCount)
-    counts.reserveCapacity(actualCount)
 
     // Use sequential indices for simplicity and guaranteed uniqueness
     for i in 0..<actualCount {
         indices.append(UInt32(i))
-        counts.append(UInt8(1 + (i % 10)))
     }
-    return SparseCoverage(indices: indices, counts: counts)
+    return SparseCoverage(indices: indices)
 }
 
 /// Generate a full counter array simulating a SanCovCounters snapshot.

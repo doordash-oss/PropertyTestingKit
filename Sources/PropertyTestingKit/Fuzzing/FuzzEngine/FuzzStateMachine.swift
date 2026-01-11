@@ -5,25 +5,36 @@
 
 import Foundation
 import DequeModule
-
+import Dependencies
 
 actor FuzzStateMachine<each Input> {
     let inputQueue: TestInputQueue<repeat each Input>
     let outputQueue: TestOutputQueue<repeat each Input>
     let workerPool: WorkerPool<repeat each Input>
 
+
+
     init(
         seeds: [(repeat each Input)],
         randomInputGenerator: @escaping () -> (repeat each Input)
+        test: @escaping (repeat each Input) async throws -> Void,
     ) {
+
         let inputQueue = TestInputQueue(
             initialValues: seeds,
             randomInputGenerator: randomInputGenerator
         )
         self.outputQueue = outputQueue
         self.inputQueue = inputQueue
+        @Dependency(\.coverageCounters) private var coverageCounters
+        // Cache
+        let coverageCounters = coverageCounters
+
         self.workerPool = WorkerPool(inputQueue: inputQueue) { testInput in
-            
+            let context = coverageClient.beginMeasurement()
+            try await test(testInput)
+            coverageClient.endMeasurement(context)
+
         }
     }
 }

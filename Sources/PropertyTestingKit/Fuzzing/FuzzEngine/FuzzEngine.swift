@@ -647,8 +647,6 @@ public actor FuzzEngine<each Input: Codable & Sendable> {
         snapshot: CorpusSnapshot<repeat each Input>,
         test: @escaping @Sendable ((repeat each Input)) async throws -> Void
     ) async -> FuzzResult<repeat each Input> {
-        @Dependency(\.coverageCounters) var coverageCounters
-
         let startTime = dateClient.now()
         var failures: [(input: (repeat each Input), error: Error)] = []
         var coverageChanges: [(input: (repeat each Input), expected: CoverageSignature, actual: CoverageSignature)] = []

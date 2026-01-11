@@ -1,5 +1,6 @@
 ## General
 - This is a testing tool, so testing is the production case for this project. Instrumentation will be part of the production environment.
+- You are free to make breaking changes. This project has not been released.
 - `nonisolated(unsafe)` should not be used.
 - Force unwrapping should not be used.
 - If you believe something about the development environment (OS, tools, compiler, etc.) is blocking you, then double check that assumption. Explain what the issue is and why you believe that to be the case.

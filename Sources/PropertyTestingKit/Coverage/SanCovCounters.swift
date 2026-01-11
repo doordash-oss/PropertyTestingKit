@@ -154,12 +154,11 @@ public struct SanCovCounters: Sendable {
         return SanCovCounters(counters: buffer)
     }
 
-    /// Get only the covered (non-zero) edge indices with their hit counts.
+    /// Get only the covered (non-zero) edge indices.
     ///
-    /// Returns parallel arrays for efficiency - avoids Dictionary hashing overhead.
     /// This is the fastest way to get sparse coverage data.
     ///
-    /// - Returns: SparseCoverage with parallel indices/counts arrays, or nil if unavailable.
+    /// - Returns: SparseCoverage with indices array, or nil if unavailable.
     public static func snapshotCoveredArrays() -> SparseCoverage? {
         guard isAvailable else { return nil }
 
@@ -170,30 +169,26 @@ public struct SanCovCounters: Sendable {
 
         // Single-pass: allocate buffer and fill in one call
         var indices = [UInt32](repeating: 0, count: maxEntries)
-        var counts = [UInt8](repeating: 0, count: maxEntries)
-        let filled = sancov_snapshot_covered_indices(&indices, &counts, maxEntries)
+        let filled = sancov_snapshot_covered_indices(&indices, maxEntries)
 
         // If buffer was too small, fall back to two-pass
         if filled == maxEntries {
-            let actualCount = sancov_snapshot_covered_indices(nil, nil, 0)
+            let actualCount = sancov_snapshot_covered_indices(nil, 0)
             if actualCount > maxEntries {
                 var largeIndices = [UInt32](repeating: 0, count: actualCount)
-                var largeCounts = [UInt8](repeating: 0, count: actualCount)
-                let actualFilled = sancov_snapshot_covered_indices(&largeIndices, &largeCounts, actualCount)
+                let actualFilled = sancov_snapshot_covered_indices(&largeIndices, actualCount)
 
                 // Trim to actual size
                 largeIndices.removeLast(actualCount - actualFilled)
-                largeCounts.removeLast(actualCount - actualFilled)
-                return SparseCoverage(indices: largeIndices, counts: largeCounts)
+                return SparseCoverage(indices: largeIndices)
             }
         }
 
         guard filled > 0 else { return SparseCoverage() }
 
-        // Trim arrays to actual size
+        // Trim array to actual size
         indices.removeLast(maxEntries - filled)
-        counts.removeLast(maxEntries - filled)
-        return SparseCoverage(indices: indices, counts: counts)
+        return SparseCoverage(indices: indices)
     }
 
 }
@@ -430,17 +425,17 @@ extension SanCovCounters {
     ///   `endMeasurement(_:)` from the same task that called `beginMeasurement()`.
     ///   The context is intentionally non-Sendable to enforce this requirement.
     public struct MeasurementContext {
-        fileprivate let rawContext: UnsafeMutableRawPointer
+        fileprivate let rawContext: UnsafeMutablePointer<SanCovMeasurementContext>
 
-        fileprivate init(_ raw: UnsafeMutableRawPointer) {
+        fileprivate init(_ raw: UnsafeMutablePointer<SanCovMeasurementContext>) {
             self.rawContext = raw
         }
 
         /// Creates a dummy context for testing purposes.
         /// This context should only be used with mock CoverageCountersClients.
         public static func testInstance() -> MeasurementContext {
-            // Allocate a small buffer that will be "freed" by the mock endMeasurement
-            let dummyPtr = UnsafeMutableRawPointer.allocate(byteCount: 1, alignment: 1)
+            let dummyPtr = UnsafeMutablePointer<SanCovMeasurementContext>.allocate(capacity: 1)
+            dummyPtr.pointee = SanCovMeasurementContext(coverage_map: nil, covered_count: 0)
             return MeasurementContext(dummyPtr)
         }
     }
@@ -453,7 +448,7 @@ extension SanCovCounters {
     /// - Important: You must call `endMeasurement(_:)` when done.
     /// - Returns: A context that must be passed to `endMeasurement(_:)`.
     public static func beginMeasurement() -> MeasurementContext {
-        return MeasurementContext(sancov_begin_measurement()!)
+        return MeasurementContext(sancov_begin_measurement())
     }
 
     /// End a measurement context and clean up its resources.
@@ -467,65 +462,34 @@ extension SanCovCounters {
     // These methods operate directly on a measurement context, bypassing TLS lookup.
     // This is critical for Swift concurrency where tasks can hop between threads.
 
+    /// Get the number of covered edges for a measurement context (O(1)).
+    ///
+    /// - Parameter context: The measurement context to query.
+    /// - Returns: Number of covered edges.
+    static func getCoveredCount(with context: MeasurementContext) -> Int {
+        sancov_get_covered_count_with_context(context.rawContext)
+    }
+
     /// Get covered indices for a specific measurement context.
     ///
     /// This method uses the context directly, avoiding TLS lookup overhead.
     /// Much faster than `snapshotCoveredArrays()` when the context is known.
     ///
     /// - Parameter context: The measurement context to snapshot.
-    /// - Returns: SparseCoverage with parallel indices/counts arrays, or nil if unavailable.
+    /// - Returns: SparseCoverage with indices array, or nil if unavailable.
     static func snapshotCoveredArrays(with context: MeasurementContext) -> SparseCoverage? {
         guard isAvailable else { return nil }
 
-        let maxEntries = 8192
+        let count = sancov_get_covered_count_with_context(context.rawContext)
+        guard count > 0 else { return SparseCoverage() }
 
-        // Allocate uninitialized buffers to avoid zeroing 40KB per call.
-        // The C function fills only the entries it needs.
-        let indicesPtr = UnsafeMutablePointer<UInt32>.allocate(capacity: maxEntries)
-        let countsPtr = UnsafeMutablePointer<UInt8>.allocate(capacity: maxEntries)
-        defer {
-            indicesPtr.deallocate()
-            countsPtr.deallocate()
+        guard let ptr = sancov_snapshot_covered_indices_with_context(context.rawContext) else {
+            return SparseCoverage()
         }
+        defer { free(ptr) }
 
-        let filled = sancov_snapshot_covered_indices_with_context(
-            context.rawContext,
-            indicesPtr,
-            countsPtr,
-            maxEntries
-        )
-
-        guard filled > 0 else { return SparseCoverage() }
-
-        // If buffer was too small, fall back to two-pass with larger buffers
-        if filled == maxEntries {
-            let actualCount = sancov_snapshot_covered_indices_with_context(context.rawContext, nil, nil, 0)
-            if actualCount > maxEntries {
-                let largeIndicesPtr = UnsafeMutablePointer<UInt32>.allocate(capacity: actualCount)
-                let largeCountsPtr = UnsafeMutablePointer<UInt8>.allocate(capacity: actualCount)
-                defer {
-                    largeIndicesPtr.deallocate()
-                    largeCountsPtr.deallocate()
-                }
-
-                let actualFilled = sancov_snapshot_covered_indices_with_context(
-                    context.rawContext,
-                    largeIndicesPtr,
-                    largeCountsPtr,
-                    actualCount
-                )
-
-                // Copy to Swift arrays (only the filled portion)
-                let largeIndices = Array(UnsafeBufferPointer(start: largeIndicesPtr, count: actualFilled))
-                let largeCounts = Array(UnsafeBufferPointer(start: largeCountsPtr, count: actualFilled))
-                return SparseCoverage(indices: largeIndices, counts: largeCounts)
-            }
-        }
-
-        // Copy to Swift arrays (only the filled portion)
-        let indices = Array(UnsafeBufferPointer(start: indicesPtr, count: filled))
-        let counts = Array(UnsafeBufferPointer(start: countsPtr, count: filled))
-        return SparseCoverage(indices: indices, counts: counts)
+        let indices = Array(UnsafeBufferPointer(start: ptr, count: count))
+        return SparseCoverage(indices: indices)
     }
 
     /// Get the program counter for a given edge index.
