@@ -49,7 +49,7 @@ extension FuzzEngine {
 
         /// Source location where the fuzz test was called.
         /// Used for reporting failures and plugin actions.
-        public var sourceLocation: SourceLocation?
+        public var sourceLocation: SourceLocation
 
         // MARK: - Plugin Configuration
 
@@ -67,7 +67,10 @@ extension FuzzEngine {
             perInputTimeout: Duration? = nil,
             mutationBatchSize: Int = 0,
             projectPath: String? = nil,
-            sourceLocation: SourceLocation? = nil,
+            fileID: String = #fileID,
+            filePath: String = #filePath,
+            line: Int = #line,
+            column: Int = #column,
             plugins: [any EventBasedPlugin] = []
         ) {
             self.maxIterations = maxIterations
@@ -82,7 +85,12 @@ extension FuzzEngine {
                 ? ProcessInfo.processInfo.processorCount
                 : max(1, mutationBatchSize)
             self.projectPath = projectPath
-            self.sourceLocation = sourceLocation
+            self.sourceLocation = SourceLocation(
+                fileID: fileID,
+                filePath: filePath,
+                line: line,
+                column: column
+            )
             self.plugins = plugins
         }
     }

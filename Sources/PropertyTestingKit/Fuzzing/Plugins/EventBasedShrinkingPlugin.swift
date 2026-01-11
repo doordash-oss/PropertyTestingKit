@@ -72,7 +72,12 @@ public struct EventBasedShrinkingPlugin: EventBasedPlugin {
             // Return actions: select for mutation, add to corpus, and record issue
             return [
                 .selectForMutation(.init(input: minimized)),
-                .submitToCorpus(.init(input: minimized)),
+                // TODO: Add failure information
+                .submitToCorpus(.init(
+                    input: minimized,
+                    coverageSignature: context.coverageSignature,
+                    entryType: .failure
+                )),
                 .recordIssue(.init(
                     comment: Comment(rawValue: message),
                     sourceLocation: context.sourceLocation

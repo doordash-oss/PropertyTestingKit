@@ -253,8 +253,7 @@ struct FuzzEngineTests {
                 {
                     "input": ["NDI="],
                     "signature": {"edges": [1]},
-                    "discoveredAt": "2025-01-01T00:00:00Z",
-                    "parentIndex": null
+                    "discoveredAt": "2025-01-01T00:00:00Z"
                 }
             ],
             "createdAt": "2025-01-01T00:00:00Z",
@@ -636,8 +635,7 @@ struct FuzzEngineTests {
                 {
                     "input": ["NDI="],
                     "signature": {"buckets": {"5": 1}},
-                    "discoveredAt": "2025-01-01T00:00:00Z",
-                    "parentIndex": null
+                    "discoveredAt": "2025-01-01T00:00:00Z"
                 }
             ],
             "createdAt": "2025-01-01T00:00:00Z",
@@ -731,8 +729,7 @@ struct FuzzEngineTests {
                 {
                     "input": ["NDI="],
                     "signature": {"buckets": {"1": 1}},
-                    "discoveredAt": "2025-01-01T00:00:00Z",
-                    "parentIndex": null
+                    "discoveredAt": "2025-01-01T00:00:00Z"
                 }
             ],
             "createdAt": "2025-01-01T00:00:00Z",

@@ -319,28 +319,6 @@ struct CorpusPropertyTests {
         #expect(minimized.count <= count, "Minimized should not be larger")
     }
 
-    @Test("Corpus selectForMutation returns valid indices")
-    func testSelectForMutationValidIndex() async throws {
-        let corpus = Corpus<String>(schemaVersion: "test")
-
-        // Empty corpus should return nil
-        let emptySelection = await corpus.selectForMutation()
-        #expect(emptySelection == nil, "Empty corpus should return nil")
-
-        // Add some entries
-        await corpus.add(input: "a", signature: CoverageSignature(edges: [0]))
-        await corpus.add(input: "b", signature: CoverageSignature(edges: [1]))
-        await corpus.add(input: "c", signature: CoverageSignature(edges: [2]))
-
-        // Selection should be valid index
-        let entries = await corpus.entries
-        for _ in 0..<10 {
-            if let index = await corpus.selectForMutation() {
-                #expect(entries.indices.contains(index), "Selected index should be valid")
-            }
-        }
-    }
-
     @Test("Corpus handles empty minimization")
     func testEmptyMinimization() async throws {
         let corpus = Corpus<String>(schemaVersion: "test")
@@ -388,22 +366,6 @@ struct CorpusPropertyTests {
         #expect(inputs[1] == "world", "Second input should match")
     }
 
-    @Test("Corpus selectForMutation with empty signatures")
-    func testSelectForMutationEmptySignatures() async throws {
-        let corpus = Corpus<String>(schemaVersion: "test")
-
-        // Add entries with empty signatures (totalScore will be 0)
-        let emptySig = CoverageSignature(edges: [])
-        await corpus.add(input: "a", signature: emptySig)
-        await corpus.add(input: "b", signature: emptySig)
-
-        // Should still return a valid index (random selection fallback)
-        let index = await corpus.selectForMutation()
-        let entries = await corpus.entries
-        #expect(index != nil, "Should return an index")
-        #expect(entries.indices.contains(index!), "Index should be valid")
-    }
-
     @Test("Corpus minimization with no new coverage")
     func testMinimizationNoNewCoverage() async throws {
         let corpus = Corpus<String>(schemaVersion: "test")
@@ -437,8 +399,7 @@ struct CorpusEntryPropertyTests {
         let entry = CorpusEntry(
             input: "test input",
             signature: CoverageSignature(edges: [0, 5]),
-            discoveredAt: Date(),
-            parentIndex: 42
+            discoveredAt: Date()
         )
 
         let encoder = JSONEncoder()
@@ -451,7 +412,6 @@ struct CorpusEntryPropertyTests {
 
         #expect(decoded.input == entry.input)
         #expect(decoded.signature == entry.signature)
-        #expect(decoded.parentIndex == entry.parentIndex)
         // Date comparison with some tolerance due to serialization
         let timeDiff: Double = decoded.discoveredAt.timeIntervalSince(entry.discoveredAt)
         let withinTolerance: Bool = Swift.abs(timeDiff) < Double(1.0)

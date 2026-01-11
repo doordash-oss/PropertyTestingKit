@@ -24,7 +24,7 @@ public actor EventBasedPlateauDetectorPlugin: EventBasedPlugin {
             detector.record(discoveredNewCoverage: context.discoveredNewCoverage)
 
             if detector.hasPlateaued {
-                return [.stop(FuzzPluginAction<repeat each T>.StopAction(reason: "coverage_plateau"))]
+                return [.stop(FuzzPluginAction<repeat each T>.StopAction(reason: .custom("coverage_plateaued")))]
             }
 
             return []

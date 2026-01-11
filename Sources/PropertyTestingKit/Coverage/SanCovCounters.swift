@@ -452,9 +452,8 @@ extension SanCovCounters {
     ///
     /// - Important: You must call `endMeasurement(_:)` when done.
     /// - Returns: A context that must be passed to `endMeasurement(_:)`.
-    public static func beginMeasurement() -> MeasurementContext? {
-        guard let raw = sancov_begin_measurement() else { return nil }
-        return MeasurementContext(raw)
+    public static func beginMeasurement() -> MeasurementContext {
+        return MeasurementContext(sancov_begin_measurement()!)
     }
 
     /// End a measurement context and clean up its resources.

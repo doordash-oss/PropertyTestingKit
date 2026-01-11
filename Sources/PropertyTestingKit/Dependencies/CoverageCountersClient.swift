@@ -39,7 +39,7 @@ public struct CoverageCountersClient: Sendable {
     /// Begin a measurement context for the current task.
     /// This creates an isolated coverage map and pre-warms caches for optimal performance.
     /// Must be paired with endMeasurement.
-    public var beginMeasurement: @Sendable () -> SanCovCounters.MeasurementContext?
+    public var beginMeasurement: @Sendable () -> SanCovCounters.MeasurementContext
 
     /// End a measurement context and clean up resources.
     /// This frees the coverage map slot for reuse by other tasks.
@@ -62,7 +62,7 @@ public struct CoverageCountersClient: Sendable {
             "isAvailable",
             placeholder: false
         ),
-        beginMeasurement: @escaping @Sendable () -> SanCovCounters.MeasurementContext? = unimplemented(
+        beginMeasurement: @escaping @Sendable () -> SanCovCounters.MeasurementContext = unimplemented(
             "beginMeasurement",
             placeholder: nil
         ),

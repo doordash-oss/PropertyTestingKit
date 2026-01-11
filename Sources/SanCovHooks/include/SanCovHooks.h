@@ -124,14 +124,6 @@ const uint8_t* sancov_get_counters_with_context(void* context);
 /// Same as sancov_snapshot_covered_indices but operates on the given context.
 size_t sancov_snapshot_covered_indices_with_context(void* context, uint32_t* indices, uint8_t* counts, size_t max_entries);
 
-// MARK: - Debug API
-
-/// Get the number of measurement registry failures.
-/// This counts how many times the measurement registry was full when trying to
-/// register a new task→context mapping. If this is non-zero, some measurements
-/// may have received incorrect coverage data due to task hops.
-size_t sancov_get_measurement_registry_failures(void);
-
 #ifdef __cplusplus
 }
 #endif

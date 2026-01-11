@@ -52,21 +52,6 @@ public actor FuzzEngine<each Input: Codable & Sendable> {
     @Dependency(\.corpusRegistry) private var corpusRegistry
 
     // MARK: - Random Helpers (use injected RNG for determinism)
-
-    /// Generate a random Double in the given range using the injected RNG.
-    private func randomDouble(in range: Range<Double>) -> Double {
-        random { rng in
-            Double.random(in: range, using: &rng)
-        }
-    }
-
-    /// Select a random element from a collection using the injected RNG.
-    private func randomElement<C: Collection & Sendable>(from collection: C) -> C.Element? where C.Element: Sendable {
-        random { rng in
-            collection.randomElement(using: &rng)
-        }
-    }
-
     private let config: Config
     private let corpusDirectory: URL?
     private let mutatorSeeds: MutatorSeeds
@@ -279,9 +264,7 @@ public actor FuzzEngine<each Input: Codable & Sendable> {
 
         // Build seed queue: default seeds + user-provided additional seeds
         // Using Deque for O(1) removeFirst() instead of Array's O(n)
-        let defaultSeeds = mutatorSeeds()
-        var seedQueue = Deque(additionalSeeds + defaultSeeds)
-        let initialSeedCount = seedQueue.count
+        var seedQueue = Deque(additionalSeeds + mutatorSeeds())
 
         // Dispatch start event to plugins
         let startContext = PluginEvent<repeat each Input>.StartContext(
@@ -289,7 +272,7 @@ public actor FuzzEngine<each Input: Codable & Sendable> {
             maxDuration: config.maxDuration,
             batchSize: config.mutationBatchSize,
             corpusMode: config.corpusMode,
-            seedCount: initialSeedCount
+            seedCount: seedQueue.count
         )
         _ = try? await dispatcher.dispatch(event: PluginEvent<repeat each Input>.start(startContext))
 
@@ -311,6 +294,37 @@ public actor FuzzEngine<each Input: Codable & Sendable> {
         var iteration = 0
         var stopReason: FuzzStats.StopReason = .iterationLimit
         let batchSize = config.mutationBatchSize
+
+//        func execute(
+//            _ actions: [FuzzPluginAction<repeat each Input>]
+//        ) {
+////            var result = ActionExecutionResult<repeat each T>()
+//
+//            for action in actions {
+//                switch action {
+//                case .stop(let stopAction):
+//                    stopReason = stopAction.reason
+////                    result.shouldStop = true
+//                    stopReason = stopAction.reason
+//
+//                case .recordIssue(let issueAction):
+//                    Issue.record(issueAction.comment, sourceLocation: issueAction.sourceLocation)
+//
+//                case .queueInputs(let queueAction):
+//                    seedQueue.append(contentsOf: queueAction.inputs)
+//
+//                case .selectForMutation(let inputToMutate):
+//                    let mutations = mutatorMutate(inputToMutate.input)
+//                    seedQueue.append(contentsOf: mutations)
+//                    totalMutations += mutations.count
+//
+//                case .submitToCorpus(let corpusAction):
+//                    corpus.add(corpusAction.input)
+//                }
+//            }
+//
+//            return result
+//        }
 
         while iteration < config.maxIterations {
             // Check stopping conditions before generating batch
@@ -341,7 +355,6 @@ public actor FuzzEngine<each Input: Codable & Sendable> {
 
                 batch.append(BatchEntry(
                     input: input,
-                    parentIndex: nil,
                     isMutation: false
                 ))
             }
@@ -355,14 +368,7 @@ public actor FuzzEngine<each Input: Codable & Sendable> {
                 for (index, entry) in batch.enumerated() {
                     group.addTask {
                         // Begin measurement context - this pre-warms caches and creates isolated coverage map
-                        guard let context = coverageClient.beginMeasurement() else {
-                            return BatchTestResult(
-                                index: index,
-                                signature: nil,
-                                error: nil,
-                                timedOut: false
-                            )
-                        }
+                        let context = coverageClient.beginMeasurement()
                         defer { coverageClient.endMeasurement(context) }
 
                         var testError: (any Error)?
@@ -423,61 +429,37 @@ public actor FuzzEngine<each Input: Codable & Sendable> {
                     seedQueue.append(contentsOf: mutations)
                     totalMutations += mutations.count
                 } else if let error = result.error {
-                    // Track whether we recorded a shrunk input
-                    var recordedShrunkInput = false
-
                     // Dispatch failureFound for immediate shrinking
-                    if let sourceLocation = config.sourceLocation {
-                        let failureContext = PluginEvent<repeat each Input>.FailureFoundContext(
-                            input: entry.input,
-                            test: test,
-                            failure: String(describing: error),
-                            sourceLocation: sourceLocation
-                        )
+                    let failureContext = PluginEvent<repeat each Input>.FailureFoundContext(
+                        input: entry.input,
+                        test: test,
+                        failure: String(describing: error),
+                        sourceLocation: config.sourceLocation,
+                        coverageSignature: result.signature
+                    )
 
-                        if let actions = try? await dispatcher.dispatch(
-                            event: PluginEvent<repeat each Input>.failureFound(failureContext)
-                        ) {
-                            // Execute non-generic actions
-                            _ = executeActions(actions)
+                    let actions = (try? await dispatcher.dispatch(
+                        event: PluginEvent<repeat each Input>.failureFound(failureContext)
+                    )) ?? []
 
-                            // Handle generic actions directly to avoid pack-typed array issues
-                            for action in actions {
-                                switch action {
-                                case .selectForMutation(let selectAction):
-                                    // Use first selected input as the shrunk input for recording
-                                    if !recordedShrunkInput {
-                                        failures.append((input: selectAction.input, error: error))
-                                        recordedShrunkInput = true
-                                    }
-                                    // Queue mutations of selected input
-                                    let mutations = mutatorMutate(selectAction.input)
-                                    seedQueue.append(contentsOf: mutations)
-                                    totalMutations += mutations.count
+                    let actionResult = executeActions(actions)
 
-                                case .submitToCorpus(let corpusAction):
-                                    // Run test to get coverage signature for this input
-                                    guard let ctx = coverageClient.beginMeasurement() else { continue }
-                                    _ = try? await test(corpusAction.input)
-                                    coverageClient.endMeasurement(ctx)
-
-                                    if let sparse = coverageClient.snapshotCoveredArraysWithContext(ctx) {
-                                        let signature = CoverageSignature(sparse: sparse)
-                                        await corpus.add(corpusAction.input, signature, nil, .failure, nil)
-                                    }
-
-                                default:
-                                    // Non-generic actions already handled by executeActions
-                                    break
-                                }
-                            }
-                        }
-                    }
-
-                    // Record original input if no shrunk input was used
-                    if !recordedShrunkInput {
+                    // Record first selected input (shrunk) or original if none
+                    if let firstSelected = actionResult.inputsToMutate.first {
+                        failures.append((input: firstSelected, error: error))
+                    } else {
                         failures.append((input: entry.input, error: error))
                     }
+
+                    // Process action result (mutations, corpus inputs)
+                    _ = await processActionResult(
+                        actionResult,
+                        seedQueue: &seedQueue,
+                        totalMutations: &totalMutations,
+                        corpus: corpus,
+                        test: test,
+                        coverageClient: coverageClient
+                    )
 
                     // Queue mutations of original input to explore nearby failure space
                     let mutations = mutatorMutate(entry.input)
@@ -490,7 +472,7 @@ public actor FuzzEngine<each Input: Codable & Sendable> {
 
                 // Collect candidates for batch add
                 if let signature = result.signature {
-                    candidates.append(CandidateEntry(input: entry.input, signature: signature, parentIndex: entry.parentIndex))
+                    candidates.append(CandidateEntry(input: entry.input, signature: signature))
                 }
             }
 
@@ -646,8 +628,8 @@ public actor FuzzEngine<each Input: Codable & Sendable> {
 
         if let actions = try? await dispatcher.dispatch(event: PluginEvent<repeat each Input>.end(endContext)) {
             _ = executeActions(actions)
-            // Note: stop and queueInputs not relevant at end event
         }
+        // Note: stop and queueInputs not relevant at end event
 
         let finalSnapshot = await finalCorpus.snapshot()
         return FuzzResult(
@@ -765,53 +747,6 @@ public actor FuzzEngine<each Input: Codable & Sendable> {
         )
     }
 
-    // MARK: - Action Execution
-
-    /// Result of executing plugin actions (non-generic parts only).
-    struct ActionExecutionResult {
-        /// Whether a stop action was received.
-        var shouldStop: Bool = false
-        /// The reason for stopping (if shouldStop is true).
-        var stopReason: String?
-        /// Inputs to queue for mutation (encoded).
-        var inputsToQueue: [Data] = []
-    }
-
-    /// Execute the non-generic parts of plugin actions.
-    ///
-    /// Generic actions (selectForMutation, submitToCorpus) must be handled separately
-    /// by the calling code due to Swift runtime limitations with pack-typed arrays.
-    ///
-    /// - Parameter actions: The actions to execute.
-    /// - Returns: The non-generic result of executing the actions.
-    private func executeActions<each T: Sendable>(
-        _ actions: [FuzzPluginAction<repeat each T>]
-    ) -> ActionExecutionResult {
-        var result = ActionExecutionResult()
-
-        for action in actions {
-            switch action {
-            case .stop(let stopAction):
-                result.shouldStop = true
-                result.stopReason = stopAction.reason
-
-            case .recordIssue(let issueAction):
-                Issue.record(issueAction.comment, sourceLocation: issueAction.sourceLocation)
-
-            case .queueInputs(let queueAction):
-                result.inputsToQueue.append(contentsOf: queueAction.inputs)
-
-            // Generic actions handled by calling code
-            case .selectForMutation:
-                break
-
-            case .submitToCorpus:
-                break
-            }
-        }
-
-        return result
-    }
 }
 
 func runWithTimeout(

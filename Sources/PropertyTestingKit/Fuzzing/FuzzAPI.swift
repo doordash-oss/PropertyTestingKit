@@ -121,12 +121,10 @@ public func fuzz<each Input: Codable & Sendable, each M: Mutator>(
         perInputTimeout: perInputTimeout,
         mutationBatchSize: mutationBatchSize,
         projectPath: projectPath(from: filePath),
-        sourceLocation: SourceLocation(
-            fileID: testFilePath,
-            filePath: testFilePath,
-            line: line,
-            column: 1
-        ),
+        fileID: testFilePath,
+        filePath: testFilePath,
+        line: line,
+        column: 1,
         plugins: plugins
     )
 

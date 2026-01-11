@@ -97,8 +97,8 @@ public enum PluginEvent<each T: Sendable>: Sendable {
         public let totalCoveredIndices: Set<Int>
         /// Project path for filtering (if configured).
         public let projectPath: String?
-        /// Source location of the fuzz call (nil when not available, e.g. in tests).
-        public let sourceLocation: SourceLocation?
+        /// Source location of the fuzz call.
+        public let sourceLocation: SourceLocation
 
         public init(
             totalIterations: Int,
@@ -109,7 +109,7 @@ public enum PluginEvent<each T: Sendable>: Sendable {
             stopReason: FuzzStats.StopReason,
             totalCoveredIndices: Set<Int>,
             projectPath: String?,
-            sourceLocation: SourceLocation? = nil
+            sourceLocation: SourceLocation
         ) {
             self.totalIterations = totalIterations
             self.duration = duration
@@ -133,17 +133,20 @@ public enum PluginEvent<each T: Sendable>: Sendable {
         public let failure: String
         /// Source location where the fuzz test was called.
         public let sourceLocation: SourceLocation
+        public let coverageSignature: CoverageSignature
 
         public init(
             input: (repeat each T),
             test: @Sendable @escaping ((repeat each T)) async throws -> Void,
             failure: String,
-            sourceLocation: SourceLocation
+            sourceLocation: SourceLocation,
+            coverageSignature: CoverageSignature
         ) {
             self.input = input
             self.test = test
             self.failure = failure
             self.sourceLocation = sourceLocation
+            self.coverageSignature = coverageSignature
         }
     }
 
@@ -239,9 +242,9 @@ public enum FuzzPluginAction<each T: Sendable>: Sendable {
     /// Action to stop fuzzing.
     public struct StopAction: Sendable {
         /// Reason for stopping.
-        public let reason: String
+        public let reason: FuzzStats.StopReason
 
-        public init(reason: String) {
+        public init(reason: FuzzStats.StopReason) {
             self.reason = reason
         }
     }
@@ -262,15 +265,15 @@ public enum FuzzPluginAction<each T: Sendable>: Sendable {
     /// Action to queue inputs for mutation.
     public struct QueueInputsAction: Sendable {
         /// Encoded inputs to add to the mutation queue.
-        public let inputs: [Data]
+        public let inputs: [(repeat each T)]
 
-        public init(inputs: [Data]) {
+        public init(inputs: [(repeat each T)]) {
             self.inputs = inputs
         }
     }
 
     /// Action to select an input for mutation.
-    public struct SelectForMutationAction: @unchecked Sendable {
+    public struct SelectForMutationAction: Sendable {
         /// The input to select for mutation.
         public let input: (repeat each T)
 
@@ -280,12 +283,23 @@ public enum FuzzPluginAction<each T: Sendable>: Sendable {
     }
 
     /// Action to submit an input to the corpus.
-    public struct SubmitToCorpusAction: @unchecked Sendable {
+    public struct SubmitToCorpusAction: Sendable {
         /// The input to submit to the corpus.
         public let input: (repeat each T)
+        public let coverageSignature: CoverageSignature
+        public let entryType: CorpusEntryType
+        public let failureInfo: FailureInfo?
 
-        public init(input: (repeat each T)) {
+        public init(
+            input: (repeat each T),
+            coverageSignature: CoverageSignature,
+            entryType: CorpusEntryType,
+            failureInfo: FailureInfo? = nil
+        ) {
             self.input = input
+            self.coverageSignature = coverageSignature
+            self.entryType = entryType
+            self.failureInfo = failureInfo
         }
     }
 }

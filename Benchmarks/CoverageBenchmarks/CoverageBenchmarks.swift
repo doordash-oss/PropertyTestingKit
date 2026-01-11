@@ -659,28 +659,6 @@ let benchmarks: @Sendable () -> Void = {
     }
 
     Benchmark(
-        "Corpus.selectForMutation - 100 entries",
-        configuration: .init(
-            metrics: [.wallClock],
-            warmupIterations: 100,
-            scalingFactor: .kilo
-        )
-    ) { benchmark async in
-        let corpus = Corpus<Int>(schemaVersion: "bench-v1")
-        for i in 0..<100 {
-            let sig = CoverageSignature(sparse: makeSparseCoverageArrays(
-                coveredCount: typicalCoveredEdges,
-                totalEdges: totalEdges
-            ))
-            await corpus.add(input: i, signature: sig)
-        }
-
-        for _ in benchmark.scaledIterations {
-            blackHole(await corpus.selectForMutation())
-        }
-    }
-
-    Benchmark(
         "Corpus.minimized - 100 entries",
         configuration: .init(
             metrics: [.wallClock],

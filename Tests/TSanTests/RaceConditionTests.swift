@@ -131,28 +131,6 @@ struct CorpusRaceTests {
         }
     }
 
-    @Test("Concurrent corpus selectForMutation")
-    func concurrentSelectForMutation() async {
-        let corpus = Corpus<Int>(schemaVersion: "1.0.0")
-
-        // Add some entries first
-        for i in 0..<20 {
-            let signature = makeSignature(indices: [i * 10, i * 10 + 1])
-            await corpus.add(input: i, signature: signature)
-        }
-
-        // Concurrently select for mutation
-        await withTaskGroup(of: Int?.self) { group in
-            for _ in 0..<50 {
-                group.addTask {
-                    await corpus.selectForMutation()
-                }
-            }
-
-            for await _ in group {}
-        }
-    }
-
     @Test("Concurrent corpus addIfInteresting")
     func concurrentAddIfInteresting() async {
         let corpus = Corpus<Int>(schemaVersion: "1.0.0")
@@ -352,7 +330,6 @@ struct HighContentionTests {
                 group.addTask {
                     for _ in 0..<20 {
                         _ = await corpus.snapshot()
-                        _ = await corpus.selectForMutation()
                     }
                 }
             }

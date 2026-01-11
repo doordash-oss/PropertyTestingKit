@@ -38,8 +38,7 @@ public struct EventBasedCoverageGapPlugin: EventBasedPlugin {
         report: CoverageGapReport,
         endContext: PluginEvent<repeat each T>.EndContext
     ) -> [FuzzPluginAction<repeat each T>] {
-        // Skip if no gaps or no source location to attach issues to
-        guard !report.gaps.isEmpty, let sourceLocation = endContext.sourceLocation else { return [] }
+        guard !report.gaps.isEmpty else { return [] }
 
         return report.gaps.map { gap in
             let file = URL(fileURLWithPath: gap.filename).lastPathComponent
@@ -63,7 +62,7 @@ public struct EventBasedCoverageGapPlugin: EventBasedPlugin {
             // SourceLocation from runtime strings (it requires compile-time StaticStrings)
             return .recordIssue(FuzzPluginAction<repeat each T>.IssueAction(
                 comment: Comment(rawValue: message),
-                sourceLocation: sourceLocation
+                sourceLocation: endContext.sourceLocation
             ))
         }
     }

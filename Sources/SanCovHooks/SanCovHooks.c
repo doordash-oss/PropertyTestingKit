@@ -32,6 +32,16 @@
 #include <stdio.h>
 #include <stdatomic.h>
 
+// Wrapper that aborts on allocation failure - keeps callsites clean
+static void* xmalloc(size_t size) {
+    void* ptr = malloc(size);
+    if (ptr == NULL) {
+        fprintf(stderr, "FATAL: malloc(%zu) failed\n", size);
+        abort();
+    }
+    return ptr;
+}
+
 // Forward declare Swift runtime function
 // Returns the current Swift Task pointer, or NULL if not in an async context
 extern void* swift_task_getCurrent(void) __attribute__((weak_import));
@@ -53,7 +63,7 @@ static size_t g_guard_count = 0;
 #include <pthread.h>
 
 // Memory allocator for ck_ht
-static void* ck_malloc_wrapper(size_t size) { return malloc(size); }
+static void* ck_malloc_wrapper(size_t size) { return xmalloc(size); }
 static void ck_free_wrapper(void* ptr, size_t size, bool defer) {
     (void)size; (void)defer;
     free(ptr);
@@ -75,7 +85,6 @@ static pthread_once_t g_coverage_ht_once = PTHREAD_ONCE_INIT;
 
 // Thread-local fallback for non-async contexts
 static _Thread_local uint8_t *tls_coverage_map = NULL;
-static _Thread_local size_t tls_coverage_map_size = 0;
 
 // Measurement registry: task_id -> measurement_context
 static ck_ht_t g_measurement_ht;
@@ -95,7 +104,7 @@ static _Thread_local uint8_t* tls_cached_coverage_map = NULL;
 static void* get_sync_pseudo_task(void) {
     if (tls_sync_pseudo_task == NULL) {
         // Use a unique heap address as pseudo-task ID
-        tls_sync_pseudo_task = malloc(1);
+        tls_sync_pseudo_task = xmalloc(1);
     }
     return tls_sync_pseudo_task;
 }
@@ -107,7 +116,7 @@ static void* get_current_task_for_measurement(void) {
         if (task != NULL) {
             return task;
         }
-    }
+    }       
     return get_sync_pseudo_task();
 }
 
@@ -121,24 +130,12 @@ static void* get_current_task_for_measurement(void) {
 // Start small and grow as needed.
 #define CK_HT_INITIAL_CAPACITY 256
 
-// Debug logging control - set to 1 to enable
-#define CK_HT_DEBUG_LOGGING 0
-
-// One-time initialization functions for pthread_once
 static void init_measurement_ht(void) {
     ck_ht_init(&g_measurement_ht, CK_HT_MODE_DIRECT, NULL, &ck_allocator, CK_HT_INITIAL_CAPACITY, 0);
-#if CK_HT_DEBUG_LOGGING
-    fprintf(stderr, "[CK_HT DEBUG] INIT measurement_ht: capacity=%d (requested)\n",
-            CK_HT_INITIAL_CAPACITY);
-#endif
 }
 
 static void init_coverage_ht(void) {
     ck_ht_init(&g_coverage_ht, CK_HT_MODE_DIRECT, NULL, &ck_allocator, CK_HT_INITIAL_CAPACITY, 0);
-#if CK_HT_DEBUG_LOGGING
-    fprintf(stderr, "[CK_HT DEBUG] INIT coverage_ht: capacity=%d (requested)\n",
-            CK_HT_INITIAL_CAPACITY);
-#endif
 }
 
 // Lazy initialization using pthread_once (lock-free after first call)
@@ -154,8 +151,6 @@ static inline void ensure_coverage_ht(void) {
 
 // Get measurement context for a task (lock-free lookup)
 static void* get_measurement_context_for_task(void* task_id) {
-    if (task_id == NULL) return NULL;
-
     ensure_measurement_ht();
 
     ck_ht_entry_t entry;
@@ -170,58 +165,8 @@ static void* get_measurement_context_for_task(void* task_id) {
     return NULL;
 }
 
-// Debug counter for tracking registry exhaustion (kept for API compatibility)
-static _Atomic(size_t) g_measurement_registry_failures = 0;
-
-size_t sancov_get_measurement_registry_failures(void) {
-    return atomic_load(&g_measurement_registry_failures);
-}
-
-#if CK_HT_DEBUG_LOGGING
-// Track peak entries for each hash table
-static _Atomic size_t g_measurement_peak_entries = 0;
-static _Atomic size_t g_coverage_peak_entries = 0;
-
-// Get actual capacity from the map (requires access to internal struct)
-extern size_t ck_ht_capacity(ck_ht_t *ht);
-
-static inline void log_ht_stats(const char* operation, ck_ht_t *ht, const char* ht_name) {
-    size_t entries = ck_ht_count(ht);
-    size_t capacity = ck_ht_capacity(ht);  // Get actual capacity
-    double load = (double)entries / (double)capacity * 100.0;
-
-    // Track peak entries
-    _Atomic size_t *peak = (ht == &g_measurement_ht) ? &g_measurement_peak_entries : &g_coverage_peak_entries;
-    size_t current_peak = atomic_load(peak);
-    while (entries > current_peak) {
-        if (atomic_compare_exchange_weak(peak, &current_peak, entries)) {
-            // New peak! Always log this
-            fprintf(stderr, "[CK_HT DEBUG] NEW PEAK %s: entries=%zu capacity=%zu load=%.1f%%\n",
-                    ht_name, entries, capacity, load);
-            break;
-        }
-    }
-
-    // Only log periodically to avoid flooding
-    static _Atomic size_t log_counter = 0;
-    size_t count = atomic_fetch_add(&log_counter, 1);
-
-    // Log every 1000 operations or if near resize threshold
-    bool near_resize = (entries * 2) > capacity;  // >50% = resize territory
-    if (count % 1000 == 0 || near_resize) {
-        fprintf(stderr, "[CK_HT DEBUG] %s %s: entries=%zu peak=%zu capacity=%zu load=%.1f%% %s\n",
-                operation, ht_name, entries, atomic_load(peak), capacity, load,
-                near_resize ? "⚠️ NEAR RESIZE!" : "");
-    }
-}
-#else
-#define log_ht_stats(op, ht, name) ((void)0)
-#endif
-
 // Set measurement context for a task (lock-free write)
 static bool set_measurement_context_for_task(void* task_id, void* context) {
-    if (task_id == NULL) return false;
-
     ensure_measurement_ht();
 
     ck_ht_entry_t entry;
@@ -230,25 +175,11 @@ static bool set_measurement_context_for_task(void* task_id, void* context) {
     ck_ht_hash_direct(&h, &g_measurement_ht, (uintptr_t)task_id);
     ck_ht_entry_set_direct(&entry, h, (uintptr_t)task_id, (uintptr_t)context);
 
-#if CK_HT_DEBUG_LOGGING
-    fprintf(stderr, "[CK_HT DEBUG] measurement_ht SET key=0x%lx (task) value=0x%lx (ctx) hash=0x%lx\n",
-            (unsigned long)task_id, (unsigned long)context, (unsigned long)h.value);
-#endif
-    log_ht_stats("SET_BEFORE", &g_measurement_ht, "measurement");
-    bool success = ck_ht_set_spmc(&g_measurement_ht, h, &entry);
-    log_ht_stats("SET_AFTER", &g_measurement_ht, "measurement");
-
-    if (!success) {
-        atomic_fetch_add(&g_measurement_registry_failures, 1);
-        return false;
-    }
-    return true;
+    return ck_ht_set_spmc(&g_measurement_ht, h, &entry);
 }
 
 // Remove measurement context for a task (lock-free write)
 static void remove_measurement_context_for_task(void* task_id) {
-    if (task_id == NULL) return;
-
     ensure_measurement_ht();
 
     ck_ht_entry_t entry;
@@ -286,17 +217,9 @@ static uint8_t* find_or_create_task_map(void* task_id) {
         return NULL;
     }
 
-    log_ht_stats("COVERAGE_INSERT_BEFORE", &g_coverage_ht, "coverage");
-
-#if CK_HT_DEBUG_LOGGING
-    fprintf(stderr, "[CK_HT DEBUG] coverage_ht PUT key=0x%lx (ctx) value=0x%lx (map) hash=0x%lx\n",
-            (unsigned long)task_id, (unsigned long)new_map, (unsigned long)h.value);
-#endif
     // Try to insert using put (fails if key already exists)
     ck_ht_entry_set_direct(&entry, h, (uintptr_t)task_id, (uintptr_t)new_map);
     bool inserted = ck_ht_put_spmc(&g_coverage_ht, h, &entry);
-
-    log_ht_stats("COVERAGE_INSERT_AFTER", &g_coverage_ht, "coverage");
 
     if (!inserted) {
         // Another thread beat us - free our map and return existing one
@@ -313,8 +236,6 @@ static uint8_t* find_or_create_task_map(void* task_id) {
 
 // Remove a task's coverage map entry (lock-free write)
 static void cleanup_task_map(void* task_id) {
-    if (task_id == NULL) return;
-
     ensure_coverage_ht();
 
     ck_ht_entry_t entry;
@@ -346,18 +267,14 @@ typedef struct {
 
 void* sancov_begin_measurement(void) {
     // Allocate the context structure
-    MeasurementContextData* ctx = (MeasurementContextData*)malloc(sizeof(MeasurementContextData));
-    if (ctx == NULL) return NULL;
-
+    MeasurementContextData* ctx = (MeasurementContextData*)xmalloc(sizeof(MeasurementContextData));
     ctx->coverage_map = NULL;
 
     // Associate this measurement context with the current task
-    // This is critical for coverage isolation - if it fails, we can't guarantee isolation
     void* task = get_current_task_for_measurement();
     if (!set_measurement_context_for_task(task, ctx)) {
-        // Registration failed - clean up and return NULL
-        free(ctx);
-        return NULL;
+        fprintf(stderr, "FATAL: failed to register measurement context for task %p\n", task);
+        abort();
     }
 
     // Pre-warm the cache by creating the coverage map now
@@ -498,8 +415,7 @@ size_t sancov_snapshot_covered_indices_with_context(void* context, uint32_t* ind
 // Ensure thread-local fallback map is allocated
 static void ensure_tls_coverage_map(void) {
     if (tls_coverage_map == NULL && g_guard_count > 0) {
-        tls_coverage_map_size = g_guard_count;
-        tls_coverage_map = (uint8_t*)calloc(tls_coverage_map_size, 1);
+        tls_coverage_map = (uint8_t*)calloc(g_guard_count, 1);
     }
 }
 
@@ -599,20 +515,6 @@ void __sanitizer_cov_trace_pc_guard(uint32_t *guard) {
     }
 }
 
-// MARK: - Inline 8-bit Counters (alternative instrumentation)
-// These are called by LLVM when -sanitize-coverage=inline-8bit-counters is enabled.
-// Swift doesn't support this mode directly, but Clang does.
-
-static uint8_t *g_8bit_counters_start = NULL;
-static uint8_t *g_8bit_counters_end = NULL;
-
-void __sanitizer_cov_8bit_counters_init(uint8_t *start, uint8_t *end) {
-    if (g_8bit_counters_start == NULL) {
-        g_8bit_counters_start = start;
-        g_8bit_counters_end = end;
-    }
-}
-
 // MARK: - PC Storage for Source Mapping
 // Store PCs from __sanitizer_cov_pcs_init for source location lookup
 
@@ -628,60 +530,31 @@ void __sanitizer_cov_pcs_init(const uintptr_t *pcs_beg, const uintptr_t *pcs_end
     }
 }
 
-// MARK: - Unified Public API
-// These functions work with whichever instrumentation mode is active:
-// - trace_pc_guard (Swift): Uses task-keyed or thread-local coverage maps
-// - inline-8bit-counters (Clang): Uses global counters (no isolation)
+// MARK: - Public API
 
 bool sancov_counters_available(void) {
-    // Either mode provides coverage
-    return g_guard_count > 0 ||
-           (g_8bit_counters_start != NULL && g_8bit_counters_end != NULL);
+    return g_guard_count > 0;
 }
 
 size_t sancov_get_counter_count(void) {
-    // Prefer trace_pc_guard (has task/thread isolation)
-    if (g_guard_count > 0) {
-        return g_guard_count;
-    }
-    // Fallback to inline-8bit-counters
-    if (g_8bit_counters_start && g_8bit_counters_end) {
-        return (size_t)(g_8bit_counters_end - g_8bit_counters_start);
-    }
-    return 0;
+    return g_guard_count;
 }
 
 size_t sancov_get_covered_count(void) {
+    if (g_guard_count == 0) return 0;
+
+    uint8_t* map = get_current_coverage_map();
+    if (!map) return 0;
+
     size_t count = 0;
-
-    // Check task-keyed or thread-local map (trace_pc_guard mode)
-    if (g_guard_count > 0) {
-        uint8_t* map = get_current_coverage_map();
-        if (map) {
-            for (size_t i = 0; i < g_guard_count; i++) {
-                if (map[i]) count++;
-            }
-        }
-        return count;
+    for (size_t i = 0; i < g_guard_count; i++) {
+        if (map[i]) count++;
     }
-
-    // Fallback to global counters (inline-8bit-counters mode)
-    if (g_8bit_counters_start && g_8bit_counters_end) {
-        for (uint8_t *p = g_8bit_counters_start; p < g_8bit_counters_end; p++) {
-            if (*p != 0) count++;
-        }
-    }
-
     return count;
 }
 
 const uint8_t* sancov_get_counters(void) {
-    // Return task-keyed or thread-local map if available
-    if (g_guard_count > 0) {
-        return get_current_coverage_map();
-    }
-    // Fallback to global counters
-    return g_8bit_counters_start;
+    return get_current_coverage_map();
 }
 
 size_t sancov_snapshot_counters(uint8_t* buffer, size_t buffer_size) {
@@ -808,9 +681,6 @@ uintptr_t sancov_get_pc(size_t edge_index) {
     return g_pcs_start[edge_index * 2];
 }
 
-// Counter for dladdr calls (for profiling)
-static _Atomic size_t g_dladdr_call_count = 0;
-
 bool sancov_get_source_location(size_t edge_index, SanCovSourceLocation* location) {
     if (!location) return false;
 
@@ -823,9 +693,7 @@ bool sancov_get_source_location(size_t edge_index, SanCovSourceLocation* locatio
     location->function_name = NULL;
     location->function_start = 0;
 
-    // Use dladdr to get symbol info
     Dl_info info;
-    atomic_fetch_add(&g_dladdr_call_count, 1);
     if (dladdr((void*)pc, &info)) {
         location->filename = info.dli_fname;
         location->function_name = info.dli_sname;

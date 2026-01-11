@@ -17,12 +17,10 @@ public struct CorpusEntry<each Input: Codable & Sendable>: Sendable, Codable {
     /// When this entry was discovered.
     public let discoveredAt: Date
 
-    /// Optional: the parent input this was mutated from.
-    public let parentIndex: Int?
-
     /// The reason this entry was added to the corpus.
     public let entryType: CorpusEntryType
 
+    // TODO: Move failureInfo into corpus entry type
     /// Failure information if this entry caused a test failure.
     public let failure: FailureInfo?
 
@@ -30,7 +28,6 @@ public struct CorpusEntry<each Input: Codable & Sendable>: Sendable, Codable {
         input: repeat each Input,
         signature: CoverageSignature,
         discoveredAt: Date? = nil,
-        parentIndex: Int? = nil,
         entryType: CorpusEntryType = .coverage,
         failure: FailureInfo? = nil
     ) {
@@ -42,7 +39,6 @@ public struct CorpusEntry<each Input: Codable & Sendable>: Sendable, Codable {
         } else {
             self.discoveredAt = dateClient.now()
         }
-        self.parentIndex = parentIndex
         self.entryType = entryType
         self.failure = failure
     }
@@ -61,7 +57,6 @@ public struct CorpusEntry<each Input: Codable & Sendable>: Sendable, Codable {
 
         try container.encode(signature, forKey: .signature)
         try container.encode(discoveredAt, forKey: .discoveredAt)
-        try container.encodeIfPresent(parentIndex, forKey: .parentIndex)
         try container.encode(entryType, forKey: .entryType)
         try container.encodeIfPresent(failure, forKey: .failure)
     }
@@ -95,7 +90,6 @@ public struct CorpusEntry<each Input: Codable & Sendable>: Sendable, Codable {
 
         self.signature = try container.decode(CoverageSignature.self, forKey: .signature)
         self.discoveredAt = try container.decode(Date.self, forKey: .discoveredAt)
-        self.parentIndex = try container.decodeIfPresent(Int.self, forKey: .parentIndex)
         // Default to .coverage for backward compatibility with existing corpus files
         self.entryType = try container.decodeIfPresent(CorpusEntryType.self, forKey: .entryType) ?? .coverage
         self.failure = try container.decodeIfPresent(FailureInfo.self, forKey: .failure)
@@ -107,7 +101,6 @@ public enum CorpusEntryCodingKeys: String, CodingKey {
     case inputReadable
     case signature
     case discoveredAt
-    case parentIndex
     case entryType
     case failure
 }

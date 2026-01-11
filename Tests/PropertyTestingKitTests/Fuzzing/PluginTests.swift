@@ -6,6 +6,7 @@
 //
 
 import Testing
+import Foundation
 @testable import PropertyTestingKit
 
 // MARK: - EventBasedShrinkingPlugin Tests
@@ -53,7 +54,8 @@ struct EventBasedShrinkingPluginTests {
             hangCount: 0,
             stopReason: .iterationLimit,
             totalCoveredIndices: Set([1, 2, 3]),
-            projectPath: nil
+            projectPath: nil,
+            sourceLocation: SourceLocation(fileID: #fileID, filePath: #filePath, line: #line, column: 1)
         )
         let endActions = try await plugin.handle(event: PluginEvent<Int>.end(endContext))
         #expect(endActions.isEmpty)
@@ -238,7 +240,8 @@ struct EventBasedSTADSPluginActionTests {
             hangCount: 0,
             stopReason: .iterationLimit,
             totalCoveredIndices: Set([1, 2, 3]),
-            projectPath: nil
+            projectPath: nil,
+            sourceLocation: SourceLocation(fileID: #fileID, filePath: #filePath, line: #line, column: 1)
         )
         let actions = try await plugin.handle(event: PluginEvent<Int>.end(endContext))
         #expect(actions.isEmpty)
@@ -446,24 +449,186 @@ struct EventBasedCoverageGapPluginActionTests {
         #expect(actions.isEmpty)
     }
 
-    @Test("Plugin returns empty when no source location provided")
-    func testReturnsEmptyWithoutSourceLocation() async throws {
-        let plugin = EventBasedCoverageGapPlugin()
+}
 
-        let endContext = PluginEvent<Int>.EndContext(
-            totalIterations: 100,
-            duration: 60.0,
-            corpusSize: 50,
-            failureCount: 0,
-            hangCount: 0,
-            stopReason: .iterationLimit,
-            totalCoveredIndices: Set([1, 2, 3]),
-            projectPath: nil,
-            sourceLocation: nil  // No source location
-        )
-        let actions = try await plugin.handle(event: PluginEvent<Int>.end(endContext))
-        #expect(actions.isEmpty)
+// MARK: - ActionExecutor Tests
+
+@Suite("ActionExecutor")
+struct ActionExecutorTests {
+
+    @Test("Empty actions returns default result")
+    func testEmptyActions() {
+        let executor = ActionExecutor(recordIssues: false)
+        let actions: [FuzzPluginAction<Int>] = []
+
+        let result = executor.execute(actions)
+
+        #expect(result.shouldStop == false)
+        #expect(result.stopReason == nil)
+        #expect(result.inputsToQueue.isEmpty)
+        #expect(result.issuesRecorded == 0)
+        #expect(result.inputsToMutate.isEmpty)
+        #expect(result.corpusInputs.isEmpty)
     }
+
+    @Test("Stop action sets shouldStop and reason")
+    func testStopAction() {
+        let executor = ActionExecutor(recordIssues: false)
+        let actions: [FuzzPluginAction<Int>] = [
+            .stop(.init(reason: "test_reason"))
+        ]
+
+        let result = executor.execute(actions)
+
+        #expect(result.shouldStop == true)
+        #expect(result.stopReason == "test_reason")
+    }
+
+    @Test("Multiple stop actions uses last reason")
+    func testMultipleStopActions() {
+        let executor = ActionExecutor(recordIssues: false)
+        let actions: [FuzzPluginAction<Int>] = [
+            .stop(.init(reason: "first_reason")),
+            .stop(.init(reason: "second_reason"))
+        ]
+
+        let result = executor.execute(actions)
+
+        #expect(result.shouldStop == true)
+        #expect(result.stopReason == "second_reason")
+    }
+
+    @Test("RecordIssue action counts issues")
+    func testRecordIssueAction() {
+        let executor = ActionExecutor(recordIssues: false)  // Don't actually record
+        let sourceLocation = SourceLocation(fileID: #fileID, filePath: #filePath, line: #line, column: 1)
+        let actions: [FuzzPluginAction<Int>] = [
+            .recordIssue(.init(comment: Comment(rawValue: "Issue 1"), sourceLocation: sourceLocation)),
+            .recordIssue(.init(comment: Comment(rawValue: "Issue 2"), sourceLocation: sourceLocation))
+        ]
+
+        let result = executor.execute(actions)
+
+        #expect(result.issuesRecorded == 2)
+        #expect(result.shouldStop == false)
+    }
+
+    @Test("QueueInputs action collects inputs")
+    func testQueueInputsAction() {
+        let executor = ActionExecutor(recordIssues: false)
+        let data1 = Data([1, 2, 3])
+        let data2 = Data([4, 5, 6])
+        let data3 = Data([7, 8, 9])
+        let actions: [FuzzPluginAction<Int>] = [
+            .queueInputs(.init(inputs: [data1, data2])),
+            .queueInputs(.init(inputs: [data3]))
+        ]
+
+        let result = executor.execute(actions)
+
+        #expect(result.inputsToQueue.count == 3)
+        #expect(result.inputsToQueue[0] == data1)
+        #expect(result.inputsToQueue[1] == data2)
+        #expect(result.inputsToQueue[2] == data3)
+    }
+
+    @Test("SelectForMutation action collects inputs")
+    func testSelectForMutationCollectsInputs() {
+        let executor = ActionExecutor(recordIssues: false)
+        let actions: [FuzzPluginAction<Int>] = [
+            .selectForMutation(.init(input: 42)),
+            .selectForMutation(.init(input: 100))
+        ]
+
+        let result = executor.execute(actions)
+
+        #expect(result.inputsToMutate.count == 2)
+        #expect(result.inputsToMutate[0] == 42)
+        #expect(result.inputsToMutate[1] == 100)
+        #expect(result.corpusInputs.isEmpty)
+    }
+
+    @Test("SubmitToCorpus action collects inputs")
+    func testSubmitToCorpusCollectsInputs() {
+        let executor = ActionExecutor(recordIssues: false)
+        let actions: [FuzzPluginAction<Int>] = [
+            .submitToCorpus(.init(input: 42)),
+            .submitToCorpus(.init(input: 100))
+        ]
+
+        let result = executor.execute(actions)
+
+        #expect(result.corpusInputs.count == 2)
+        #expect(result.corpusInputs[0] == 42)
+        #expect(result.corpusInputs[1] == 100)
+        #expect(result.inputsToMutate.isEmpty)
+    }
+
+    @Test("Mixed actions processed correctly")
+    func testMixedActions() {
+        let executor = ActionExecutor(recordIssues: false)
+        let sourceLocation = SourceLocation(fileID: #fileID, filePath: #filePath, line: #line, column: 1)
+        let data = Data([1, 2, 3])
+        let actions: [FuzzPluginAction<Int>] = [
+            .recordIssue(.init(comment: Comment(rawValue: "Issue"), sourceLocation: sourceLocation)),
+            .queueInputs(.init(inputs: [data])),
+            .selectForMutation(.init(input: 42)),
+            .submitToCorpus(.init(input: 100)),
+            .stop(.init(reason: "done"))
+        ]
+
+        let result = executor.execute(actions)
+
+        #expect(result.shouldStop == true)
+        #expect(result.stopReason == "done")
+        #expect(result.inputsToQueue.count == 1)
+        #expect(result.inputsToQueue[0] == data)
+        #expect(result.issuesRecorded == 1)
+        #expect(result.inputsToMutate.count == 1)
+        #expect(result.inputsToMutate[0] == 42)
+        #expect(result.corpusInputs.count == 1)
+        #expect(result.corpusInputs[0] == 100)
+    }
+
+    @Test("Works with array input type")
+    func testArrayInputType() {
+        let executor = ActionExecutor(recordIssues: false)
+        let actions: [FuzzPluginAction<[Int]>] = [
+            .selectForMutation(.init(input: [1, 2, 3])),
+            .submitToCorpus(.init(input: [4, 5, 6])),
+            .stop(.init(reason: "array_test"))
+        ]
+
+        let result = executor.execute(actions)
+
+        #expect(result.shouldStop == true)
+        #expect(result.stopReason == "array_test")
+        #expect(result.inputsToMutate.count == 1)
+        #expect(result.inputsToMutate[0] == [1, 2, 3])
+        #expect(result.corpusInputs.count == 1)
+        #expect(result.corpusInputs[0] == [4, 5, 6])
+    }
+
+    @Test("Works with string input type")
+    func testStringInputType() {
+        let executor = ActionExecutor(recordIssues: false)
+        let data = Data("test".utf8)
+        let actions: [FuzzPluginAction<String>] = [
+            .queueInputs(.init(inputs: [data])),
+            .selectForMutation(.init(input: "hello")),
+            .submitToCorpus(.init(input: "world"))
+        ]
+
+        let result = executor.execute(actions)
+
+        #expect(result.inputsToQueue.count == 1)
+        #expect(result.inputsToQueue[0] == data)
+        #expect(result.inputsToMutate.count == 1)
+        #expect(result.inputsToMutate[0] == "hello")
+        #expect(result.corpusInputs.count == 1)
+        #expect(result.corpusInputs[0] == "world")
+    }
+
 }
 
 // MARK: - Test Helpers

@@ -53,18 +53,16 @@ public struct CorpusClient<each Input: Codable & Sendable>: Sendable {
     /// let state = await corpus.batchState()
     /// for _ in 0..<batchSize {
     ///     if state.isEmpty { ... }
-    ///     let idx = state.selectForMutation()
-    ///     let parent = state.entries[idx].input
+    ///     let parent = state.entries.randomElement()?.input
     /// }
     /// ```
     public var batchState: @Sendable () async -> CorpusBatchState<repeat each Input>
 
     // MARK: - Mutating Operations
 
-    public var addIfInteresting: @Sendable ((repeat each Input), CoverageSignature, Int?) async -> Bool
+    public var addIfInteresting: @Sendable ((repeat each Input), CoverageSignature) async -> Bool
     public var batchAddIfInteresting: @Sendable ([Corpus<repeat each Input>.CandidateEntry]) async -> [Bool]
-    public var add: @Sendable ((repeat each Input), CoverageSignature, Int?, CorpusEntryType, FailureInfo?) async -> Void
-    public var selectForMutation: @Sendable () async -> Int?
+    public var add: @Sendable ((repeat each Input), CoverageSignature, CorpusEntryType, FailureInfo?) async -> Void
     public var minimized: @Sendable () async -> CorpusSnapshot<repeat each Input>
     public var snapshot: @Sendable () async -> CorpusSnapshot<repeat each Input>
 
@@ -83,10 +81,9 @@ public struct CorpusClient<each Input: Codable & Sendable>: Sendable {
         failureEntries: @escaping @Sendable () async -> [CorpusEntry<repeat each Input>],
         hangEntries: @escaping @Sendable () async -> [CorpusEntry<repeat each Input>],
         batchState: @escaping @Sendable () async -> CorpusBatchState<repeat each Input>,
-        addIfInteresting: @escaping @Sendable ((repeat each Input), CoverageSignature, Int?) async -> Bool,
+        addIfInteresting: @escaping @Sendable ((repeat each Input), CoverageSignature) async -> Bool,
         batchAddIfInteresting: @escaping @Sendable ([Corpus<repeat each Input>.CandidateEntry]) async -> [Bool],
-        add: @escaping @Sendable ((repeat each Input), CoverageSignature, Int?, CorpusEntryType, FailureInfo?) async -> Void,
-        selectForMutation: @escaping @Sendable () async -> Int?,
+        add: @escaping @Sendable ((repeat each Input), CoverageSignature, CorpusEntryType, FailureInfo?) async -> Void,
         minimized: @escaping @Sendable () async -> CorpusSnapshot<repeat each Input>,
         snapshot: @escaping @Sendable () async -> CorpusSnapshot<repeat each Input>
     ) {
@@ -107,7 +104,6 @@ public struct CorpusClient<each Input: Codable & Sendable>: Sendable {
         self.addIfInteresting = addIfInteresting
         self.batchAddIfInteresting = batchAddIfInteresting
         self.add = add
-        self.selectForMutation = selectForMutation
         self.minimized = minimized
         self.snapshot = snapshot
     }
@@ -130,16 +126,15 @@ public struct CorpusClient<each Input: Codable & Sendable>: Sendable {
             failureEntries: { await corpus.failureEntries },
             hangEntries: { await corpus.hangEntries },
             batchState: { await corpus.batchState() },
-            addIfInteresting: { input, signature, parentIndex in
-                await corpus.addIfInteresting(input: input, signature: signature, parentIndex: parentIndex)
+            addIfInteresting: { input, signature in
+                await corpus.addIfInteresting(input: input, signature: signature)
             },
             batchAddIfInteresting: { candidates in
                 await corpus.batchAddIfInteresting(candidates)
             },
-            add: { input, signature, parentIndex, entryType, failure in
-                await corpus.add(input: input, signature: signature, parentIndex: parentIndex, entryType: entryType, failure: failure)
+            add: { input, signature, entryType, failure in
+                await corpus.add(input: input, signature: signature, entryType: entryType, failure: failure)
             },
-            selectForMutation: { await corpus.selectForMutation() },
             minimized: { await corpus.minimized() },
             snapshot: { await corpus.snapshot() }
         )
@@ -162,16 +157,15 @@ public struct CorpusClient<each Input: Codable & Sendable>: Sendable {
             failureEntries: { await corpus.failureEntries },
             hangEntries: { await corpus.hangEntries },
             batchState: { await corpus.batchState() },
-            addIfInteresting: { input, signature, parentIndex in
-                await corpus.addIfInteresting(input: input, signature: signature, parentIndex: parentIndex)
+            addIfInteresting: { input, signature in
+                await corpus.addIfInteresting(input: input, signature: signature)
             },
             batchAddIfInteresting: { candidates in
                 await corpus.batchAddIfInteresting(candidates)
             },
-            add: { input, signature, parentIndex, entryType, failure in
-                await corpus.add(input: input, signature: signature, parentIndex: parentIndex, entryType: entryType, failure: failure)
+            add: { input, signature, entryType, failure in
+                await corpus.add(input: input, signature: signature, entryType: entryType, failure: failure)
             },
-            selectForMutation: { await corpus.selectForMutation() },
             minimized: { await corpus.minimized() },
             snapshot: { await corpus.snapshot() }
         )
@@ -198,12 +192,11 @@ public struct CorpusClient<each Input: Codable & Sendable>: Sendable {
             failureEntries: { await corpus.failureEntries },
             hangEntries: { await corpus.hangEntries },
             batchState: { await corpus.batchState() },
-            addIfInteresting: { input, signature, parentIndex in
+            addIfInteresting: { input, signature in
                 // Always add to corpus (bypass coverage check)
                 await corpus.add(
                     input: input,
                     signature: signature,
-                    parentIndex: parentIndex,
                     entryType: .coverage,
                     failure: nil
                 )
@@ -215,17 +208,15 @@ public struct CorpusClient<each Input: Codable & Sendable>: Sendable {
                     await corpus.add(
                         input: candidate.input,
                         signature: candidate.signature,
-                        parentIndex: candidate.parentIndex,
                         entryType: .coverage,
                         failure: nil
                     )
                 }
                 return [Bool](repeating: true, count: candidates.count)
             },
-            add: { input, signature, parentIndex, entryType, failure in
-                await corpus.add(input: input, signature: signature, parentIndex: parentIndex, entryType: entryType, failure: failure)
+            add: { input, signature, entryType, failure in
+                await corpus.add(input: input, signature: signature, entryType: entryType, failure: failure)
             },
-            selectForMutation: { await corpus.selectForMutation() },
             minimized: { await corpus.minimized() },
             snapshot: { await corpus.snapshot() }
         )

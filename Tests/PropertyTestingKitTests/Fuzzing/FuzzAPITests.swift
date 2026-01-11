@@ -34,8 +34,7 @@ struct FuzzAPITests {
                 maxIterations: 100,
                 maxDuration: .seconds(5),
                 minimizeCorpus: true,
-                verbose: true,
-                plugins: [EventBasedCoverageGapPlugin()]
+                verbose: true
             )
 
             let engine = FuzzEngine<String>(mutators: String.defaultMutator, config: config, corpusDirectory: corpusDir)
@@ -64,9 +63,6 @@ struct FuzzAPITests {
             let parsed = NumberParser.parse(entry.input)
             print("  \(i + 1). \"\(entry.input)\" → \(parsed.map(String.init) ?? "nil")")
         }
-
-        // Note: Coverage gap detection is now handled via EventBasedCoverageGapPlugin
-        // which records issues directly rather than storing in the result
 
         #expect(result.failures.isEmpty, "No test errors should occur")
         #expect(saveSpy.callCount == 1, "Corpus should be saved")

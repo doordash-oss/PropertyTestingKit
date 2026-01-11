@@ -43,7 +43,7 @@ public actor EventBasedSaturationPlugin: EventBasedPlugin {
             detector.record(discoveredNewCoverage: context.discoveredNewCoverage)
 
             if detector.hasPlateaued {
-                return [.stop(FuzzPluginAction<repeat each T>.StopAction(reason: "saturation_plateau"))]
+                return [.stop(FuzzPluginAction<repeat each T>.StopAction(reason: .custom("saturation_plateau")))]
             }
 
             return []
