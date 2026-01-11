@@ -4,6 +4,7 @@
 //
 
 import Foundation
+import Testing
 
 extension FuzzEngine {
     /// Configuration for the fuzzing run.
@@ -13,10 +14,6 @@ extension FuzzEngine {
 
         /// Maximum time to spend fuzzing.
         public var maxDuration: Duration
-
-        /// Probability of generating fresh vs mutating (0.0-1.0).
-        /// Higher = more fresh generation.
-        public var generationRatio: Double
 
         /// Whether to minimize the corpus before saving.
         public var minimizeCorpus: Bool
@@ -50,47 +47,31 @@ extension FuzzEngine {
         /// When set, only reports gaps in files under this path.
         public var projectPath: String?
 
+        /// Source location where the fuzz test was called.
+        /// Used for reporting failures and plugin actions.
+        public var sourceLocation: SourceLocation?
+
         // MARK: - Plugin Configuration
 
-        /// Observer plugins that receive lifecycle notifications.
-        /// These are called at various points during fuzzing but don't influence behavior.
-        public var observerPlugins: [any FuzzObserverPlugin]
-
-        /// Stopping condition plugins that determine when fuzzing should stop.
-        /// Default: empty (only iteration/time limits apply).
-        /// Use `.plateauDetector()` to enable adaptive early stopping.
-        public var stoppingPlugins: [any StoppingConditionPlugin]
-
-        /// Analysis plugins that run after fuzzing completes.
-        /// Default: empty (no post-fuzzing analysis).
-        /// Use `.coverageGaps()` to enable coverage gap detection.
-        public var analysisPlugins: [any AnalysisPlugin]
-
-        /// Shrinking plugin for minimizing failing inputs.
-        /// When enabled, failing inputs are reduced to minimal reproducing cases
-        /// using delta debugging.
-        /// Default: nil (no shrinking).
-        /// Use `.default()` to enable shrinking with default settings.
-        public var shrinkingPlugin: (any ShrinkingPlugin)?
+        /// Event-based plugins that handle fuzzing events and return actions.
+        /// Plugins run in array order for each event.
+        /// Default: empty (no plugins).
+        public var plugins: [any EventBasedPlugin]
 
         public init(
             maxIterations: Int = 10_000,
             maxDuration: Duration = .seconds(60),
-            generationRatio: Double = 0.3,
             minimizeCorpus: Bool = true,
             verbose: Bool = false,
             corpusMode: CorpusMode? = nil,
             perInputTimeout: Duration? = nil,
             mutationBatchSize: Int = 0,
             projectPath: String? = nil,
-            observerPlugins: [any FuzzObserverPlugin] = [],
-            stoppingPlugins: [any StoppingConditionPlugin]? = nil,
-            analysisPlugins: [any AnalysisPlugin] = [],
-            shrinkingPlugin: (any ShrinkingPlugin)? = nil
+            sourceLocation: SourceLocation? = nil,
+            plugins: [any EventBasedPlugin] = []
         ) {
             self.maxIterations = maxIterations
             self.maxDuration = maxDuration
-            self.generationRatio = generationRatio
             self.minimizeCorpus = minimizeCorpus
             self.verbose = verbose
             // Use provided mode, or check environment, or default to auto
@@ -101,11 +82,8 @@ extension FuzzEngine {
                 ? ProcessInfo.processInfo.processorCount
                 : max(1, mutationBatchSize)
             self.projectPath = projectPath
-            self.observerPlugins = observerPlugins
-            // Default to no stopping plugins (only iteration/time limits apply)
-            self.stoppingPlugins = stoppingPlugins ?? []
-            self.analysisPlugins = analysisPlugins
-            self.shrinkingPlugin = shrinkingPlugin
+            self.sourceLocation = sourceLocation
+            self.plugins = plugins
         }
     }
 }

@@ -7,18 +7,19 @@ import Testing
 import Foundation
 
 public struct EventBasedCoverageGapPlugin: EventBasedPlugin {
+    public var id: String { "coverage_gap" }
+
     private let detector: CoverageGapDetector
 
     /// Create a coverage gap analysis plugin.
     ///
     /// - Parameters:
     ///   - config: Configuration for gap detection.
-    ///   - priority: Plugin priority (higher runs first). Default is 0.
     public init(config: CoverageGapDetector.Config = .init()) {
         self.detector = CoverageGapDetector(config: config)
     }
 
-    mutating func handle<each T>(event: PluginEvent<repeat each T>) async throws -> [FuzzPluginAction] {
+    public func handle<each T: Sendable>(event: PluginEvent<repeat each T>) async throws -> [FuzzPluginAction<repeat each T>] {
         switch event {
         case let .end(endContext):
             let coverageGapReport = await detector
@@ -27,23 +28,24 @@ public struct EventBasedCoverageGapPlugin: EventBasedPlugin {
                     projectPath: endContext.projectPath
                 )
 
-            for issue in constructIssues(report: coverageGapReport, endContext: endContext) {
-                Issue.record(Comment(rawValue: issue.message), sourceLocation: issue.location)
-            }
-
-            return []
+            return constructIssueActions(report: coverageGapReport, endContext: endContext)
         default:
             return []
         }
     }
 
-    private func constructIssues<each T>(report: CoverageGapReport, endContext: PluginEvent<repeat each T>.EndContext) -> [(message: String, location: SourceLocation)] {
-        guard !report.gaps.isEmpty else { return [] }
+    private func constructIssueActions<each T: Sendable>(
+        report: CoverageGapReport,
+        endContext: PluginEvent<repeat each T>.EndContext
+    ) -> [FuzzPluginAction<repeat each T>] {
+        // Skip if no gaps or no source location to attach issues to
+        guard !report.gaps.isEmpty, let sourceLocation = endContext.sourceLocation else { return [] }
 
         return report.gaps.map { gap in
             let file = URL(fileURLWithPath: gap.filename).lastPathComponent
             let pct = String(format: "%.0f", gap.coveragePercentage)
-            // TODO: We should always have lines. Determine in what situations we don't have lines.
+            // Include line info in the message since we can't create SourceLocation
+            // from runtime strings (SourceLocation requires compile-time StaticStrings)
             let lines = gap.uncoveredRegions
                 .map { $0.lineStart }
                 .filter { $0 > 0 }
@@ -57,25 +59,12 @@ public struct EventBasedCoverageGapPlugin: EventBasedPlugin {
                 "Coverage gap: \(gap.functionName) in \(file) is \(pct)% covered (lines: \(lines))"
             }
 
-            // Place issues at the location of the gap if we have it, otherwise
-            // place it at the location of the fuzz call
-            let sourceLocation = if let line = (gap.uncoveredRegions.map(\.lineStart).filter { $0 > 0 }.first) {
-                SourceLocation(
-                    fileID: gap.filename,
-                    filePath: gap.filename,
-                    line: line,
-                    column: 1
-                )
-            } else {
-                SourceLocation(
-                    fileID: endContext.testFilePath,
-                    filePath: endContext.testFilePath,
-                    line: endContext.testFunctionLine,
-                    column: 1
-                )
-            }
-
-            return (message: message, sourceLocation)
+            // Use the source location from the fuzz call since we can't create
+            // SourceLocation from runtime strings (it requires compile-time StaticStrings)
+            return .recordIssue(FuzzPluginAction<repeat each T>.IssueAction(
+                comment: Comment(rawValue: message),
+                sourceLocation: sourceLocation
+            ))
         }
     }
 }

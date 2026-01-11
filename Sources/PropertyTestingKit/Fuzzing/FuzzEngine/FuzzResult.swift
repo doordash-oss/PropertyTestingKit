@@ -22,39 +22,18 @@ public struct FuzzResult<each Input: Codable & Sendable>: Sendable {
     /// Inputs that had different coverage than expected (regression only).
     public let coverageChanges: [(input: (repeat each Input), expected: CoverageSignature, actual: CoverageSignature)]
 
-    /// Reports from analysis plugins.
-    public let analysisReports: [AnyAnalysisReport]
-
-    /// Shrinking statistics for each failure (parallel array with failures).
-    /// Only populated if shrinking was performed.
-    public let shrinkingStats: [ShrinkStats]
-
     public init(
         corpus: CorpusSnapshot<repeat each Input>,
         failures: [(input: (repeat each Input), error: Error)],
         stats: FuzzStats,
         wasRegression: Bool,
-        coverageChanges: [(input: (repeat each Input), expected: CoverageSignature, actual: CoverageSignature)],
-        analysisReports: [AnyAnalysisReport] = [],
-        shrinkingStats: [ShrinkStats] = []
+        coverageChanges: [(input: (repeat each Input), expected: CoverageSignature, actual: CoverageSignature)]
     ) {
         self.corpus = corpus
         self.failures = failures
         self.stats = stats
         self.wasRegression = wasRegression
         self.coverageChanges = coverageChanges
-        self.analysisReports = analysisReports
-        self.shrinkingStats = shrinkingStats
-    }
-
-    /// Get a specific analysis report by plugin ID.
-    public func analysisReport<R>(for pluginId: String, as type: R.Type) -> R? {
-        analysisReports.first { $0.pluginId == pluginId }?.report(as: type)
-    }
-
-    /// Get the coverage gap report if gap detection was enabled.
-    public var coverageGapReport: CoverageGapReport? {
-        analysisReport(for: "coverageGaps", as: CoverageGapReport.self)
     }
 }
 

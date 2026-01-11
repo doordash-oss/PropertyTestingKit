@@ -43,12 +43,12 @@ struct MutatorProtocolTests {
         #expect(mutations.count > 1)
     }
 
-    @Test("DefaultMutator uses Fuzzable conformance")
-    func defaultMutatorUsesFuzzable() async {
-        let mutator = DefaultMutator<Int>()
+    @Test("MutatorProviding defaultMutator provides seeds and mutations")
+    func defaultMutatorProvidesSeedsAndMutations() async {
+        let mutator = Int.defaultMutator
 
-        #expect(mutator.seeds == Int.fuzz)
-        #expect(mutator.mutate(5) == 5.mutate())
+        #expect(!mutator.seeds.isEmpty)
+        #expect(!mutator.mutate(5).isEmpty)
     }
 
     @Test("SingleMutator works with custom seeds and mutate")
@@ -351,9 +351,7 @@ struct MutatorFuzzEngineTests {
 
             let config = FuzzEngine<String>.Config(
                 maxIterations: 10,
-                maxDuration: .seconds(1),
-                stoppingPlugins: []
-            )
+                maxDuration: .seconds(1)            )
 
             let engine = FuzzEngine<String>(mutators: mutator, config: config)
             _ = await engine.run { input in
@@ -384,9 +382,7 @@ struct MutatorFuzzEngineTests {
 
             let config = FuzzEngine<String>.Config(
                 maxIterations: 20,
-                maxDuration: .seconds(2),
-                stoppingPlugins: []
-            )
+                maxDuration: .seconds(2)            )
 
             let engine = FuzzEngine<String>(mutators: mutator, config: config)
             _ = await engine.run { input in

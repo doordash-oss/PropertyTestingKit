@@ -31,7 +31,7 @@ import Testing
 /// ## Algorithm
 ///
 /// Fuzzing follows AFL/FuzzChick's approach:
-/// 1. Start with boundary values from `Fuzzable.fuzz`
+/// 1. Start with boundary values from `Mutator.seeds`
 /// 2. Run each input, capture coverage signature
 /// 3. If signature is new, add to corpus
 /// 4. Select corpus entries for mutation (energy-based)
@@ -39,10 +39,11 @@ import Testing
 /// 6. Stop when: iteration limit, time limit, or coverage plateau
 /// 7. Minimize corpus, save to disk
 ///
-public actor FuzzEngine<each Input: Fuzzable & Codable & Sendable> {
+public actor FuzzEngine<each Input: Codable & Sendable> {
     /// Type-erased mutator functions for each input component.
     public typealias MutatorSeeds = @Sendable () -> [(repeat each Input)]
     public typealias MutatorMutate = @Sendable ((repeat each Input)) -> [(repeat each Input)]
+    public typealias MutatorGenerate = @Sendable () -> (repeat each Input)
 
     @Dependency(\.dateClient) private var dateClient
     @Dependency(\.random) private var random
@@ -70,21 +71,9 @@ public actor FuzzEngine<each Input: Fuzzable & Codable & Sendable> {
     private let corpusDirectory: URL?
     private let mutatorSeeds: MutatorSeeds
     private let mutatorMutate: MutatorMutate
+    private let mutatorGenerate: MutatorGenerate
 
-    /// Initialize with default mutators derived from `Fuzzable` conformance.
-    ///
-    /// - Parameters:
-    ///   - config: Fuzzing configuration.
-    ///   - corpusDirectory: Where to save/load the corpus.
-    public init(config: Config = Config(), corpusDirectory: URL? = nil) {
-        self.init(
-            mutators: (repeat DefaultMutator<each Input>()),
-            config: config,
-            corpusDirectory: corpusDirectory
-        )
-    }
-
-    /// Initialize with custom mutators.
+    /// Initialize with mutators.
     ///
     /// - Parameters:
     ///   - mutators: A tuple of mutators, one for each input type.
@@ -109,6 +98,11 @@ public actor FuzzEngine<each Input: Fuzzable & Codable & Sendable> {
         self.mutatorMutate = { input in
             Self.mutateWithMutators(input: input, mutators: mutators)
         }
+
+        // Capture generate functionality from mutators
+        self.mutatorGenerate = {
+            Self.generateWithMutators(mutators: mutators)
+        }
     }
 
     // MARK: - Mutator Helpers
@@ -125,6 +119,14 @@ public actor FuzzEngine<each Input: Fuzzable & Codable & Sendable> {
         var count = 0
         (repeat { _ = each input; count += 1 }())
         return count
+    }
+
+    /// Generate a random input using the provided mutators.
+    /// Uses parameter pack expansion to call generate on each mutator.
+    private static func generateWithMutators<each M: Mutator>(
+        mutators: (repeat each M)
+    ) -> (repeat each Input) where (repeat (each M).Value) == (repeat each Input) {
+        (repeat (each mutators).generate())
     }
 
     /// Mutate an input using the provided mutators.
@@ -170,7 +172,7 @@ public actor FuzzEngine<each Input: Fuzzable & Codable & Sendable> {
         // Start pre-warming the source location cache if gap analysis plugin is present.
         // This runs dladdr calls in the background so they complete by the time
         // gap detection needs them at the end of the fuzz run.
-        if config.analysisPlugins.contains(where: { $0 is CoverageGapPlugin }) {
+        if config.plugins.contains(where: { $0 is EventBasedCoverageGapPlugin }) {
             await SanCovCounters.startPreWarmingSourceLocations()
         }
 
@@ -272,36 +274,30 @@ public actor FuzzEngine<each Input: Fuzzable & Codable & Sendable> {
         var totalGenerations = 0
         var totalDiscoveries = 0
 
-        // Initialize plugin manager for lifecycle events and stopping conditions
-        var pluginManager = FuzzPluginManager(
-            observerPlugins: config.observerPlugins,
-            stoppingPlugins: config.stoppingPlugins,
-            analysisPlugins: config.analysisPlugins,
-            shrinkingPlugin: config.shrinkingPlugin
-        )
+        // Initialize event-based plugin dispatcher
+        var dispatcher = EventBasedPluginDispatcher(plugins: config.plugins)
 
         // Build seed queue: default seeds + user-provided additional seeds
         // Using Deque for O(1) removeFirst() instead of Array's O(n)
         let defaultSeeds = mutatorSeeds()
-        var seedQueue = Deque(defaultSeeds + additionalSeeds)
+        var seedQueue = Deque(additionalSeeds + defaultSeeds)
         let initialSeedCount = seedQueue.count
 
-        // Notify observers that fuzzing has started
-        let startContext = FuzzPluginContext.StartContext(
+        // Dispatch start event to plugins
+        let startContext = PluginEvent<repeat each Input>.StartContext(
             maxIterations: config.maxIterations,
             maxDuration: config.maxDuration,
             batchSize: config.mutationBatchSize,
             corpusMode: config.corpusMode,
             seedCount: initialSeedCount
         )
-        await pluginManager.notifyStart(context: startContext)
+        _ = try? await dispatcher.dispatch(event: PluginEvent<repeat each Input>.start(startContext))
 
         let perTimeout = config.perInputTimeout
         let verbose = config.verbose
 
-        // Capture clients before loops to avoid @Dependency lookup overhead in hot path
+        // Capture client before loop to avoid @Dependency lookup overhead in hot path
         let coverageClient = coverageCounters
-        let randomClient = random
 
         // Early exit if no seeds and no way to generate inputs
         if seedQueue.isEmpty && mutatorSeeds().isEmpty {
@@ -326,107 +322,28 @@ public actor FuzzEngine<each Input: Fuzzable & Codable & Sendable> {
                 break
             }
 
-            // Check plugin-based stopping conditions
-            let corpusSize = await corpus.count()
-            let elapsed = dateClient.now().timeIntervalSince(startTime)
-            // Compute recent discovery rate from the last ~100 iterations
-            let windowSize = min(100, iteration)
-            let recentRate = windowSize > 0 ? Double(totalDiscoveries) / Double(iteration) : 0.0
-            let stoppingContext = FuzzPluginContext.StoppingContext(
-                iteration: iteration,
-                elapsed: elapsed,
-                corpusSize: corpusSize,
-                recentDiscoveryRate: recentRate,
-                totalDiscoveries: totalDiscoveries,
-                iterationsSinceLastDiscovery: iterationsSinceNewCoverage
-            )
-
-            // TODO: Should be able to return a custom stop reason
-            if let pluginStopReason = pluginManager.shouldStop(context: stoppingContext) {
-                if config.verbose {
-                    print("[Fuzz] Plugin stopping condition triggered: \(pluginStopReason)")
-                    print("[Fuzz] Stopping early at iteration \(iteration) (saved \(config.maxIterations - iteration) iterations)")
-                }
-                // Map known reasons to FuzzStats.StopReason
-                if pluginStopReason == "coverage_plateau" {
-                    stopReason = .coveragePlateau
-                } else {
-                    // For custom reasons, use coverage_plateau as the enum value
-                    // but the actual reason is logged above
-                    stopReason = .coveragePlateau
-                }
-                break
-            }
-
             // Generate batch of inputs from current corpus state
             let remainingIterations = config.maxIterations - iteration
             let currentBatchSize = min(batchSize, remainingIterations)
             var batch: [BatchEntry<repeat each Input>] = []
             batch.reserveCapacity(currentBatchSize)
 
-            // Get corpus state once for the entire batch (1 actor hop instead of ~400)
-            let corpusState = await corpus.batchState()
-
+            // Form a batch by taking from seed queue (generate if empty)
             for _ in 0..<currentBatchSize {
-                let input: (repeat each Input)
-                let parentIndex: Int?
-                var isMutation = false
-
-                // Priority 1: Consume from seed queue
-                if !seedQueue.isEmpty {
-                    input = seedQueue.removeFirst()
-                    parentIndex = nil
+                // If queue is empty, generate fresh random input
+                if seedQueue.isEmpty {
+                    seedQueue.append(mutatorGenerate())
                     totalGenerations += 1
-                } else {
-                    // Priority 2: Generate or mutate based on ratio
-                    // Use cached randomClient to avoid @Dependency lookup overhead
-                    let shouldGenerate = corpusState.isEmpty || randomClient { rng in Double.random(in: 0..<1, using: &rng) } < config.generationRatio
-
-                    if shouldGenerate {
-                        // Generate fresh input
-                        let fuzzValues = mutatorSeeds()
-                        guard let fuzzValue = randomClient({ rng in fuzzValues.randomElement(using: &rng) }) else {
-                            continue
-                        }
-                        input = fuzzValue
-                        parentIndex = nil
-                        totalGenerations += 1
-                    } else {
-                        // Mutate existing corpus entry
-                        let selectedIndex = corpusState.selectForMutation()!
-
-                        let parent = corpusState.entries[selectedIndex].input
-                        let mutations = mutatorMutate(parent)
-
-                        if let m = randomClient({ rng in mutations.randomElement(using: &rng) }) {
-                            input = m
-                            parentIndex = selectedIndex
-                            totalMutations += 1
-                            isMutation = true
-                        } else {
-                            // Mutations exhausted - fall back to generation
-                            let fuzzValues = mutatorSeeds()
-                            guard let fuzzValue = randomClient({ rng in fuzzValues.randomElement(using: &rng) }) else {
-                                continue
-                            }
-                            input = fuzzValue
-                            parentIndex = nil
-                            totalGenerations += 1
-                        }
-                    }
                 }
+
+                // Take first item from queue
+                let input = seedQueue.removeFirst()
 
                 batch.append(BatchEntry(
                     input: input,
-                    parentIndex: parentIndex,
-                    isMutation: isMutation
+                    parentIndex: nil,
+                    isMutation: false
                 ))
-            }
-
-            // Skip if no inputs were generated
-            guard !batch.isEmpty else {
-                iteration += 1
-                continue
             }
 
             // Run batch in parallel using withTaskGroup
@@ -490,65 +407,169 @@ public actor FuzzEngine<each Input: Fuzzable & Codable & Sendable> {
             // First pass: handle errors/hangs and collect coverage candidates
             typealias CandidateEntry = Corpus<repeat each Input>.CandidateEntry
             var candidates: [CandidateEntry] = []
-            var candidateIndices: [Int] = []  // Track which batchResults have candidates
 
-            for (resultIdx, result) in batchResults.enumerated() {
+            for result in batchResults {
                 let entry = batch[result.index]
 
-                // Handle test errors and hangs
+                // Handle test errors and hangs - failing inputs are "interesting" so queue mutations
                 if result.timedOut {
                     let timeout = config.perInputTimeout ?? .seconds(0)
                     hangs.append((entry.input, timeout))
                     if verbose {
-                        print("[Fuzz] Hang detected: input timed out after \(timeout)s, iteration \(iteration + resultIdx + 1)")
+                        print("[Fuzz] Hang detected: input timed out after \(timeout)s, iteration \(iteration + result.index + 1)")
                     }
+                    // Queue mutations of hanging input to explore nearby failure space
+                    let mutations = mutatorMutate(entry.input)
+                    seedQueue.append(contentsOf: mutations)
+                    totalMutations += mutations.count
                 } else if let error = result.error {
-                    failures.append((entry.input, error))
+                    // Track whether we recorded a shrunk input
+                    var recordedShrunkInput = false
+
+                    // Dispatch failureFound for immediate shrinking
+                    if let sourceLocation = config.sourceLocation {
+                        let failureContext = PluginEvent<repeat each Input>.FailureFoundContext(
+                            input: entry.input,
+                            test: test,
+                            failure: String(describing: error),
+                            sourceLocation: sourceLocation
+                        )
+
+                        if let actions = try? await dispatcher.dispatch(
+                            event: PluginEvent<repeat each Input>.failureFound(failureContext)
+                        ) {
+                            // Execute non-generic actions
+                            _ = executeActions(actions)
+
+                            // Handle generic actions directly to avoid pack-typed array issues
+                            for action in actions {
+                                switch action {
+                                case .selectForMutation(let selectAction):
+                                    // Use first selected input as the shrunk input for recording
+                                    if !recordedShrunkInput {
+                                        failures.append((input: selectAction.input, error: error))
+                                        recordedShrunkInput = true
+                                    }
+                                    // Queue mutations of selected input
+                                    let mutations = mutatorMutate(selectAction.input)
+                                    seedQueue.append(contentsOf: mutations)
+                                    totalMutations += mutations.count
+
+                                case .submitToCorpus(let corpusAction):
+                                    // Run test to get coverage signature for this input
+                                    guard let ctx = coverageClient.beginMeasurement() else { continue }
+                                    _ = try? await test(corpusAction.input)
+                                    coverageClient.endMeasurement(ctx)
+
+                                    if let sparse = coverageClient.snapshotCoveredArraysWithContext(ctx) {
+                                        let signature = CoverageSignature(sparse: sparse)
+                                        await corpus.add(corpusAction.input, signature, nil, .failure, nil)
+                                    }
+
+                                default:
+                                    // Non-generic actions already handled by executeActions
+                                    break
+                                }
+                            }
+                        }
+                    }
+
+                    // Record original input if no shrunk input was used
+                    if !recordedShrunkInput {
+                        failures.append((input: entry.input, error: error))
+                    }
+
+                    // Queue mutations of original input to explore nearby failure space
+                    let mutations = mutatorMutate(entry.input)
+                    seedQueue.append(contentsOf: mutations)
+                    totalMutations += mutations.count
+                    if verbose {
+                        print("[Fuzz] Failure found, queued \(mutations.count) mutations to explore nearby")
+                    }
                 }
 
                 // Collect candidates for batch add
                 if let signature = result.signature {
                     candidates.append(CandidateEntry(input: entry.input, signature: signature, parentIndex: entry.parentIndex))
-                    candidateIndices.append(resultIdx)
                 }
             }
 
             // Batch add all candidates in a single actor call
             let addResults = await corpus.batchAddIfInteresting(candidates)
 
-            // Second pass: update counters based on batch results
+            // Second pass: update counters, queue mutations, and dispatch iteration events
             var candidateResultIdx = 0
             var newPathsInBatch = 0
+            var shouldStopFromPlugin = false
+            var pluginStopReason: String?
+
             for result in batchResults {
                 iteration += 1
                 iterationsSinceNewCoverage += 1
 
+                let wasAdded: Bool
                 if result.signature != nil {
-                    let wasAdded = addResults[candidateResultIdx]
+                    wasAdded = addResults[candidateResultIdx]
+                    let entry = batch[result.index]
                     candidateResultIdx += 1
-
-                    // Record discovery status for stopping plugins
-                    pluginManager.recordIteration(discoveredNewCoverage: wasAdded)
 
                     if wasAdded {
                         iterationsSinceNewCoverage = 0
                         newPathsInBatch += 1
                         totalDiscoveries += 1
 
+                        // Add mutations of interesting input to end of seed queue
+                        let mutations = mutatorMutate(entry.input)
+                        seedQueue.append(contentsOf: mutations)
+                        totalMutations += mutations.count
+
                         if verbose {
                             let count = await corpus.count()
-                            print("[Fuzz] New coverage! \(count) entries, iteration \(iteration)")
+                            print("[Fuzz] New coverage! \(count) entries, iteration \(iteration), queued \(mutations.count) mutations")
                         }
                     }
                 } else {
-                    pluginManager.recordIteration(discoveredNewCoverage: false)
+                    wasAdded = false
+                }
+
+                // Dispatch iteration event to plugins
+                let corpusSize = await corpus.count()
+                let elapsed = dateClient.now().timeIntervalSince(startTime)
+                let iterationContext = PluginEvent<repeat each Input>.IterationContext(
+                    iteration: iteration,
+                    discoveredNewCoverage: wasAdded,
+                    elapsed: elapsed,
+                    corpusSize: corpusSize
+                )
+
+                if let actions = try? await dispatcher.dispatch(event: PluginEvent<repeat each Input>.iteration(iterationContext)) {
+                    let actionResult = executeActions(actions)
+                    if actionResult.shouldStop {
+                        shouldStopFromPlugin = true
+                        pluginStopReason = actionResult.stopReason
+                    }
+                    // Note: queueInputs not handled during iteration to avoid modifying seedQueue during iteration
+                }
+
+                if shouldStopFromPlugin {
+                    break
                 }
             }
 
-            // Notify observers that batch completed
+            // Check if plugin requested stop
+            if shouldStopFromPlugin {
+                if verbose {
+                    print("[Fuzz] Plugin stopping condition triggered: \(pluginStopReason ?? "unknown")")
+                    print("[Fuzz] Stopping early at iteration \(iteration) (saved \(config.maxIterations - iteration) iterations)")
+                }
+                stopReason = .coveragePlateau
+                break
+            }
+
+            // Dispatch batch complete event to plugins
             let batchCorpusSize = await corpus.count()
             let batchElapsed = dateClient.now().timeIntervalSince(startTime)
-            let batchContext = FuzzPluginContext.BatchContext(
+            let batchContext = PluginEvent<repeat each Input>.BatchContext(
                 batchIndex: (iteration - batchResults.count) / batchSize,
                 batchSize: batchResults.count,
                 newPathsInBatch: newPathsInBatch,
@@ -557,7 +578,7 @@ public actor FuzzEngine<each Input: Fuzzable & Codable & Sendable> {
                 failureCount: failures.count,
                 hangCount: hangs.count
             )
-            await pluginManager.notifyBatchComplete(context: batchContext)
+            _ = try? await dispatcher.dispatch(event: PluginEvent<repeat each Input>.batchComplete(batchContext))
         }
 
         // Phase 3: Minimize corpus
@@ -589,23 +610,12 @@ public actor FuzzEngine<each Input: Fuzzable & Codable & Sendable> {
 
         let duration = dateClient.now().timeIntervalSince(startTime)
 
-        // Report stopping plugin statistics if verbose
-        if config.verbose && pluginManager.hasStoppingPlugins {
-            let stoppingStats = pluginManager.stoppingStats()
-            for stats in stoppingStats {
-                let details = stats.details.map { "\($0.key)=\($0.value)" }.joined(separator: ", ")
-                print("[Fuzz] \(stats.pluginId): \(details)")
-            }
-        }
-
         // Report hang statistics if any were detected
         if !hangs.isEmpty && config.verbose {
             print("[Fuzz] Hang statistics: \(hangs.count) inputs caused timeouts")
         }
 
         let finalCorpusCount = await finalCorpus.count()
-        // Get plateau stats from the plateau detector plugin if present
-        let plateauStats = pluginManager.getPlateauStats()
         let stats = FuzzStats(
             totalInputs: iteration,
             newPaths: finalCorpusCount,
@@ -613,34 +623,31 @@ public actor FuzzEngine<each Input: Fuzzable & Codable & Sendable> {
             generations: totalGenerations,
             duration: duration,
             stopReason: stopReason,
-            plateauStats: plateauStats,
+            plateauStats: nil,
             failures: failures.count,
             hangs: hangs.count
         )
 
-        // Run analysis plugins
+        // Dispatch end event to plugins for analysis
         let totalCoverage = await finalCorpus.totalCoverage()
         let totalCoveredIndices = totalCoverage.executedIndices
 
-        let analysisContext = FuzzPluginContext.AnalysisContext(
-            totalCoveredIndices: totalCoveredIndices,
-            corpusSize: finalCorpusCount,
-            duration: duration,
-            projectPath: config.projectPath
-        )
-
-        let analysisReports = await pluginManager.runAnalysis(context: analysisContext)
-
-        // Notify observers that fuzzing has ended
-        let endContext = FuzzPluginContext.EndContext(
+        let endContext = PluginEvent<repeat each Input>.EndContext(
             totalIterations: iteration,
             duration: duration,
             corpusSize: finalCorpusCount,
             failureCount: failures.count,
             hangCount: hangs.count,
-            stopReason: stopReason
+            stopReason: stopReason,
+            totalCoveredIndices: totalCoveredIndices,
+            projectPath: config.projectPath,
+            sourceLocation: config.sourceLocation
         )
-        await pluginManager.notifyEnd(context: endContext)
+
+        if let actions = try? await dispatcher.dispatch(event: PluginEvent<repeat each Input>.end(endContext)) {
+            _ = executeActions(actions)
+            // Note: stop and queueInputs not relevant at end event
+        }
 
         let finalSnapshot = await finalCorpus.snapshot()
         return FuzzResult(
@@ -648,8 +655,7 @@ public actor FuzzEngine<each Input: Fuzzable & Codable & Sendable> {
             failures: failures,
             stats: stats,
             wasRegression: false,
-            coverageChanges: [],
-            analysisReports: analysisReports
+            coverageChanges: []
         )
     }
 
@@ -723,35 +729,29 @@ public actor FuzzEngine<each Input: Fuzzable & Codable & Sendable> {
             plateauStats: nil
         )
 
-        // Run analysis plugins if any configured
-        var analysisReports: [AnyAnalysisReport] = []
-        if !config.analysisPlugins.isEmpty {
-            let pluginManager = FuzzPluginManager(
-                observerPlugins: [],
-                stoppingPlugins: [],
-                analysisPlugins: config.analysisPlugins,
-                shrinkingPlugin: config.shrinkingPlugin
-            )
-
+        // Dispatch end event to plugins for analysis
+        if !config.plugins.isEmpty {
+            var dispatcher = EventBasedPluginDispatcher(plugins: config.plugins)
             let totalCoveredIndices = snapshot.totalCoverage.executedIndices
 
             if config.verbose {
                 print("[Regression] Running analysis: corpus covered \(totalCoveredIndices.count) edges, total edges: \(SanCovCounters.totalEdgeCount)")
             }
 
-            let analysisContext = FuzzPluginContext.AnalysisContext(
-                totalCoveredIndices: totalCoveredIndices,
-                corpusSize: snapshot.count,
+            let endContext = PluginEvent<repeat each Input>.EndContext(
+                totalIterations: snapshot.count,
                 duration: duration,
-                projectPath: config.projectPath
+                corpusSize: snapshot.count,
+                failureCount: failures.count,
+                hangCount: 0,
+                stopReason: .iterationLimit,
+                totalCoveredIndices: totalCoveredIndices,
+                projectPath: config.projectPath,
+                sourceLocation: config.sourceLocation
             )
 
-            analysisReports = await pluginManager.runAnalysis(context: analysisContext)
-
-            if config.verbose {
-                for report in analysisReports {
-                    print("[Regression] \(report.summary)")
-                }
+            if let actions = try? await dispatcher.dispatch(event: PluginEvent<repeat each Input>.end(endContext)) {
+                _ = executeActions(actions)
             }
         }
 
@@ -761,58 +761,57 @@ public actor FuzzEngine<each Input: Fuzzable & Codable & Sendable> {
             failures: failures,
             stats: stats,
             wasRegression: true,
-            coverageChanges: coverageChanges,
-            analysisReports: analysisReports
+            coverageChanges: coverageChanges
         )
     }
-}
 
-enum PluginEvent<each T> {
-    case start(StartContext)
-    case end(EndContext)
-    case failureFound(FailureFoundContext)
-    case iteration(IterationContext)
+    // MARK: - Action Execution
 
-    struct FailureFoundContext {
-        let input: (repeat each T)
-        let test: @Sendable ((repeat each T)) async throws -> Void
-        let failure: String
+    /// Result of executing plugin actions (non-generic parts only).
+    struct ActionExecutionResult {
+        /// Whether a stop action was received.
+        var shouldStop: Bool = false
+        /// The reason for stopping (if shouldStop is true).
+        var stopReason: String?
+        /// Inputs to queue for mutation (encoded).
+        var inputsToQueue: [Data] = []
     }
 
-    struct StartContext {
+    /// Execute the non-generic parts of plugin actions.
+    ///
+    /// Generic actions (selectForMutation, submitToCorpus) must be handled separately
+    /// by the calling code due to Swift runtime limitations with pack-typed arrays.
+    ///
+    /// - Parameter actions: The actions to execute.
+    /// - Returns: The non-generic result of executing the actions.
+    private func executeActions<each T: Sendable>(
+        _ actions: [FuzzPluginAction<repeat each T>]
+    ) -> ActionExecutionResult {
+        var result = ActionExecutionResult()
 
+        for action in actions {
+            switch action {
+            case .stop(let stopAction):
+                result.shouldStop = true
+                result.stopReason = stopAction.reason
+
+            case .recordIssue(let issueAction):
+                Issue.record(issueAction.comment, sourceLocation: issueAction.sourceLocation)
+
+            case .queueInputs(let queueAction):
+                result.inputsToQueue.append(contentsOf: queueAction.inputs)
+
+            // Generic actions handled by calling code
+            case .selectForMutation:
+                break
+
+            case .submitToCorpus:
+                break
+            }
+        }
+
+        return result
     }
-
-    struct EndContext {
-        /// Set of all covered edge indices.
-        public let totalCoveredIndices: Set<Int>
-        /// Project path for filtering (if configured).
-        public let projectPath: String?
-        public let testFilePath: String
-        public let testFunctionLine: Int
-    }
-
-    struct IterationContext {
-        public let discoveredNewCoverage: Bool
-    }
-}
-
-enum FuzzPluginAction {
-    case stop(StopContext)
-    case mutate(MutationContext)
-
-    struct StopContext {
-        let reason: String
-    }
-
-    struct MutationContext {
-
-    }
-}
-
-
-protocol EventBasedPlugin {
-    mutating func handle<each T>(event: PluginEvent<repeat each T>) async throws -> [FuzzPluginAction]
 }
 
 func runWithTimeout(

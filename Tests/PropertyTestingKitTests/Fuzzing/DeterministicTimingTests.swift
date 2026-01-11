@@ -41,14 +41,14 @@ private func makeMockCoverageClient(
     )
 }
 
-/// A minimal Fuzzable type with a single seed for predictable test behavior.
-private struct SingleSeedInt: Fuzzable, Codable, Sendable, Equatable {
+/// A minimal MutatorProviding type with a single seed for predictable test behavior.
+private struct SingleSeedInt: MutatorProviding, Codable, Sendable, Equatable {
     let value: Int
 
-    static var fuzz: [SingleSeedInt] { [SingleSeedInt(value: 0)] }
-
-    func mutate() -> [SingleSeedInt] {
-        [SingleSeedInt(value: value + 1)]
+    static var defaultMutator: AnyMutator<SingleSeedInt> {
+        AnyMutator(seeds: [SingleSeedInt(value: 0)]) { current in
+            [SingleSeedInt(value: current.value + 1)]
+        }
     }
 }
 
@@ -81,7 +81,7 @@ struct DeterministicTimingTests {
                     mutationBatchSize: 1  // Use batch size 1 for precise time limit testing
                 )
 
-                let engine = FuzzEngine<SingleSeedInt>(config: config, corpusDirectory: nil)
+                let engine = FuzzEngine<SingleSeedInt>(mutators: SingleSeedInt.defaultMutator, config: config, corpusDirectory: nil)
                 return await engine.run { _ in
                     // Advance time by 11 seconds each test (exceeds 10s limit after first test)
                     currentTime.update { $0 = $0.addingTimeInterval(11) }
@@ -114,7 +114,7 @@ struct DeterministicTimingTests {
                     verbose: false
                 )
 
-                let engine = FuzzEngine<SingleSeedInt>(config: config, corpusDirectory: nil)
+                let engine = FuzzEngine<SingleSeedInt>(mutators: SingleSeedInt.defaultMutator, config: config, corpusDirectory: nil)
                 return await engine.run { _ in
                     // Advance time by exactly 2.5 seconds each test
                     testCount.update { $0 += 1 }
@@ -146,7 +146,7 @@ struct DeterministicTimingTests {
                     verbose: false
                 )
 
-                let engine = FuzzEngine<SingleSeedInt>(config: config, corpusDirectory: nil)
+                let engine = FuzzEngine<SingleSeedInt>(mutators: SingleSeedInt.defaultMutator, config: config, corpusDirectory: nil)
                 return await engine.run { _ in
                     // Only advance 1 second per test
                     currentTime.update { $0 = $0.addingTimeInterval(1) }
@@ -596,7 +596,7 @@ struct DeterministicTimingTests {
                     perInputTimeout: .seconds(1)
                 )
 
-                let engine = FuzzEngine<Int>(config: config, corpusDirectory: nil)
+                let engine = FuzzEngine<Int>(mutators: Int.defaultMutator, config: config, corpusDirectory: nil)
                 return await engine.run { input in
                     inputsTested.update { $0.append(input) }
                     // All inputs try to sleep longer than timeout
@@ -644,7 +644,7 @@ struct DeterministicTimingTests {
                     perInputTimeout: nil  // No timeout
                 )
 
-                let engine = FuzzEngine<Int>(config: config, corpusDirectory: nil)
+                let engine = FuzzEngine<Int>(mutators: Int.defaultMutator, config: config, corpusDirectory: nil)
                 return await engine.run { _ in
                     completedInputs.update { $0 += 1 }
                 }
@@ -673,7 +673,7 @@ struct DeterministicTimingTests {
                     perInputTimeout: .seconds(1)
                 )
 
-                let engine = FuzzEngine<Int>(config: config, corpusDirectory: nil)
+                let engine = FuzzEngine<Int>(mutators: Int.defaultMutator, config: config, corpusDirectory: nil)
                 return await engine.run { input in
                     if input == 0 {
                         // Fast input - completes immediately

@@ -159,35 +159,35 @@ struct SignatureSetPropertyTests {
     }
 }
 
-// MARK: - Fuzzable Conformance Property Tests
+// MARK: - MutatorProviding Property Tests
 
-@Suite("Fuzzable Properties")
-struct FuzzablePropertyTests {
+@Suite("MutatorProviding Properties")
+struct MutatorProvidingPropertyTests {
 
-    @Test("Bool.mutate always returns the opposite value")
+    @Test("Bool.defaultMutator.mutate always returns the opposite value")
     func testBoolMutate() async throws {
-        #expect(true.mutate() == [false])
-        #expect(false.mutate() == [true])
+        #expect(Bool.defaultMutator.mutate(true) == [false])
+        #expect(Bool.defaultMutator.mutate(false) == [true])
     }
 
-    @Test("Int.mutate never returns the original value")
+    @Test("Int.defaultMutator.mutate never returns the original value")
     func testIntMutateExcludesOriginal() async throws {
         // Test specific values including edge cases
         let testValues = [0, 1, -1, 42, -42, 1000, -1000, Int.max, Int.min, Int.max / 2, Int.min / 2]
 
         for n in testValues {
-            let mutations = n.mutate()
+            let mutations = Int.defaultMutator.mutate(n)
             #expect(!mutations.contains(n), "Mutations should not contain original value \(n)")
         }
     }
 
-    @Test("Int.mutate produces valid mutations without overflow")
+    @Test("Int.defaultMutator.mutate produces valid mutations without overflow")
     func testIntMutateNoOverflow() async throws {
         // Test edge cases explicitly
         let edgeCases = [Int.max, Int.min, 0, 1, -1]
 
         for n in edgeCases {
-            let mutations = n.mutate()
+            let mutations = Int.defaultMutator.mutate(n)
             // Should not crash and all mutations should be valid
             for m in mutations {
                 #expect(m != n, "Mutation \(m) should differ from original \(n)")
@@ -195,34 +195,34 @@ struct FuzzablePropertyTests {
         }
     }
 
-    @Test("String.mutate never returns the original value")
+    @Test("String.defaultMutator.mutate never returns the original value")
     func testStringMutateExcludesOriginal() async throws {
-        // Test specific values from String.fuzz plus some extras
-        let testValues = String.fuzz + ["test", "Hello World", "12345"]
+        // Test specific values from String.defaultMutator.seeds plus some extras
+        let testValues = String.defaultMutator.seeds + ["test", "Hello World", "12345"]
 
         for s in testValues {
-            let mutations = s.mutate()
+            let mutations = String.defaultMutator.mutate(s)
             #expect(!mutations.contains(s), "Mutations should not contain original value '\(s)'")
         }
     }
 
-    @Test("Optional.mutate includes nil when value is some")
+    @Test("Optional.defaultMutator.mutate includes nil when value is some")
     func testOptionalMutateIncludesNil() async throws {
-        let mutations = (Optional<Int>.some(42)).mutate()
+        let mutations = Optional<Int>.defaultMutator.mutate(42)
         #expect(mutations.contains(nil), "Mutating some should include nil")
     }
 
-    @Test("Optional.mutate includes some values when value is nil")
+    @Test("Optional.defaultMutator.mutate includes some values when value is nil")
     func testOptionalMutateFromNil() async throws {
-        let mutations = (nil as Int?).mutate()
+        let mutations = Optional<Int>.defaultMutator.mutate(nil)
         #expect(mutations.allSatisfy { $0 != nil }, "Mutating nil should only produce some values")
         #expect(!mutations.isEmpty, "Mutating nil should produce some mutations")
     }
 
-    @Test("Array.mutate produces structural variations")
+    @Test("Array.defaultMutator.mutate produces structural variations")
     func testArrayMutate() async throws {
         let original = [1, 2, 3]
-        let mutations = original.mutate()
+        let mutations = Array<Int>.defaultMutator.mutate(original)
 
         // Should include shorter arrays (element removal)
         let hasShorter = mutations.contains { $0.count < original.count }
@@ -237,35 +237,35 @@ struct FuzzablePropertyTests {
         #expect(hasReversed, "Should include reversed array")
     }
 
-    @Test("UInt.mutate respects bounds")
+    @Test("UInt.defaultMutator.mutate respects bounds")
     func testUIntMutateBounds() async throws {
         // Test UInt.max - should not overflow
-        let maxMutations = (UInt.max).mutate()
+        let maxMutations = UInt.defaultMutator.mutate(UInt.max)
         #expect(!maxMutations.isEmpty, "Should have mutations for UInt.max")
         #expect(!maxMutations.contains(UInt.max), "Should not contain original")
 
         // Test 0 - should not underflow
-        let zeroMutations = (0 as UInt).mutate()
+        let zeroMutations = UInt.defaultMutator.mutate(0)
         #expect(!zeroMutations.isEmpty, "Should have mutations for 0")
         #expect(!zeroMutations.contains(0), "Should not contain original")
     }
 
-    @Test("Double.mutate handles special values")
+    @Test("Double.defaultMutator.mutate handles special values")
     func testDoubleMutateSpecialValues() async throws {
         // NaN should produce finite mutations
-        let nanMutations = (Double.nan).mutate()
+        let nanMutations = Double.defaultMutator.mutate(Double.nan)
         #expect(nanMutations.allSatisfy { $0.isFinite }, "NaN mutations should be finite")
 
         // Infinity should produce finite mutations
-        let infMutations = (Double.infinity).mutate()
+        let infMutations = Double.defaultMutator.mutate(Double.infinity)
         #expect(infMutations.allSatisfy { $0.isFinite }, "Infinity mutations should be finite")
     }
 
-    @Test("Character.mutate returns all other fuzz characters")
+    @Test("Character.defaultMutator.mutate returns all other fuzz characters")
     func testCharacterMutate() async throws {
-        let mutations = ("a" as Character).mutate()
+        let mutations = Character.defaultMutator.mutate("a")
         #expect(!mutations.contains("a" as Character), "Should not contain original")
-        #expect(mutations.count == Character.fuzz.count - 1, "Should have all other fuzz chars")
+        #expect(mutations.count == Character.defaultMutator.seeds.count - 1, "Should have all other fuzz chars")
     }
 }
 

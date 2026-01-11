@@ -142,12 +142,13 @@ func hashValue(_ value: Int, seed: Int) -> Int {
     return result
 }
 
-/// A Fuzzable type with empty fuzz array and empty mutations.
+/// A MutatorProviding type with empty seeds and empty mutations.
 /// Used to benchmark edge case handling in FuzzEngine.
-struct EmptyFuzzable: Fuzzable, Codable, Sendable, Equatable {
+struct EmptyFuzzable: MutatorProviding, Codable, Sendable, Equatable {
     let value: Int
-    static var fuzz: [EmptyFuzzable] { [] }
-    func mutate() -> [EmptyFuzzable] { [] }
+    static var defaultMutator: AnyMutator<EmptyFuzzable> {
+        AnyMutator(seeds: []) { _ in [] }
+    }
 }
 
 // MARK: - Benchmarks
@@ -238,10 +239,8 @@ let benchmarks: @Sendable () -> Void = {
             let config = FuzzEngine<Int>.Config(
                 maxIterations: 100,
                 maxDuration: .seconds(1),
-                corpusMode: .refuzzReplace,
-                stoppingPlugins: []
-            )
-            let engine = FuzzEngine<Int>(config: config)
+                corpusMode: .refuzzReplace            )
+            let engine = FuzzEngine<Int>(mutators: Int.defaultMutator, config: config)
             let _ = await engine.run { input in
                 try parseAndValidate(input)
             }
@@ -263,10 +262,9 @@ let benchmarks: @Sendable () -> Void = {
                 maxIterations: 100,
                 maxDuration: .seconds(1),
                 corpusMode: .refuzzReplace,
-                stoppingPlugins: [],
-                analysisPlugins: [.coverageGaps()]
+                plugins: [EventBasedCoverageGapPlugin()]
             )
-            let engine = FuzzEngine<Int>(config: config)
+            let engine = FuzzEngine<Int>(mutators: Int.defaultMutator, config: config)
             let _ = await engine.run { input in
                 try parseAndValidate(input)
             }
@@ -287,10 +285,8 @@ let benchmarks: @Sendable () -> Void = {
             let config = FuzzEngine<String>.Config(
                 maxIterations: 100,
                 maxDuration: .seconds(1),
-                corpusMode: .refuzzReplace,
-                stoppingPlugins: []
-            )
-            let engine = FuzzEngine<String>(config: config)
+                corpusMode: .refuzzReplace            )
+            let engine = FuzzEngine<String>(mutators: String.defaultMutator, config: config)
             let _ = await engine.run { input in
                 try validateString(input)
             }
@@ -310,10 +306,8 @@ let benchmarks: @Sendable () -> Void = {
         for _ in benchmark.scaledIterations {
             let config = FuzzEngine<Int>.Config(
                 maxIterations: 1000,
-                corpusMode: .refuzzReplace,
-                stoppingPlugins: []
-            )
-            let engine = FuzzEngine<Int>(config: config)
+                corpusMode: .refuzzReplace            )
+            let engine = FuzzEngine<Int>(mutators: Int.defaultMutator, config: config)
             let _ = await engine.run { input in
                 try parseAndValidate(input)
             }
@@ -334,10 +328,9 @@ let benchmarks: @Sendable () -> Void = {
             let config = FuzzEngine<Int>.Config(
                 maxIterations: 1000,
                 corpusMode: .refuzzReplace,
-                stoppingPlugins: [],
-                analysisPlugins: [.coverageGaps()]
+                plugins: [EventBasedCoverageGapPlugin()]
             )
-            let engine = FuzzEngine<Int>(config: config)
+            let engine = FuzzEngine<Int>(mutators: Int.defaultMutator, config: config)
             let _ = await engine.run { input in
                 try parseAndValidate(input)
             }
@@ -358,8 +351,7 @@ let benchmarks: @Sendable () -> Void = {
             let _ = try? await fuzz(
                 iterations: 1000,
                 corpusMode: .refuzzReplace,
-                stoppingPlugins: [],
-                analysisPlugins: [.coverageGaps()]
+                plugins: [EventBasedCoverageGapPlugin()]
             ) { (i: Int, s: String, b: Bool, d: Double, u: UInt8) in
                 // Exercise all 5 inputs with branching logic
                 if i < 0 {
@@ -397,10 +389,9 @@ let benchmarks: @Sendable () -> Void = {
                 maxIterations: 100,
                 maxDuration: .seconds(5),
                 corpusMode: .refuzzReplace,
-                stoppingPlugins: [],
-                analysisPlugins: [.coverageGaps()]
+                plugins: [EventBasedCoverageGapPlugin()]
             )
-            let engine = FuzzEngine<Int>(config: config)
+            let engine = FuzzEngine<Int>(mutators: Int.defaultMutator, config: config)
             let _ = await engine.run { input in
                 realisticCoverageGap(input)
             }
@@ -421,10 +412,8 @@ let benchmarks: @Sendable () -> Void = {
             let config = FuzzEngine<EmptyFuzzable>.Config(
                 maxIterations: 10,
                 maxDuration: .seconds(1),
-                corpusMode: .refuzzReplace,
-                stoppingPlugins: []
-            )
-            let engine = FuzzEngine<EmptyFuzzable>(config: config, corpusDirectory: nil)
+                corpusMode: .refuzzReplace            )
+            let engine = FuzzEngine<EmptyFuzzable>(mutators: EmptyFuzzable.defaultMutator, config: config, corpusDirectory: nil)
             let _ = await engine.run { _ in }
         }
     }
@@ -541,7 +530,7 @@ let benchmarks: @Sendable () -> Void = {
     // MARK: - Mutation Strategy Benchmarks
 
     Benchmark(
-        "Int.mutate() - single value",
+        "Int.defaultMutator.mutate() - single value",
         configuration: .init(
             metrics: [.wallClock],
             warmupIterations: 100,
@@ -550,12 +539,12 @@ let benchmarks: @Sendable () -> Void = {
     ) { benchmark in
         let value = 42
         for _ in benchmark.scaledIterations {
-            blackHole(value.mutate())
+            blackHole(Int.defaultMutator.mutate(value))
         }
     }
 
     Benchmark(
-        "String.mutate() - short string",
+        "String.defaultMutator.mutate() - short string",
         configuration: .init(
             metrics: [.wallClock],
             warmupIterations: 100,
@@ -564,12 +553,12 @@ let benchmarks: @Sendable () -> Void = {
     ) { benchmark in
         let value = "hello"
         for _ in benchmark.scaledIterations {
-            blackHole(value.mutate())
+            blackHole(String.defaultMutator.mutate(value))
         }
     }
 
     Benchmark(
-        "String.mutate() - medium string",
+        "String.defaultMutator.mutate() - medium string",
         configuration: .init(
             metrics: [.wallClock],
             warmupIterations: 100,
@@ -578,12 +567,12 @@ let benchmarks: @Sendable () -> Void = {
     ) { benchmark in
         let value = String(repeating: "a", count: 100)
         for _ in benchmark.scaledIterations {
-            blackHole(value.mutate())
+            blackHole(String.defaultMutator.mutate(value))
         }
     }
 
     Benchmark(
-        "[Int].mutate() - small array",
+        "[Int].defaultMutator.mutate() - small array",
         configuration: .init(
             metrics: [.wallClock],
             warmupIterations: 100,
@@ -592,12 +581,12 @@ let benchmarks: @Sendable () -> Void = {
     ) { benchmark in
         let value = [1, 2, 3, 4, 5]
         for _ in benchmark.scaledIterations {
-            blackHole(value.mutate())
+            blackHole([Int].defaultMutator.mutate(value))
         }
     }
 
     Benchmark(
-        "[Int].mutate() - medium array",
+        "[Int].defaultMutator.mutate() - medium array",
         configuration: .init(
             metrics: [.wallClock],
             warmupIterations: 100,
@@ -606,7 +595,7 @@ let benchmarks: @Sendable () -> Void = {
     ) { benchmark in
         let value = Array(1...50)
         for _ in benchmark.scaledIterations {
-            blackHole(value.mutate())
+            blackHole([Int].defaultMutator.mutate(value))
         }
     }
 
@@ -715,7 +704,7 @@ let benchmarks: @Sendable () -> Void = {
     }
 
     Benchmark(
-        "Int.fuzz generation",
+        "Int.defaultMutator.seeds generation",
         configuration: .init(
             metrics: [.wallClock],
             warmupIterations: 100,
@@ -723,12 +712,12 @@ let benchmarks: @Sendable () -> Void = {
         )
     ) { benchmark in
         for _ in benchmark.scaledIterations {
-            blackHole(Int.fuzz)
+            blackHole(Int.defaultMutator.seeds)
         }
     }
 
     Benchmark(
-        "String.fuzz generation",
+        "String.defaultMutator.seeds generation",
         configuration: .init(
             metrics: [.wallClock],
             warmupIterations: 100,
@@ -736,12 +725,12 @@ let benchmarks: @Sendable () -> Void = {
         )
     ) { benchmark in
         for _ in benchmark.scaledIterations {
-            blackHole(String.fuzz)
+            blackHole(String.defaultMutator.seeds)
         }
     }
 
     Benchmark(
-        "[Int].fuzz generation",
+        "[Int].defaultMutator.seeds generation",
         configuration: .init(
             metrics: [.wallClock],
             warmupIterations: 100,
@@ -749,7 +738,7 @@ let benchmarks: @Sendable () -> Void = {
         )
     ) { benchmark in
         for _ in benchmark.scaledIterations {
-            blackHole([Int].fuzz)
+            blackHole([Int].defaultMutator.seeds)
         }
     }
     // MARK: - Fuzz Overhead Deep Dive Benchmarks
@@ -768,10 +757,8 @@ let benchmarks: @Sendable () -> Void = {
             let config = FuzzEngine<Int>.Config(
                 maxIterations: 10,
                 maxDuration: .seconds(1),
-                corpusMode: .refuzzReplace,
-                stoppingPlugins: []
-            )
-            let engine = FuzzEngine<Int>(config: config)
+                corpusMode: .refuzzReplace            )
+            let engine = FuzzEngine<Int>(mutators: Int.defaultMutator, config: config)
             let _ = await engine.run { input in
                 // Minimal test - just touch the input
                 blackHole(input)
@@ -793,10 +780,8 @@ let benchmarks: @Sendable () -> Void = {
             let config = FuzzEngine<Int>.Config(
                 maxIterations: 50,
                 maxDuration: .seconds(1),
-                corpusMode: .refuzzReplace,
-                stoppingPlugins: []
-            )
-            let engine = FuzzEngine<Int>(config: config)
+                corpusMode: .refuzzReplace            )
+            let engine = FuzzEngine<Int>(mutators: Int.defaultMutator, config: config)
             let _ = await engine.run { input in
                 blackHole(input)
             }
@@ -820,8 +805,8 @@ let benchmarks: @Sendable () -> Void = {
             // This simulates one seed iteration in the fuzz loop
             let corpus = Corpus<Int>(schemaVersion: "bench-v1")
 
-            // Process all Int.fuzz seeds (21 values)
-            for input in Int.fuzz {
+            // Process all Int seeds (21 values)
+            for input in Int.defaultMutator.seeds {
                 // 1. Begin measurement context
                 guard let context = SanCovCounters.beginMeasurement() else { continue }
 
@@ -933,10 +918,8 @@ let benchmarks: @Sendable () -> Void = {
             let config = FuzzEngine<Int>.Config(
                 maxIterations: 100,
                 maxDuration: .seconds(30),
-                corpusMode: .refuzzReplace,
-                stoppingPlugins: []
-            )
-            let engine = FuzzEngine<Int>(config: config)
+                corpusMode: .refuzzReplace            )
+            let engine = FuzzEngine<Int>(mutators: Int.defaultMutator, config: config)
             let _ = await engine.run { input in
                 try expensiveValidation(input)
             }
@@ -958,10 +941,9 @@ let benchmarks: @Sendable () -> Void = {
                 maxIterations: 100,
                 maxDuration: .seconds(30),
                 corpusMode: .refuzzReplace,
-                mutationBatchSize: 1,  // Force sequential execution
-                stoppingPlugins: []
+                mutationBatchSize: 1  // Force sequential execution
             )
-            let engine = FuzzEngine<Int>(config: config)
+            let engine = FuzzEngine<Int>(mutators: Int.defaultMutator, config: config)
             let _ = await engine.run { input in
                 try expensiveValidation(input)
             }
@@ -983,10 +965,8 @@ let benchmarks: @Sendable () -> Void = {
                 maxIterations: 100,
                 maxDuration: .seconds(30),
                 corpusMode: .refuzzReplace,
-                mutationBatchSize: 16,
-                stoppingPlugins: []
-            )
-            let engine = FuzzEngine<Int>(config: config)
+                mutationBatchSize: 16            )
+            let engine = FuzzEngine<Int>(mutators: Int.defaultMutator, config: config)
             let _ = await engine.run { input in
                 try expensiveValidation(input)
             }
@@ -1011,10 +991,9 @@ let benchmarks: @Sendable () -> Void = {
                         let config = FuzzEngine<Int>.Config(
                             maxIterations: 100,
                             corpusMode: .refuzzReplace,
-                            mutationBatchSize: 1,  // Sequential to maximize edge hits per engine
-                            stoppingPlugins: []
+                            mutationBatchSize: 1  // Sequential to maximize edge hits per engine
                         )
-                        let engine = FuzzEngine<Int>(config: config)
+                        let engine = FuzzEngine<Int>(mutators: Int.defaultMutator, config: config)
                         let _ = await engine.run { input in
                             try parseAndValidate(input)
                         }
@@ -1042,10 +1021,9 @@ let benchmarks: @Sendable () -> Void = {
                         let config = FuzzEngine<Int>.Config(
                             maxIterations: 100,
                             corpusMode: .refuzzReplace,
-                            mutationBatchSize: 1,  // Sequential to maximize edge hits per engine
-                            stoppingPlugins: []
+                            mutationBatchSize: 1  // Sequential to maximize edge hits per engine
                         )
-                        let engine = FuzzEngine<Int>(config: config)
+                        let engine = FuzzEngine<Int>(mutators: Int.defaultMutator, config: config)
                         let _ = await engine.run { input in
                             try parseAndValidate(input)
                         }

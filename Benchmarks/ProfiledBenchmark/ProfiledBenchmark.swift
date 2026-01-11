@@ -62,11 +62,11 @@ let benchmarks: @Sendable () -> Void = {
 //                }
 //            }
             cartesianProduct(
-                Int.fuzz,
-                String.fuzz,
-                Bool.fuzz,
-                Double.fuzz,
-                UInt8.fuzz
+                Int.defaultMutator.seeds,
+                String.defaultMutator.seeds,
+                Bool.defaultMutator.seeds,
+                Double.defaultMutator.seeds,
+                UInt8.defaultMutator.seeds
             )
         }
     }

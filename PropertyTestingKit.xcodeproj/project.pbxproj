@@ -11,30 +11,34 @@
 		0469AB3AB668C05713B4CEEC /* CorpusClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = FFF4F63E42A1153F798F4A15 /* CorpusClient.swift */; };
 		0A0B966D3B103DDD9ADC457C /* CoverageCountersClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B7DA3E55A8132FE210D8EAF /* CoverageCountersClient.swift */; };
 		0AEA251D3FF9432F04D9FC04 /* CoverageGapDetectorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5A7DD272E538B8E8CFE5C75 /* CoverageGapDetectorTests.swift */; };
+		1226F62189C28475B8A01EE4 /* Int+MutatorProviding.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC834389B8A7AF84299B4237 /* Int+MutatorProviding.swift */; };
 		125D3FB66141B63E3542572E /* FuzzResult.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7769DE997855D0C94C1C405F /* FuzzResult.swift */; };
-		1426388F8F61D31CB0AC925C /* PlateauDetectorPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = F5F59F7C0FD59FAD26BADFE6 /* PlateauDetectorPlugin.swift */; };
 		14CE5AF65788D0ED532C423D /* PropertyBasedSelfTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F7B5F39FFCE93451B38B3FBA /* PropertyBasedSelfTests.swift */; };
 		154F79A2EEDDE650511A586D /* CustomFuzzableTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 683A330BCB90F626B21D2422 /* CustomFuzzableTests.swift */; };
 		1676A6251DF285939A232329 /* EventBasedCoverageGapPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1BAB215F45EB4C8CA1934BEF /* EventBasedCoverageGapPlugin.swift */; };
 		17D551F0DC9A49573320CBC2 /* ck_ht.c in Sources */ = {isa = PBXBuildFile; fileRef = DF69D0BBA6357FA0A5F78ABC /* ck_ht.c */; };
 		194E2180758E8A2A82D69A19 /* SyncBox.swift in Sources */ = {isa = PBXBuildFile; fileRef = 807ED515190705E70EEBD7FE /* SyncBox.swift */; };
 		19E5E7F83FA7FB0675B65818 /* MockDatabase.swift in Sources */ = {isa = PBXBuildFile; fileRef = B64D06718A05E1272E84861D /* MockDatabase.swift */; };
+		1CEE9C52E71296E5382DD285 /* PercentageMutator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4787D3EC4C3D5D95A956AD02 /* PercentageMutator.swift */; };
 		1F8C42A1E118D08E319AF582 /* MultiComponentShrinker.swift in Sources */ = {isa = PBXBuildFile; fileRef = E3286F279F14B496AD89F0BE /* MultiComponentShrinker.swift */; };
 		20F73DB698F40134660DEB4E /* PropertyTestingKit.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 2595E9AD80DBFC77F241A7E7 /* PropertyTestingKit.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
-		233D62539D27A6EB4181220F /* Optional+Fuzzable.swift in Sources */ = {isa = PBXBuildFile; fileRef = 22C52228B4908E47A6DF38B1 /* Optional+Fuzzable.swift */; };
+		234BA490B759413930B7164B /* DoubleMutators.swift in Sources */ = {isa = PBXBuildFile; fileRef = 955C5983D6125F89C2DE0E3E /* DoubleMutators.swift */; };
 		244F543DDFAA24140A76485F /* FuzzEngineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BC4138150CDC1ABC2DE7C65 /* FuzzEngineTests.swift */; };
 		26A3CB5877617786D4DAC208 /* SparseCoverage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 52C1DEE9A4340554236C9F32 /* SparseCoverage.swift */; };
-		2791D860E1AFB4810E51C213 /* DefaultShrinkingPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = D9B8430D41323168F71EBA35 /* DefaultShrinkingPlugin.swift */; };
 		286622DA029C3AC20D7DA262 /* PropertyTestingKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 2595E9AD80DBFC77F241A7E7 /* PropertyTestingKit.framework */; };
+		2934DF4D2D0A7B2472998876 /* SQLInjectionMutator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E87A51CF22639FAC9BB2577 /* SQLInjectionMutator.swift */; };
 		29AD704E75D749B097C95BAA /* CorpusEntryType.swift in Sources */ = {isa = PBXBuildFile; fileRef = 49412A507ECD93C3E85C649B /* CorpusEntryType.swift */; };
 		2DC1B96A3FA7B3578DB69E7F /* PropertyTestingKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 2595E9AD80DBFC77F241A7E7 /* PropertyTestingKit.framework */; };
 		2E6CDCBF7B91A07E9402C82F /* ConcurrentFuzzLoadTest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00EBA13944AF0B757005638A /* ConcurrentFuzzLoadTest.swift */; };
+		3623AE0B84CB07558F777090 /* PortMutator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5F0A30CF764B199509AB0614 /* PortMutator.swift */; };
+		37A87717B2EB72E8BA3B0DFB /* StringBoundaryMutator.swift in Sources */ = {isa = PBXBuildFile; fileRef = F853A816879F7A6E163BE7B4 /* StringBoundaryMutator.swift */; };
+		383216502C8ADDDC63DC0FDB /* EventBasedPluginDispatcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2B78883BB69E251950656D0 /* EventBasedPluginDispatcher.swift */; };
 		3AE90F2D2F5E78080AAB081C /* FuzzAPITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 99DF2D2D7A9C78BEFDA1C9FF /* FuzzAPITests.swift */; };
+		3C0A06D9F8141B7C2EEC9073 /* XSSMutator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 987822C1AE1DD0059B1B19EB /* XSSMutator.swift */; };
 		40BBDB105DB39C8B70D658CE /* EventBasedPlateauDetectorPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = DCDB2199470F533775067DB9 /* EventBasedPlateauDetectorPlugin.swift */; };
 		413720205EA64C2558BD9F04 /* FuzzAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = A18400D950AE2D1D13443E9A /* FuzzAPI.swift */; };
 		432A7C1997D44CD9561448F1 /* CorpusMode.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7F23079959F6B89989AD2EB /* CorpusMode.swift */; };
 		4663EC7618D3511158524207 /* RaceConditionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 797B369A783CF8DA4F7C9190 /* RaceConditionTests.swift */; };
-		472EBAA0C21986A90E121C90 /* FuzzPluginManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2AF56A3C5CC98C189D94FACC /* FuzzPluginManager.swift */; };
 		4B46C972C1518B04075D7EED /* DWARFSymbolizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3F1917814603DE56511E5F24 /* DWARFSymbolizer.swift */; };
 		4EB9436B27158A5C6839F9BA /* DWARFSymbolizerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1E97A029218EB361C14F01D /* DWARFSymbolizerTests.swift */; };
 		509CC5C943C5ECF47E29EF7C /* PropertyTestingKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 2595E9AD80DBFC77F241A7E7 /* PropertyTestingKit.framework */; };
@@ -42,85 +46,100 @@
 		5127D413390D3FE20602F726 /* DequeModule in Frameworks */ = {isa = PBXBuildFile; productRef = ED638EEB32787F0136CC6158 /* DequeModule */; };
 		52C260E19A743BA5BCADC703 /* CoverageSignature.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BD8E7DDBFB1256A08DEBE05 /* CoverageSignature.swift */; };
 		534C8AE7D3768059DDAEA18D /* Benchmark in Frameworks */ = {isa = PBXBuildFile; productRef = FD911ACF527827DA331405BD /* Benchmark */; };
+		56BD6A924A8704F7BB65D7CD /* ArrayPositionAwareMutator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E9F5016469E3378725DCE64 /* ArrayPositionAwareMutator.swift */; };
+		56D29B8C49300786D2ACBD1A /* NegativeIntMutator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4091F4EF6449C34BCC32E57C /* NegativeIntMutator.swift */; };
 		589D0164A415C152CDD4B160 /* Benchmark in Frameworks */ = {isa = PBXBuildFile; productRef = E6A87E5EFC33D405ECEDD0E1 /* Benchmark */; };
 		5CE75ACE29DD3F8860FAA19D /* STADSPlateauDetector.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1733E8C2C5D2FC2BC7394036 /* STADSPlateauDetector.swift */; };
+		5D4F6868F443A4D25BE68A3F /* EventBasedPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = 93B1250EDF5B0A9EBB249819 /* EventBasedPlugin.swift */; };
+		605B9C253222E341C0385AB9 /* Double+MutatorProviding.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E987090D06715A5F99BEC1A /* Double+MutatorProviding.swift */; };
 		60F4B0B951427866AB7380DC /* CorpusEntry.swift in Sources */ = {isa = PBXBuildFile; fileRef = D708E6A5A1B65DA927AFEA9E /* CorpusEntry.swift */; };
 		61031F0CE3C1B19C1D04DF89 /* PropertyTestingKit.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 2595E9AD80DBFC77F241A7E7 /* PropertyTestingKit.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		63529CA3B2D9F29C8601810D /* PropertyTestingKit.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 2595E9AD80DBFC77F241A7E7 /* PropertyTestingKit.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		637CEF93972CB8A43732FCB0 /* ArrayDuplicationMutator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 846F2F02B0AA5A040C5EB704 /* ArrayDuplicationMutator.swift */; };
 		6632F732A4FAECE34A80F544 /* ShrinkStats.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C98CB65B3ADE29BB300C7EA /* ShrinkStats.swift */; };
-		67B2DBE808E07482177746DF /* UInt+Fuzzable.swift in Sources */ = {isa = PBXBuildFile; fileRef = 029261475F37B2CCF9E0B0F7 /* UInt+Fuzzable.swift */; };
-		6B3E9990299CD5D8B12A316E /* Int+Fuzzable.swift in Sources */ = {isa = PBXBuildFile; fileRef = D22DDC98AF9435971589CF56 /* Int+Fuzzable.swift */; };
 		6B81F710C9EAE2B9786DFD16 /* TaskResults.swift in Sources */ = {isa = PBXBuildFile; fileRef = B155EAF0286844D09A5709EC /* TaskResults.swift */; };
 		6C92AFA4A8A89008D14C5645 /* SanCovIsolationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 34658F2420967EA35E38058D /* SanCovIsolationTests.swift */; };
-		6EA867F5B1FCB8DA1D789F91 /* Fuzzable.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E2CCED33C681E7189FA6A47 /* Fuzzable.swift */; };
 		6FC71167936E2046141EAA6B /* DWARFSymbolizerHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = A179A4CAD0B9C0FC0DF76A85 /* DWARFSymbolizerHelper.swift */; };
+		7177FDDC6C703BE6ED195B56 /* PhoneNumberMutator.swift in Sources */ = {isa = PBXBuildFile; fileRef = F13B7E4AC8104D85F98B8418 /* PhoneNumberMutator.swift */; };
 		721B918F0C92F521E1CD4FC3 /* TestCaseShrinkerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F58C560D0D81EBCA41AC8282 /* TestCaseShrinkerTests.swift */; };
 		77318276C93EAB250B715AAD /* SaturationPlateauDetectorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B37ED10677A92DC01DD0B289 /* SaturationPlateauDetectorTests.swift */; };
 		79D489B6D89C771503E3F4C8 /* libCLLVMSymbolizer.a in Frameworks */ = {isa = PBXBuildFile; fileRef = EF7AA1611BFAAB73EE70CA85 /* libCLLVMSymbolizer.a */; };
 		7B7ADDE2BFF43D15DE86328A /* Array+Shrinkable.swift in Sources */ = {isa = PBXBuildFile; fileRef = B60A0F1AE1DD32B9E72168DE /* Array+Shrinkable.swift */; };
+		7CB8AB059E1825789CCB0F93 /* SpecialDoubleMutator.swift in Sources */ = {isa = PBXBuildFile; fileRef = C80829DB919B1E7D80F66C9B /* SpecialDoubleMutator.swift */; };
 		808DEDCEF3F72F26E4C97724 /* CorpusTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9E53225F99BA35278DB06DA6 /* CorpusTests.swift */; };
 		8583A6B9CC8AE06E1F34F8C4 /* CoverageBenchmarks.swift in Sources */ = {isa = PBXBuildFile; fileRef = EF833B020283C4892D55D53C /* CoverageBenchmarks.swift */; };
+		86364D3C2F2DBEA2A9B62EA0 /* PowerOfTwoMutator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 88F5B7FC44F425E39676B1D3 /* PowerOfTwoMutator.swift */; };
 		87CB37DFCDC351E3E53BE7F1 /* TestCaseShrinker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7DA5B74380237260F7E42D71 /* TestCaseShrinker.swift */; };
+		890F51672DF9C141E63233FB /* ArrayLengthTargetedMutator.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF13CC15C322A9D79BD1BD06 /* ArrayLengthTargetedMutator.swift */; };
 		8B77076135753B47C626A029 /* FuzzEngine+Config.swift in Sources */ = {isa = PBXBuildFile; fileRef = ACE4D8AA0A411B9988FA7E7C /* FuzzEngine+Config.swift */; };
 		8CBB720CE81E97F2750950E1 /* libSanCovHooks.a in Frameworks */ = {isa = PBXBuildFile; fileRef = FC16934A7D0ADDA3859FDFCA /* libSanCovHooks.a */; };
-		8D27AFB1254FC22918527BA3 /* CoverageGapPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = 112824CF90673942F0DC8528 /* CoverageGapPlugin.swift */; };
 		902AD170388F6A40C15ECCA5 /* MutatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C2AB425C1886E9C43DA056F /* MutatorTests.swift */; };
-		930A6CA4EA3850C7A8BF5EFF /* AnalysisPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = 06D254C3EBFD9F80B874BBEB /* AnalysisPlugin.swift */; };
+		92C0A97FA308BAE7318F09BE /* UInt+MutatorProviding.swift in Sources */ = {isa = PBXBuildFile; fileRef = C94A378F579D36D7A0DE6F8D /* UInt+MutatorProviding.swift */; };
+		93A29BA964CA290588A5D762 /* IntMutators.swift in Sources */ = {isa = PBXBuildFile; fileRef = CED4705CAFB71E914729EBE5 /* IntMutators.swift */; };
+		93B2E23B1BBADC7F513EC48E /* String+MutatorProviding.swift in Sources */ = {isa = PBXBuildFile; fileRef = 87964E15BDAEE902B7B38D6E /* String+MutatorProviding.swift */; };
 		9411D6055035E20DD3490798 /* CorpusSchema.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F25239605AF76FC51FDDF99 /* CorpusSchema.swift */; };
 		965AC1F59968645673F07841 /* corpus.json in Resources */ = {isa = PBXBuildFile; fileRef = 87C13394409DA48E4BE31930 /* corpus.json */; };
 		995888DFC95845A88625B91A /* FailureInfo.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CF3A4D9068E7899D99B8C01 /* FailureInfo.swift */; };
 		997046243B39595955A73A07 /* CoverageGap.swift in Sources */ = {isa = PBXBuildFile; fileRef = E710A18D4C3A68A36CF37040 /* CoverageGap.swift */; };
 		9B7DC07539CBF59272EDCC37 /* SaturationPlateauDetector.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0ABBB2AC9890A3F64DAF698 /* SaturationPlateauDetector.swift */; };
+		9D2D02284C1649A4BA51ED14 /* DoubleBoundaryMutator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4549A952C6186904B56C3714 /* DoubleBoundaryMutator.swift */; };
 		9DADB5A1F40BF13558A2BD55 /* Synchronized.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF1E91685C6019AA1D8E23F9 /* Synchronized.swift */; };
+		9E5C3463A81E92C8411CBBC4 /* WhitespaceMutator.swift in Sources */ = {isa = PBXBuildFile; fileRef = D836E824C1D4857069D00DA4 /* WhitespaceMutator.swift */; };
 		9E681FD7857BB0E8B54236DD /* Mutator.swift in Sources */ = {isa = PBXBuildFile; fileRef = D51DB081E26BBC926EBD26BD /* Mutator.swift */; };
-		A03C312DFD232E75A523A81F /* StoppingConditionPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = D75DF1865747DCBCB1AA0F9F /* StoppingConditionPlugin.swift */; };
+		9F6155B98EEEB63EFDB185DC /* EventBasedShrinkingPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = 36CC899B2CDB1E06A154526E /* EventBasedShrinkingPlugin.swift */; };
 		A11656F32C1DA89DAC5AE4B1 /* EnvironmentClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = F46057CB7F84DA3671178057 /* EnvironmentClient.swift */; };
 		A1B5C9D7B4345854FF5D488A /* PropertyTestingKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 2595E9AD80DBFC77F241A7E7 /* PropertyTestingKit.framework */; };
-		A36B305BD1D1ED9AD7FA7393 /* Double+Fuzzable.swift in Sources */ = {isa = PBXBuildFile; fileRef = 96C9C5A0907E3C1FF9A53837 /* Double+Fuzzable.swift */; };
 		A37D8BF967DDC59F6674C589 /* CartesianProduct.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3DC7247C29C4368A12DBDC7 /* CartesianProduct.swift */; };
 		A4917FD92F876D60CD8646DC /* FuzzerStressTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E6E3AD5DC96FE62C844BFA88 /* FuzzerStressTests.swift */; };
-		A791F464FE3BDDB8A76320B5 /* FuzzPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = C46A7E2288E1AE7A59B100CF /* FuzzPlugin.swift */; };
 		A8AB88E38D9F9BBE8CCCD77B /* CorpusCoder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3FFCEA0CB033829BFBAEFA52 /* CorpusCoder.swift */; };
-		A971C2C46510D47C1A1C3FE0 /* Bool+Fuzzable.swift in Sources */ = {isa = PBXBuildFile; fileRef = C13A3C0DDB843401611C6BCC /* Bool+Fuzzable.swift */; };
+		AC0EB1E931DDE5907D9E63F7 /* Optional+MutatorProviding.swift in Sources */ = {isa = PBXBuildFile; fileRef = E65E1585E4A2E6E29044F7C6 /* Optional+MutatorProviding.swift */; };
 		ADF49AE0B09D08080E515387 /* CoverageCountersTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4C33B33085A4DB5D1981F0A /* CoverageCountersTests.swift */; };
+		AE4F51213F59E5755867F166 /* Character+MutatorProviding.swift in Sources */ = {isa = PBXBuildFile; fileRef = ED3D3A4715807897A071483B /* Character+MutatorProviding.swift */; };
 		AFDDC40C6C111A0C8359403D /* FunctionSizeLookup.swift in Sources */ = {isa = PBXBuildFile; fileRef = D675F3742488937DF00D923F /* FunctionSizeLookup.swift */; };
 		B0B276C037B14EAA3010672E /* FuzzEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4401B1A5DC7E001073C6D2B1 /* FuzzEngine.swift */; };
 		B12BA13984E49118CD620DA9 /* Shrinkable.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A401389A02B82B842F9ED0F /* Shrinkable.swift */; };
 		B269AC60201884DB429C947C /* STADSPlateauDetectorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 146B4C7BE9FB4A557084104F /* STADSPlateauDetectorTests.swift */; };
 		B26FDBA1F2F9B6BE116325A2 /* CartesianProductTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 909450826B23F3420A39E22F /* CartesianProductTests.swift */; };
+		B41D8704B0A4CC5534A14E18 /* Array+MutatorProviding.swift in Sources */ = {isa = PBXBuildFile; fileRef = C507F3A635BA3903F890009B /* Array+MutatorProviding.swift */; };
+		B4BDB29EC97DFFA012041961 /* ArrayRepeatedValuesMutator.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5C5882F6BFF2F94A68DD51D /* ArrayRepeatedValuesMutator.swift */; };
 		B589BFFA6C70C0D16C75E1AD /* FuzzableProtocolTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D5B1DD3570EBB6E7D12F912 /* FuzzableProtocolTests.swift */; };
 		B658E17CCF942125EF08B2C9 /* ShrinkConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0C4FC87637FA205C20057C9 /* ShrinkConfig.swift */; };
 		BB317568B96C33EA9BBBDC4F /* PropertyTestingKit.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 2595E9AD80DBFC77F241A7E7 /* PropertyTestingKit.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		BD0CC959DAB2216FB5A5AE9E /* ShrinkResult.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A1857217E99772D144C79B7 /* ShrinkResult.swift */; };
 		BE833829B0A29D2730C9A37C /* Data+Shrinkable.swift in Sources */ = {isa = PBXBuildFile; fileRef = C8D72A5EBCA28D84F6AECC0B /* Data+Shrinkable.swift */; };
 		BEBBA20C60FAF1E749C4427D /* SanCovCounters.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A865DFA08A7E0DE3F588EDB /* SanCovCounters.swift */; };
-		BEDB0614821BD4498825DC86 /* UInt8+Fuzzable.swift in Sources */ = {isa = PBXBuildFile; fileRef = 476A4D40895FDAD411069194 /* UInt8+Fuzzable.swift */; };
+		C029DB863E81D5730107E9F9 /* EmptyStringMutator.swift in Sources */ = {isa = PBXBuildFile; fileRef = A346A5CDA2BF60B37F20B1D2 /* EmptyStringMutator.swift */; };
 		C3CCD2C9B56E9E0FC0574642 /* CoverageGapDetector.swift in Sources */ = {isa = PBXBuildFile; fileRef = C5A515E40A855C623BC509BC /* CoverageGapDetector.swift */; };
 		C6BD19DBD991F706DF3597D2 /* Dependencies in Frameworks */ = {isa = PBXBuildFile; productRef = A493D2B71CD03B3B9D34DA14 /* Dependencies */; };
+		C6E708A0F04FED6D2E5A5DF0 /* HTTPStatusCodeMutator.swift in Sources */ = {isa = PBXBuildFile; fileRef = C9952DEBABC45B57A9A83D8B /* HTTPStatusCodeMutator.swift */; };
 		C767CFCE0529D3F2A03C1C12 /* SanCovHooks.c in Sources */ = {isa = PBXBuildFile; fileRef = CB119BBD24F520783D33BA6F /* SanCovHooks.c */; };
-		C7EFC9C84CA6559C4F8B0443 /* String+Fuzzable.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1C4EDCAB19E2F65E521C289 /* String+Fuzzable.swift */; };
-		C9A465F613D3882BE73F401C /* Array+Fuzzable.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE00ADF599F29D727647ECE4 /* Array+Fuzzable.swift */; };
 		CD4CF90D44574C94590CCE3F /* DeterministicTimingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5DE9A7DAD99528274ED05439 /* DeterministicTimingTests.swift */; };
 		CF148FE630379ED6CAF42AA4 /* SimpleCoveragePlateauDetectorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3B56C4B9B3773FB6734D0821 /* SimpleCoveragePlateauDetectorTests.swift */; };
 		CFEE279397531A3509632FAA /* FunctionSpy in Frameworks */ = {isa = PBXBuildFile; productRef = F0BEB91D5B04B84629BA665A /* FunctionSpy */; };
 		D050028AE7CF7F83205D5C4E /* HardToFuzzFunctions.swift in Sources */ = {isa = PBXBuildFile; fileRef = CCEE0E1BF3B9166CBA9A3C59 /* HardToFuzzFunctions.swift */; };
+		D08B5C962956C22E0282A48E /* ArraySequenceInsertionMutator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5150147016EC8550F07948A1 /* ArraySequenceInsertionMutator.swift */; };
 		D0C65F0813EFB9C22E7A24EC /* DWARFSymbolizerError.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2671C4A43D9243DDBC246A9 /* DWARFSymbolizerError.swift */; };
 		D304EFC84705417D212EA91D /* CoverageSignatureTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09F9A66C1671353C4CCF4F16 /* CoverageSignatureTests.swift */; };
 		D3BBDD6471BDB998F4979E48 /* FileManagerClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A5FD30F272F4610F9D0637A /* FileManagerClient.swift */; };
 		D5304C43DD6EFBF89321404D /* PropertyTestingKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 2595E9AD80DBFC77F241A7E7 /* PropertyTestingKit.framework */; };
 		DB3B9AFA08DCD50172E473CB /* CLLVMSymbolizer.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 6B4DC0FA0EFB0DDF25E4C353 /* CLLVMSymbolizer.cpp */; };
-		DB71EBF35575DA1DEA31C0F0 /* Macros.swift in Sources */ = {isa = PBXBuildFile; fileRef = D9AB1FE9A26A576DB0D5550E /* Macros.swift */; };
 		DE91A730EDEC7C073B4D166F /* ContinuousClockClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4A90F27F22BE17810AE1B6F /* ContinuousClockClient.swift */; };
+		DEF92DD8B0670DF0ECD68792 /* Bool+MutatorProviding.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD73DE80764A2587F59AEEEB /* Bool+MutatorProviding.swift */; };
 		E05A1921A081B8C834B8A921 /* String+Shrinkable.swift in Sources */ = {isa = PBXBuildFile; fileRef = F9091C3EF601AF281CEC4E3A /* String+Shrinkable.swift */; };
 		E22FD5BA11720007BFEC6E1E /* DWARFSourceLocation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 801978DFD141E3190DC8219D /* DWARFSourceLocation.swift */; };
-		E580739238EA1DCDBB49D4E5 /* Character+Fuzzable.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9090D11CEB59C93417F2F4F6 /* Character+Fuzzable.swift */; };
+		E2ED9AA8879A99B92480A646 /* URLMutator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 233B765E89E5C522C4158B51 /* URLMutator.swift */; };
 		E5CE85300E9595AE8CF1F398 /* UncoveredRegion.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9DA6786D89438D0199BF0412 /* UncoveredRegion.swift */; };
+		E61304C8BC4F785E82EF8E3D /* StringMutators.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8070E3D26516154F5EEEC862 /* StringMutators.swift */; };
+		E687CB03E2FB5282DDF5EE66 /* BoolMutators.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C0EB12824A02A80F8D4EB77 /* BoolMutators.swift */; };
 		E6964DD309352DC4A763CFE1 /* AnyShrinkable.swift in Sources */ = {isa = PBXBuildFile; fileRef = 13045E2C359AB3AFCD8C3FF9 /* AnyShrinkable.swift */; };
 		E7500FB62C682AC6EC216A82 /* ProfiledBenchmark.swift in Sources */ = {isa = PBXBuildFile; fileRef = 72EFC8FC26036551EE41795E /* ProfiledBenchmark.swift */; };
-		E94E382B579A8EAEA05F2A12 /* ShrinkingPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = 19A4AA0D8D28393DDC7CDD33 /* ShrinkingPlugin.swift */; };
+		E84A0D3FEB919703F75C1BA1 /* UnicodeMutator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 920C7E046C3C079B33F40A8F /* UnicodeMutator.swift */; };
+		E914B1D593A03C40C576C93A /* UInt8+MutatorProviding.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2A04C16608308FDC4F6ADE4 /* UInt8+MutatorProviding.swift */; };
 		EDA4F3DF2A8772887434F792 /* Testing.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 3F5DD8CB2128FA92846AA71F /* Testing.framework */; };
+		EED2A378ADF17C64DC50D6C8 /* ArrayMutators.swift in Sources */ = {isa = PBXBuildFile; fileRef = D82933D55EE528E5E866C257 /* ArrayMutators.swift */; };
 		F175208C6823ED3BC2A92224 /* PropertyTestingKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 2595E9AD80DBFC77F241A7E7 /* PropertyTestingKit.framework */; };
 		F4E3D1DF382DCAC750307163 /* UserService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5305591133199EC528A0A92D /* UserService.swift */; };
+		F4F5214CABA1CC0BBFD80985 /* IntBoundaryMutator.swift in Sources */ = {isa = PBXBuildFile; fileRef = E88B1563B358C2EE651C20E4 /* IntBoundaryMutator.swift */; };
 		F5E12565A5E3B3F657133645 /* STADSPlateauDetectorPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = 40672CAD432576A4635C1676 /* STADSPlateauDetectorPlugin.swift */; };
 		F854221602A30DC642BC0670 /* SimpleCoveragePlateauDetector.swift in Sources */ = {isa = PBXBuildFile; fileRef = 94EB367A0BBDEA977C219F3A /* SimpleCoveragePlateauDetector.swift */; };
 		F8CA279E1D5C86F49E55C093 /* RandomNumberGeneratorClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = C6B7D375C4052AA3BFE8E32A /* RandomNumberGeneratorClient.swift */; };
@@ -128,7 +147,7 @@
 		F997A4DDB225D63D65B476AA /* Corpus.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA3C0B16540F4626B5B88CD7 /* Corpus.swift */; };
 		FAE454D657D928B2962AB47B /* SeededRandomNumberGenerator.swift in Sources */ = {isa = PBXBuildFile; fileRef = CBD2703ECFC03CDB4AF0A1EC /* SeededRandomNumberGenerator.swift */; };
 		FCC9ADA20072098BFAD48EBE /* SaturationPlateauDetectorPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF44990BD642A0A6FBF94C6F /* SaturationPlateauDetectorPlugin.swift */; };
-		FCEEBF191CE51978D06E85E9 /* FuzzObserverPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1471987A1097721AD7C3599F /* FuzzObserverPlugin.swift */; };
+		FD441F5D3E24D693D0A26B7B /* EmailMutator.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4BDE3BB5DB51115A5922433 /* EmailMutator.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -240,62 +259,70 @@
 /* Begin PBXFileReference section */
 		00EBA13944AF0B757005638A /* ConcurrentFuzzLoadTest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConcurrentFuzzLoadTest.swift; sourceTree = "<group>"; };
 		021ACDF8BE3B266FA44EEDBD /* CoverageBenchmarks */ = {isa = PBXFileReference; includeInIndex = 0; path = CoverageBenchmarks; sourceTree = BUILT_PRODUCTS_DIR; };
-		029261475F37B2CCF9E0B0F7 /* UInt+Fuzzable.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "UInt+Fuzzable.swift"; sourceTree = "<group>"; };
-		06D254C3EBFD9F80B874BBEB /* AnalysisPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnalysisPlugin.swift; sourceTree = "<group>"; };
 		08D9F63994131BD074E1BE90 /* StressTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = StressTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		09F9A66C1671353C4CCF4F16 /* CoverageSignatureTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoverageSignatureTests.swift; sourceTree = "<group>"; };
 		0A1857217E99772D144C79B7 /* ShrinkResult.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShrinkResult.swift; sourceTree = "<group>"; };
 		0A401389A02B82B842F9ED0F /* Shrinkable.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Shrinkable.swift; sourceTree = "<group>"; };
 		0A5FD30F272F4610F9D0637A /* FileManagerClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileManagerClient.swift; sourceTree = "<group>"; };
 		0BC4138150CDC1ABC2DE7C65 /* FuzzEngineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FuzzEngineTests.swift; sourceTree = "<group>"; };
-		0E2CCED33C681E7189FA6A47 /* Fuzzable.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Fuzzable.swift; sourceTree = "<group>"; };
-		112824CF90673942F0DC8528 /* CoverageGapPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoverageGapPlugin.swift; sourceTree = "<group>"; };
 		13045E2C359AB3AFCD8C3FF9 /* AnyShrinkable.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnyShrinkable.swift; sourceTree = "<group>"; };
 		146B4C7BE9FB4A557084104F /* STADSPlateauDetectorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = STADSPlateauDetectorTests.swift; sourceTree = "<group>"; };
-		1471987A1097721AD7C3599F /* FuzzObserverPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FuzzObserverPlugin.swift; sourceTree = "<group>"; };
 		1733E8C2C5D2FC2BC7394036 /* STADSPlateauDetector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = STADSPlateauDetector.swift; sourceTree = "<group>"; };
-		19A4AA0D8D28393DDC7CDD33 /* ShrinkingPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShrinkingPlugin.swift; sourceTree = "<group>"; };
 		1B7FA0AAC10E7E2DB5FD6CDE /* TSanTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = TSanTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		1BAB215F45EB4C8CA1934BEF /* EventBasedCoverageGapPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventBasedCoverageGapPlugin.swift; sourceTree = "<group>"; };
-		22C52228B4908E47A6DF38B1 /* Optional+Fuzzable.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Optional+Fuzzable.swift"; sourceTree = "<group>"; };
+		233B765E89E5C522C4158B51 /* URLMutator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = URLMutator.swift; sourceTree = "<group>"; };
 		2595E9AD80DBFC77F241A7E7 /* PropertyTestingKit.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = PropertyTestingKit.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		2A865DFA08A7E0DE3F588EDB /* SanCovCounters.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SanCovCounters.swift; sourceTree = "<group>"; };
-		2AF56A3C5CC98C189D94FACC /* FuzzPluginManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FuzzPluginManager.swift; sourceTree = "<group>"; };
 		2C2AB425C1886E9C43DA056F /* MutatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MutatorTests.swift; sourceTree = "<group>"; };
 		2CF3A4D9068E7899D99B8C01 /* FailureInfo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FailureInfo.swift; sourceTree = "<group>"; };
 		34658F2420967EA35E38058D /* SanCovIsolationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SanCovIsolationTests.swift; sourceTree = "<group>"; };
+		36CC899B2CDB1E06A154526E /* EventBasedShrinkingPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventBasedShrinkingPlugin.swift; sourceTree = "<group>"; };
 		3B56C4B9B3773FB6734D0821 /* SimpleCoveragePlateauDetectorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SimpleCoveragePlateauDetectorTests.swift; sourceTree = "<group>"; };
 		3F1917814603DE56511E5F24 /* DWARFSymbolizer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DWARFSymbolizer.swift; sourceTree = "<group>"; };
 		3F5DD8CB2128FA92846AA71F /* Testing.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; path = Testing.framework; sourceTree = "<group>"; };
 		3FFCEA0CB033829BFBAEFA52 /* CorpusCoder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CorpusCoder.swift; sourceTree = "<group>"; };
 		40672CAD432576A4635C1676 /* STADSPlateauDetectorPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = STADSPlateauDetectorPlugin.swift; sourceTree = "<group>"; };
+		4091F4EF6449C34BCC32E57C /* NegativeIntMutator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NegativeIntMutator.swift; sourceTree = "<group>"; };
 		4401B1A5DC7E001073C6D2B1 /* FuzzEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FuzzEngine.swift; sourceTree = "<group>"; };
-		476A4D40895FDAD411069194 /* UInt8+Fuzzable.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "UInt8+Fuzzable.swift"; sourceTree = "<group>"; };
+		4549A952C6186904B56C3714 /* DoubleBoundaryMutator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DoubleBoundaryMutator.swift; sourceTree = "<group>"; };
+		4787D3EC4C3D5D95A956AD02 /* PercentageMutator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PercentageMutator.swift; sourceTree = "<group>"; };
 		49412A507ECD93C3E85C649B /* CorpusEntryType.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CorpusEntryType.swift; sourceTree = "<group>"; };
+		4E987090D06715A5F99BEC1A /* Double+MutatorProviding.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Double+MutatorProviding.swift"; sourceTree = "<group>"; };
+		4E9F5016469E3378725DCE64 /* ArrayPositionAwareMutator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArrayPositionAwareMutator.swift; sourceTree = "<group>"; };
 		4F25239605AF76FC51FDDF99 /* CorpusSchema.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CorpusSchema.swift; sourceTree = "<group>"; };
+		5150147016EC8550F07948A1 /* ArraySequenceInsertionMutator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArraySequenceInsertionMutator.swift; sourceTree = "<group>"; };
 		52C1DEE9A4340554236C9F32 /* SparseCoverage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SparseCoverage.swift; sourceTree = "<group>"; };
 		5305591133199EC528A0A92D /* UserService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserService.swift; sourceTree = "<group>"; };
 		5B885ACEB672DD762DA0F839 /* ProfiledBenchmark */ = {isa = PBXFileReference; includeInIndex = 0; path = ProfiledBenchmark; sourceTree = BUILT_PRODUCTS_DIR; };
 		5DE9A7DAD99528274ED05439 /* DeterministicTimingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeterministicTimingTests.swift; sourceTree = "<group>"; };
+		5F0A30CF764B199509AB0614 /* PortMutator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PortMutator.swift; sourceTree = "<group>"; };
 		683A330BCB90F626B21D2422 /* CustomFuzzableTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CustomFuzzableTests.swift; sourceTree = "<group>"; };
 		6B4DC0FA0EFB0DDF25E4C353 /* CLLVMSymbolizer.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = CLLVMSymbolizer.cpp; sourceTree = "<group>"; };
 		6B7DA3E55A8132FE210D8EAF /* CoverageCountersClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoverageCountersClient.swift; sourceTree = "<group>"; };
 		72EFC8FC26036551EE41795E /* ProfiledBenchmark.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfiledBenchmark.swift; sourceTree = "<group>"; };
 		7769DE997855D0C94C1C405F /* FuzzResult.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FuzzResult.swift; sourceTree = "<group>"; };
 		797B369A783CF8DA4F7C9190 /* RaceConditionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RaceConditionTests.swift; sourceTree = "<group>"; };
+		7C0EB12824A02A80F8D4EB77 /* BoolMutators.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BoolMutators.swift; sourceTree = "<group>"; };
 		7C98CB65B3ADE29BB300C7EA /* ShrinkStats.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShrinkStats.swift; sourceTree = "<group>"; };
 		7DA5B74380237260F7E42D71 /* TestCaseShrinker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TestCaseShrinker.swift; sourceTree = "<group>"; };
 		801978DFD141E3190DC8219D /* DWARFSourceLocation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DWARFSourceLocation.swift; sourceTree = "<group>"; };
 		805D70C5E70888046E92D052 /* SanCovTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = SanCovTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		8070E3D26516154F5EEEC862 /* StringMutators.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StringMutators.swift; sourceTree = "<group>"; };
 		807ED515190705E70EEBD7FE /* SyncBox.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncBox.swift; sourceTree = "<group>"; };
+		846F2F02B0AA5A040C5EB704 /* ArrayDuplicationMutator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArrayDuplicationMutator.swift; sourceTree = "<group>"; };
+		87964E15BDAEE902B7B38D6E /* String+MutatorProviding.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "String+MutatorProviding.swift"; sourceTree = "<group>"; };
 		87C13394409DA48E4BE31930 /* corpus.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = corpus.json; sourceTree = "<group>"; };
+		88F5B7FC44F425E39676B1D3 /* PowerOfTwoMutator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PowerOfTwoMutator.swift; sourceTree = "<group>"; };
 		8D5B1DD3570EBB6E7D12F912 /* FuzzableProtocolTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FuzzableProtocolTests.swift; sourceTree = "<group>"; };
 		8DCFCD27F236B21539FDC070 /* DateClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DateClient.swift; sourceTree = "<group>"; };
+		8E87A51CF22639FAC9BB2577 /* SQLInjectionMutator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SQLInjectionMutator.swift; sourceTree = "<group>"; };
 		8FED37BAA14224125F5AD7CA /* CorpusPersistenceClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CorpusPersistenceClient.swift; sourceTree = "<group>"; };
-		9090D11CEB59C93417F2F4F6 /* Character+Fuzzable.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Character+Fuzzable.swift"; sourceTree = "<group>"; };
 		909450826B23F3420A39E22F /* CartesianProductTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CartesianProductTests.swift; sourceTree = "<group>"; };
+		920C7E046C3C079B33F40A8F /* UnicodeMutator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UnicodeMutator.swift; sourceTree = "<group>"; };
+		93B1250EDF5B0A9EBB249819 /* EventBasedPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventBasedPlugin.swift; sourceTree = "<group>"; };
 		94EB367A0BBDEA977C219F3A /* SimpleCoveragePlateauDetector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SimpleCoveragePlateauDetector.swift; sourceTree = "<group>"; };
-		96C9C5A0907E3C1FF9A53837 /* Double+Fuzzable.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Double+Fuzzable.swift"; sourceTree = "<group>"; };
+		955C5983D6125F89C2DE0E3E /* DoubleMutators.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DoubleMutators.swift; sourceTree = "<group>"; };
+		987822C1AE1DD0059B1B19EB /* XSSMutator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = XSSMutator.swift; sourceTree = "<group>"; };
 		99DF2D2D7A9C78BEFDA1C9FF /* FuzzAPITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FuzzAPITests.swift; sourceTree = "<group>"; };
 		9BD8E7DDBFB1256A08DEBE05 /* CoverageSignature.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoverageSignature.swift; sourceTree = "<group>"; };
 		9DA6786D89438D0199BF0412 /* UncoveredRegion.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UncoveredRegion.swift; sourceTree = "<group>"; };
@@ -303,52 +330,63 @@
 		A0C4FC87637FA205C20057C9 /* ShrinkConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShrinkConfig.swift; sourceTree = "<group>"; };
 		A179A4CAD0B9C0FC0DF76A85 /* DWARFSymbolizerHelper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DWARFSymbolizerHelper.swift; sourceTree = "<group>"; };
 		A18400D950AE2D1D13443E9A /* FuzzAPI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FuzzAPI.swift; sourceTree = "<group>"; };
-		A1C4EDCAB19E2F65E521C289 /* String+Fuzzable.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "String+Fuzzable.swift"; sourceTree = "<group>"; };
+		A346A5CDA2BF60B37F20B1D2 /* EmptyStringMutator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmptyStringMutator.swift; sourceTree = "<group>"; };
 		A3DC7247C29C4368A12DBDC7 /* CartesianProduct.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CartesianProduct.swift; sourceTree = "<group>"; };
 		A4A90F27F22BE17810AE1B6F /* ContinuousClockClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContinuousClockClient.swift; sourceTree = "<group>"; };
 		A5A7DD272E538B8E8CFE5C75 /* CoverageGapDetectorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoverageGapDetectorTests.swift; sourceTree = "<group>"; };
 		ACE4D8AA0A411B9988FA7E7C /* FuzzEngine+Config.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "FuzzEngine+Config.swift"; sourceTree = "<group>"; };
+		AD73DE80764A2587F59AEEEB /* Bool+MutatorProviding.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Bool+MutatorProviding.swift"; sourceTree = "<group>"; };
 		AF1E91685C6019AA1D8E23F9 /* Synchronized.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Synchronized.swift; sourceTree = "<group>"; };
 		B155EAF0286844D09A5709EC /* TaskResults.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskResults.swift; sourceTree = "<group>"; };
+		B2B78883BB69E251950656D0 /* EventBasedPluginDispatcher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventBasedPluginDispatcher.swift; sourceTree = "<group>"; };
 		B37ED10677A92DC01DD0B289 /* SaturationPlateauDetectorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaturationPlateauDetectorTests.swift; sourceTree = "<group>"; };
 		B60A0F1AE1DD32B9E72168DE /* Array+Shrinkable.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Array+Shrinkable.swift"; sourceTree = "<group>"; };
 		B64D06718A05E1272E84861D /* MockDatabase.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockDatabase.swift; sourceTree = "<group>"; };
-		C13A3C0DDB843401611C6BCC /* Bool+Fuzzable.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Bool+Fuzzable.swift"; sourceTree = "<group>"; };
-		C46A7E2288E1AE7A59B100CF /* FuzzPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FuzzPlugin.swift; sourceTree = "<group>"; };
 		C4C33B33085A4DB5D1981F0A /* CoverageCountersTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoverageCountersTests.swift; sourceTree = "<group>"; };
+		C507F3A635BA3903F890009B /* Array+MutatorProviding.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Array+MutatorProviding.swift"; sourceTree = "<group>"; };
 		C5A515E40A855C623BC509BC /* CoverageGapDetector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoverageGapDetector.swift; sourceTree = "<group>"; };
 		C6B7D375C4052AA3BFE8E32A /* RandomNumberGeneratorClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RandomNumberGeneratorClient.swift; sourceTree = "<group>"; };
 		C7F23079959F6B89989AD2EB /* CorpusMode.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CorpusMode.swift; sourceTree = "<group>"; };
+		C80829DB919B1E7D80F66C9B /* SpecialDoubleMutator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpecialDoubleMutator.swift; sourceTree = "<group>"; };
 		C8D72A5EBCA28D84F6AECC0B /* Data+Shrinkable.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Data+Shrinkable.swift"; sourceTree = "<group>"; };
+		C94A378F579D36D7A0DE6F8D /* UInt+MutatorProviding.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "UInt+MutatorProviding.swift"; sourceTree = "<group>"; };
+		C9952DEBABC45B57A9A83D8B /* HTTPStatusCodeMutator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HTTPStatusCodeMutator.swift; sourceTree = "<group>"; };
 		CB119BBD24F520783D33BA6F /* SanCovHooks.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = SanCovHooks.c; sourceTree = "<group>"; };
 		CBD2703ECFC03CDB4AF0A1EC /* SeededRandomNumberGenerator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SeededRandomNumberGenerator.swift; sourceTree = "<group>"; };
+		CC834389B8A7AF84299B4237 /* Int+MutatorProviding.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Int+MutatorProviding.swift"; sourceTree = "<group>"; };
 		CCEE0E1BF3B9166CBA9A3C59 /* HardToFuzzFunctions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HardToFuzzFunctions.swift; sourceTree = "<group>"; };
-		CE00ADF599F29D727647ECE4 /* Array+Fuzzable.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Array+Fuzzable.swift"; sourceTree = "<group>"; };
+		CED4705CAFB71E914729EBE5 /* IntMutators.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IntMutators.swift; sourceTree = "<group>"; };
 		CF44990BD642A0A6FBF94C6F /* SaturationPlateauDetectorPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaturationPlateauDetectorPlugin.swift; sourceTree = "<group>"; };
 		CF7909559B042C15C36EAABE /* PropertyTestingKitTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = PropertyTestingKitTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
-		D22DDC98AF9435971589CF56 /* Int+Fuzzable.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Int+Fuzzable.swift"; sourceTree = "<group>"; };
 		D2671C4A43D9243DDBC246A9 /* DWARFSymbolizerError.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DWARFSymbolizerError.swift; sourceTree = "<group>"; };
 		D51DB081E26BBC926EBD26BD /* Mutator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Mutator.swift; sourceTree = "<group>"; };
 		D675F3742488937DF00D923F /* FunctionSizeLookup.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FunctionSizeLookup.swift; sourceTree = "<group>"; };
 		D708E6A5A1B65DA927AFEA9E /* CorpusEntry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CorpusEntry.swift; sourceTree = "<group>"; };
-		D75DF1865747DCBCB1AA0F9F /* StoppingConditionPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoppingConditionPlugin.swift; sourceTree = "<group>"; };
-		D9AB1FE9A26A576DB0D5550E /* Macros.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Macros.swift; sourceTree = "<group>"; };
-		D9B8430D41323168F71EBA35 /* DefaultShrinkingPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DefaultShrinkingPlugin.swift; sourceTree = "<group>"; };
+		D82933D55EE528E5E866C257 /* ArrayMutators.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArrayMutators.swift; sourceTree = "<group>"; };
+		D836E824C1D4857069D00DA4 /* WhitespaceMutator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WhitespaceMutator.swift; sourceTree = "<group>"; };
 		DA3C0B16540F4626B5B88CD7 /* Corpus.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Corpus.swift; sourceTree = "<group>"; };
 		DCDB2199470F533775067DB9 /* EventBasedPlateauDetectorPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventBasedPlateauDetectorPlugin.swift; sourceTree = "<group>"; };
+		DF13CC15C322A9D79BD1BD06 /* ArrayLengthTargetedMutator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArrayLengthTargetedMutator.swift; sourceTree = "<group>"; };
 		DF69D0BBA6357FA0A5F78ABC /* ck_ht.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = ck_ht.c; sourceTree = "<group>"; };
 		E0ABBB2AC9890A3F64DAF698 /* SaturationPlateauDetector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaturationPlateauDetector.swift; sourceTree = "<group>"; };
+		E2A04C16608308FDC4F6ADE4 /* UInt8+MutatorProviding.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "UInt8+MutatorProviding.swift"; sourceTree = "<group>"; };
 		E3286F279F14B496AD89F0BE /* MultiComponentShrinker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MultiComponentShrinker.swift; sourceTree = "<group>"; };
+		E5C5882F6BFF2F94A68DD51D /* ArrayRepeatedValuesMutator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArrayRepeatedValuesMutator.swift; sourceTree = "<group>"; };
+		E65E1585E4A2E6E29044F7C6 /* Optional+MutatorProviding.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Optional+MutatorProviding.swift"; sourceTree = "<group>"; };
 		E6E3AD5DC96FE62C844BFA88 /* FuzzerStressTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FuzzerStressTests.swift; sourceTree = "<group>"; };
 		E710A18D4C3A68A36CF37040 /* CoverageGap.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoverageGap.swift; sourceTree = "<group>"; };
+		E88B1563B358C2EE651C20E4 /* IntBoundaryMutator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IntBoundaryMutator.swift; sourceTree = "<group>"; };
+		ED3D3A4715807897A071483B /* Character+MutatorProviding.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Character+MutatorProviding.swift"; sourceTree = "<group>"; };
 		EF7AA1611BFAAB73EE70CA85 /* libCLLVMSymbolizer.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = libCLLVMSymbolizer.a; sourceTree = BUILT_PRODUCTS_DIR; };
 		EF833B020283C4892D55D53C /* CoverageBenchmarks.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoverageBenchmarks.swift; sourceTree = "<group>"; };
+		F13B7E4AC8104D85F98B8418 /* PhoneNumberMutator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhoneNumberMutator.swift; sourceTree = "<group>"; };
 		F1E97A029218EB361C14F01D /* DWARFSymbolizerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DWARFSymbolizerTests.swift; sourceTree = "<group>"; };
 		F3E63606AF341F913872CB76 /* CoverageGapReport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoverageGapReport.swift; sourceTree = "<group>"; };
 		F46057CB7F84DA3671178057 /* EnvironmentClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EnvironmentClient.swift; sourceTree = "<group>"; };
+		F4BDE3BB5DB51115A5922433 /* EmailMutator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmailMutator.swift; sourceTree = "<group>"; };
 		F58C560D0D81EBCA41AC8282 /* TestCaseShrinkerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TestCaseShrinkerTests.swift; sourceTree = "<group>"; };
-		F5F59F7C0FD59FAD26BADFE6 /* PlateauDetectorPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlateauDetectorPlugin.swift; sourceTree = "<group>"; };
 		F7B5F39FFCE93451B38B3FBA /* PropertyBasedSelfTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PropertyBasedSelfTests.swift; sourceTree = "<group>"; };
+		F853A816879F7A6E163BE7B4 /* StringBoundaryMutator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StringBoundaryMutator.swift; sourceTree = "<group>"; };
 		F9091C3EF601AF281CEC4E3A /* String+Shrinkable.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "String+Shrinkable.swift"; sourceTree = "<group>"; };
 		FC16934A7D0ADDA3859FDFCA /* libSanCovHooks.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = libSanCovHooks.a; sourceTree = BUILT_PRODUCTS_DIR; };
 		FFF4F63E42A1153F798F4A15 /* CorpusClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CorpusClient.swift; sourceTree = "<group>"; };
@@ -501,6 +539,23 @@
 			path = Coverage;
 			sourceTree = "<group>";
 		};
+		276C71DE5B326F1105B8CA5C /* Mutators */ = {
+			isa = PBXGroup;
+			children = (
+				D82933D55EE528E5E866C257 /* ArrayMutators.swift */,
+				7C0EB12824A02A80F8D4EB77 /* BoolMutators.swift */,
+				955C5983D6125F89C2DE0E3E /* DoubleMutators.swift */,
+				CED4705CAFB71E914729EBE5 /* IntMutators.swift */,
+				8070E3D26516154F5EEEC862 /* StringMutators.swift */,
+				65487F2CD06B2E5FDEB27B78 /* Array */,
+				5904899D0D159D5CBAC28557 /* Double */,
+				6F6912696CB649905B6414EA /* Int */,
+				71ACD1473D4FD944A250014D /* MutatorProviding */,
+				4E78910B3F0F718A7406195A /* String */,
+			);
+			path = Mutators;
+			sourceTree = "<group>";
+		};
 		2E361748AD895F31D637FA0C /* Shrinkable */ = {
 			isa = PBXGroup;
 			children = (
@@ -541,12 +596,50 @@
 			path = Sources/SanCovHooks;
 			sourceTree = "<group>";
 		};
+		4E78910B3F0F718A7406195A /* String */ = {
+			isa = PBXGroup;
+			children = (
+				F4BDE3BB5DB51115A5922433 /* EmailMutator.swift */,
+				A346A5CDA2BF60B37F20B1D2 /* EmptyStringMutator.swift */,
+				F13B7E4AC8104D85F98B8418 /* PhoneNumberMutator.swift */,
+				8E87A51CF22639FAC9BB2577 /* SQLInjectionMutator.swift */,
+				F853A816879F7A6E163BE7B4 /* StringBoundaryMutator.swift */,
+				920C7E046C3C079B33F40A8F /* UnicodeMutator.swift */,
+				233B765E89E5C522C4158B51 /* URLMutator.swift */,
+				D836E824C1D4857069D00DA4 /* WhitespaceMutator.swift */,
+				987822C1AE1DD0059B1B19EB /* XSSMutator.swift */,
+			);
+			path = String;
+			sourceTree = "<group>";
+		};
+		5904899D0D159D5CBAC28557 /* Double */ = {
+			isa = PBXGroup;
+			children = (
+				4549A952C6186904B56C3714 /* DoubleBoundaryMutator.swift */,
+				4787D3EC4C3D5D95A956AD02 /* PercentageMutator.swift */,
+				C80829DB919B1E7D80F66C9B /* SpecialDoubleMutator.swift */,
+			);
+			path = Double;
+			sourceTree = "<group>";
+		};
 		62299BB35DD80E8D598979F5 /* ProfiledBenchmark */ = {
 			isa = PBXGroup;
 			children = (
 				87C13394409DA48E4BE31930 /* corpus.json */,
 			);
 			path = ProfiledBenchmark;
+			sourceTree = "<group>";
+		};
+		65487F2CD06B2E5FDEB27B78 /* Array */ = {
+			isa = PBXGroup;
+			children = (
+				846F2F02B0AA5A040C5EB704 /* ArrayDuplicationMutator.swift */,
+				DF13CC15C322A9D79BD1BD06 /* ArrayLengthTargetedMutator.swift */,
+				4E9F5016469E3378725DCE64 /* ArrayPositionAwareMutator.swift */,
+				E5C5882F6BFF2F94A68DD51D /* ArrayRepeatedValuesMutator.swift */,
+				5150147016EC8550F07948A1 /* ArraySequenceInsertionMutator.swift */,
+			);
+			path = Array;
 			sourceTree = "<group>";
 		};
 		6A0D4F20DD61600A95099AA3 /* ProfiledBenchmark */ = {
@@ -557,6 +650,34 @@
 			);
 			name = ProfiledBenchmark;
 			path = Benchmarks/ProfiledBenchmark;
+			sourceTree = "<group>";
+		};
+		6F6912696CB649905B6414EA /* Int */ = {
+			isa = PBXGroup;
+			children = (
+				C9952DEBABC45B57A9A83D8B /* HTTPStatusCodeMutator.swift */,
+				E88B1563B358C2EE651C20E4 /* IntBoundaryMutator.swift */,
+				4091F4EF6449C34BCC32E57C /* NegativeIntMutator.swift */,
+				5F0A30CF764B199509AB0614 /* PortMutator.swift */,
+				88F5B7FC44F425E39676B1D3 /* PowerOfTwoMutator.swift */,
+			);
+			path = Int;
+			sourceTree = "<group>";
+		};
+		71ACD1473D4FD944A250014D /* MutatorProviding */ = {
+			isa = PBXGroup;
+			children = (
+				C507F3A635BA3903F890009B /* Array+MutatorProviding.swift */,
+				AD73DE80764A2587F59AEEEB /* Bool+MutatorProviding.swift */,
+				ED3D3A4715807897A071483B /* Character+MutatorProviding.swift */,
+				4E987090D06715A5F99BEC1A /* Double+MutatorProviding.swift */,
+				CC834389B8A7AF84299B4237 /* Int+MutatorProviding.swift */,
+				E65E1585E4A2E6E29044F7C6 /* Optional+MutatorProviding.swift */,
+				87964E15BDAEE902B7B38D6E /* String+MutatorProviding.swift */,
+				C94A378F579D36D7A0DE6F8D /* UInt+MutatorProviding.swift */,
+				E2A04C16608308FDC4F6ADE4 /* UInt8+MutatorProviding.swift */,
+			);
+			path = MutatorProviding;
 			sourceTree = "<group>";
 		};
 		7397170BA7D821E3A51C70A8 /* DWARF */ = {
@@ -587,30 +708,12 @@
 			isa = PBXGroup;
 			children = (
 				A3DC7247C29C4368A12DBDC7 /* CartesianProduct.swift */,
-				D9AB1FE9A26A576DB0D5550E /* Macros.swift */,
 				9389B3080515AB75B3627EE4 /* Coverage */,
 				1030A957868366F4FD9125D1 /* Dependencies */,
 				8E0551F1E322C33BFF09CCAE /* Fuzzing */,
 			);
 			name = PropertyTestingKit;
 			path = Sources/PropertyTestingKit;
-			sourceTree = "<group>";
-		};
-		891BA1BD3F8329706112A9C3 /* Fuzzable */ = {
-			isa = PBXGroup;
-			children = (
-				CE00ADF599F29D727647ECE4 /* Array+Fuzzable.swift */,
-				C13A3C0DDB843401611C6BCC /* Bool+Fuzzable.swift */,
-				9090D11CEB59C93417F2F4F6 /* Character+Fuzzable.swift */,
-				96C9C5A0907E3C1FF9A53837 /* Double+Fuzzable.swift */,
-				0E2CCED33C681E7189FA6A47 /* Fuzzable.swift */,
-				D22DDC98AF9435971589CF56 /* Int+Fuzzable.swift */,
-				22C52228B4908E47A6DF38B1 /* Optional+Fuzzable.swift */,
-				A1C4EDCAB19E2F65E521C289 /* String+Fuzzable.swift */,
-				029261475F37B2CCF9E0B0F7 /* UInt+Fuzzable.swift */,
-				476A4D40895FDAD411069194 /* UInt8+Fuzzable.swift */,
-			);
-			path = Fuzzable;
 			sourceTree = "<group>";
 		};
 		8E0551F1E322C33BFF09CCAE /* Fuzzing */ = {
@@ -624,8 +727,8 @@
 				1733E8C2C5D2FC2BC7394036 /* STADSPlateauDetector.swift */,
 				74D7DFE6A4AE677D39C4DD8C /* Corpus */,
 				331FF506A56D2F60F9E25916 /* CoverageGap */,
-				891BA1BD3F8329706112A9C3 /* Fuzzable */,
 				E1DAE30A40C7182EDB1A08B6 /* FuzzEngine */,
+				276C71DE5B326F1105B8CA5C /* Mutators */,
 				F94CA8BDDC0253B0AA6FF70C /* Plugins */,
 				22B14C46021ADC551142A93F /* TestCaseShrinker */,
 			);
@@ -741,19 +844,13 @@
 		F94CA8BDDC0253B0AA6FF70C /* Plugins */ = {
 			isa = PBXGroup;
 			children = (
-				06D254C3EBFD9F80B874BBEB /* AnalysisPlugin.swift */,
-				112824CF90673942F0DC8528 /* CoverageGapPlugin.swift */,
-				D9B8430D41323168F71EBA35 /* DefaultShrinkingPlugin.swift */,
 				1BAB215F45EB4C8CA1934BEF /* EventBasedCoverageGapPlugin.swift */,
 				DCDB2199470F533775067DB9 /* EventBasedPlateauDetectorPlugin.swift */,
-				1471987A1097721AD7C3599F /* FuzzObserverPlugin.swift */,
-				C46A7E2288E1AE7A59B100CF /* FuzzPlugin.swift */,
-				2AF56A3C5CC98C189D94FACC /* FuzzPluginManager.swift */,
-				F5F59F7C0FD59FAD26BADFE6 /* PlateauDetectorPlugin.swift */,
+				93B1250EDF5B0A9EBB249819 /* EventBasedPlugin.swift */,
+				B2B78883BB69E251950656D0 /* EventBasedPluginDispatcher.swift */,
+				36CC899B2CDB1E06A154526E /* EventBasedShrinkingPlugin.swift */,
 				CF44990BD642A0A6FBF94C6F /* SaturationPlateauDetectorPlugin.swift */,
-				19A4AA0D8D28393DDC7CDD33 /* ShrinkingPlugin.swift */,
 				40672CAD432576A4635C1676 /* STADSPlateauDetectorPlugin.swift */,
-				D75DF1865747DCBCB1AA0F9F /* StoppingConditionPlugin.swift */,
 			);
 			path = Plugins;
 			sourceTree = "<group>";
@@ -1092,13 +1189,19 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				930A6CA4EA3850C7A8BF5EFF /* AnalysisPlugin.swift in Sources */,
 				E6964DD309352DC4A763CFE1 /* AnyShrinkable.swift in Sources */,
-				C9A465F613D3882BE73F401C /* Array+Fuzzable.swift in Sources */,
+				B41D8704B0A4CC5534A14E18 /* Array+MutatorProviding.swift in Sources */,
 				7B7ADDE2BFF43D15DE86328A /* Array+Shrinkable.swift in Sources */,
-				A971C2C46510D47C1A1C3FE0 /* Bool+Fuzzable.swift in Sources */,
+				637CEF93972CB8A43732FCB0 /* ArrayDuplicationMutator.swift in Sources */,
+				890F51672DF9C141E63233FB /* ArrayLengthTargetedMutator.swift in Sources */,
+				EED2A378ADF17C64DC50D6C8 /* ArrayMutators.swift in Sources */,
+				56BD6A924A8704F7BB65D7CD /* ArrayPositionAwareMutator.swift in Sources */,
+				B4BDB29EC97DFFA012041961 /* ArrayRepeatedValuesMutator.swift in Sources */,
+				D08B5C962956C22E0282A48E /* ArraySequenceInsertionMutator.swift in Sources */,
+				DEF92DD8B0670DF0ECD68792 /* Bool+MutatorProviding.swift in Sources */,
+				E687CB03E2FB5282DDF5EE66 /* BoolMutators.swift in Sources */,
 				A37D8BF967DDC59F6674C589 /* CartesianProduct.swift in Sources */,
-				E580739238EA1DCDBB49D4E5 /* Character+Fuzzable.swift in Sources */,
+				AE4F51213F59E5755867F166 /* Character+MutatorProviding.swift in Sources */,
 				DE91A730EDEC7C073B4D166F /* ContinuousClockClient.swift in Sources */,
 				F997A4DDB225D63D65B476AA /* Corpus.swift in Sources */,
 				0469AB3AB668C05713B4CEEC /* CorpusClient.swift in Sources */,
@@ -1111,7 +1214,6 @@
 				0A0B966D3B103DDD9ADC457C /* CoverageCountersClient.swift in Sources */,
 				997046243B39595955A73A07 /* CoverageGap.swift in Sources */,
 				C3CCD2C9B56E9E0FC0574642 /* CoverageGapDetector.swift in Sources */,
-				8D27AFB1254FC22918527BA3 /* CoverageGapPlugin.swift in Sources */,
 				01C409E9A774CE4770B6DC3B /* CoverageGapReport.swift in Sources */,
 				52C260E19A743BA5BCADC703 /* CoverageSignature.swift in Sources */,
 				E22FD5BA11720007BFEC6E1E /* DWARFSourceLocation.swift in Sources */,
@@ -1120,29 +1222,38 @@
 				6FC71167936E2046141EAA6B /* DWARFSymbolizerHelper.swift in Sources */,
 				BE833829B0A29D2730C9A37C /* Data+Shrinkable.swift in Sources */,
 				5118F45702A081DEB42B60AA /* DateClient.swift in Sources */,
-				2791D860E1AFB4810E51C213 /* DefaultShrinkingPlugin.swift in Sources */,
-				A36B305BD1D1ED9AD7FA7393 /* Double+Fuzzable.swift in Sources */,
+				605B9C253222E341C0385AB9 /* Double+MutatorProviding.swift in Sources */,
+				9D2D02284C1649A4BA51ED14 /* DoubleBoundaryMutator.swift in Sources */,
+				234BA490B759413930B7164B /* DoubleMutators.swift in Sources */,
+				FD441F5D3E24D693D0A26B7B /* EmailMutator.swift in Sources */,
+				C029DB863E81D5730107E9F9 /* EmptyStringMutator.swift in Sources */,
 				A11656F32C1DA89DAC5AE4B1 /* EnvironmentClient.swift in Sources */,
 				1676A6251DF285939A232329 /* EventBasedCoverageGapPlugin.swift in Sources */,
 				40BBDB105DB39C8B70D658CE /* EventBasedPlateauDetectorPlugin.swift in Sources */,
+				5D4F6868F443A4D25BE68A3F /* EventBasedPlugin.swift in Sources */,
+				383216502C8ADDDC63DC0FDB /* EventBasedPluginDispatcher.swift in Sources */,
+				9F6155B98EEEB63EFDB185DC /* EventBasedShrinkingPlugin.swift in Sources */,
 				995888DFC95845A88625B91A /* FailureInfo.swift in Sources */,
 				D3BBDD6471BDB998F4979E48 /* FileManagerClient.swift in Sources */,
 				AFDDC40C6C111A0C8359403D /* FunctionSizeLookup.swift in Sources */,
 				413720205EA64C2558BD9F04 /* FuzzAPI.swift in Sources */,
 				8B77076135753B47C626A029 /* FuzzEngine+Config.swift in Sources */,
 				B0B276C037B14EAA3010672E /* FuzzEngine.swift in Sources */,
-				FCEEBF191CE51978D06E85E9 /* FuzzObserverPlugin.swift in Sources */,
-				A791F464FE3BDDB8A76320B5 /* FuzzPlugin.swift in Sources */,
-				472EBAA0C21986A90E121C90 /* FuzzPluginManager.swift in Sources */,
 				125D3FB66141B63E3542572E /* FuzzResult.swift in Sources */,
-				6EA867F5B1FCB8DA1D789F91 /* Fuzzable.swift in Sources */,
-				6B3E9990299CD5D8B12A316E /* Int+Fuzzable.swift in Sources */,
-				DB71EBF35575DA1DEA31C0F0 /* Macros.swift in Sources */,
+				C6E708A0F04FED6D2E5A5DF0 /* HTTPStatusCodeMutator.swift in Sources */,
+				1226F62189C28475B8A01EE4 /* Int+MutatorProviding.swift in Sources */,
+				F4F5214CABA1CC0BBFD80985 /* IntBoundaryMutator.swift in Sources */,
+				93A29BA964CA290588A5D762 /* IntMutators.swift in Sources */,
 				1F8C42A1E118D08E319AF582 /* MultiComponentShrinker.swift in Sources */,
 				9E681FD7857BB0E8B54236DD /* Mutator.swift in Sources */,
-				233D62539D27A6EB4181220F /* Optional+Fuzzable.swift in Sources */,
-				1426388F8F61D31CB0AC925C /* PlateauDetectorPlugin.swift in Sources */,
+				56D29B8C49300786D2ACBD1A /* NegativeIntMutator.swift in Sources */,
+				AC0EB1E931DDE5907D9E63F7 /* Optional+MutatorProviding.swift in Sources */,
+				1CEE9C52E71296E5382DD285 /* PercentageMutator.swift in Sources */,
+				7177FDDC6C703BE6ED195B56 /* PhoneNumberMutator.swift in Sources */,
+				3623AE0B84CB07558F777090 /* PortMutator.swift in Sources */,
+				86364D3C2F2DBEA2A9B62EA0 /* PowerOfTwoMutator.swift in Sources */,
 				F8CA279E1D5C86F49E55C093 /* RandomNumberGeneratorClient.swift in Sources */,
+				2934DF4D2D0A7B2472998876 /* SQLInjectionMutator.swift in Sources */,
 				5CE75ACE29DD3F8860FAA19D /* STADSPlateauDetector.swift in Sources */,
 				F5E12565A5E3B3F657133645 /* STADSPlateauDetectorPlugin.swift in Sources */,
 				BEBBA20C60FAF1E749C4427D /* SanCovCounters.swift in Sources */,
@@ -1152,18 +1263,23 @@
 				BD0CC959DAB2216FB5A5AE9E /* ShrinkResult.swift in Sources */,
 				6632F732A4FAECE34A80F544 /* ShrinkStats.swift in Sources */,
 				B12BA13984E49118CD620DA9 /* Shrinkable.swift in Sources */,
-				E94E382B579A8EAEA05F2A12 /* ShrinkingPlugin.swift in Sources */,
 				F854221602A30DC642BC0670 /* SimpleCoveragePlateauDetector.swift in Sources */,
 				26A3CB5877617786D4DAC208 /* SparseCoverage.swift in Sources */,
-				A03C312DFD232E75A523A81F /* StoppingConditionPlugin.swift in Sources */,
-				C7EFC9C84CA6559C4F8B0443 /* String+Fuzzable.swift in Sources */,
+				7CB8AB059E1825789CCB0F93 /* SpecialDoubleMutator.swift in Sources */,
+				93B2E23B1BBADC7F513EC48E /* String+MutatorProviding.swift in Sources */,
 				E05A1921A081B8C834B8A921 /* String+Shrinkable.swift in Sources */,
+				37A87717B2EB72E8BA3B0DFB /* StringBoundaryMutator.swift in Sources */,
+				E61304C8BC4F785E82EF8E3D /* StringMutators.swift in Sources */,
 				194E2180758E8A2A82D69A19 /* SyncBox.swift in Sources */,
 				6B81F710C9EAE2B9786DFD16 /* TaskResults.swift in Sources */,
 				87CB37DFCDC351E3E53BE7F1 /* TestCaseShrinker.swift in Sources */,
-				67B2DBE808E07482177746DF /* UInt+Fuzzable.swift in Sources */,
-				BEDB0614821BD4498825DC86 /* UInt8+Fuzzable.swift in Sources */,
+				92C0A97FA308BAE7318F09BE /* UInt+MutatorProviding.swift in Sources */,
+				E914B1D593A03C40C576C93A /* UInt8+MutatorProviding.swift in Sources */,
+				E2ED9AA8879A99B92480A646 /* URLMutator.swift in Sources */,
 				E5CE85300E9595AE8CF1F398 /* UncoveredRegion.swift in Sources */,
+				E84A0D3FEB919703F75C1BA1 /* UnicodeMutator.swift in Sources */,
+				9E5C3463A81E92C8411CBBC4 /* WhitespaceMutator.swift in Sources */,
+				3C0A06D9F8141B7C2EEC9073 /* XSSMutator.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

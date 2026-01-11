@@ -2,7 +2,6 @@
 // The swift-tools-version declares the minimum version of Swift required to build this package.
 
 import PackageDescription
-import CompilerPluginSupport
 
 let package = Package(
     name: "PropertyTestingKit",
@@ -17,7 +16,6 @@ let package = Package(
         ),
     ],
     dependencies: [
-        .package(url: "https://github.com/swiftlang/swift-syntax.git", from: "600.0.1"),
         .package(url: "https://github.com/pointfreeco/swift-dependencies.git", from: "1.6.0"),
         .package(url: "https://github.com/twof/FunctionSpy.git", from: "1.2.0"),
         .package(url: "https://github.com/apple/swift-collections.git", from: "1.1.0"),
@@ -61,7 +59,6 @@ let package = Package(
         .target(
             name: "PropertyTestingKit",
             dependencies: [
-                "PropertyTestingKitMacros",
                 "SanCovHooks",
                 "CLLVMSymbolizer",
                 .product(name: "Dependencies", package: "swift-dependencies"),
@@ -142,16 +139,6 @@ let package = Package(
                 "PropertyTestingKit",
             ]
         ),
-        .macro(
-            name: "PropertyTestingKitMacros",
-            dependencies: [
-                .product(name: "SwiftSyntaxMacros", package: "swift-syntax"),
-                .product(name: "SwiftCompilerPlugin", package: "swift-syntax"),
-            ],
-            swiftSettings: [
-                .unsafeFlags(["-O"])  // Optimize even in debug builds
-            ]
-        )
     ]
 )
 

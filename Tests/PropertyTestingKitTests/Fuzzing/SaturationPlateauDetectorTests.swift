@@ -194,71 +194,57 @@ struct SaturationPlateauDetectorTests {
     }
 }
 
-@Suite("SaturationPlateauDetectorPlugin")
-struct SaturationPlateauDetectorPluginTests {
+@Suite("EventBasedSaturationPlugin")
+struct EventBasedSaturationPluginTests {
 
     @Test("Plugin has correct ID")
     func testPluginId() async {
-        let plugin = SaturationPlateauDetectorPlugin()
-        #expect(plugin.id == "saturationDetector")
+        let plugin = EventBasedSaturationPlugin()
+        #expect(await plugin.id == "saturation_detector")
     }
 
-    @Test("Plugin returns stop decision when plateaued")
-    func testStopDecision() async {
+    @Test("Plugin returns stop action when plateaued")
+    func testStopAction() async throws {
         let config = SaturationPlateauDetector.Config(
             minGrowthRate: 0.01,
             windowSize: 5,
             confirmationWindows: 2,
             enabled: true
         )
-        var plugin = SaturationPlateauDetectorPlugin(config: config)
+        let plugin = EventBasedSaturationPlugin(config: config)
 
-        // Record many non-discoveries
-        for _ in 0..<50 {
-            plugin.recordIteration(discoveredNewCoverage: false)
+        // Record many non-discoveries via iteration events
+        for i in 0..<50 {
+            let iterationContext = PluginEvent<Int>.IterationContext(
+                iteration: i,
+                discoveredNewCoverage: false,
+                elapsed: Double(i) * 0.1,
+                corpusSize: 0
+            )
+            let actions = try await plugin.handle(event: PluginEvent<Int>.iteration(iterationContext))
+
+            // Check if we got a stop action
+            if actions.contains(where: {
+                if case .stop = $0 { return true }
+                return false
+            }) {
+                // Good - we got a stop action
+                return
+            }
         }
 
-        let context = FuzzPluginContext.StoppingContext(
-            iteration: 50,
-            elapsed: 1.0,
-            corpusSize: 0,
-            recentDiscoveryRate: 0.0,
-            totalDiscoveries: 0,
-            iterationsSinceLastDiscovery: 50
-        )
-
-        let decision = plugin.shouldStop(context: context)
-        if case .stop(let reason) = decision {
-            #expect(reason == "saturation_plateau")
-        } else {
-            Issue.record("Expected stop decision")
-        }
+        Issue.record("Expected stop action after plateau")
     }
 
     @Test("Convenience constructor creates plugin")
     func testConvenienceConstructor() async {
-        let plugin: SaturationPlateauDetectorPlugin = .saturationDetector(
+        let plugin: EventBasedSaturationPlugin = .saturationDetector(
             minSaturation: 0.95,
             minGrowthRate: 0.0005,
             windowSize: 100,
             confirmationWindows: 5
         )
 
-        #expect(plugin.id == "saturationDetector")
-    }
-
-    @Test("Stats are populated correctly")
-    func testStats() async {
-        var plugin = SaturationPlateauDetectorPlugin()
-
-        for i in 0..<10 {
-            plugin.recordIteration(discoveredNewCoverage: i % 3 == 0)
-        }
-
-        let stats = plugin.stats()
-        #expect(stats.pluginId == "saturationDetector")
-        #expect(stats.details["saturationLevel"] != nil)
-        #expect(stats.details["growthRate"] != nil)
-        #expect(stats.details["cumulativeCoverage"] != nil)
+        #expect(await plugin.id == "saturation_detector")
     }
 }

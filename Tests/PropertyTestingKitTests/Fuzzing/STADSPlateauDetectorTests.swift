@@ -171,69 +171,56 @@ struct STADSPlateauDetectorTests {
     }
 }
 
-@Suite("STADSPlateauDetectorPlugin")
-struct STADSPlateauDetectorPluginTests {
+@Suite("EventBasedSTADSPlugin")
+struct EventBasedSTADSPluginTests {
 
     @Test("Plugin has correct ID")
     func testPluginId() async {
-        let plugin = STADSPlateauDetectorPlugin()
-        #expect(plugin.id == "stadsDetector")
+        let plugin = EventBasedSTADSPlugin()
+        #expect(await plugin.id == "stads_detector")
     }
 
-    @Test("Plugin returns stop decision when plateaued")
-    func testStopDecision() async {
+    @Test("Plugin returns stop action when plateaued")
+    func testStopAction() async throws {
         let config = STADSPlateauDetector.Config(
             minDiscoveryProbability: 0.01,
             confirmationChecks: 2,
             checkInterval: 5,
             enabled: true
         )
-        var plugin = STADSPlateauDetectorPlugin(config: config)
+        let plugin = EventBasedSTADSPlugin(config: config)
 
-        // Record many non-discoveries
-        for _ in 0..<50 {
-            plugin.recordIteration(discoveredNewCoverage: false)
+        // Record many non-discoveries via iteration events
+        for i in 0..<50 {
+            let iterationContext = PluginEvent<Int>.IterationContext(
+                iteration: i,
+                discoveredNewCoverage: false,
+                elapsed: Double(i) * 0.1,
+                corpusSize: 0
+            )
+            let actions = try await plugin.handle(event: PluginEvent<Int>.iteration(iterationContext))
+
+            // Check if we got a stop action
+            if actions.contains(where: {
+                if case .stop = $0 { return true }
+                return false
+            }) {
+                // Good - we got a stop action
+                return
+            }
         }
 
-        let context = FuzzPluginContext.StoppingContext(
-            iteration: 50,
-            elapsed: 1.0,
-            corpusSize: 0,
-            recentDiscoveryRate: 0.0,
-            totalDiscoveries: 0,
-            iterationsSinceLastDiscovery: 50
-        )
-
-        let decision = plugin.shouldStop(context: context)
-        if case .stop(let reason) = decision {
-            #expect(reason == "stads_plateau")
-        } else {
-            Issue.record("Expected stop decision")
-        }
+        Issue.record("Expected stop action after plateau")
     }
 
     @Test("Convenience constructor creates plugin")
     func testConvenienceConstructor() async {
-        let plugin: STADSPlateauDetectorPlugin = .stadsDetector(
+        let plugin: EventBasedSTADSPlugin = .stadsDetector(
             minDiscoveryProbability: 0.005,
             confirmationChecks: 5,
             checkInterval: 50
         )
 
-        #expect(plugin.id == "stadsDetector")
-    }
-
-    @Test("Stats are populated correctly")
-    func testStats() async {
-        var plugin = STADSPlateauDetectorPlugin()
-
-        for i in 0..<10 {
-            plugin.recordIteration(discoveredNewCoverage: i % 3 == 0)
-        }
-
-        let stats = plugin.stats()
-        #expect(stats.pluginId == "stadsDetector")
-        #expect(stats.details["totalDiscoveries"] != nil)
-        #expect(stats.details["discoveryProbability"] != nil)
+        #expect(await plugin.id == "stads_detector")
     }
 }

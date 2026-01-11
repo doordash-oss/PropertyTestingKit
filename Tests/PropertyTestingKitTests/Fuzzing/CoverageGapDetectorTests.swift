@@ -269,19 +269,72 @@ struct CoverageGapDetectorTests {
             coverageChanges: []
         )
 
-        // coverageGapReport is now a computed property from analysisReports
-        #expect(result.coverageGapReport == nil)
+        // Coverage gap reports are now handled via recordIssue actions from plugins
+        // No direct access to coverage gap report in FuzzResult
+        #expect(result.failures.isEmpty)
     }
 
-    @Test("FuzzEngine.Config has analysisPlugins for gap detection")
-    func configHasAnalysisPlugins() {
-        // With plugins, gap detection is enabled by adding CoverageGapPlugin
-        let config = FuzzEngine<Int>.Config(analysisPlugins: [.coverageGaps()])
-        #expect(config.analysisPlugins.count == 1)
-        #expect(config.analysisPlugins.contains { $0 is CoverageGapPlugin })
+    @Test("FuzzEngine.Config has plugins for gap detection")
+    func configHasPlugins() {
+        // With plugins, gap detection is enabled by adding EventBasedCoverageGapPlugin
+        let config = FuzzEngine<Int>.Config(plugins: [EventBasedCoverageGapPlugin()])
+        #expect(config.plugins.count == 1)
+        #expect(config.plugins.contains { $0 is EventBasedCoverageGapPlugin })
 
         let defaultConfig = FuzzEngine<Int>.Config()
-        #expect(defaultConfig.analysisPlugins.isEmpty)
+        #expect(defaultConfig.plugins.isEmpty)
+    }
+
+    // REPRO TEST: Minimal version without plugins to isolate crash
+    @Test("Minimal fuzz test - no plugins")
+    func minimalFuzzTestNoPlugins() async throws {
+        try await fuzz(
+            iterations: 10,
+            corpusMode: .refuzzReplace,
+            plugins: []
+        ) { (input: Int) in
+            _ = input &* 2  // Use overflow operator to avoid crash on Int.max
+        }
+    }
+
+    // REPRO TEST: Direct FuzzEngine usage (bypasses fuzz() API)
+    @Test("Direct FuzzEngine usage")
+    func directFuzzEngineTest() async throws {
+        let config = FuzzEngine<Int>.Config(
+            maxIterations: 10,
+            corpusMode: .refuzzReplace,
+            plugins: []
+        )
+        let engine = FuzzEngine<Int>(mutators: Int.defaultMutator, config: config)
+        let _ = await engine.run { input in
+            _ = input &* 2  // Use overflow operator to avoid crash on Int.max
+        }
+    }
+
+    // REPRO TEST: Just create FuzzEngine, don't run
+    @Test("Just create FuzzEngine")
+    func justCreateFuzzEngine() async throws {
+        let config = FuzzEngine<Int>.Config(
+            maxIterations: 10,
+            corpusMode: .refuzzReplace,
+            plugins: []
+        )
+        let _ = FuzzEngine<Int>(mutators: Int.defaultMutator, config: config)
+        // Don't call run()
+    }
+
+    // REPRO TEST: Run with empty closure
+    @Test("Run with empty closure")
+    func runWithEmptyClosure() async throws {
+        let config = FuzzEngine<Int>.Config(
+            maxIterations: 1,  // Just 1 iteration
+            corpusMode: .refuzzReplace,
+            plugins: []
+        )
+        let engine = FuzzEngine<Int>(mutators: Int.defaultMutator, config: config)
+        let _ = await engine.run { _ in
+            // Empty body
+        }
     }
 
     @Test("Realistic coverage gap test")
@@ -306,25 +359,10 @@ struct CoverageGapDetectorTests {
             try await fuzz(
                 iterations: 100,
                 corpusMode: .refuzzReplace,
-                stoppingPlugins: [],
-                analysisPlugins: [.coverageGaps()]
+                plugins: [EventBasedCoverageGapPlugin()]
             ) { (input: Int) in
                 partiallyCoveredFunction(input: input)
             }
-        }
-    }
-
-    @Test
-    func scratchPad() async throws {
-        let config = FuzzEngine<Int>.Config(
-            maxIterations: 1000,
-            corpusMode: .refuzzReplace,
-            stoppingPlugins: [],  // Disable automatic stopping
-            analysisPlugins: [.coverageGaps()]  // Enable gap detection
-        )
-        let engine = FuzzEngine<Int>(config: config)
-        let _ = await engine.run { input in
-            try parseAndValidate(input)
         }
     }
 

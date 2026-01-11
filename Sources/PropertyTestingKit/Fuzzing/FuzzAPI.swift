@@ -11,7 +11,7 @@ import Dependencies
 
 // MARK: - Public Fuzz API
 
-/// Run a coverage-guided fuzz test.
+/// Run a coverage-guided fuzz test with explicit mutators.
 ///
 /// This function combines property-based testing with coverage guidance:
 /// 1. First run: Explores inputs to maximize code coverage, saves minimal corpus
@@ -21,7 +21,7 @@ import Dependencies
 ///
 /// ```swift
 /// @Test func testParser() throws {
-///     // Basic usage with default seeds (uses Fuzzable conformance)
+///     // Basic usage with default mutators (uses MutatorProviding conformance)
 ///     try fuzz { (input: String) in
 ///         let result = parse(input)
 ///         #expect(result.isValid || result.hasError)
@@ -68,13 +68,13 @@ import Dependencies
 /// ## Requirements
 ///
 /// - Build with sanitizer coverage: `-sanitize-coverage=edge,pc-table`
-/// - Input type must conform to `Fuzzable & Codable`
+/// - Input type must conform to `Codable & Sendable`
 /// - **Coverage isolation**: The fuzzer uses task-keyed coverage maps that provide
 ///   true per-task isolation. Multiple fuzz tests can run concurrently without
 ///   coverage contamination, even when tasks share threads.
 ///
 /// - Parameters:
-///   - mutators: Custom mutators for each input type. Pass one mutator per input.
+///   - mutators: Mutators for each input type. Pass one mutator per input.
 ///     Use `String.mutators(...)`, `Int.mutators(...)`, etc. for domain-specific fuzzing.
 ///   - seeds: Domain-specific seed values to guide the fuzzer. These are added
 ///     to the mutator's seed values. Use this to target specific edge cases.
@@ -88,21 +88,15 @@ import Dependencies
 ///     Can also be set via `FUZZ_CORPUS_MODE` environment variable.
 ///   - mutationBatchSize: Number of mutations to run in parallel per batch.
 ///     0 = auto-tune based on test cost (default), 1 = sequential, 4-16 = manual batching.
-///   - observerPlugins: Plugins that receive lifecycle notifications (start, batch complete, end).
-///   - stoppingPlugins: Plugins that determine when to stop fuzzing.
+///   - plugins: Event-based plugins for stopping conditions, analysis, and shrinking.
 ///     Default: empty (only iteration/time limits apply).
-///     Use `.plateauDetector()` for adaptive early stopping.
-///   - analysisPlugins: Plugins that run after fuzzing completes. Use `.coverageGaps()`
-///     to enable coverage gap detection.
-///   - shrinkingPlugin: Plugin for shrinking failing inputs to minimal reproducing cases.
-///     Use `.default()` to enable shrinking with default settings.
 ///   - filePath: Source file path (auto-filled).
 ///   - function: Test function name (auto-filled).
 ///   - test: The test closure receiving fuzzed inputs.
 ///
 /// - Throws: Re-throws test failures, or throws if fuzzing finds failures.
 @discardableResult
-public func fuzz<each Input: Fuzzable & Codable & Sendable, each M: Mutator>(
+public func fuzz<each Input: Codable & Sendable, each M: Mutator>(
     using mutators: repeat each M,
     seeds: [(repeat each Input)] = [],
     iterations: Int = 10_000,
@@ -110,10 +104,7 @@ public func fuzz<each Input: Fuzzable & Codable & Sendable, each M: Mutator>(
     perInputTimeout: Duration? = nil,
     corpusMode: CorpusMode? = nil,
     mutationBatchSize: Int = 0,
-    observerPlugins: [any FuzzObserverPlugin] = [],
-    stoppingPlugins: [any StoppingConditionPlugin]? = nil,
-    analysisPlugins: [any AnalysisPlugin] = [],
-    shrinkingPlugin: (any ShrinkingPlugin)? = nil,
+    plugins: [any EventBasedPlugin] = [],
     filePath: StaticString = #filePath,
     function: StaticString = #function,
     line: Int = #line,
@@ -121,6 +112,7 @@ public func fuzz<each Input: Fuzzable & Codable & Sendable, each M: Mutator>(
 ) async throws -> FuzzResult<repeat each Input> where (repeat (each M).Value) == (repeat each Input) {
     @Dependency(\.environment) var environment
 
+    let testFilePath = String(describing: filePath)
     let config = FuzzEngine<repeat each Input>.Config(
         maxIterations: iterations,
         maxDuration: duration,
@@ -129,10 +121,13 @@ public func fuzz<each Input: Fuzzable & Codable & Sendable, each M: Mutator>(
         perInputTimeout: perInputTimeout,
         mutationBatchSize: mutationBatchSize,
         projectPath: projectPath(from: filePath),
-        observerPlugins: observerPlugins,
-        stoppingPlugins: stoppingPlugins,
-        analysisPlugins: analysisPlugins,
-        shrinkingPlugin: shrinkingPlugin
+        sourceLocation: SourceLocation(
+            fileID: testFilePath,
+            filePath: testFilePath,
+            line: line,
+            column: 1
+        ),
+        plugins: plugins
     )
 
     let engine = FuzzEngine<repeat each Input>(
@@ -144,9 +139,9 @@ public func fuzz<each Input: Fuzzable & Codable & Sendable, each M: Mutator>(
     return try reportFuzzResult(await engine.run(additionalSeeds: seeds, test: test), filePath: filePath, line: line)
 }
 
-/// Run a coverage-guided fuzz test using the type's `Fuzzable` conformance.
+/// Run a coverage-guided fuzz test using the type's default mutator.
 ///
-/// This version uses the default `Fuzzable.fuzz` seeds and `mutate()` method for each input type.
+/// This version uses the type's `MutatorProviding.defaultMutator` for each input type.
 /// For custom mutation strategies, use `fuzz(using:seeds:...)` with explicit mutators.
 ///
 /// - Parameters:
@@ -161,48 +156,36 @@ public func fuzz<each Input: Fuzzable & Codable & Sendable, each M: Mutator>(
 ///     Can also be set via `FUZZ_CORPUS_MODE` environment variable.
 ///   - mutationBatchSize: Number of mutations to run in parallel per batch.
 ///     0 = auto-tune based on test cost (default), 1 = sequential, 4-16 = manual batching.
-///   - observerPlugins: Plugins that receive lifecycle notifications (start, batch complete, end).
-///   - stoppingPlugins: Plugins that determine when to stop fuzzing.
+///   - plugins: Event-based plugins for stopping conditions, analysis, and shrinking.
 ///     Default: empty (only iteration/time limits apply).
-///     Use `.plateauDetector()` for adaptive early stopping.
-///   - analysisPlugins: Plugins that run after fuzzing completes. Use `.coverageGaps()`
-///     to enable coverage gap detection.
-///   - shrinkingPlugin: Plugin for shrinking failing inputs to minimal reproducing cases.
-///     Use `.default()` to enable shrinking with default settings.
 ///   - filePath: Source file path (auto-filled).
 ///   - function: Test function name (auto-filled).
 ///   - test: The test closure receiving fuzzed inputs.
 ///
 /// - Throws: Re-throws test failures, or throws if fuzzing finds failures.
 @discardableResult
-public func fuzz<each Input: Fuzzable & Codable & Sendable>(
+public func fuzz<each Input: MutatorProviding & Codable & Sendable>(
     seeds: [(repeat each Input)] = [],
     iterations: Int = 10_000,
     duration: Duration = .seconds(60),
     perInputTimeout: Duration? = nil,
     corpusMode: CorpusMode? = nil,
     mutationBatchSize: Int = 0,
-    observerPlugins: [any FuzzObserverPlugin] = [],
-    stoppingPlugins: [any StoppingConditionPlugin]? = nil,
-    analysisPlugins: [any AnalysisPlugin] = [],
-    shrinkingPlugin: (any ShrinkingPlugin)? = nil,
+    plugins: [any EventBasedPlugin] = [],
     filePath: StaticString = #filePath,
     function: StaticString = #function,
     line: Int = #line,
     test: @escaping @Sendable ((repeat each Input)) async throws -> Void
 ) async throws -> FuzzResult<repeat each Input> {
     try await fuzz(
-        using: repeat DefaultMutator<each Input>(),
+        using: repeat (each Input).defaultMutator,
         seeds: seeds,
         iterations: iterations,
         duration: duration,
         perInputTimeout: perInputTimeout,
         corpusMode: corpusMode,
         mutationBatchSize: mutationBatchSize,
-        observerPlugins: observerPlugins,
-        stoppingPlugins: stoppingPlugins,
-        analysisPlugins: analysisPlugins,
-        shrinkingPlugin: shrinkingPlugin,
+        plugins: plugins,
         filePath: filePath,
         function: function,
         line: line,
@@ -246,20 +229,7 @@ private func reportFuzzResult<each Input: Codable & Sendable>(
         )
     }
 
-    // Record issues from analysis plugins
-    for report in result.analysisReports {
-        for issueMessage in report.issues {
-            Issue.record(
-                Comment(rawValue: issueMessage),
-                sourceLocation: SourceLocation(
-                    fileID: testFilePath,
-                    filePath: testFilePath,
-                    line: line,
-                    column: 1
-                )
-            )
-        }
-    }
+    // Note: Analysis plugin issues are now recorded directly via recordIssue actions
 
     if let firstFailure = result.failures.first {
         throw FuzzError.testFailed(

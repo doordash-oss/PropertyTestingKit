@@ -33,14 +33,12 @@ struct FuzzAPITests {
             let config = FuzzEngine<String>.Config(
                 maxIterations: 100,
                 maxDuration: .seconds(5),
-                generationRatio: 0.2,
                 minimizeCorpus: true,
                 verbose: true,
-                stoppingPlugins: [],
-                analysisPlugins: [.coverageGaps()]
+                plugins: [EventBasedCoverageGapPlugin()]
             )
 
-            let engine = FuzzEngine<String>(config: config, corpusDirectory: corpusDir)
+            let engine = FuzzEngine<String>(mutators: String.defaultMutator, config: config, corpusDirectory: corpusDir)
 
             // Use String directly with domain-specific seeds
             return await engine.run(additionalSeeds: numberParserSeeds) { input in
@@ -67,31 +65,8 @@ struct FuzzAPITests {
             print("  \(i + 1). \"\(entry.input)\" → \(parsed.map(String.init) ?? "nil")")
         }
 
-        // Check coverage gap report
-        if let gapReport = result.coverageGapReport {
-            print("\n=== Coverage Gap Report ===")
-            print(gapReport.detailedSummary)
-
-            // Verify NumberParser.parse has 100% coverage (no gaps)
-            let parseGap = gapReport.gaps.first { $0.functionName.contains("NumberParser.parse") }
-
-            if let gap = parseGap {
-                print("\nNumberParser.parse coverage: \(String(format: "%.0f", gap.coveragePercentage))%")
-                print("  Covered edges: \(gap.coveredEdgeCount)/\(gap.totalEdgeCount)")
-                for region in gap.uncoveredRegions {
-                    print("  - Line \(region.lineStart): not covered (edge \(region.edgeIndex))")
-                }
-
-                #expect(
-                    gap.uncoveredRegions.isEmpty,
-                    "NumberParser.parse should have 100% coverage, but has gaps at edges: \(gap.uncoveredRegions.map { $0.edgeIndex })"
-                )
-            } else {
-                print("\nNumberParser.parse: 100% coverage achieved")
-            }
-        } else {
-            print("\nNote: Coverage gap detection not available (requires SanCov instrumentation)")
-        }
+        // Note: Coverage gap detection is now handled via EventBasedCoverageGapPlugin
+        // which records issues directly rather than storing in the result
 
         #expect(result.failures.isEmpty, "No test errors should occur")
         #expect(saveSpy.callCount == 1, "Corpus should be saved")
@@ -119,11 +94,10 @@ struct FuzzAPITests {
             let config = FuzzEngine<String>.Config(
                 maxIterations: 50,
                 maxDuration: .seconds(5),
-                verbose: false,
-                stoppingPlugins: []
+                verbose: false
             )
 
-            let engine = FuzzEngine<String>(config: config, corpusDirectory: corpusDir)
+            let engine = FuzzEngine<String>(mutators: String.defaultMutator, config: config, corpusDirectory: corpusDir)
             let result = await engine.run(additionalSeeds: numberParserSeeds) { input in
                 _ = NumberParser.parse(input)
             }
@@ -237,7 +211,7 @@ struct FuzzAPITests {
                 verbose: false
             )
 
-            let engine = FuzzEngine<Bool>(config: config)
+            let engine = FuzzEngine<Bool>(mutators: Bool.defaultMutator, config: config)
             return await engine.run { _ in
                 // Throw for any input to guarantee a failure
                 throw TestFailure()

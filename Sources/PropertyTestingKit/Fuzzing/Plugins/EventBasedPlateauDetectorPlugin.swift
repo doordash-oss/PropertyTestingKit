@@ -5,8 +5,10 @@
 
 import Foundation
 
-struct EventBasedPlateauDetectorPlugin: EventBasedPlugin {
-    var detector: SimpleCoveragePlateauDetector
+public actor EventBasedPlateauDetectorPlugin: EventBasedPlugin {
+    public let id: String = "plateau_detector" 
+
+    private var detector: SimpleCoveragePlateauDetector
 
     /// Create a plateau detector plugin.
     ///
@@ -16,17 +18,18 @@ struct EventBasedPlateauDetectorPlugin: EventBasedPlugin {
         self.detector = SimpleCoveragePlateauDetector(config: config)
     }
 
-    mutating func handle<each T>(event: PluginEvent<repeat each T>) async throws -> [FuzzPluginAction] {
+    public func handle<each T: Sendable>(event: PluginEvent<repeat each T>) async throws -> [FuzzPluginAction<repeat each T>] {
         switch event {
         case let .iteration(context):
             detector.record(discoveredNewCoverage: context.discoveredNewCoverage)
 
             if detector.hasPlateaued {
-                return [.stop(.init(reason: "coverage_plateau"))]
+                return [.stop(FuzzPluginAction<repeat each T>.StopAction(reason: "coverage_plateau"))]
             }
 
             return []
-        default: return []
+        default:
+            return []
         }
     }
 }

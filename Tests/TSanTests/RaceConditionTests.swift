@@ -219,7 +219,7 @@ struct FuzzEngineRaceTests {
                         verbose: false,
                         corpusMode: .refuzzReplace
                     )
-                    let engine = FuzzEngine(config: config)
+                    let engine = FuzzEngine(mutators: Int.defaultMutator, config: config)
 
                     _ = try await engine.run { (input: Int) in
                         // Simple test that doesn't fail

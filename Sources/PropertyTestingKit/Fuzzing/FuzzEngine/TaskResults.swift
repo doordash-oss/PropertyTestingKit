@@ -16,7 +16,7 @@ struct SeedTaskResult: Sendable {
 }
 
 /// A batch entry containing both input and metadata.
-struct BatchEntry<each Input: Fuzzable & Codable & Sendable>: Sendable {
+struct BatchEntry<each Input: Codable & Sendable>: Sendable {
     let input: (repeat each Input)
     let parentIndex: Int?
     let isMutation: Bool

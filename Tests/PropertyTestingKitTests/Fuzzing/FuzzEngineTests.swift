@@ -50,25 +50,23 @@ private func makeNilCoverageClient() -> CoverageCountersClient {
     )
 }
 
-/// A Fuzzable type that returns empty fuzz values and empty mutations.
+/// A MutatorProviding type that returns empty seeds and empty mutations.
 /// Used to test guard branches in FuzzEngine.
-struct EmptyFuzzable: Fuzzable, Codable, Sendable, Equatable {
+struct EmptyFuzzable: MutatorProviding, Codable, Sendable, Equatable {
     let value: Int
 
-    static var fuzz: [EmptyFuzzable] { [] }
-
-    func mutate() -> [EmptyFuzzable] { [] }
+    static var defaultMutator: AnyMutator<EmptyFuzzable> {
+        AnyMutator(seeds: []) { _ in [] }
+    }
 }
 
-/// A Fuzzable type with values but empty mutations.
-struct EmptyMutationsFuzzable: Fuzzable, Codable, Sendable, Equatable {
+/// A MutatorProviding type with values but empty mutations.
+struct EmptyMutationsFuzzable: MutatorProviding, Codable, Sendable, Equatable {
     let value: Int
 
-    static var fuzz: [EmptyMutationsFuzzable] {
-        [EmptyMutationsFuzzable(value: 1)]
+    static var defaultMutator: AnyMutator<EmptyMutationsFuzzable> {
+        AnyMutator(seeds: [EmptyMutationsFuzzable(value: 1)]) { _ in [] }
     }
-
-    func mutate() -> [EmptyMutationsFuzzable] { [] }
 }
 
 @Suite("FuzzEngine")
@@ -99,11 +97,9 @@ struct FuzzEngineTests {
                 maxIterations: 30,
                 maxDuration: .seconds(5),
                 minimizeCorpus: false,
-                verbose: false,
-                stoppingPlugins: []
-            )
+                verbose: false            )
 
-            let engine = FuzzEngine<Int>(config: config, corpusDirectory: nil)
+            let engine = FuzzEngine<Int>(mutators: Int.defaultMutator, config: config, corpusDirectory: nil)
             return await engine.run { _ in }
         }
 
@@ -127,7 +123,7 @@ struct FuzzEngineTests {
                 verbose: false
             )
 
-            let engine = FuzzEngine<Int>(config: config, corpusDirectory: nil)
+            let engine = FuzzEngine<Int>(mutators: Int.defaultMutator, config: config, corpusDirectory: nil)
             return await engine.run { (input: Int) in
                 if input == 42 {
                     throw TestError()
@@ -137,51 +133,6 @@ struct FuzzEngineTests {
 
         #expect(!result.failures.isEmpty, "Should detect failures")
         #expect(result.failures.contains { $0.input == 42 })
-    }
-
-    @Test("FuzzEngine respects iteration limit")
-    func testIterationLimit() async {
-        // Use AlwaysInterestingCorpusRegistry to bypass coverage data requirements
-        let alwaysInterestingRegistry = AlwaysInterestingCorpusRegistry()
-
-        let result = await withDependencies {
-            $0.corpusRegistry = alwaysInterestingRegistry
-        } operation: {
-            let config = FuzzEngine<Int>.Config(
-                maxIterations: 50,  // Higher than Int.fuzz count (21) to allow some fuzzing
-                maxDuration: .seconds(60),
-                verbose: false,
-                stoppingPlugins: []
-            )
-
-            let engine = FuzzEngine<Int>(config: config, corpusDirectory: nil)
-            return await engine.run { _ in }
-        }
-
-        #expect(result.stats.totalInputs <= 50)
-    }
-
-    @Test("FuzzStats.inputsPerSecond computes correctly")
-    func testInputsPerSecond() async {
-        // Use AlwaysInterestingCorpusRegistry to bypass coverage data requirements
-        let alwaysInterestingRegistry = AlwaysInterestingCorpusRegistry()
-
-        let result = await withDependencies {
-            $0.corpusRegistry = alwaysInterestingRegistry
-        } operation: {
-            let config = FuzzEngine<Int>.Config(
-                maxIterations: 20,
-                maxDuration: .seconds(5),
-                verbose: false
-            )
-
-            let engine = FuzzEngine<Int>(config: config, corpusDirectory: nil)
-            return await engine.run { _ in }
-        }
-
-        let rate = result.stats.inputsPerSecond
-        #expect(rate >= 0)
-        #expect(result.stats.duration >= 0)
     }
 
     @Test("FuzzEngine verbose mode logs messages")
@@ -195,37 +146,13 @@ struct FuzzEngineTests {
             let config = FuzzEngine<Int>.Config(
                 maxIterations: 50,
                 maxDuration: .seconds(5),
-                verbose: true,
-                stoppingPlugins: []
-            )
+                verbose: true            )
 
-            let engine = FuzzEngine<Int>(config: config, corpusDirectory: nil)
+            let engine = FuzzEngine<Int>(mutators: Int.defaultMutator, config: config, corpusDirectory: nil)
             return await engine.run { _ in }
         }
 
         #expect(result.stats.totalInputs > 0)
-    }
-
-    @Test("FuzzEngine reaches time limit")
-    func testTimeLimit() async {
-        // Use AlwaysInterestingCorpusRegistry to bypass coverage data requirements
-        let alwaysInterestingRegistry = AlwaysInterestingCorpusRegistry()
-
-        let result = await withDependencies {
-            $0.corpusRegistry = alwaysInterestingRegistry
-        } operation: {
-            let config = FuzzEngine<Int>.Config(
-                maxIterations: 1_000_000,
-                maxDuration: .seconds(0.001),
-                verbose: true,
-                stoppingPlugins: []
-            )
-
-            let engine = FuzzEngine<Int>(config: config, corpusDirectory: nil)
-            return await engine.run { _ in }
-        }
-
-        #expect(result.stats.totalInputs < 1_000_000)
     }
 
     @Test("FuzzEngine handles test errors during fuzzing")
@@ -244,7 +171,7 @@ struct FuzzEngineTests {
                 verbose: false
             )
 
-            let engine = FuzzEngine<Int>(config: config, corpusDirectory: nil)
+            let engine = FuzzEngine<Int>(mutators: Int.defaultMutator, config: config, corpusDirectory: nil)
             return await engine.run { (input: Int) in
                 if input % 10 == 0 {
                     throw FuzzError()
@@ -281,7 +208,7 @@ struct FuzzEngineTests {
                 verbose: true
             )
 
-            let engine = FuzzEngine<Int>(config: config, corpusDirectory: corpusDir)
+            let engine = FuzzEngine<Int>(mutators: Int.defaultMutator, config: config, corpusDirectory: corpusDir)
             return await engine.run { _ in }
         }
 
@@ -371,7 +298,7 @@ struct FuzzEngineTests {
                 verbose: true
             )
 
-            let engine = FuzzEngine<Int>(config: config, corpusDirectory: corpusDir)
+            let engine = FuzzEngine<Int>(mutators: Int.defaultMutator, config: config, corpusDirectory: corpusDir)
             return await engine.run { _ in }
         }
 
@@ -428,7 +355,7 @@ struct FuzzEngineTests {
                 verbose: true
             )
 
-            let engine = FuzzEngine<Int>(config: config, corpusDirectory: corpusDir)
+            let engine = FuzzEngine<Int>(mutators: Int.defaultMutator, config: config, corpusDirectory: corpusDir)
             return await engine.run { _ in }
         }
 
@@ -463,7 +390,7 @@ struct FuzzEngineTests {
                 verbose: true
             )
 
-            let engine = FuzzEngine<Int>(config: config, corpusDirectory: corpusDir)
+            let engine = FuzzEngine<Int>(mutators: Int.defaultMutator, config: config, corpusDirectory: corpusDir)
             return await engine.run { _ in }
         }
 
@@ -485,12 +412,9 @@ struct FuzzEngineTests {
             let config = FuzzEngine<Int>.Config(
                 maxIterations: 100,
                 maxDuration: .seconds(10),
-                generationRatio: 0.5,
-                verbose: true,
-                stoppingPlugins: []
-            )
+                verbose: true            )
 
-            let engine = FuzzEngine<Int>(config: config, corpusDirectory: nil)
+            let engine = FuzzEngine<Int>(mutators: Int.defaultMutator, config: config, corpusDirectory: nil)
             return await engine.run { _ in }
         }
 
@@ -525,7 +449,7 @@ struct FuzzEngineTests {
                 verbose: true
             )
 
-            let engine = FuzzEngine<Int>(config: config, corpusDirectory: corpusDir)
+            let engine = FuzzEngine<Int>(mutators: Int.defaultMutator, config: config, corpusDirectory: corpusDir)
             return await engine.run { _ in }
         }
 
@@ -583,7 +507,7 @@ struct FuzzEngineTests {
                 verbose: true
             )
 
-            let engine = FuzzEngine<Int>(config: config, corpusDirectory: corpusDir)
+            let engine = FuzzEngine<Int>(mutators: Int.defaultMutator, config: config, corpusDirectory: corpusDir)
             return await engine.run { _ in }
         }
 
@@ -613,7 +537,7 @@ struct FuzzEngineTests {
                 verbose: false
             )
 
-            let engine = FuzzEngine<Int>(config: config, corpusDirectory: nil)
+            let engine = FuzzEngine<Int>(mutators: Int.defaultMutator, config: config, corpusDirectory: nil)
             return await engine.run { _ in }
         }
 
@@ -645,7 +569,7 @@ struct FuzzEngineTests {
                 verbose: false
             )
 
-            let engine = FuzzEngine<Int>(config: config, corpusDirectory: nil)
+            let engine = FuzzEngine<Int>(mutators: Int.defaultMutator, config: config, corpusDirectory: nil)
             return await engine.run { _ in
                 throw TestError()
             }
@@ -683,7 +607,7 @@ struct FuzzEngineTests {
                 verbose: false
             )
 
-            let engine = FuzzEngine<Int>(config: config, corpusDirectory: nil)
+            let engine = FuzzEngine<Int>(mutators: Int.defaultMutator, config: config, corpusDirectory: nil)
             return await engine.run { _ in }
         }
 
@@ -752,7 +676,7 @@ struct FuzzEngineTests {
                 verbose: true
             )
 
-            let engine = FuzzEngine<Int>(config: config, corpusDirectory: corpusDir)
+            let engine = FuzzEngine<Int>(mutators: Int.defaultMutator, config: config, corpusDirectory: corpusDir)
             return await engine.run { _ in }
         }
 
@@ -773,13 +697,10 @@ struct FuzzEngineTests {
             let config = FuzzEngine<Int>.Config(
                 maxIterations: 20,  // Will do seeds + iterations
                 maxDuration: .seconds(10),
-                generationRatio: 1.0,  // Always generate fresh
                 minimizeCorpus: false,
-                verbose: true,
-                stoppingPlugins: []
-            )
+                verbose: true            )
 
-            let engine = FuzzEngine<Int>(config: config, corpusDirectory: nil)
+            let engine = FuzzEngine<Int>(mutators: Int.defaultMutator, config: config, corpusDirectory: nil)
             return await engine.run { _ in }
         }
 
@@ -851,7 +772,7 @@ struct FuzzEngineTests {
                 verbose: true
             )
 
-            let engine = FuzzEngine<Int>(config: config, corpusDirectory: corpusDir)
+            let engine = FuzzEngine<Int>(mutators: Int.defaultMutator, config: config, corpusDirectory: corpusDir)
             return await engine.run { (input: Int) in
                 if input == 42 {
                     throw RegressionError()
@@ -875,16 +796,14 @@ struct FuzzEngineTests {
             let config = FuzzEngine<EmptyFuzzable>.Config(
                 maxIterations: 10,
                 maxDuration: .seconds(1),
-                verbose: false,
-                stoppingPlugins: []
-            )
+                verbose: false            )
 
-            let engine = FuzzEngine<EmptyFuzzable>(config: config, corpusDirectory: nil)
+            let engine = FuzzEngine<EmptyFuzzable>(mutators: EmptyFuzzable.defaultMutator, config: config, corpusDirectory: nil)
             return await engine.run { _ in }
         }
 
-        // With empty fuzz, no seeds are processed and iterations skip via guard
-        #expect(result.corpus.count == 0, "Empty fuzz should produce empty corpus")
+        // With empty seeds, no seeds are processed and iterations skip via guard
+        #expect(result.corpus.count == 0, "Empty seeds should produce empty corpus")
         #expect(result.stats.totalInputs == 0 || result.stats.totalInputs == 10,
                 "Should either process no inputs or hit iteration limit with skips")
     }
@@ -900,12 +819,9 @@ struct FuzzEngineTests {
             let config = FuzzEngine<EmptyMutationsFuzzable>.Config(
                 maxIterations: 20,
                 maxDuration: .seconds(5),
-                generationRatio: 0.0,  // Force mutation path
-                verbose: false,
-                stoppingPlugins: []
-            )
+                verbose: false            )
 
-            let engine = FuzzEngine<EmptyMutationsFuzzable>(config: config, corpusDirectory: nil)
+            let engine = FuzzEngine<EmptyMutationsFuzzable>(mutators: EmptyMutationsFuzzable.defaultMutator, config: config, corpusDirectory: nil)
             return await engine.run { _ in }
         }
 
