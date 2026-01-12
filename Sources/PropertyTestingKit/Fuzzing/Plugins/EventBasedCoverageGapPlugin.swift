@@ -21,6 +21,10 @@ public struct EventBasedCoverageGapPlugin: EventBasedPlugin {
 
     public func handle<each T: Sendable>(event: PluginEvent<repeat each T>) async throws -> [FuzzPluginAction<repeat each T>] {
         switch event {
+        case .start:
+            // Get counters ready, resolve source locations up front.
+            await SanCovCounters.startPreWarmingSourceLocations()
+            return []
         case let .end(endContext):
             let coverageGapReport = await detector
                 .detect(
