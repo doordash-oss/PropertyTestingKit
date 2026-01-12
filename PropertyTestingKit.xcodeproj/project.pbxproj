@@ -3,7 +3,7 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 63;
+	objectVersion = 77;
 	objects = {
 
 /* Begin PBXBuildFile section */
@@ -35,6 +35,7 @@
 		383216502C8ADDDC63DC0FDB /* EventBasedPluginDispatcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2B78883BB69E251950656D0 /* EventBasedPluginDispatcher.swift */; };
 		3AE90F2D2F5E78080AAB081C /* FuzzAPITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 99DF2D2D7A9C78BEFDA1C9FF /* FuzzAPITests.swift */; };
 		3C0A06D9F8141B7C2EEC9073 /* XSSMutator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 987822C1AE1DD0059B1B19EB /* XSSMutator.swift */; };
+		3D278F94AC182188C4B835AF /* FuzzStateMachine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 248285724DB5F6586AE70506 /* FuzzStateMachine.swift */; };
 		40BBDB105DB39C8B70D658CE /* EventBasedPlateauDetectorPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = DCDB2199470F533775067DB9 /* EventBasedPlateauDetectorPlugin.swift */; };
 		413720205EA64C2558BD9F04 /* FuzzAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = A18400D950AE2D1D13443E9A /* FuzzAPI.swift */; };
 		432A7C1997D44CD9561448F1 /* CorpusMode.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7F23079959F6B89989AD2EB /* CorpusMode.swift */; };
@@ -54,7 +55,6 @@
 		605B9C253222E341C0385AB9 /* Double+MutatorProviding.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E987090D06715A5F99BEC1A /* Double+MutatorProviding.swift */; };
 		60F4B0B951427866AB7380DC /* CorpusEntry.swift in Sources */ = {isa = PBXBuildFile; fileRef = D708E6A5A1B65DA927AFEA9E /* CorpusEntry.swift */; };
 		61031F0CE3C1B19C1D04DF89 /* PropertyTestingKit.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 2595E9AD80DBFC77F241A7E7 /* PropertyTestingKit.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
-		62AAC8BC2F13FD470094293E /* FuzzStateMachine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 62AAC8BB2F13FD470094293E /* FuzzStateMachine.swift */; };
 		63529CA3B2D9F29C8601810D /* PropertyTestingKit.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 2595E9AD80DBFC77F241A7E7 /* PropertyTestingKit.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		637CEF93972CB8A43732FCB0 /* ArrayDuplicationMutator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 846F2F02B0AA5A040C5EB704 /* ArrayDuplicationMutator.swift */; };
 		6632F732A4FAECE34A80F544 /* ShrinkStats.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C98CB65B3ADE29BB300C7EA /* ShrinkStats.swift */; };
@@ -260,33 +260,44 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		00C7E57E4C8DFE72AE119BBD /* ck_pr.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ck_pr.h; sourceTree = "<group>"; };
+		00D9A28F92E90B2E82D5DC8C /* ck_cc.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ck_cc.h; sourceTree = "<group>"; };
 		00EBA13944AF0B757005638A /* ConcurrentFuzzLoadTest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConcurrentFuzzLoadTest.swift; sourceTree = "<group>"; };
-		021ACDF8BE3B266FA44EEDBD /* CoverageBenchmarks */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = text; path = CoverageBenchmarks; sourceTree = BUILT_PRODUCTS_DIR; };
+		021ACDF8BE3B266FA44EEDBD /* CoverageBenchmarks */ = {isa = PBXFileReference; includeInIndex = 0; path = CoverageBenchmarks; sourceTree = BUILT_PRODUCTS_DIR; };
 		08D9F63994131BD074E1BE90 /* StressTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = StressTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		0968653A4EEE0DAB7906E61C /* ck_f_pr.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ck_f_pr.h; sourceTree = "<group>"; };
 		09F9A66C1671353C4CCF4F16 /* CoverageSignatureTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoverageSignatureTests.swift; sourceTree = "<group>"; };
 		0A1857217E99772D144C79B7 /* ShrinkResult.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShrinkResult.swift; sourceTree = "<group>"; };
 		0A401389A02B82B842F9ED0F /* Shrinkable.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Shrinkable.swift; sourceTree = "<group>"; };
 		0A5FD30F272F4610F9D0637A /* FileManagerClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileManagerClient.swift; sourceTree = "<group>"; };
 		0BC4138150CDC1ABC2DE7C65 /* FuzzEngineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FuzzEngineTests.swift; sourceTree = "<group>"; };
+		0BF3BAC10EF47D6C57388C35 /* SanCovHooks.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = SanCovHooks.h; sourceTree = "<group>"; };
+		0F9D24C887A6D36D7A6EFDB8 /* ck_pr.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ck_pr.h; sourceTree = "<group>"; };
 		13045E2C359AB3AFCD8C3FF9 /* AnyShrinkable.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnyShrinkable.swift; sourceTree = "<group>"; };
+		137A6EE309F1056E3F217831 /* ck_pr.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ck_pr.h; sourceTree = "<group>"; };
 		146B4C7BE9FB4A557084104F /* STADSPlateauDetectorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = STADSPlateauDetectorTests.swift; sourceTree = "<group>"; };
 		1733E8C2C5D2FC2BC7394036 /* STADSPlateauDetector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = STADSPlateauDetector.swift; sourceTree = "<group>"; };
 		1B7FA0AAC10E7E2DB5FD6CDE /* TSanTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = TSanTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		1BAB215F45EB4C8CA1934BEF /* EventBasedCoverageGapPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventBasedCoverageGapPlugin.swift; sourceTree = "<group>"; };
+		207ADDE793917BD26C4770EB /* CLLVMSymbolizer.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = CLLVMSymbolizer.h; sourceTree = "<group>"; };
 		21FA35545B727DBF0891946C /* ActionExecutor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActionExecutor.swift; sourceTree = "<group>"; };
 		233B765E89E5C522C4158B51 /* URLMutator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = URLMutator.swift; sourceTree = "<group>"; };
+		248285724DB5F6586AE70506 /* FuzzStateMachine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FuzzStateMachine.swift; sourceTree = "<group>"; };
 		2595E9AD80DBFC77F241A7E7 /* PropertyTestingKit.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = PropertyTestingKit.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		2A865DFA08A7E0DE3F588EDB /* SanCovCounters.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SanCovCounters.swift; sourceTree = "<group>"; };
 		2C2AB425C1886E9C43DA056F /* MutatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MutatorTests.swift; sourceTree = "<group>"; };
 		2CF3A4D9068E7899D99B8C01 /* FailureInfo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FailureInfo.swift; sourceTree = "<group>"; };
+		2F5D17F7EF3F37D6C60A6EBF /* ck_stdbool.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ck_stdbool.h; sourceTree = "<group>"; };
 		34658F2420967EA35E38058D /* SanCovIsolationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SanCovIsolationTests.swift; sourceTree = "<group>"; };
 		36CC899B2CDB1E06A154526E /* EventBasedShrinkingPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventBasedShrinkingPlugin.swift; sourceTree = "<group>"; };
 		3B56C4B9B3773FB6734D0821 /* SimpleCoveragePlateauDetectorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SimpleCoveragePlateauDetectorTests.swift; sourceTree = "<group>"; };
+		3B6534DD92D12382387899CD /* ck_f_pr.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ck_f_pr.h; sourceTree = "<group>"; };
 		3F1917814603DE56511E5F24 /* DWARFSymbolizer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DWARFSymbolizer.swift; sourceTree = "<group>"; };
 		3F5DD8CB2128FA92846AA71F /* Testing.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; path = Testing.framework; sourceTree = "<group>"; };
 		3FFCEA0CB033829BFBAEFA52 /* CorpusCoder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CorpusCoder.swift; sourceTree = "<group>"; };
 		40672CAD432576A4635C1676 /* STADSPlateauDetectorPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = STADSPlateauDetectorPlugin.swift; sourceTree = "<group>"; };
 		4091F4EF6449C34BCC32E57C /* NegativeIntMutator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NegativeIntMutator.swift; sourceTree = "<group>"; };
+		41D46FE2CA83F10C2DE9B2F1 /* ck_ht.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ck_ht.h; sourceTree = "<group>"; };
 		4401B1A5DC7E001073C6D2B1 /* FuzzEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FuzzEngine.swift; sourceTree = "<group>"; };
 		4549A952C6186904B56C3714 /* DoubleBoundaryMutator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DoubleBoundaryMutator.swift; sourceTree = "<group>"; };
 		4787D3EC4C3D5D95A956AD02 /* PercentageMutator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PercentageMutator.swift; sourceTree = "<group>"; };
@@ -295,29 +306,44 @@
 		4E9F5016469E3378725DCE64 /* ArrayPositionAwareMutator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArrayPositionAwareMutator.swift; sourceTree = "<group>"; };
 		4F25239605AF76FC51FDDF99 /* CorpusSchema.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CorpusSchema.swift; sourceTree = "<group>"; };
 		5150147016EC8550F07948A1 /* ArraySequenceInsertionMutator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArraySequenceInsertionMutator.swift; sourceTree = "<group>"; };
+		51F60E9EF9B6498AC00EEBFE /* ck_f_pr.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ck_f_pr.h; sourceTree = "<group>"; };
 		52C1DEE9A4340554236C9F32 /* SparseCoverage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SparseCoverage.swift; sourceTree = "<group>"; };
 		5305591133199EC528A0A92D /* UserService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserService.swift; sourceTree = "<group>"; };
-		5B885ACEB672DD762DA0F839 /* ProfiledBenchmark */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = text; path = ProfiledBenchmark; sourceTree = BUILT_PRODUCTS_DIR; };
+		5357FB37687D2D3BDA8DABED /* ck_pr.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ck_pr.h; sourceTree = "<group>"; };
+		57EB1A242BFD17108D7B7C76 /* ck_f_pr.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ck_f_pr.h; sourceTree = "<group>"; };
+		5808442EF808C1EDDA75846C /* ck_cc.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ck_cc.h; sourceTree = "<group>"; };
+		5B885ACEB672DD762DA0F839 /* ProfiledBenchmark */ = {isa = PBXFileReference; includeInIndex = 0; path = ProfiledBenchmark; sourceTree = BUILT_PRODUCTS_DIR; };
 		5DE9A7DAD99528274ED05439 /* DeterministicTimingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeterministicTimingTests.swift; sourceTree = "<group>"; };
+		5DF47986A6DF631A9EB89635 /* ck_f_pr.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ck_f_pr.h; sourceTree = "<group>"; };
+		5E8F9F6F98682A286CF9856A /* ck_f_pr.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ck_f_pr.h; sourceTree = "<group>"; };
 		5F0A30CF764B199509AB0614 /* PortMutator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PortMutator.swift; sourceTree = "<group>"; };
-		62AAC8BB2F13FD470094293E /* FuzzStateMachine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FuzzStateMachine.swift; sourceTree = "<group>"; };
+		6089581A8525B59F997740DA /* ck_pr_lse.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ck_pr_lse.h; sourceTree = "<group>"; };
+		676196E34E9EA63139657323 /* ck_stdint.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ck_stdint.h; sourceTree = "<group>"; };
 		683A330BCB90F626B21D2422 /* CustomFuzzableTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CustomFuzzableTests.swift; sourceTree = "<group>"; };
+		6ADE3EEEF0705F1A7D88FD97 /* ck_stddef.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ck_stddef.h; sourceTree = "<group>"; };
 		6B4DC0FA0EFB0DDF25E4C353 /* CLLVMSymbolizer.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = CLLVMSymbolizer.cpp; sourceTree = "<group>"; };
 		6B7DA3E55A8132FE210D8EAF /* CoverageCountersClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoverageCountersClient.swift; sourceTree = "<group>"; };
+		6C6089DAA244C9F5FEF045C2 /* ck_ht_hash.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ck_ht_hash.h; sourceTree = "<group>"; };
+		6E542601AA461AC5A1E637A8 /* ck_pr.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ck_pr.h; sourceTree = "<group>"; };
+		71AD2B2875AE058F4041293D /* ck_internal.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ck_internal.h; sourceTree = "<group>"; };
 		72EFC8FC26036551EE41795E /* ProfiledBenchmark.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfiledBenchmark.swift; sourceTree = "<group>"; };
 		7769DE997855D0C94C1C405F /* FuzzResult.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FuzzResult.swift; sourceTree = "<group>"; };
 		797B369A783CF8DA4F7C9190 /* RaceConditionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RaceConditionTests.swift; sourceTree = "<group>"; };
+		7ACFE600DD67A8E2CC79D829 /* ck_pr.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ck_pr.h; sourceTree = "<group>"; };
 		7C0EB12824A02A80F8D4EB77 /* BoolMutators.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BoolMutators.swift; sourceTree = "<group>"; };
+		7C237EB63D16AB69083B9010 /* ck_limits.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ck_limits.h; sourceTree = "<group>"; };
 		7C98CB65B3ADE29BB300C7EA /* ShrinkStats.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShrinkStats.swift; sourceTree = "<group>"; };
 		7DA5B74380237260F7E42D71 /* TestCaseShrinker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TestCaseShrinker.swift; sourceTree = "<group>"; };
 		801978DFD141E3190DC8219D /* DWARFSourceLocation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DWARFSourceLocation.swift; sourceTree = "<group>"; };
 		805D70C5E70888046E92D052 /* SanCovTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = SanCovTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		8070E3D26516154F5EEEC862 /* StringMutators.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StringMutators.swift; sourceTree = "<group>"; };
 		807ED515190705E70EEBD7FE /* SyncBox.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncBox.swift; sourceTree = "<group>"; };
+		82E302CA79A5FD97C9E37328 /* ck_f_pr.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ck_f_pr.h; sourceTree = "<group>"; };
 		846F2F02B0AA5A040C5EB704 /* ArrayDuplicationMutator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArrayDuplicationMutator.swift; sourceTree = "<group>"; };
 		87964E15BDAEE902B7B38D6E /* String+MutatorProviding.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "String+MutatorProviding.swift"; sourceTree = "<group>"; };
 		87C13394409DA48E4BE31930 /* corpus.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = corpus.json; sourceTree = "<group>"; };
 		88F5B7FC44F425E39676B1D3 /* PowerOfTwoMutator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PowerOfTwoMutator.swift; sourceTree = "<group>"; };
+		8A0CC115EE184F1E93C3A0E0 /* ck_string.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ck_string.h; sourceTree = "<group>"; };
 		8D5B1DD3570EBB6E7D12F912 /* FuzzableProtocolTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FuzzableProtocolTests.swift; sourceTree = "<group>"; };
 		8DCFCD27F236B21539FDC070 /* DateClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DateClient.swift; sourceTree = "<group>"; };
 		8E87A51CF22639FAC9BB2577 /* SQLInjectionMutator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SQLInjectionMutator.swift; sourceTree = "<group>"; };
@@ -336,6 +362,7 @@
 		A179A4CAD0B9C0FC0DF76A85 /* DWARFSymbolizerHelper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DWARFSymbolizerHelper.swift; sourceTree = "<group>"; };
 		A18400D950AE2D1D13443E9A /* FuzzAPI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FuzzAPI.swift; sourceTree = "<group>"; };
 		A346A5CDA2BF60B37F20B1D2 /* EmptyStringMutator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmptyStringMutator.swift; sourceTree = "<group>"; };
+		A3890AE7461FB58FC0FA5FAC /* ck_pr.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ck_pr.h; sourceTree = "<group>"; };
 		A3DC7247C29C4368A12DBDC7 /* CartesianProduct.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CartesianProduct.swift; sourceTree = "<group>"; };
 		A4A90F27F22BE17810AE1B6F /* ContinuousClockClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContinuousClockClient.swift; sourceTree = "<group>"; };
 		A5A7DD272E538B8E8CFE5C75 /* CoverageGapDetectorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoverageGapDetectorTests.swift; sourceTree = "<group>"; };
@@ -348,6 +375,8 @@
 		B37ED10677A92DC01DD0B289 /* SaturationPlateauDetectorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaturationPlateauDetectorTests.swift; sourceTree = "<group>"; };
 		B60A0F1AE1DD32B9E72168DE /* Array+Shrinkable.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Array+Shrinkable.swift"; sourceTree = "<group>"; };
 		B64D06718A05E1272E84861D /* MockDatabase.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockDatabase.swift; sourceTree = "<group>"; };
+		C02CEB72860556B925E49CC9 /* ck_pr.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ck_pr.h; sourceTree = "<group>"; };
+		C45F1F52B8DBAE4FADF5B5C0 /* ck_md.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ck_md.h; sourceTree = "<group>"; };
 		C4C33B33085A4DB5D1981F0A /* CoverageCountersTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoverageCountersTests.swift; sourceTree = "<group>"; };
 		C507F3A635BA3903F890009B /* Array+MutatorProviding.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Array+MutatorProviding.swift"; sourceTree = "<group>"; };
 		C5A515E40A855C623BC509BC /* CoverageGapDetector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoverageGapDetector.swift; sourceTree = "<group>"; };
@@ -362,15 +391,18 @@
 		CC834389B8A7AF84299B4237 /* Int+MutatorProviding.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Int+MutatorProviding.swift"; sourceTree = "<group>"; };
 		CCEE0E1BF3B9166CBA9A3C59 /* HardToFuzzFunctions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HardToFuzzFunctions.swift; sourceTree = "<group>"; };
 		CED4705CAFB71E914729EBE5 /* IntMutators.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IntMutators.swift; sourceTree = "<group>"; };
+		CEE33D6A37CCAA419FE56BDE /* ck_f_pr.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ck_f_pr.h; sourceTree = "<group>"; };
 		CF44990BD642A0A6FBF94C6F /* SaturationPlateauDetectorPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaturationPlateauDetectorPlugin.swift; sourceTree = "<group>"; };
 		CF7909559B042C15C36EAABE /* PropertyTestingKitTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = PropertyTestingKitTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		D2671C4A43D9243DDBC246A9 /* DWARFSymbolizerError.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DWARFSymbolizerError.swift; sourceTree = "<group>"; };
 		D51DB081E26BBC926EBD26BD /* Mutator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Mutator.swift; sourceTree = "<group>"; };
+		D543CBF031454223DE6AE5E2 /* ck_pr.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ck_pr.h; sourceTree = "<group>"; };
 		D675F3742488937DF00D923F /* FunctionSizeLookup.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FunctionSizeLookup.swift; sourceTree = "<group>"; };
 		D708E6A5A1B65DA927AFEA9E /* CorpusEntry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CorpusEntry.swift; sourceTree = "<group>"; };
 		D82933D55EE528E5E866C257 /* ArrayMutators.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArrayMutators.swift; sourceTree = "<group>"; };
 		D836E824C1D4857069D00DA4 /* WhitespaceMutator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WhitespaceMutator.swift; sourceTree = "<group>"; };
 		DA3C0B16540F4626B5B88CD7 /* Corpus.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Corpus.swift; sourceTree = "<group>"; };
+		DAC6B4B0A9A99E0B2637413E /* module.modulemap */ = {isa = PBXFileReference; lastKnownFileType = "sourcecode.module-map"; path = module.modulemap; sourceTree = "<group>"; };
 		DCDB2199470F533775067DB9 /* EventBasedPlateauDetectorPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventBasedPlateauDetectorPlugin.swift; sourceTree = "<group>"; };
 		DF13CC15C322A9D79BD1BD06 /* ArrayLengthTargetedMutator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArrayLengthTargetedMutator.swift; sourceTree = "<group>"; };
 		DF69D0BBA6357FA0A5F78ABC /* ck_ht.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = ck_ht.c; sourceTree = "<group>"; };
@@ -381,20 +413,28 @@
 		E65E1585E4A2E6E29044F7C6 /* Optional+MutatorProviding.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Optional+MutatorProviding.swift"; sourceTree = "<group>"; };
 		E6E3AD5DC96FE62C844BFA88 /* FuzzerStressTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FuzzerStressTests.swift; sourceTree = "<group>"; };
 		E710A18D4C3A68A36CF37040 /* CoverageGap.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoverageGap.swift; sourceTree = "<group>"; };
+		E751C3855D21CFCFF69930BC /* ck_pr_llsc.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ck_pr_llsc.h; sourceTree = "<group>"; };
 		E88B1563B358C2EE651C20E4 /* IntBoundaryMutator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IntBoundaryMutator.swift; sourceTree = "<group>"; };
+		E8BFD8EB5926A6EE25B0D4A9 /* ck_pr_rtm.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ck_pr_rtm.h; sourceTree = "<group>"; };
+		EBE8AFD5051896B66F9862E2 /* ck_malloc.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ck_malloc.h; sourceTree = "<group>"; };
 		ED3D3A4715807897A071483B /* Character+MutatorProviding.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Character+MutatorProviding.swift"; sourceTree = "<group>"; };
+		EDEDCE8D50AA08E8CAF3B63A /* ck_f_pr.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ck_f_pr.h; sourceTree = "<group>"; };
 		EF7AA1611BFAAB73EE70CA85 /* libCLLVMSymbolizer.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = libCLLVMSymbolizer.a; sourceTree = BUILT_PRODUCTS_DIR; };
 		EF833B020283C4892D55D53C /* CoverageBenchmarks.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoverageBenchmarks.swift; sourceTree = "<group>"; };
+		F0556AB486A6844D1A3B9F04 /* module.modulemap */ = {isa = PBXFileReference; lastKnownFileType = "sourcecode.module-map"; path = module.modulemap; sourceTree = "<group>"; };
 		F13B7E4AC8104D85F98B8418 /* PhoneNumberMutator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhoneNumberMutator.swift; sourceTree = "<group>"; };
 		F1E97A029218EB361C14F01D /* DWARFSymbolizerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DWARFSymbolizerTests.swift; sourceTree = "<group>"; };
 		F3E63606AF341F913872CB76 /* CoverageGapReport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoverageGapReport.swift; sourceTree = "<group>"; };
 		F46057CB7F84DA3671178057 /* EnvironmentClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EnvironmentClient.swift; sourceTree = "<group>"; };
 		F4BDE3BB5DB51115A5922433 /* EmailMutator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmailMutator.swift; sourceTree = "<group>"; };
 		F58C560D0D81EBCA41AC8282 /* TestCaseShrinkerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TestCaseShrinkerTests.swift; sourceTree = "<group>"; };
+		F5FAD6386630E58099EFA884 /* ck_pr.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ck_pr.h; sourceTree = "<group>"; };
 		F7B5F39FFCE93451B38B3FBA /* PropertyBasedSelfTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PropertyBasedSelfTests.swift; sourceTree = "<group>"; };
 		F853A816879F7A6E163BE7B4 /* StringBoundaryMutator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StringBoundaryMutator.swift; sourceTree = "<group>"; };
 		F9091C3EF601AF281CEC4E3A /* String+Shrinkable.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "String+Shrinkable.swift"; sourceTree = "<group>"; };
 		FC16934A7D0ADDA3859FDFCA /* libSanCovHooks.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = libSanCovHooks.a; sourceTree = BUILT_PRODUCTS_DIR; };
+		FF7EA1B7C028962CAA9A3F56 /* ck_f_pr.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ck_f_pr.h; sourceTree = "<group>"; };
+		FF840C500FFAB067BC638703 /* ck_pr.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ck_pr.h; sourceTree = "<group>"; };
 		FFF4F63E42A1153F798F4A15 /* CorpusClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CorpusClient.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -465,6 +505,26 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		06CD8DCD29F0DD9801F45E77 /* ck */ = {
+			isa = PBXGroup;
+			children = (
+				5808442EF808C1EDDA75846C /* ck_cc.h */,
+				6C6089DAA244C9F5FEF045C2 /* ck_ht_hash.h */,
+				41D46FE2CA83F10C2DE9B2F1 /* ck_ht.h */,
+				71AD2B2875AE058F4041293D /* ck_internal.h */,
+				7C237EB63D16AB69083B9010 /* ck_limits.h */,
+				EBE8AFD5051896B66F9862E2 /* ck_malloc.h */,
+				C45F1F52B8DBAE4FADF5B5C0 /* ck_md.h */,
+				A3890AE7461FB58FC0FA5FAC /* ck_pr.h */,
+				2F5D17F7EF3F37D6C60A6EBF /* ck_stdbool.h */,
+				6ADE3EEEF0705F1A7D88FD97 /* ck_stddef.h */,
+				676196E34E9EA63139657323 /* ck_stdint.h */,
+				8A0CC115EE184F1E93C3A0E0 /* ck_string.h */,
+				42BACF776C62EACBC858C7B2 /* gcc */,
+			);
+			path = ck;
+			sourceTree = "<group>";
+		};
 		1030A957868366F4FD9125D1 /* Dependencies */ = {
 			isa = PBXGroup;
 			children = (
@@ -509,6 +569,8 @@
 			children = (
 				A02618471FF4E5CAE16C036E /* CLLVMSymbolizer */,
 				D90E9AECF33092EB6E4921C9 /* CoverageBenchmarks */,
+				C0C659FFA61BA01295301D6F /* include */,
+				AA60EB395FA77AB75CBF6488 /* include */,
 				6A0D4F20DD61600A95099AA3 /* ProfiledBenchmark */,
 				7772FE8E711FE4E44FDBBA37 /* PropertyTestingKit */,
 				BDDFFD2714DEB826C97E5A69 /* PropertyTestingKitTests */,
@@ -584,6 +646,15 @@
 			path = CoverageGap;
 			sourceTree = "<group>";
 		};
+		36AD15A872436A918AF943AB /* riscv64 */ = {
+			isa = PBXGroup;
+			children = (
+				57EB1A242BFD17108D7B7C76 /* ck_f_pr.h */,
+				D543CBF031454223DE6AE5E2 /* ck_pr.h */,
+			);
+			path = riscv64;
+			sourceTree = "<group>";
+		};
 		3A8850690985797B04B95710 /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
@@ -602,6 +673,34 @@
 			path = Sources/SanCovHooks;
 			sourceTree = "<group>";
 		};
+		42BACF776C62EACBC858C7B2 /* gcc */ = {
+			isa = PBXGroup;
+			children = (
+				00D9A28F92E90B2E82D5DC8C /* ck_cc.h */,
+				82E302CA79A5FD97C9E37328 /* ck_f_pr.h */,
+				137A6EE309F1056E3F217831 /* ck_pr.h */,
+				A32DF58F302C20D7324FDFAD /* aarch64 */,
+				D83E2A8615078CEDD25B812F /* arm */,
+				C5A5FFABB52C0087265047F5 /* ppc */,
+				568966FD781BF268C114E70A /* ppc64 */,
+				36AD15A872436A918AF943AB /* riscv64 */,
+				8974C6CABA7819A6F1A378A0 /* s390x */,
+				83767AE86D6BBF332AD14CB4 /* sparcv9 */,
+				4771D9D185660C72712CD859 /* x86 */,
+				68A7531F0EE099C16D505F79 /* x86_64 */,
+			);
+			path = gcc;
+			sourceTree = "<group>";
+		};
+		4771D9D185660C72712CD859 /* x86 */ = {
+			isa = PBXGroup;
+			children = (
+				5E8F9F6F98682A286CF9856A /* ck_f_pr.h */,
+				7ACFE600DD67A8E2CC79D829 /* ck_pr.h */,
+			);
+			path = x86;
+			sourceTree = "<group>";
+		};
 		4E78910B3F0F718A7406195A /* String */ = {
 			isa = PBXGroup;
 			children = (
@@ -616,6 +715,15 @@
 				987822C1AE1DD0059B1B19EB /* XSSMutator.swift */,
 			);
 			path = String;
+			sourceTree = "<group>";
+		};
+		568966FD781BF268C114E70A /* ppc64 */ = {
+			isa = PBXGroup;
+			children = (
+				5DF47986A6DF631A9EB89635 /* ck_f_pr.h */,
+				FF840C500FFAB067BC638703 /* ck_pr.h */,
+			);
+			path = ppc64;
 			sourceTree = "<group>";
 		};
 		5904899D0D159D5CBAC28557 /* Double */ = {
@@ -646,6 +754,16 @@
 				5150147016EC8550F07948A1 /* ArraySequenceInsertionMutator.swift */,
 			);
 			path = Array;
+			sourceTree = "<group>";
+		};
+		68A7531F0EE099C16D505F79 /* x86_64 */ = {
+			isa = PBXGroup;
+			children = (
+				3B6534DD92D12382387899CD /* ck_f_pr.h */,
+				E8BFD8EB5926A6EE25B0D4A9 /* ck_pr_rtm.h */,
+				C02CEB72860556B925E49CC9 /* ck_pr.h */,
+			);
+			path = x86_64;
 			sourceTree = "<group>";
 		};
 		6A0D4F20DD61600A95099AA3 /* ProfiledBenchmark */ = {
@@ -722,6 +840,24 @@
 			path = Sources/PropertyTestingKit;
 			sourceTree = "<group>";
 		};
+		83767AE86D6BBF332AD14CB4 /* sparcv9 */ = {
+			isa = PBXGroup;
+			children = (
+				0968653A4EEE0DAB7906E61C /* ck_f_pr.h */,
+				0F9D24C887A6D36D7A6EFDB8 /* ck_pr.h */,
+			);
+			path = sparcv9;
+			sourceTree = "<group>";
+		};
+		8974C6CABA7819A6F1A378A0 /* s390x */ = {
+			isa = PBXGroup;
+			children = (
+				51F60E9EF9B6498AC00EEBFE /* ck_f_pr.h */,
+				00C7E57E4C8DFE72AE119BBD /* ck_pr.h */,
+			);
+			path = s390x;
+			sourceTree = "<group>";
+		};
 		8E0551F1E322C33BFF09CCAE /* Fuzzing */ = {
 			isa = PBXGroup;
 			children = (
@@ -761,6 +897,17 @@
 			path = Sources/CLLVMSymbolizer;
 			sourceTree = "<group>";
 		};
+		A32DF58F302C20D7324FDFAD /* aarch64 */ = {
+			isa = PBXGroup;
+			children = (
+				FF7EA1B7C028962CAA9A3F56 /* ck_f_pr.h */,
+				E751C3855D21CFCFF69930BC /* ck_pr_llsc.h */,
+				6089581A8525B59F997740DA /* ck_pr_lse.h */,
+				5357FB37687D2D3BDA8DABED /* ck_pr.h */,
+			);
+			path = aarch64;
+			sourceTree = "<group>";
+		};
 		A77974B787838CD93CE6071A /* Support */ = {
 			isa = PBXGroup;
 			children = (
@@ -768,6 +915,17 @@
 				AF1E91685C6019AA1D8E23F9 /* Synchronized.swift */,
 			);
 			path = Support;
+			sourceTree = "<group>";
+		};
+		AA60EB395FA77AB75CBF6488 /* include */ = {
+			isa = PBXGroup;
+			children = (
+				F0556AB486A6844D1A3B9F04 /* module.modulemap */,
+				0BF3BAC10EF47D6C57388C35 /* SanCovHooks.h */,
+				06CD8DCD29F0DD9801F45E77 /* ck */,
+			);
+			name = include;
+			path = Sources/SanCovHooks/include;
 			sourceTree = "<group>";
 		};
 		BDDFFD2714DEB826C97E5A69 /* PropertyTestingKitTests */ = {
@@ -786,6 +944,16 @@
 			path = Tests/PropertyTestingKitTests;
 			sourceTree = "<group>";
 		};
+		C0C659FFA61BA01295301D6F /* include */ = {
+			isa = PBXGroup;
+			children = (
+				207ADDE793917BD26C4770EB /* CLLVMSymbolizer.h */,
+				DAC6B4B0A9A99E0B2637413E /* module.modulemap */,
+			);
+			name = include;
+			path = Sources/CLLVMSymbolizer/include;
+			sourceTree = "<group>";
+		};
 		C57630F4E61E4FE3B2C652DC /* SanCovTests */ = {
 			isa = PBXGroup;
 			children = (
@@ -793,6 +961,15 @@
 			);
 			name = SanCovTests;
 			path = Tests/SanCovTests;
+			sourceTree = "<group>";
+		};
+		C5A5FFABB52C0087265047F5 /* ppc */ = {
+			isa = PBXGroup;
+			children = (
+				EDEDCE8D50AA08E8CAF3B63A /* ck_f_pr.h */,
+				6E542601AA461AC5A1E637A8 /* ck_pr.h */,
+			);
+			path = ppc;
 			sourceTree = "<group>";
 		};
 		CFEBB383E2A4D3C0FFC7FC4F /* StressTests */ = {
@@ -803,6 +980,15 @@
 			);
 			name = StressTests;
 			path = Tests/StressTests;
+			sourceTree = "<group>";
+		};
+		D83E2A8615078CEDD25B812F /* arm */ = {
+			isa = PBXGroup;
+			children = (
+				CEE33D6A37CCAA419FE56BDE /* ck_f_pr.h */,
+				F5FAD6386630E58099EFA884 /* ck_pr.h */,
+			);
+			path = arm;
 			sourceTree = "<group>";
 		};
 		D90E9AECF33092EB6E4921C9 /* CoverageBenchmarks */ = {
@@ -841,9 +1027,9 @@
 			children = (
 				C7F23079959F6B89989AD2EB /* CorpusMode.swift */,
 				4401B1A5DC7E001073C6D2B1 /* FuzzEngine.swift */,
-				62AAC8BB2F13FD470094293E /* FuzzStateMachine.swift */,
 				ACE4D8AA0A411B9988FA7E7C /* FuzzEngine+Config.swift */,
 				7769DE997855D0C94C1C405F /* FuzzResult.swift */,
+				248285724DB5F6586AE70506 /* FuzzStateMachine.swift */,
 				B155EAF0286844D09A5709EC /* TaskResults.swift */,
 			);
 			path = FuzzEngine;
@@ -1078,6 +1264,7 @@
 				43F21DAA57223F47B9FE88F4 /* XCRemoteSwiftPackageReference "swift-collections" */,
 				FE7753DCDC2B738759F3B507 /* XCRemoteSwiftPackageReference "swift-dependencies" */,
 			);
+			preferredProjectObjectVersion = 77;
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
@@ -1204,7 +1391,6 @@
 				7B7ADDE2BFF43D15DE86328A /* Array+Shrinkable.swift in Sources */,
 				637CEF93972CB8A43732FCB0 /* ArrayDuplicationMutator.swift in Sources */,
 				890F51672DF9C141E63233FB /* ArrayLengthTargetedMutator.swift in Sources */,
-				62AAC8BC2F13FD470094293E /* FuzzStateMachine.swift in Sources */,
 				EED2A378ADF17C64DC50D6C8 /* ArrayMutators.swift in Sources */,
 				56BD6A924A8704F7BB65D7CD /* ArrayPositionAwareMutator.swift in Sources */,
 				B4BDB29EC97DFFA012041961 /* ArrayRepeatedValuesMutator.swift in Sources */,
@@ -1251,6 +1437,7 @@
 				8B77076135753B47C626A029 /* FuzzEngine+Config.swift in Sources */,
 				B0B276C037B14EAA3010672E /* FuzzEngine.swift in Sources */,
 				125D3FB66141B63E3542572E /* FuzzResult.swift in Sources */,
+				3D278F94AC182188C4B835AF /* FuzzStateMachine.swift in Sources */,
 				C6E708A0F04FED6D2E5A5DF0 /* HTTPStatusCodeMutator.swift in Sources */,
 				1226F62189C28475B8A01EE4 /* Int+MutatorProviding.swift in Sources */,
 				F4F5214CABA1CC0BBFD80985 /* IntBoundaryMutator.swift in Sources */,
@@ -1344,20 +1531,16 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				COMBINE_HIDPI_IMAGES = YES;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"$(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin",
-				);
-				OTHER_LDFLAGS = (
-					"$(inherited)",
-					"-L$(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin",
-					"-lclang_rt.ubsan_osx_dynamic",
-				);
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) $(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin";
+				OTHER_LDFLAGS = "$(inherited) -L$(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin -lclang_rt.ubsan_osx_dynamic";
 				OTHER_SWIFT_FLAGS = "$(inherited) -g -sanitize=undefined -sanitize-coverage=edge,pc-table";
 				PRODUCT_BUNDLE_IDENTIFIER = com.propertytestingkit.ProfiledBenchmark;
 				PRODUCT_NAME = ProfiledBenchmark;
 				SDKROOT = macosx;
-				SWIFT_INCLUDE_PATHS = "$(SRCROOT)/Sources/CLLVMSymbolizer/include $(SRCROOT)/Sources/SanCovHooks/include";
+				SWIFT_INCLUDE_PATHS = (
+					"$(SRCROOT)/Sources/CLLVMSymbolizer/include",
+					"$(SRCROOT)/Sources/SanCovHooks/include",
+				);
 			};
 			name = Debug;
 		};
@@ -1367,20 +1550,16 @@
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				COMBINE_HIDPI_IMAGES = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"$(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin",
-				);
-				OTHER_LDFLAGS = (
-					"$(inherited)",
-					"-L$(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin",
-					"-lclang_rt.ubsan_osx_dynamic",
-				);
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) $(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin";
+				OTHER_LDFLAGS = "$(inherited) -L$(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin -lclang_rt.ubsan_osx_dynamic";
 				OTHER_SWIFT_FLAGS = "$(inherited) -g -sanitize=undefined -sanitize-coverage=edge,pc-table";
 				PRODUCT_BUNDLE_IDENTIFIER = com.propertytestingkit.stresstests;
 				PRODUCT_NAME = StressTests;
 				SDKROOT = macosx;
-				SWIFT_INCLUDE_PATHS = "$(SRCROOT)/Sources/CLLVMSymbolizer/include $(SRCROOT)/Sources/SanCovHooks/include";
+				SWIFT_INCLUDE_PATHS = (
+					"$(SRCROOT)/Sources/CLLVMSymbolizer/include",
+					"$(SRCROOT)/Sources/SanCovHooks/include",
+				);
 			};
 			name = Debug;
 		};
@@ -1399,7 +1578,9 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				LIBRARY_SEARCH_PATHS = /opt/homebrew/opt/llvm/lib;
+				LIBRARY_SEARCH_PATHS = (
+					/opt/homebrew/opt/llvm/lib,
+				);
 				MODULEMAP_FILE = "$(SRCROOT)/Sources/CLLVMSymbolizer/include/module.modulemap";
 				PRODUCT_BUNDLE_IDENTIFIER = com.propertytestingkit.CLLVMSymbolizer;
 				PRODUCT_NAME = CLLVMSymbolizer;
@@ -1415,20 +1596,16 @@
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				COMBINE_HIDPI_IMAGES = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"$(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin",
-				);
-				OTHER_LDFLAGS = (
-					"$(inherited)",
-					"-L$(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin",
-					"-lclang_rt.ubsan_osx_dynamic",
-				);
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) $(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin";
+				OTHER_LDFLAGS = "$(inherited) -L$(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin -lclang_rt.ubsan_osx_dynamic";
 				OTHER_SWIFT_FLAGS = "$(inherited) -g -sanitize=undefined -sanitize-coverage=edge,pc-table";
 				PRODUCT_BUNDLE_IDENTIFIER = com.propertytestingkit.sancovtests;
 				PRODUCT_NAME = SanCovTests;
 				SDKROOT = macosx;
-				SWIFT_INCLUDE_PATHS = "$(SRCROOT)/Sources/CLLVMSymbolizer/include $(SRCROOT)/Sources/SanCovHooks/include";
+				SWIFT_INCLUDE_PATHS = (
+					"$(SRCROOT)/Sources/CLLVMSymbolizer/include",
+					"$(SRCROOT)/Sources/SanCovHooks/include",
+				);
 			};
 			name = Release;
 		};
@@ -1438,20 +1615,16 @@
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				COMBINE_HIDPI_IMAGES = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"$(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin",
-				);
-				OTHER_LDFLAGS = (
-					"$(inherited)",
-					"-L$(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin",
-					"-lclang_rt.ubsan_osx_dynamic",
-				);
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) $(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin";
+				OTHER_LDFLAGS = "$(inherited) -L$(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin -lclang_rt.ubsan_osx_dynamic";
 				OTHER_SWIFT_FLAGS = "$(inherited) -g -sanitize=undefined -sanitize-coverage=edge,pc-table";
 				PRODUCT_BUNDLE_IDENTIFIER = com.propertytestingkit.tests;
 				PRODUCT_NAME = PropertyTestingKitTests;
 				SDKROOT = macosx;
-				SWIFT_INCLUDE_PATHS = "$(SRCROOT)/Sources/CLLVMSymbolizer/include $(SRCROOT)/Sources/SanCovHooks/include";
+				SWIFT_INCLUDE_PATHS = (
+					"$(SRCROOT)/Sources/CLLVMSymbolizer/include",
+					"$(SRCROOT)/Sources/SanCovHooks/include",
+				);
 			};
 			name = Debug;
 		};
@@ -1459,7 +1632,9 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				COMBINE_HIDPI_IMAGES = YES;
-				HEADER_SEARCH_PATHS = "$(SRCROOT)/Sources/SanCovHooks/include";
+				HEADER_SEARCH_PATHS = (
+					"$(SRCROOT)/Sources/SanCovHooks/include",
+				);
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
@@ -1485,9 +1660,7 @@
 				DYLIB_CURRENT_VERSION = 1;
 				DYLIB_INSTALL_NAME_BASE = "@rpath";
 				FRAMEWORK_SEARCH_PATHS = (
-					"$(inherited)",
-					"$(DEVELOPER_FRAMEWORKS_DIR)",
-					"$(PLATFORM_DIR)/Developer/Library/Frameworks",
+					"$(inherited) $(DEVELOPER_FRAMEWORKS_DIR) $(PLATFORM_DIR)/Developer/Library/Frameworks",
 					"\".\"",
 				);
 				GCC_ENABLE_CPP_EXCEPTIONS = NO;
@@ -1498,21 +1671,22 @@
 					"$(SRCROOT)/Sources/SanCovHooks/include",
 				);
 				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) /opt/homebrew/opt/llvm/lib";
+				LIBRARY_SEARCH_PATHS = (
 					/opt/homebrew/opt/llvm/lib,
 				);
-				LIBRARY_SEARCH_PATHS = /opt/homebrew/opt/llvm/lib;
 				OTHER_LDFLAGS = (
-					"$(inherited)",
-					"-lLLVM",
+					"$(inherited) -lLLVM",
 					"-ObjC",
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.propertytestingkit.framework;
 				PRODUCT_NAME = PropertyTestingKit;
 				SDKROOT = macosx;
 				SKIP_INSTALL = YES;
-				SWIFT_INCLUDE_PATHS = "$(SRCROOT)/Sources/CLLVMSymbolizer/include $(SRCROOT)/Sources/SanCovHooks/include";
+				SWIFT_INCLUDE_PATHS = (
+					"$(SRCROOT)/Sources/CLLVMSymbolizer/include",
+					"$(SRCROOT)/Sources/SanCovHooks/include",
+				);
 				SWIFT_TESTING_ENABLED = YES;
 				VERSIONING_SYSTEM = "apple-generic";
 			};
@@ -1530,9 +1704,7 @@
 				DYLIB_CURRENT_VERSION = 1;
 				DYLIB_INSTALL_NAME_BASE = "@rpath";
 				FRAMEWORK_SEARCH_PATHS = (
-					"$(inherited)",
-					"$(DEVELOPER_FRAMEWORKS_DIR)",
-					"$(PLATFORM_DIR)/Developer/Library/Frameworks",
+					"$(inherited) $(DEVELOPER_FRAMEWORKS_DIR) $(PLATFORM_DIR)/Developer/Library/Frameworks",
 					"\".\"",
 				);
 				GCC_ENABLE_CPP_EXCEPTIONS = NO;
@@ -1543,21 +1715,22 @@
 					"$(SRCROOT)/Sources/SanCovHooks/include",
 				);
 				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) /opt/homebrew/opt/llvm/lib";
+				LIBRARY_SEARCH_PATHS = (
 					/opt/homebrew/opt/llvm/lib,
 				);
-				LIBRARY_SEARCH_PATHS = /opt/homebrew/opt/llvm/lib;
 				OTHER_LDFLAGS = (
-					"$(inherited)",
-					"-lLLVM",
+					"$(inherited) -lLLVM",
 					"-ObjC",
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.propertytestingkit.framework;
 				PRODUCT_NAME = PropertyTestingKit;
 				SDKROOT = macosx;
 				SKIP_INSTALL = YES;
-				SWIFT_INCLUDE_PATHS = "$(SRCROOT)/Sources/CLLVMSymbolizer/include $(SRCROOT)/Sources/SanCovHooks/include";
+				SWIFT_INCLUDE_PATHS = (
+					"$(SRCROOT)/Sources/CLLVMSymbolizer/include",
+					"$(SRCROOT)/Sources/SanCovHooks/include",
+				);
 				SWIFT_TESTING_ENABLED = YES;
 				VERSIONING_SYSTEM = "apple-generic";
 			};
@@ -1578,7 +1751,9 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				LIBRARY_SEARCH_PATHS = /opt/homebrew/opt/llvm/lib;
+				LIBRARY_SEARCH_PATHS = (
+					/opt/homebrew/opt/llvm/lib,
+				);
 				MODULEMAP_FILE = "$(SRCROOT)/Sources/CLLVMSymbolizer/include/module.modulemap";
 				PRODUCT_BUNDLE_IDENTIFIER = com.propertytestingkit.CLLVMSymbolizer;
 				PRODUCT_NAME = CLLVMSymbolizer;
@@ -1592,20 +1767,16 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				COMBINE_HIDPI_IMAGES = YES;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"$(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin",
-				);
-				OTHER_LDFLAGS = (
-					"$(inherited)",
-					"-L$(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin",
-					"-lclang_rt.ubsan_osx_dynamic",
-				);
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) $(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin";
+				OTHER_LDFLAGS = "$(inherited) -L$(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin -lclang_rt.ubsan_osx_dynamic";
 				OTHER_SWIFT_FLAGS = "$(inherited) -g -sanitize=undefined -sanitize-coverage=edge,pc-table";
 				PRODUCT_BUNDLE_IDENTIFIER = com.propertytestingkit.ProfiledBenchmark;
 				PRODUCT_NAME = ProfiledBenchmark;
 				SDKROOT = macosx;
-				SWIFT_INCLUDE_PATHS = "$(SRCROOT)/Sources/CLLVMSymbolizer/include $(SRCROOT)/Sources/SanCovHooks/include";
+				SWIFT_INCLUDE_PATHS = (
+					"$(SRCROOT)/Sources/CLLVMSymbolizer/include",
+					"$(SRCROOT)/Sources/SanCovHooks/include",
+				);
 			};
 			name = Release;
 		};
@@ -1615,20 +1786,16 @@
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				COMBINE_HIDPI_IMAGES = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"$(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin",
-				);
-				OTHER_LDFLAGS = (
-					"$(inherited)",
-					"-L$(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin",
-					"-lclang_rt.ubsan_osx_dynamic",
-				);
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) $(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin";
+				OTHER_LDFLAGS = "$(inherited) -L$(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin -lclang_rt.ubsan_osx_dynamic";
 				OTHER_SWIFT_FLAGS = "$(inherited) -g -sanitize=undefined -sanitize-coverage=edge,pc-table";
 				PRODUCT_BUNDLE_IDENTIFIER = com.propertytestingkit.stresstests;
 				PRODUCT_NAME = StressTests;
 				SDKROOT = macosx;
-				SWIFT_INCLUDE_PATHS = "$(SRCROOT)/Sources/CLLVMSymbolizer/include $(SRCROOT)/Sources/SanCovHooks/include";
+				SWIFT_INCLUDE_PATHS = (
+					"$(SRCROOT)/Sources/CLLVMSymbolizer/include",
+					"$(SRCROOT)/Sources/SanCovHooks/include",
+				);
 			};
 			name = Release;
 		};
@@ -1636,7 +1803,9 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				COMBINE_HIDPI_IMAGES = YES;
-				HEADER_SEARCH_PATHS = "$(SRCROOT)/Sources/SanCovHooks/include";
+				HEADER_SEARCH_PATHS = (
+					"$(SRCROOT)/Sources/SanCovHooks/include",
+				);
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
@@ -1656,20 +1825,16 @@
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				COMBINE_HIDPI_IMAGES = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"$(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin",
-				);
-				OTHER_LDFLAGS = (
-					"$(inherited)",
-					"-L$(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin",
-					"-lclang_rt.tsan_osx_dynamic",
-				);
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) $(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin";
+				OTHER_LDFLAGS = "$(inherited) -L$(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin -lclang_rt.tsan_osx_dynamic";
 				OTHER_SWIFT_FLAGS = "$(inherited) -g -sanitize=thread -sanitize-coverage=edge,pc-table";
 				PRODUCT_BUNDLE_IDENTIFIER = com.propertytestingkit.tsantests;
 				PRODUCT_NAME = TSanTests;
 				SDKROOT = macosx;
-				SWIFT_INCLUDE_PATHS = "$(SRCROOT)/Sources/CLLVMSymbolizer/include $(SRCROOT)/Sources/SanCovHooks/include";
+				SWIFT_INCLUDE_PATHS = (
+					"$(SRCROOT)/Sources/CLLVMSymbolizer/include",
+					"$(SRCROOT)/Sources/SanCovHooks/include",
+				);
 			};
 			name = Debug;
 		};
@@ -1679,20 +1844,16 @@
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				COMBINE_HIDPI_IMAGES = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"$(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin",
-				);
-				OTHER_LDFLAGS = (
-					"$(inherited)",
-					"-L$(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin",
-					"-lclang_rt.ubsan_osx_dynamic",
-				);
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) $(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin";
+				OTHER_LDFLAGS = "$(inherited) -L$(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin -lclang_rt.ubsan_osx_dynamic";
 				OTHER_SWIFT_FLAGS = "$(inherited) -g -sanitize=undefined -sanitize-coverage=edge,pc-table";
 				PRODUCT_BUNDLE_IDENTIFIER = com.propertytestingkit.sancovtests;
 				PRODUCT_NAME = SanCovTests;
 				SDKROOT = macosx;
-				SWIFT_INCLUDE_PATHS = "$(SRCROOT)/Sources/CLLVMSymbolizer/include $(SRCROOT)/Sources/SanCovHooks/include";
+				SWIFT_INCLUDE_PATHS = (
+					"$(SRCROOT)/Sources/CLLVMSymbolizer/include",
+					"$(SRCROOT)/Sources/SanCovHooks/include",
+				);
 			};
 			name = Debug;
 		};
@@ -1700,20 +1861,16 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				COMBINE_HIDPI_IMAGES = YES;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"$(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin",
-				);
-				OTHER_LDFLAGS = (
-					"$(inherited)",
-					"-L$(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin",
-					"-lclang_rt.ubsan_osx_dynamic",
-				);
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) $(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin";
+				OTHER_LDFLAGS = "$(inherited) -L$(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin -lclang_rt.ubsan_osx_dynamic";
 				OTHER_SWIFT_FLAGS = "$(inherited) -g -sanitize=undefined -sanitize-coverage=edge,pc-table";
 				PRODUCT_BUNDLE_IDENTIFIER = com.propertytestingkit.CoverageBenchmarks;
 				PRODUCT_NAME = CoverageBenchmarks;
 				SDKROOT = macosx;
-				SWIFT_INCLUDE_PATHS = "$(SRCROOT)/Sources/CLLVMSymbolizer/include $(SRCROOT)/Sources/SanCovHooks/include";
+				SWIFT_INCLUDE_PATHS = (
+					"$(SRCROOT)/Sources/CLLVMSymbolizer/include",
+					"$(SRCROOT)/Sources/SanCovHooks/include",
+				);
 			};
 			name = Release;
 		};
@@ -1723,20 +1880,16 @@
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				COMBINE_HIDPI_IMAGES = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"$(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin",
-				);
-				OTHER_LDFLAGS = (
-					"$(inherited)",
-					"-L$(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin",
-					"-lclang_rt.tsan_osx_dynamic",
-				);
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) $(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin";
+				OTHER_LDFLAGS = "$(inherited) -L$(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin -lclang_rt.tsan_osx_dynamic";
 				OTHER_SWIFT_FLAGS = "$(inherited) -g -sanitize=thread -sanitize-coverage=edge,pc-table";
 				PRODUCT_BUNDLE_IDENTIFIER = com.propertytestingkit.tsantests;
 				PRODUCT_NAME = TSanTests;
 				SDKROOT = macosx;
-				SWIFT_INCLUDE_PATHS = "$(SRCROOT)/Sources/CLLVMSymbolizer/include $(SRCROOT)/Sources/SanCovHooks/include";
+				SWIFT_INCLUDE_PATHS = (
+					"$(SRCROOT)/Sources/CLLVMSymbolizer/include",
+					"$(SRCROOT)/Sources/SanCovHooks/include",
+				);
 			};
 			name = Release;
 		};
@@ -1744,20 +1897,16 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				COMBINE_HIDPI_IMAGES = YES;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"$(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin",
-				);
-				OTHER_LDFLAGS = (
-					"$(inherited)",
-					"-L$(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin",
-					"-lclang_rt.ubsan_osx_dynamic",
-				);
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) $(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin";
+				OTHER_LDFLAGS = "$(inherited) -L$(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin -lclang_rt.ubsan_osx_dynamic";
 				OTHER_SWIFT_FLAGS = "$(inherited) -g -sanitize=undefined -sanitize-coverage=edge,pc-table";
 				PRODUCT_BUNDLE_IDENTIFIER = com.propertytestingkit.CoverageBenchmarks;
 				PRODUCT_NAME = CoverageBenchmarks;
 				SDKROOT = macosx;
-				SWIFT_INCLUDE_PATHS = "$(SRCROOT)/Sources/CLLVMSymbolizer/include $(SRCROOT)/Sources/SanCovHooks/include";
+				SWIFT_INCLUDE_PATHS = (
+					"$(SRCROOT)/Sources/CLLVMSymbolizer/include",
+					"$(SRCROOT)/Sources/SanCovHooks/include",
+				);
 			};
 			name = Debug;
 		};
@@ -1894,20 +2043,16 @@
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				COMBINE_HIDPI_IMAGES = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"$(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin",
-				);
-				OTHER_LDFLAGS = (
-					"$(inherited)",
-					"-L$(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin",
-					"-lclang_rt.ubsan_osx_dynamic",
-				);
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) $(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin";
+				OTHER_LDFLAGS = "$(inherited) -L$(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin -lclang_rt.ubsan_osx_dynamic";
 				OTHER_SWIFT_FLAGS = "$(inherited) -g -sanitize=undefined -sanitize-coverage=edge,pc-table";
 				PRODUCT_BUNDLE_IDENTIFIER = com.propertytestingkit.tests;
 				PRODUCT_NAME = PropertyTestingKitTests;
 				SDKROOT = macosx;
-				SWIFT_INCLUDE_PATHS = "$(SRCROOT)/Sources/CLLVMSymbolizer/include $(SRCROOT)/Sources/SanCovHooks/include";
+				SWIFT_INCLUDE_PATHS = (
+					"$(SRCROOT)/Sources/CLLVMSymbolizer/include",
+					"$(SRCROOT)/Sources/SanCovHooks/include",
+				);
 			};
 			name = Release;
 		};

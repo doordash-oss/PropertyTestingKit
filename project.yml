@@ -41,6 +41,8 @@ targets:
       - path: Sources/SanCovHooks
         excludes:
           - "**/include/**"
+      - path: Sources/SanCovHooks/include
+        buildPhase: none
     settings:
       base:
         PRODUCT_NAME: SanCovHooks
@@ -57,6 +59,8 @@ targets:
       - path: Sources/CLLVMSymbolizer
         excludes:
           - "**/include/**"
+      - path: Sources/CLLVMSymbolizer/include
+        buildPhase: none
     settings:
       base:
         PRODUCT_NAME: CLLVMSymbolizer

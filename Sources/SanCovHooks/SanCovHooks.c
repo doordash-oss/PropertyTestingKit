@@ -286,6 +286,7 @@ SanCovMeasurementContext* sancov_begin_measurement(void) {
     return ctx;
 }
 
+/// Cleanup caches, etc
 void sancov_end_measurement(SanCovMeasurementContext* ctx) {
     if (ctx == NULL) return;
 
@@ -336,7 +337,7 @@ size_t sancov_get_covered_count_with_context(SanCovMeasurementContext* ctx) {
 //   Caller must free() the returned pointer.
 //
 // The SIMD path processes 16 counters at a time, skipping zero chunks entirely.
-uint32_t*   (SanCovMeasurementContext* ctx) {
+uint32_t* sancov_snapshot_covered_indices_with_context(SanCovMeasurementContext* ctx) {
     if (!ctx) return NULL;
 
     size_t count = ctx->covered_count;

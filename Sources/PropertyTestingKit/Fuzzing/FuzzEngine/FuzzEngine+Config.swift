@@ -9,9 +9,6 @@ import Testing
 extension FuzzEngine {
     /// Configuration for the fuzzing run.
     public struct Config: Sendable {
-        /// Maximum iterations (inputs to test).
-        public var maxIterations: Int
-
         /// Maximum time to spend fuzzing.
         public var maxDuration: Duration
 
@@ -25,23 +22,6 @@ extension FuzzEngine {
         /// Defaults to checking the `FUZZ_CORPUS_MODE` environment variable,
         /// then falling back to `.auto`.
         public var corpusMode: CorpusMode
-
-        /// Per-input execution timeout in seconds.
-        /// When set, each test execution will be terminated if it exceeds this duration.
-        /// This catches infinite loops and deadlocks.
-        /// Default: nil (no per-input timeout, only overall duration limit applies).
-        ///
-        /// Based on Miller 1990 "Fuzz" paper which used 5-minute timeouts to detect hangs.
-        public var perInputTimeout: Duration?
-
-        /// Number of inputs to test in parallel during the mutation phase.
-        /// Higher values increase parallelism but may reduce coverage guidance accuracy
-        /// since corpus updates happen in batches rather than after each test.
-        /// - 0: Use system processor count (default, ~50% faster than sequential)
-        /// - 1: Sequential execution (best for shared mutable state)
-        /// - N: Fixed batch size
-        /// Default: 0 (processor count).
-        public var mutationBatchSize: Int
 
         /// Project root path for filtering coverage gaps to project files only.
         /// When set, only reports gaps in files under this path.
@@ -59,13 +39,10 @@ extension FuzzEngine {
         public var plugins: [any EventBasedPlugin]
 
         public init(
-            maxIterations: Int = 10_000,
             maxDuration: Duration = .seconds(60),
             minimizeCorpus: Bool = true,
             verbose: Bool = false,
             corpusMode: CorpusMode? = nil,
-            perInputTimeout: Duration? = nil,
-            mutationBatchSize: Int = 0,
             projectPath: String? = nil,
             fileID: String = #fileID,
             filePath: String = #filePath,
@@ -73,17 +50,11 @@ extension FuzzEngine {
             column: Int = #column,
             plugins: [any EventBasedPlugin] = []
         ) {
-            self.maxIterations = maxIterations
             self.maxDuration = maxDuration
             self.minimizeCorpus = minimizeCorpus
             self.verbose = verbose
             // Use provided mode, or check environment, or default to auto
             self.corpusMode = corpusMode ?? CorpusMode.fromEnvironment()
-            self.perInputTimeout = perInputTimeout
-            // 0 means "use processor count"
-            self.mutationBatchSize = mutationBatchSize == 0
-                ? ProcessInfo.processInfo.processorCount
-                : max(1, mutationBatchSize)
             self.projectPath = projectPath
             self.sourceLocation = SourceLocation(
                 fileID: fileID,

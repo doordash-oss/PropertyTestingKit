@@ -122,6 +122,16 @@ public struct SanCovCounters: Sendable {
         sancov_counters_available()
     }
 
+    static func checkAvailabilty() throws {
+        if !isAvailable {
+            throw Errors.coverageNotAvailable
+        }
+    }
+
+    public enum Errors: Error {
+        case coverageNotAvailable
+    }
+
     /// Get the total number of instrumented edges.
     public static var totalEdgeCount: Int {
         sancov_get_counter_count()
@@ -135,61 +145,61 @@ public struct SanCovCounters: Sendable {
         sancov_get_covered_count()
     }
 
-    /// Capture a snapshot of the current task's coverage.
-    ///
-    /// Returns `nil` if SanitizerCoverage is not available.
-    ///
-    /// - Note: The snapshot is isolated to the current Swift task.
-    public static func snapshot() -> SanCovCounters? {
-        guard isAvailable else { return nil }
+//    /// Capture a snapshot of the current task's coverage.
+//    ///
+//    /// Returns `nil` if SanitizerCoverage is not available.
+//    ///
+//    /// - Note: The snapshot is isolated to the current Swift task.
+//    public static func snapshot() -> SanCovCounters? {
+//        guard isAvailable else { return nil }
+//
+//        let count = sancov_get_counter_count()
+//        guard count > 0 else { return nil }
+//
+//        // Allocate buffer and copy counters
+//        var buffer = [UInt8](repeating: 0, count: count)
+//        let copied = sancov_snapshot_counters(&buffer, count)
+//        guard copied == count else { return nil }
+//
+//        return SanCovCounters(counters: buffer)
+//    }
 
-        let count = sancov_get_counter_count()
-        guard count > 0 else { return nil }
-
-        // Allocate buffer and copy counters
-        var buffer = [UInt8](repeating: 0, count: count)
-        let copied = sancov_snapshot_counters(&buffer, count)
-        guard copied == count else { return nil }
-
-        return SanCovCounters(counters: buffer)
-    }
-
-    /// Get only the covered (non-zero) edge indices.
-    ///
-    /// This is the fastest way to get sparse coverage data.
-    ///
-    /// - Returns: SparseCoverage with indices array, or nil if unavailable.
-    public static func snapshotCoveredArrays() -> SparseCoverage? {
-        guard isAvailable else { return nil }
-
-        // Optimization: Use a single pass with a reasonable max buffer.
-        // Coverage is typically sparse (<1% of edges hit), so 8K entries is usually enough.
-        // If we need more, we fall back to the two-pass approach.
-        let maxEntries = 8192
-
-        // Single-pass: allocate buffer and fill in one call
-        var indices = [UInt32](repeating: 0, count: maxEntries)
-        let filled = sancov_snapshot_covered_indices(&indices, maxEntries)
-
-        // If buffer was too small, fall back to two-pass
-        if filled == maxEntries {
-            let actualCount = sancov_snapshot_covered_indices(nil, 0)
-            if actualCount > maxEntries {
-                var largeIndices = [UInt32](repeating: 0, count: actualCount)
-                let actualFilled = sancov_snapshot_covered_indices(&largeIndices, actualCount)
-
-                // Trim to actual size
-                largeIndices.removeLast(actualCount - actualFilled)
-                return SparseCoverage(indices: largeIndices)
-            }
-        }
-
-        guard filled > 0 else { return SparseCoverage() }
-
-        // Trim array to actual size
-        indices.removeLast(maxEntries - filled)
-        return SparseCoverage(indices: indices)
-    }
+//    /// Get only the covered (non-zero) edge indices.
+//    ///
+//    /// This is the fastest way to get sparse coverage data.
+//    ///
+//    /// - Returns: SparseCoverage with indices array, or nil if unavailable.
+//    public static func snapshotCoveredArrays() -> SparseCoverage? {
+//        guard isAvailable else { return nil }
+//
+//        // Optimization: Use a single pass with a reasonable max buffer.
+//        // Coverage is typically sparse (<1% of edges hit), so 8K entries is usually enough.
+//        // If we need more, we fall back to the two-pass approach.
+//        let maxEntries = 8192
+//
+//        // Single-pass: allocate buffer and fill in one call
+//        var indices = [UInt32]()
+//        let filled = sancov_snapshot_covered_indices(&indices, maxEntries)
+//
+//        // If buffer was too small, fall back to two-pass
+//        if filled == maxEntries {
+//            let actualCount = sancov_snapshot_covered_indices(nil, 0)
+//            if actualCount > maxEntries {
+//                var largeIndices = [UInt32](repeating: 0, count: actualCount)
+//                let actualFilled = sancov_snapshot_covered_indices(&largeIndices, actualCount)
+//
+//                // Trim to actual size
+//                largeIndices.removeLast(actualCount - actualFilled)
+//                return SparseCoverage(indices: largeIndices)
+//            }
+//        }
+//
+//        guard filled > 0 else { return SparseCoverage() }
+//
+//        // Trim array to actual size
+//        indices.removeLast(maxEntries - filled)
+//        return SparseCoverage(indices: indices)
+//    }
 
 }
 
@@ -477,10 +487,10 @@ extension SanCovCounters {
     ///
     /// - Parameter context: The measurement context to snapshot.
     /// - Returns: SparseCoverage with indices array, or nil if unavailable.
-    static func snapshotCoveredArrays(with context: MeasurementContext) -> SparseCoverage? {
-        guard isAvailable else { return nil }
+    static func snapshotCoveredArrays(with context: MeasurementContext) throws -> SparseCoverage {
+        try checkAvailabilty()
 
-        let count = sancov_get_covered_count_with_context(context.rawContext)
+        let count = getCoveredCount(with: context)
         guard count > 0 else { return SparseCoverage() }
 
         guard let ptr = sancov_snapshot_covered_indices_with_context(context.rawContext) else {

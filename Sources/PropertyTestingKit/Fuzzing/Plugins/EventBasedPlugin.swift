@@ -40,14 +40,8 @@ public enum PluginEvent<each T: Sendable>: Sendable {
     /// A test failure was found.
     case failureFound(FailureFoundContext)
 
-    /// A hang was detected.
-    case hangDetected(HangDetectedContext)
-
     /// An iteration completed.
     case iteration(IterationContext)
-
-    /// A batch of iterations completed.
-    case batchComplete(BatchContext)
 
     // MARK: - Context Types
 
@@ -57,42 +51,22 @@ public enum PluginEvent<each T: Sendable>: Sendable {
         public let maxIterations: Int
         /// Maximum duration in seconds.
         public let maxDuration: Duration
-        /// Number of inputs per batch.
-        public let batchSize: Int
         /// How the corpus is being handled.
         public let corpusMode: CorpusMode
-        /// Number of seed inputs.
-        public let seedCount: Int
 
         public init(
             maxIterations: Int,
             maxDuration: Duration,
-            batchSize: Int,
-            corpusMode: CorpusMode,
-            seedCount: Int
+            corpusMode: CorpusMode
         ) {
             self.maxIterations = maxIterations
             self.maxDuration = maxDuration
-            self.batchSize = batchSize
             self.corpusMode = corpusMode
-            self.seedCount = seedCount
         }
     }
 
     /// Context provided when fuzzing ends.
     public struct EndContext: Sendable {
-        /// Total iterations completed.
-        public let totalIterations: Int
-        /// Total duration of fuzzing.
-        public let duration: TimeInterval
-        /// Final corpus size.
-        public let corpusSize: Int
-        /// Number of failures found.
-        public let failureCount: Int
-        /// Number of hangs detected.
-        public let hangCount: Int
-        /// Reason fuzzing stopped.
-        public let stopReason: FuzzStats.StopReason
         /// Set of all covered edge indices.
         public let totalCoveredIndices: Set<Int>
         /// Project path for filtering (if configured).
@@ -101,22 +75,10 @@ public enum PluginEvent<each T: Sendable>: Sendable {
         public let sourceLocation: SourceLocation
 
         public init(
-            totalIterations: Int,
-            duration: TimeInterval,
-            corpusSize: Int,
-            failureCount: Int,
-            hangCount: Int,
-            stopReason: FuzzStats.StopReason,
             totalCoveredIndices: Set<Int>,
             projectPath: String?,
             sourceLocation: SourceLocation
         ) {
-            self.totalIterations = totalIterations
-            self.duration = duration
-            self.corpusSize = corpusSize
-            self.failureCount = failureCount
-            self.hangCount = hangCount
-            self.stopReason = stopReason
             self.totalCoveredIndices = totalCoveredIndices
             self.projectPath = projectPath
             self.sourceLocation = sourceLocation
@@ -129,8 +91,6 @@ public enum PluginEvent<each T: Sendable>: Sendable {
         public let input: (repeat each T)
         /// The test closure for shrinking attempts.
         public let test: @Sendable ((repeat each T)) async throws -> Void
-        /// Description of the failure.
-        public let failure: String
         /// Source location where the fuzz test was called.
         public let sourceLocation: SourceLocation
         public let coverageSignature: CoverageSignature
@@ -138,88 +98,25 @@ public enum PluginEvent<each T: Sendable>: Sendable {
         public init(
             input: (repeat each T),
             test: @Sendable @escaping ((repeat each T)) async throws -> Void,
-            failure: String,
             sourceLocation: SourceLocation,
             coverageSignature: CoverageSignature
         ) {
             self.input = input
             self.test = test
-            self.failure = failure
             self.sourceLocation = sourceLocation
             self.coverageSignature = coverageSignature
         }
     }
 
-    /// Context provided when a hang is detected.
-    public struct HangDetectedContext: @unchecked Sendable {
-        /// The input that caused the hang.
-        public let input: (repeat each T)
-        /// The timeout duration that was exceeded.
-        public let timeout: Duration
-
-        public init(input: (repeat each T), timeout: Duration) {
-            self.input = input
-            self.timeout = timeout
-        }
-    }
-
     /// Context provided after each iteration.
     public struct IterationContext: Sendable {
-        /// Current iteration number (0-based).
-        public let iteration: Int
         /// Whether this iteration discovered new coverage.
         public let discoveredNewCoverage: Bool
-        /// Time elapsed since fuzzing started.
-        public let elapsed: TimeInterval
-        /// Current corpus size.
-        public let corpusSize: Int
 
         public init(
-            iteration: Int,
-            discoveredNewCoverage: Bool,
-            elapsed: TimeInterval,
-            corpusSize: Int
+            discoveredNewCoverage: Bool
         ) {
-            self.iteration = iteration
             self.discoveredNewCoverage = discoveredNewCoverage
-            self.elapsed = elapsed
-            self.corpusSize = corpusSize
-        }
-    }
-
-    /// Context provided after a batch of tests completes.
-    public struct BatchContext: Sendable {
-        /// Index of this batch (0-based).
-        public let batchIndex: Int
-        /// Number of inputs in this batch.
-        public let batchSize: Int
-        /// Number of new coverage paths discovered in this batch.
-        public let newPathsInBatch: Int
-        /// Total number of entries in the corpus.
-        public let totalCorpusSize: Int
-        /// Time elapsed since fuzzing started.
-        public let elapsed: TimeInterval
-        /// Number of failures found so far.
-        public let failureCount: Int
-        /// Number of hangs detected so far.
-        public let hangCount: Int
-
-        public init(
-            batchIndex: Int,
-            batchSize: Int,
-            newPathsInBatch: Int,
-            totalCorpusSize: Int,
-            elapsed: TimeInterval,
-            failureCount: Int,
-            hangCount: Int
-        ) {
-            self.batchIndex = batchIndex
-            self.batchSize = batchSize
-            self.newPathsInBatch = newPathsInBatch
-            self.totalCorpusSize = totalCorpusSize
-            self.elapsed = elapsed
-            self.failureCount = failureCount
-            self.hangCount = hangCount
         }
     }
 }

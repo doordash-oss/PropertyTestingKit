@@ -129,7 +129,7 @@ extension FuzzResult {
 
         let emptySnapshot = CorpusSnapshot<repeat each Input>(
             entries: [],
-            schemaVersion: CorpusSchema.currentVersion(),
+            schemaVersion: "",
             createdAt: dateClient.now(),
             updatedAt: dateClient.now(),
             totalCoverage: CoverageSignature(edges: [])

@@ -229,6 +229,7 @@ public struct CorpusClient<each Input: Codable & Sendable>: Sendable {
 ///
 /// Provides a factory for creating corpus clients with the appropriate type.
 public struct CorpusRegistry: Sendable {
+    // TODO: What the hell. Why are we accessing a live value through an injected dependency.
     /// Create a corpus client for the given input types.
     public func get<each Input: Codable & Sendable>(schemaVersion: String) -> CorpusClient<repeat each Input> {
         return CorpusClient.live(schemaVersion: schemaVersion)

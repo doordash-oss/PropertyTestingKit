@@ -14,7 +14,7 @@ struct BatchEntry<each Input: Codable & Sendable>: Sendable {
 /// Result type for parallel mutation testing.
 struct BatchTestResult: Sendable {
     let index: Int
-    let signature: CoverageSignature?
+    let signature: CoverageSignature
     let error: (any Error)?
     let timedOut: Bool
 }
