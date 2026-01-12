@@ -33,7 +33,7 @@ actor FuzzStateMachine<each Input: Codable & Sendable> {
         startTime: Date,
         randomInputGenerator: @escaping @Sendable () -> (repeat each Input),
         mutationGenerator: @escaping @Sendable ((repeat each Input)) -> [(repeat each Input)],
-        test: @escaping ((repeat each Input)) async throws -> Void,
+        test: @escaping @Sendable ((repeat each Input)) async throws -> Void,
     ) {
         let inputQueue = TestInputQueue(
             initialValues: seeds,
@@ -152,26 +152,43 @@ actor FuzzStateMachine<each Input: Codable & Sendable> {
     /// Takes a test case and throws an error if any expectations failed
     private static func captureIssues(
         sourceLocation: SourceLocation,
-        test: @escaping ((repeat each Input)) async throws -> Void
+        test: @escaping @Sendable ((repeat each Input)) async throws -> Void
     ) -> @Sendable ((repeat each Input)) async throws -> Void {
         { input in
-            var isError = false
+            let issueRecorded = SyncBox(false)
             try await withKnownIssue(
                 isIntermittent: true,
                 sourceLocation: sourceLocation,
                 { try await test(input) },
                 matching: { issue in
+                    let comment = Comment.init(rawValue: issue.comments.map { $0.rawValue }.joined())
                     if let error = issue.error {
-                        Issue.record(error, issue.comment, sourceLocation: issue.sourceLocation)
+                        if let sourceLocation = issue.sourceLocation {
+                            Issue
+                                .record(
+                                    error,
+                                    comment,
+                                    sourceLocation: sourceLocation
+                                )
+                        } else {
+                            Issue.record(error, comment)
+                        }
+
                     } else {
-                        Issue.record(issue.comment, sourceLocation: issue.sourceLocation)
+                        if let sourceLocation = issue.sourceLocation {
+                            Issue.record(comment, sourceLocation: sourceLocation)
+                        } else {
+                            Issue.record(comment)
+                        }
                     }
 
-                    isError = true
+                    issueRecorded.value = true
+
+                    return true
                 }
             )
 
-            if isError {
+            if issueRecorded.value {
                 throw Errors.testFailed
             }
         }
@@ -193,10 +210,6 @@ actor FuzzStateMachine<each Input: Codable & Sendable> {
         try await execute(pluginDispatcher.dispatch(event: event))
     }
 
-    private func dispatch(event: PluginEvent<repeat each Input>) {
-        try await pluginDispatcher.dispatch(event: event)
-    }
-
     private func execute(
         _ actions: [FuzzPluginAction<repeat each Input>]
     ) async {
@@ -209,15 +222,20 @@ actor FuzzStateMachine<each Input: Codable & Sendable> {
                 Issue.record(issueAction.comment, sourceLocation: issueAction.sourceLocation)
 
             case .queueInputs(let queueAction):
-                appendToInputs(queueAction.inputs)
+                await appendToInputs(queueAction.inputs)
 
             case .selectForMutation(let mutationAction):
                 let mutations = mutationGenerator(mutationAction.input)
-                appendToInputs(mutations)
+                await appendToInputs(mutations)
                 mutationsCount += 1
 
             case .submitToCorpus(let corpusAction):
-                addToCorpus(corpusAction.input)
+                await addToCorpus(
+                    corpusAction.input,
+                    signature: corpusAction.coverageSignature,
+                    type: corpusAction.entryType,
+                    failureInfo: corpusAction.failureInfo
+                )
             }
         }
     }
@@ -226,8 +244,8 @@ actor FuzzStateMachine<each Input: Codable & Sendable> {
         await inputQueue.push(contentsOf: inputs)
     }
 
-    private func addToCorpus(_ input: (repeat each Input), signature: CoverageSignature, type: CorpusEntryType, failureInfo: FailureInfo?) {
-        corpus.add(input, signature, type, failureInfo)
+    private func addToCorpus(_ input: (repeat each Input), signature: CoverageSignature, type: CorpusEntryType, failureInfo: FailureInfo?) async {
+        await corpus.add(input, signature, type, failureInfo)
     }
 }
 

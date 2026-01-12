@@ -24,7 +24,7 @@ public struct EventBasedPluginDispatcher: Sendable {
     ///
     /// - Parameter event: The event to dispatch.
     /// - Returns: All actions returned by all plugins, in order.
-    public mutating func dispatch<each T: Sendable>(
+    public func dispatch<each T: Sendable>(
         event: PluginEvent<repeat each T>
     ) async throws -> [FuzzPluginAction<repeat each T>] {
         var results = [FuzzPluginAction<repeat each T>]()
