@@ -37,6 +37,7 @@ static void* xmalloc(size_t size) {
     void* ptr = malloc(size);
     if (ptr == NULL) {
         fprintf(stderr, "FATAL: malloc(%zu) failed\n", size);
+        fflush(stderr);
         abort();
     }
     return ptr;
@@ -419,24 +420,33 @@ static void ensure_tls_coverage_map(void) {
 // 2. If task changed, check for measurement context
 // 3. Lookup/create map and update cache
 //
-// The cache is safe because:
-// - Within consecutive trace_pc_guard calls on the same thread, the task is stable
-// - When tasks hop threads, the new thread has a different cache
-// - Measurement end explicitly invalidates the cache
+// WARNING: The TLS cache can become stale in the worker pool model where the same
+// task runs multiple measurement iterations. When a task hops threads between
+// iterations, threads it previously visited retain stale cache entries pointing
+// to freed coverage maps.
+//
+// Define SANCOV_DISABLE_TLS_CACHE=1 to disable the fast path for debugging.
+#ifndef SANCOV_DISABLE_TLS_CACHE
+#define SANCOV_DISABLE_TLS_CACHE 0
+#endif
+
 static uint8_t* get_current_coverage_map(void) {
     // Get the current task (Swift task or sync pseudo-task)
     void* task = get_current_task_for_measurement();
 
+#if !SANCOV_DISABLE_TLS_CACHE
     // FAST PATH: Check if we have a cached map for this exact task
     // This avoids the O(512) scans in the common case where the task hasn't changed
     if (task == tls_cached_task && tls_cached_task_map != NULL) {
         return tls_cached_task_map;
     }
+#endif
 
     // Task changed - need to do full lookup
     // First check for measurement context for this task (highest priority)
     SanCovMeasurementContext* measurement_ctx = (SanCovMeasurementContext*)get_measurement_context_for_task(task);
     if (measurement_ctx != NULL) {
+#if !SANCOV_DISABLE_TLS_CACHE
         // Check measurement context cache
         if (measurement_ctx == tls_cached_measurement_context && tls_cached_coverage_map != NULL) {
             // Update task cache to point to measurement map
@@ -444,6 +454,7 @@ static uint8_t* get_current_coverage_map(void) {
             tls_cached_task_map = tls_cached_coverage_map;
             return tls_cached_coverage_map;
         }
+#endif
         // Slow path: lookup or create, then cache
         uint8_t* map = find_or_create_task_map(measurement_ctx);
         if (map != NULL) {

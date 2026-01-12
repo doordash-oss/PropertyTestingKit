@@ -92,11 +92,15 @@ actor FuzzStateMachine<each Input: Codable & Sendable> {
                         .init(discoveredNewCoverage: didAdd)
                     ))
                 } catch {
-                    let coverageSignature = CoverageSignature(
-                        sparse: try! coverageCountersClient.snapshotCoveredArraysWithContext(context)
-                    )
+                    // On failure, try to get coverage but use empty signature if unavailable
+                    let coverageSignature: CoverageSignature
+                    if let sparse = try? coverageCountersClient.snapshotCoveredArraysWithContext(context) {
+                        coverageSignature = CoverageSignature(sparse: sparse)
+                    } else {
+                        coverageSignature = CoverageSignature(edges: Set())
+                    }
                     await self.addNewFailure((testInput, error))
-                    try! await self.submitPluginEvent(.failureFound(
+                    try? await self.submitPluginEvent(.failureFound(
                         .init(
                             input: testInput,
                             test: testWithIssueCapture,
