@@ -93,12 +93,17 @@ static pthread_once_t g_measurement_ht_once = PTHREAD_ONCE_INIT;
 // Thread-local pseudo-task ID for synchronous code outside async contexts
 static _Thread_local void* tls_sync_pseudo_task = NULL;
 
+// Global generation counter - incremented when any measurement context ends.
+// Used to invalidate stale TLS caches across all threads.
+static _Atomic uint64_t g_measurement_generation = 0;
+
 // Thread-local cache for coverage map lookup (avoids rwlock acquisition in hot path)
 // The cache is invalidated when task changes or measurement context ends
 static _Thread_local void* tls_cached_task = NULL;
 static _Thread_local uint8_t* tls_cached_task_map = NULL;
 static _Thread_local SanCovMeasurementContext* tls_cached_measurement_context = NULL;
 static _Thread_local uint8_t* tls_cached_coverage_map = NULL;
+static _Thread_local uint64_t tls_cached_generation = 0;
 
 // Get or create a pseudo-task ID for synchronous code
 static void* get_sync_pseudo_task(void) {

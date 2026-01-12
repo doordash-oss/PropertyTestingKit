@@ -75,8 +75,6 @@ struct FuzzerStressTests {
         nonisolated(unsafe) var seenBelow = false
 
         let result = try await fuzz(
-            iterations: 100,
-            duration: .seconds(5)
         ) { (num: Int) in
             let output = easyGreaterThan(num)
             if output == "above" { seenAbove = true }
@@ -94,7 +92,6 @@ struct FuzzerStressTests {
         nonisolated(unsafe) var seenNonNegative = false
 
         let result = try await fuzz(
-            iterations: 100,
             duration: .seconds(5)
         ) { (num: Int) in
             let output = easyNegativeCheck(num)
@@ -113,7 +110,6 @@ struct FuzzerStressTests {
         nonisolated(unsafe) var seenNonEmpty = false
 
         let result = try await fuzz(
-            iterations: 100,
             duration: .seconds(5)
         ) { (str: String) in
             let output = easyEmptyString(str)
@@ -134,7 +130,6 @@ struct FuzzerStressTests {
         nonisolated(unsafe) var seenOutOfRange = false
 
         let result = try await fuzz(
-            iterations: 500,
             duration: .seconds(10)
         ) { (num: Int) in
             let output = mediumRangeCheck(num)
@@ -153,7 +148,6 @@ struct FuzzerStressTests {
         nonisolated(unsafe) var seenOtherLength = false
 
         let result = try await fuzz(
-            iterations: 500,
             duration: .seconds(10)
         ) { (str: String) in
             let output = mediumLengthCheck(str)
@@ -172,7 +166,6 @@ struct FuzzerStressTests {
         nonisolated(unsafe) var seenNotBoth = false
 
         let result = try await fuzz(
-            iterations: 500,
             duration: .seconds(10)
         ) { (a: Int, b: Int) in
             let output = mediumTwoConditions(a, b)
@@ -193,7 +186,6 @@ struct FuzzerStressTests {
         nonisolated(unsafe) var seenOrdinary = false
 
         let result = try await fuzz(
-            iterations: 1000,
             duration: .seconds(10)
         ) { (num: Int) in
             let output = hardMagicNumber(num)
@@ -212,7 +204,6 @@ struct FuzzerStressTests {
         nonisolated(unsafe) var seenOrdinary = false
 
         let result = try await fuzz(
-            iterations: 1000,
             duration: .seconds(10)
         ) { (num: Int) in
             let output = hardLargeMagicNumber(num)
@@ -231,7 +222,6 @@ struct FuzzerStressTests {
         nonisolated(unsafe) var seenOrdinary = false
 
         let result = try await fuzz(
-            iterations: 1000,
             duration: .seconds(10)
         ) { (str: String) in
             let output = hardMagicString(str)
@@ -250,7 +240,6 @@ struct FuzzerStressTests {
         nonisolated(unsafe) var seenPublic = false
 
         let result = try await fuzz(
-            iterations: 1000,
             duration: .seconds(10)
         ) { (str: String) in
             let output = hardMagicPrefix(str)
@@ -273,7 +262,6 @@ struct FuzzerStressTests {
         nonisolated(unsafe) var seenNeither = false
 
         let result = try await fuzz(
-            iterations: 500,
             duration: .seconds(10)
         ) { (a: Int, b: Int) in
             let output = veryHardTwoMagicNumbers(a, b)
@@ -297,7 +285,6 @@ struct FuzzerStressTests {
         nonisolated(unsafe) var seenInvalid = false
 
         let result = try await fuzz(
-            iterations: 1000,
             duration: .seconds(10)
         ) { (a: Int, b: Int) in
             let output = veryHardChecksum(a, b)
@@ -319,7 +306,6 @@ struct FuzzerStressTests {
         nonisolated(unsafe) var seenBelow1000 = false
 
         let result = try await fuzz(
-            iterations: 500,
             duration: .seconds(10)
         ) { (num: Int) in
             let output = veryHardNestedMagic(num)
@@ -345,7 +331,6 @@ struct FuzzerStressTests {
         nonisolated(unsafe) var seenMismatch = false
 
         let result = try await fuzz(
-            iterations: 500,
             duration: .seconds(10)
         ) { (str: String) in
             let output = veryHardHashMatch(str)
@@ -368,7 +353,6 @@ struct FuzzerStressTests {
         nonisolated(unsafe) var seenMismatch = false
 
         let result = try await fuzz(
-            iterations: 1000,
             duration: .seconds(10)
         ) { (a: Int, b: Int) in
             let output = veryHardModuloSum(a, b)
@@ -389,7 +373,6 @@ struct FuzzerStressTests {
         nonisolated(unsafe) var seenOrdinary = false
 
         let result = try await fuzz(
-            iterations: 1000,
             duration: .seconds(10)
         ) { (num: Int) in
             let output = extremeMagic64(num)
@@ -409,7 +392,6 @@ struct FuzzerStressTests {
 
         // With 3 Int inputs, seeds = 21^3 = 9261, so we need extra iterations for mutations
         let result = try await fuzz(
-            iterations: 15000,
             duration: .seconds(30)
         ) { (a: Int, b: Int, c: Int) in
             let output = extremeSequence(a, b, c)
@@ -428,7 +410,6 @@ struct FuzzerStressTests {
         nonisolated(unsafe) var seenDenied = false
 
         let result = try await fuzz(
-            iterations: 1000,
             duration: .seconds(10)
         ) { (str: String) in
             let output = extremePassword(str)
@@ -455,7 +436,6 @@ struct FuzzerStressTests {
         // The string dictionary should capture "token_2024_secret" at runtime
         // and use it for mutations
         let result = try await fuzz(
-            iterations: 2000,
             duration: .seconds(20)
         ) { (str: String) in
             let output = extremeDynamicPassword(str)
@@ -481,7 +461,6 @@ struct FuzzerStressTests {
 
         // The string dictionary should capture "admin", "_root", and "admin_root"
         let result = try await fuzz(
-            iterations: 2000,
             duration: .seconds(20)
         ) { (str: String) in
             let output = extremeMultipleDynamicStrings(str)
@@ -507,7 +486,6 @@ struct FuzzerStressTests {
         nonisolated(unsafe) var seenNotFound = false
 
         let result = try await fuzz(
-            iterations: 200,
             duration: .seconds(5)
         ) { (values: [Int], threshold: Int) in
             let output = easyLoopFindFirst(values, threshold: threshold)
@@ -527,7 +505,6 @@ struct FuzzerStressTests {
         nonisolated(unsafe) var seenNone = false
 
         let result = try await fuzz(
-            iterations: 500,
             duration: .seconds(10)
         ) { (values: [Int], target: Int) in
             let output = easyLoopCount(values, target: target)
@@ -549,7 +526,6 @@ struct FuzzerStressTests {
         nonisolated(unsafe) var seenBelow = false
 
         let result = try await fuzz(
-            iterations: 500,
             duration: .seconds(10)
         ) { (values: [Int], threshold: Int) in
             let output = mediumLoopAccumulator(values, threshold: threshold)
@@ -571,7 +547,6 @@ struct FuzzerStressTests {
         nonisolated(unsafe) var seenNormal = false
 
         let result = try await fuzz(
-            iterations: 1000,
             duration: .seconds(15)
         ) { (values: [Int]) in
             let output = mediumLoopIndexDependent(values)
@@ -598,7 +573,6 @@ struct FuzzerStressTests {
         nonisolated(unsafe) var hitIndices: Set<Int> = []
 
         let result = try await fuzz(
-            iterations: 5000,
             duration: .seconds(30)
         ) { (values: [Int]) in
             // Check all indices 1-20 in each iteration
@@ -638,7 +612,6 @@ struct FuzzerStressTests {
         nonisolated(unsafe) var seenNoSpecial = false
 
         let result = try await fuzz(
-            iterations: 1000,
             duration: .seconds(15)
         ) { (outer: [Int], inner: [Int]) in
             let output = hardLoopNestedFind(outer, inner)
@@ -667,7 +640,6 @@ struct FuzzerStressTests {
         nonisolated(unsafe) var seenSuccess = false
 
         let result = try await fuzz(
-            iterations: 1000,
             duration: .seconds(15)
         ) { (inputs: [Int]) in
             let output = hardLoopStateMachine(inputs)
@@ -691,7 +663,6 @@ struct FuzzerStressTests {
         nonisolated(unsafe) var seenNotFound = false
 
         let result = try await fuzz(
-            iterations: 2000,
             duration: .seconds(20)
         ) { (values: [Int]) in
             let output = veryHardLoopSequenceDetect(values)
@@ -715,7 +686,6 @@ struct FuzzerStressTests {
         nonisolated(unsafe) var seenEmpty = false
 
         let result = try await fuzz(
-            iterations: 1000,
             duration: .seconds(15)
         ) { (values: [Int]) in
             let output = veryHardLoopChecksum(values)
@@ -744,7 +714,6 @@ struct FuzzerStressTests {
         nonisolated(unsafe) var seenInvalid = false
 
         let result = try await fuzz(
-            iterations: 1000,
             duration: .seconds(15)
         ) { (rows: Int, cols: Int, target: Int) in
             let output = extremeLoopMatrixSearch(rows, cols, target: target)
@@ -773,7 +742,6 @@ struct FuzzerStressTests {
         nonisolated(unsafe) var seenInvalid = false
 
         let result = try await fuzz(
-            iterations: 1000,
             duration: .seconds(15)
         ) { (start: Int, divisor: Int) in
             let output = extremeLoopConvergence(start, divisor: divisor)
@@ -804,7 +772,6 @@ struct FuzzerStressTests {
         nonisolated(unsafe) var maxArraySize = 0
 
         let result = try await fuzz(
-            iterations: 2000,
             duration: .seconds(30)
         ) { (values: [Int]) in
             maxArraySize = max(maxArraySize, values.count)
@@ -829,7 +796,6 @@ struct FuzzerStressTests {
         nonisolated(unsafe) var maxArraySize = 0
 
         let result = try await fuzz(
-            iterations: 3000,
             duration: .seconds(45)
         ) { (values: [Int]) in
             maxArraySize = max(maxArraySize, values.count)

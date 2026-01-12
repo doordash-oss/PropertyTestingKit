@@ -284,55 +284,6 @@ struct CoverageGapDetectorTests {
         #expect(defaultConfig.plugins.isEmpty)
     }
 
-    // REPRO TEST: Minimal version without plugins to isolate crash
-    @Test("Minimal fuzz test - no plugins")
-    func minimalFuzzTestNoPlugins() async throws {
-        try await fuzz(
-            iterations: 10,
-            corpusMode: .refuzzReplace,
-            plugins: []
-        ) { (input: Int) in
-            _ = input &* 2  // Use overflow operator to avoid crash on Int.max
-        }
-    }
-
-    // REPRO TEST: Direct FuzzEngine usage (bypasses fuzz() API)
-    @Test("Direct FuzzEngine usage")
-    func directFuzzEngineTest() async throws {
-        let config = FuzzEngine<Int>.Config(
-            corpusMode: .refuzzReplace,
-            plugins: []
-        )
-        let engine = FuzzEngine<Int>(mutators: Int.defaultMutator, config: config)
-        let _ = await engine.run { input in
-            _ = input &* 2  // Use overflow operator to avoid crash on Int.max
-        }
-    }
-
-    // REPRO TEST: Just create FuzzEngine, don't run
-    @Test("Just create FuzzEngine")
-    func justCreateFuzzEngine() async throws {
-        let config = FuzzEngine<Int>.Config(
-            corpusMode: .refuzzReplace,
-            plugins: []
-        )
-        let _ = FuzzEngine<Int>(mutators: Int.defaultMutator, config: config)
-        // Don't call run()
-    }
-
-    // REPRO TEST: Run with empty closure
-    @Test("Run with empty closure")
-    func runWithEmptyClosure() async throws {
-        let config = FuzzEngine<Int>.Config(
-            corpusMode: .refuzzReplace,
-            plugins: []
-        )
-        let engine = FuzzEngine<Int>(mutators: Int.defaultMutator, config: config)
-        let _ = await engine.run { _ in
-            // Empty body
-        }
-    }
-
     @Test("Realistic coverage gap test")
     func realisticCoverageGapTest() async throws {
         // Use a hash-based check that value profile can't solve easily
@@ -353,7 +304,7 @@ struct CoverageGapDetectorTests {
         // This test intentionally creates a coverage gap to verify detection works
         await withKnownIssue("Expected coverage gap in partiallyCoveredFunction") {
             try await fuzz(
-                iterations: 100,
+                duration: .seconds(1),
                 corpusMode: .refuzzReplace,
                 plugins: [EventBasedCoverageGapPlugin()]
             ) { (input: Int) in

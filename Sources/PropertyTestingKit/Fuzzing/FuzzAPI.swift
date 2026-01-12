@@ -78,11 +78,7 @@ import Dependencies
 ///     Use `String.mutators(...)`, `Int.mutators(...)`, etc. for domain-specific fuzzing.
 ///   - seeds: Domain-specific seed values to guide the fuzzer. These are added
 ///     to the mutator's seed values. Use this to target specific edge cases.
-///   - iterations: Maximum fuzzing iterations (default: 10,000).
 ///   - duration: Maximum fuzzing time in seconds (default: 60).
-///   - perInputTimeout: Timeout per test execution in seconds. When set, inputs
-///     exceeding this duration are marked as "hangs" (potential infinite loops).
-///     Default: nil (no per-input timeout).
 ///   - corpusMode: Controls corpus behavior. Use `.refuzzReplace` to start fresh,
 ///     `.refuzzExtend` to add to existing corpus, or `.auto` for default behavior.
 ///     Can also be set via `FUZZ_CORPUS_MODE` environment variable.
@@ -99,9 +95,7 @@ import Dependencies
 public func fuzz<each Input: Codable & Sendable, each M: Mutator>(
     using mutators: repeat each M,
     seeds: [(repeat each Input)] = [],
-    iterations: Int = 10_000,
     duration: Duration = .seconds(60),
-    perInputTimeout: Duration? = nil,
     corpusMode: CorpusMode? = nil,
     mutationBatchSize: Int = 0,
     plugins: [any EventBasedPlugin] = [],
@@ -141,11 +135,7 @@ public func fuzz<each Input: Codable & Sendable, each M: Mutator>(
 ///
 /// - Parameters:
 ///   - seeds: Domain-specific seed values to guide the fuzzer.
-///   - iterations: Maximum fuzzing iterations (default: 10,000).
 ///   - duration: Maximum fuzzing time in seconds (default: 60).
-///   - perInputTimeout: Timeout per test execution in seconds. When set, inputs
-///     exceeding this duration are marked as "hangs" (potential infinite loops).
-///     Default: nil (no per-input timeout).
 ///   - corpusMode: Controls corpus behavior. Use `.refuzzReplace` to start fresh,
 ///     `.refuzzExtend` to add to existing corpus, or `.auto` for default behavior.
 ///     Can also be set via `FUZZ_CORPUS_MODE` environment variable.
@@ -161,9 +151,7 @@ public func fuzz<each Input: Codable & Sendable, each M: Mutator>(
 @discardableResult
 public func fuzz<each Input: MutatorProviding & Codable & Sendable>(
     seeds: [(repeat each Input)] = [],
-    iterations: Int = 10_000,
     duration: Duration = .seconds(60),
-    perInputTimeout: Duration? = nil,
     corpusMode: CorpusMode? = nil,
     mutationBatchSize: Int = 0,
     plugins: [any EventBasedPlugin] = [],
@@ -175,9 +163,7 @@ public func fuzz<each Input: MutatorProviding & Codable & Sendable>(
     try await fuzz(
         using: repeat (each Input).defaultMutator,
         seeds: seeds,
-        iterations: iterations,
         duration: duration,
-        perInputTimeout: perInputTimeout,
         corpusMode: corpusMode,
         mutationBatchSize: mutationBatchSize,
         plugins: plugins,
@@ -358,7 +344,6 @@ public enum FuzzError: Error, LocalizedError {
 /// Environment variables for configuring fuzz behavior:
 ///
 /// - `FUZZ_VERBOSE=1`: Enable verbose logging
-/// - `FUZZ_ITERATIONS=N`: Override max iterations
 /// - `FUZZ_DURATION=N`: Override max duration (seconds)
 /// - `FUZZ_CORPUS_MODE=<mode>`: Control corpus behavior for all tests:
 ///   - `auto`: Run regression if corpus exists, otherwise fuzz (default)
@@ -386,10 +371,6 @@ extension FuzzEngine.Config {
 
         var config = FuzzEngine<repeat each Input>.Config()
 
-//        if let iterations = env["FUZZ_ITERATIONS"].flatMap(Int.init) {
-//            config.maxIterations = iterations
-//        }
-
         if let duration = env["FUZZ_DURATION"].flatMap(TimeInterval.init) {
             config.maxDuration = .seconds(duration)
         }
@@ -397,8 +378,6 @@ extension FuzzEngine.Config {
         if env["FUZZ_VERBOSE"] != nil {
             config.verbose = true
         }
-
-        // corpusMode is already handled by CorpusMode.fromEnvironment() in Config.init
 
         return config
     }

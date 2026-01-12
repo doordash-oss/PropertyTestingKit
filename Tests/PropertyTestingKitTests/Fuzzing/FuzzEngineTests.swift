@@ -63,17 +63,6 @@ struct EmptyMutationsFuzzable: MutatorProviding, Codable, Sendable, Equatable {
 @Suite("FuzzEngine")
 struct FuzzEngineTests {
 
-    // MARK: - Helpers
-
-    /// Creates a SanCovCounters with a specific signature pattern.
-    /// Different counter values produce different CoverageSignatures.
-    /// Used only for tests that specifically test coverage behavior.
-    static func makeCounters(_ seed: Int) -> SanCovCounters {
-        var counters = [UInt64](repeating: 0, count: 100)
-        counters[seed % 100] = UInt64(seed + 1)
-        return SanCovCounters(counters: counters)
-    }
-
     // MARK: - Tests
 
     @Test("FuzzEngine runs and builds corpus")
@@ -222,12 +211,8 @@ struct FuzzEngineTests {
             SparseCoverage(indices: [1])
         }
 
-        // Test the signature creation first - use let to make it Sendable
-        var testCountersMutable = [UInt64](repeating: 0, count: 100)
-        testCountersMutable[1] = 1
-        let testCounters = testCountersMutable
-        let testSnapshot = SanCovCounters(counters: testCounters)
-        let sigTest = CoverageSignature(snapshot: testSnapshot)
+        // Test the signature creation first
+        let sigTest = CoverageSignature(sparse: SparseCoverage(indices: [1]))
         print("DEBUG: Test signature edges=\(sigTest.edges)")
 
         // Create corpus with matching signature
@@ -305,9 +290,6 @@ struct FuzzEngineTests {
         """
         let corpusData = Data(oldCorpusJSON.utf8)
 
-        let (snapshotSpy, snapshotFn) = spy { () -> SanCovCounters? in
-            FuzzEngineTests.makeCounters(1)
-        }
         // makeCounters(1) creates counters[1]=2, so snapshotCoveredArrays returns [1] = 2
         let snapshotCoveredArraysFn: @Sendable () -> SparseCoverage = {
             SparseCoverage(indices: [1])
@@ -340,7 +322,6 @@ struct FuzzEngineTests {
 
         #expect(existsSpy.callCount >= 1)
         #expect(loadSpy.callCount == 1, "Should have attempted to load corpus")
-        #expect(snapshotSpy.callCount > 0)
         #expect(!result.wasRegression, "Should re-fuzz due to schema incompatibility")
     }
 
@@ -436,10 +417,6 @@ struct FuzzEngineTests {
     func testRegressionSuccessPath() async throws {
         let corpusDir = URL(fileURLWithPath: "/test/fuzz-regression-success")
 
-        // Use 100 counters so schema version is "v1-100"
-        let (snapshotSpy, snapshotFn) = spy { () -> SanCovCounters? in
-            SanCovCounters(counters: [UInt64](repeating: 0, count: 100))
-        }
         // All zeros means empty SparseCoverage
         let snapshotCoveredArraysFn: @Sendable () -> SparseCoverage = {
             SparseCoverage(indices: [])
@@ -485,7 +462,6 @@ struct FuzzEngineTests {
 
         #expect(existsSpy.callCount >= 1)
         #expect(loadSpy.callCount == 1, "Should have loaded corpus")
-        #expect(snapshotSpy.callCount >= 0)  // May or may not be called with empty corpus
         #expect(result.wasRegression, "Should be regression mode with empty corpus")
     }
 

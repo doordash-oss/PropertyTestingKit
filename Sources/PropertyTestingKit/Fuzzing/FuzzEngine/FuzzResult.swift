@@ -64,7 +64,6 @@ public struct FuzzStats: Sendable {
 
     /// Reason for stopping the fuzz run.
     public enum StopReason: RawRepresentable, Sendable {
-//        case iterationLimit
         case timeLimit
         case regression
         case noSeedsAvailable
@@ -72,7 +71,6 @@ public struct FuzzStats: Sendable {
 
         public init?(rawValue: String) {
             switch rawValue {
-//            case "iteration_limit": self = .iterationLimit
             case "time_limit": self = .timeLimit
             case "regression": self = .regression
             case "no_seeds_available": self = .noSeedsAvailable
@@ -82,7 +80,6 @@ public struct FuzzStats: Sendable {
 
         public var rawValue: String {
             switch self {
-//            case .iterationLimit: "iteration_limit"
             case .timeLimit: "time_limit"
             case .regression: "regression"
             case .noSeedsAvailable: "no_seeds_available"

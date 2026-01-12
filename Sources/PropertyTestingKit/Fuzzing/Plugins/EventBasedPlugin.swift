@@ -64,14 +64,14 @@ public enum PluginEvent<each T: Sendable>: Sendable {
     /// Context provided when fuzzing ends.
     public struct EndContext: Sendable {
         /// Set of all covered edge indices.
-        public let totalCoveredIndices: Set<Int>
+        public let totalCoveredIndices: Set<UInt32>
         /// Project path for filtering (if configured).
         public let projectPath: String?
         /// Source location of the fuzz call.
         public let sourceLocation: SourceLocation
 
         public init(
-            totalCoveredIndices: Set<Int>,
+            totalCoveredIndices: Set<UInt32>,
             projectPath: String?,
             sourceLocation: SourceLocation
         ) {

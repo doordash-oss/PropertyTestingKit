@@ -63,7 +63,7 @@ struct EventBasedShrinkingPluginTests {
                 }
             },
             sourceLocation: SourceLocation(fileID: #fileID, filePath: #filePath, line: #line, column: 1),
-            coverageSignature: CoverageSignature(edges: [])
+            coverageSignature: CoverageSignature(edges: Set<UInt32>([]))
         )
 
         let actions = try await plugin.handle(event: PluginEvent<[Int]>.failureFound(failureContext))
@@ -106,7 +106,7 @@ struct EventBasedShrinkingPluginTests {
                 }
             },
             sourceLocation: SourceLocation(fileID: #fileID, filePath: #filePath, line: #line, column: 1),
-            coverageSignature: CoverageSignature(edges: [])
+            coverageSignature: CoverageSignature(edges: Set<UInt32>([]))
         )
 
         let actions = try await plugin.handle(event: PluginEvent<[Int]>.failureFound(failureContext))

@@ -17,43 +17,16 @@ import Foundation
 public struct CoverageSignature: Hashable, Sendable {
     /// The set of edge indices that were executed.
     /// Only non-zero edges are stored for efficiency.
-    public private(set) var edges: Set<Int>
-
-    /// Create a signature from raw counter values.
-    public init(counters: [UInt64]) {
-        var edges: Set<Int> = []
-        for (index, count) in counters.enumerated() {
-            if count > 0 {
-                edges.insert(index)
-            }
-        }
-        self.edges = edges
-    }
-
-    /// Create a signature from a SanCovCounters snapshot.
-    public init(snapshot: SanCovCounters) {
-        var edges: Set<Int> = []
-        for (index, count) in snapshot.counters.enumerated() {
-            if count > 0 {
-                edges.insert(index)
-            }
-        }
-        self.edges = edges
-    }
+    public private(set) var edges: Set<UInt32>
 
     /// Create directly from edges (for testing/deserialization).
-    public init(edges: Set<Int>) {
+    public init(edges: Set<UInt32>) {
         self.edges = edges
     }
 
     /// Create a signature from sparse coverage data.
-    ///
-    /// This is the fastest way to create a signature from coverage data,
-    /// as it avoids hashing overhead during collection.
-    ///
-    /// - Parameter sparse: SparseCoverage with indices array.
     public init(sparse: SparseCoverage) {
-        self.edges = Set((0..<sparse.count).map { Int(sparse.indices[$0]) })
+        self.edges = Set(sparse.indices)
     }
 
     /// Number of edges that were executed.
@@ -67,33 +40,33 @@ public struct CoverageSignature: Hashable, Sendable {
     }
 
     /// The set of edge indices that were executed.
-    public var executedIndices: Set<Int> {
+    public var executedIndices: Set<UInt32> {
         edges
     }
 
     /// Remove this signature's executed indices from the given set.
     /// More efficient than `set.subtract(executedIndices)` as it avoids
     /// creating an intermediate Set.
-    public func subtractIndices(from set: inout Set<Int>) {
+    public func subtractIndices(from set: inout Set<UInt32>) {
         set.subtract(edges)
     }
 
     /// Count how many of this signature's indices are in the given set.
     /// More efficient than `executedIndices.intersection(set).count` as it
     /// avoids creating intermediate Sets.
-    public func countIndicesIn(_ set: Set<Int>) -> Int {
+    public func countIndicesIn(_ set: Set<UInt32>) -> Int {
         edges.intersection(set).count
     }
 
     // MARK: - Comparison
 
     /// Returns the indices covered by this signature but not the other.
-    public func uniqueIndices(comparedTo other: CoverageSignature) -> Set<Int> {
+    public func uniqueIndices(comparedTo other: CoverageSignature) -> Set<UInt32> {
         edges.subtracting(other.edges)
     }
 
     /// Returns the indices covered by both signatures.
-    public func commonIndices(with other: CoverageSignature) -> Set<Int> {
+    public func commonIndices(with other: CoverageSignature) -> Set<UInt32> {
         edges.intersection(other.edges)
     }
 
@@ -136,7 +109,7 @@ extension CoverageSignature: Codable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
 
         // Try new format first
-        if let edges = try? container.decode(Set<Int>.self, forKey: .edges) {
+        if let edges = try? container.decode(Set<UInt32>.self, forKey: .edges) {
             self.edges = edges
             return
         }
@@ -144,7 +117,7 @@ extension CoverageSignature: Codable {
         // Fall back to legacy buckets format: {"1": 1, "5": 1} -> edges [1, 5]
         // The bucket values are ignored since we only care about which edges were hit
         if let buckets = try? container.decode([String: Int].self, forKey: .buckets) {
-            self.edges = Set(buckets.keys.compactMap { Int($0) })
+            self.edges = Set(buckets.keys.compactMap { UInt32($0) })
             return
         }
 
@@ -170,7 +143,7 @@ public struct SignatureSet: Codable, Sendable {
 
     public init() {
         self.signatures = []
-        self.totalCoverage = CoverageSignature(edges: [])
+        self.totalCoverage = CoverageSignature(edges: Set<UInt32>())
     }
 
     /// Add a signature to the set.

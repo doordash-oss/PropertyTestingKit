@@ -427,7 +427,6 @@ struct MutatorPublicAPITests {
 
             try await fuzz(
                 using: mutator,
-                iterations: 10,
                 duration: .seconds(1)
             ) { (input: String) in
                 await testedInputs.update { $0.append(input) }
@@ -460,7 +459,6 @@ struct MutatorPublicAPITests {
         } operation: {
             try await fuzz(
                 using: String.mutators(.empty),
-                iterations: 10,
                 duration: .seconds(1)
             ) { (input: String) in
                 await testedInputs.update { $0.append(input) }
@@ -500,7 +498,6 @@ struct MutatorPublicAPITests {
 
             try await fuzz(
                 using: stringMutator, intMutator,
-                iterations: 20,
                 duration: .seconds(2)
             ) { (str: String, num: Int) in
                 await testedInputs.update { $0.append((str, num)) }
@@ -539,7 +536,6 @@ struct MutatorPublicAPITests {
         } operation: {
             try await fuzz(
                 using: String.mutators(.empty), Int.mutators(.boundaries),
-                iterations: 50,
                 duration: .seconds(3)
             ) { (str: String, num: Int) in
                 await testedInputs.update { $0.append((str, num)) }
@@ -582,7 +578,6 @@ struct MutatorPublicAPITests {
             // Compose multiple strategies for a single String input
             try await fuzz(
                 using: String.mutators(.empty, .sql, .xss),
-                iterations: 500,
                 duration: .seconds(5)
             ) { (input: String) in
                 await testedInputs.update { $0.append(input) }

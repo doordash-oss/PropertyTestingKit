@@ -39,7 +39,7 @@ private func getFunctionSizeLookup() -> FunctionSizeLookupHelper {
     return _functionSizeLookup!
 }
 
-/// A snapshot of coverage counters with task-level isolation.
+/// Namespace for SanitizerCoverage APIs with task-level isolation.
 ///
 /// `SanCovCounters` uses SanitizerCoverage's trace_pc_guard callbacks with
 /// task-keyed maps. This provides true per-task isolation even when
@@ -56,15 +56,15 @@ private func getFunctionSizeLookup() -> FunctionSizeLookupHelper {
 ///
 /// ```swift
 /// // Begin isolated measurement
-/// guard let context = SanCovCounters.beginMeasurement() else { return }
+/// let context = SanCovCounters.beginMeasurement()
 /// defer { SanCovCounters.endMeasurement(context) }
 ///
 /// // Run code under test
 /// myFunction()
 ///
 /// // Get coverage for this context
-/// let coverage = SanCovCounters.snapshotCoveredArrays(with: context)
-/// print("Covered \(coverage?.indices.count ?? 0) edges")
+/// let coverage = try SanCovCounters.snapshotCoveredArrays(with: context)
+/// print("Covered \(coverage.indices.count) edges")
 /// ```
 ///
 /// ## Build Requirements
@@ -80,40 +80,7 @@ private func getFunctionSizeLookup() -> FunctionSizeLookupHelper {
 ///     ]
 /// )
 /// ```
-public struct SanCovCounters: Sendable {
-    /// The raw counter values (0 = not executed, 1 = executed).
-    public let counters: [UInt8]
-
-    /// Number of instrumented edges.
-    public var count: Int { counters.count }
-
-    /// Number of edges that were executed (non-zero counters).
-    public var coveredCount: Int {
-        counters.filter { $0 > 0 }.count
-    }
-
-    /// The set of edge indices that were executed.
-    public var coveredIndices: Set<Int> {
-        var indices = Set<Int>()
-        for (index, value) in counters.enumerated() where value > 0 {
-            indices.insert(index)
-        }
-        return indices
-    }
-
-    /// Create from raw counter array.
-    public init(counters: [UInt8]) {
-        self.counters = counters
-    }
-
-    /// Create from UInt64 counters (for test compatibility).
-    /// Values are clamped to UInt8.max.
-    public init(counters: [UInt64]) {
-        self.counters = counters.map { UInt8(min($0, UInt64(UInt8.max))) }
-    }
-
-    // MARK: - Static API
-
+public enum SanCovCounters {
     /// Check if SanitizerCoverage counters are available.
     ///
     /// Returns `true` if the binary was compiled with sanitizer coverage flags
@@ -144,63 +111,6 @@ public struct SanCovCounters: Sendable {
     static var currentCoveredCount: Int {
         sancov_get_covered_count()
     }
-
-//    /// Capture a snapshot of the current task's coverage.
-//    ///
-//    /// Returns `nil` if SanitizerCoverage is not available.
-//    ///
-//    /// - Note: The snapshot is isolated to the current Swift task.
-//    public static func snapshot() -> SanCovCounters? {
-//        guard isAvailable else { return nil }
-//
-//        let count = sancov_get_counter_count()
-//        guard count > 0 else { return nil }
-//
-//        // Allocate buffer and copy counters
-//        var buffer = [UInt8](repeating: 0, count: count)
-//        let copied = sancov_snapshot_counters(&buffer, count)
-//        guard copied == count else { return nil }
-//
-//        return SanCovCounters(counters: buffer)
-//    }
-
-//    /// Get only the covered (non-zero) edge indices.
-//    ///
-//    /// This is the fastest way to get sparse coverage data.
-//    ///
-//    /// - Returns: SparseCoverage with indices array, or nil if unavailable.
-//    public static func snapshotCoveredArrays() -> SparseCoverage? {
-//        guard isAvailable else { return nil }
-//
-//        // Optimization: Use a single pass with a reasonable max buffer.
-//        // Coverage is typically sparse (<1% of edges hit), so 8K entries is usually enough.
-//        // If we need more, we fall back to the two-pass approach.
-//        let maxEntries = 8192
-//
-//        // Single-pass: allocate buffer and fill in one call
-//        var indices = [UInt32]()
-//        let filled = sancov_snapshot_covered_indices(&indices, maxEntries)
-//
-//        // If buffer was too small, fall back to two-pass
-//        if filled == maxEntries {
-//            let actualCount = sancov_snapshot_covered_indices(nil, 0)
-//            if actualCount > maxEntries {
-//                var largeIndices = [UInt32](repeating: 0, count: actualCount)
-//                let actualFilled = sancov_snapshot_covered_indices(&largeIndices, actualCount)
-//
-//                // Trim to actual size
-//                largeIndices.removeLast(actualCount - actualFilled)
-//                return SparseCoverage(indices: largeIndices)
-//            }
-//        }
-//
-//        guard filled > 0 else { return SparseCoverage() }
-//
-//        // Trim array to actual size
-//        indices.removeLast(maxEntries - filled)
-//        return SparseCoverage(indices: indices)
-//    }
-
 }
 
 // MARK: - Source Location Mapping

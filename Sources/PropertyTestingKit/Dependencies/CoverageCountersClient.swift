@@ -25,14 +25,6 @@ import IssueReporting
 /// )
 /// ```
 public struct CoverageCountersClient: Sendable {
-    /// Get a snapshot of current coverage counters for this task.
-//    public var snapshot: @Sendable () -> SanCovCounters?
-
-    /// Get only the covered (non-zero) edges as parallel arrays.
-    /// This is the fastest way to get sparse coverage data.
-    /// Note: This is synchronous since the underlying SanCov implementation uses task-local data.
-//    public var snapshotCoveredArrays: @Sendable () -> SparseCoverage?
-
     /// Check if coverage instrumentation is available.
     public var isAvailable: @Sendable () -> Bool
 
@@ -50,14 +42,6 @@ public struct CoverageCountersClient: Sendable {
     public var snapshotCoveredArraysWithContext: @Sendable (SanCovCounters.MeasurementContext) throws -> SparseCoverage
 
     public init(
-//        snapshot: @escaping @Sendable () -> SanCovCounters? = unimplemented(
-//            "snapshot",
-//            placeholder: nil
-//        ),
-//        snapshotCoveredArrays: @escaping @Sendable () -> SparseCoverage? = unimplemented(
-//            "snapshotCoveredArrays",
-//            placeholder: nil
-//        ),
         isAvailable: @escaping @Sendable () -> Bool = unimplemented(
             "isAvailable",
             placeholder: false
@@ -74,8 +58,6 @@ public struct CoverageCountersClient: Sendable {
             placeholder: SparseCoverage()
         )
     ) {
-//        self.snapshot = snapshot
-//        self.snapshotCoveredArrays = snapshotCoveredArrays
         self.isAvailable = isAvailable
         self.beginMeasurement = beginMeasurement
         self.endMeasurement = endMeasurement
@@ -87,8 +69,6 @@ public struct CoverageCountersClient: Sendable {
 
 extension CoverageCountersClient: DependencyKey {
     public static let liveValue = CoverageCountersClient(
-//        snapshot: { SanCovCounters.snapshot() },
-//        snapshotCoveredArrays: { SanCovCounters.snapshotCoveredArrays() },
         isAvailable: { SanCovCounters.isAvailable },
         beginMeasurement: { SanCovCounters.beginMeasurement() },
         endMeasurement: { SanCovCounters.endMeasurement($0) },

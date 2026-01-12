@@ -192,34 +192,6 @@ let benchmarks: @Sendable () -> Void = {
         }
     }
 
-    Benchmark(
-        "CoverageSignature(full) - 10 edges in 26K",
-        configuration: .init(
-            metrics: [.wallClock],
-            warmupIterations: 10,
-            scalingFactor: .one
-        )
-    ) { benchmark in
-        let snapshot = SanCovCounters(counters: fullCountersSmall)
-        for _ in benchmark.scaledIterations {
-            blackHole(CoverageSignature(snapshot: snapshot))
-        }
-    }
-
-    Benchmark(
-        "CoverageSignature(full) - 100 edges in 26K",
-        configuration: .init(
-            metrics: [.wallClock],
-            warmupIterations: 10,
-            scalingFactor: .one
-        )
-    ) { benchmark in
-        let snapshot = SanCovCounters(counters: fullCountersLarge)
-        for _ in benchmark.scaledIterations {
-            blackHole(CoverageSignature(snapshot: snapshot))
-        }
-    }
-
     // MARK: - Fuzz Benchmarks
 
     Benchmark(
@@ -341,7 +313,7 @@ let benchmarks: @Sendable () -> Void = {
     ) { benchmark in
         for _ in benchmark.scaledIterations {
             let _ = try? await fuzz(
-                iterations: 1000,
+                duration: .seconds(5),
                 corpusMode: .refuzzReplace,
                 plugins: [EventBasedCoverageGapPlugin()]
             ) { (i: Int, s: String, b: Bool, d: Double, u: UInt8) in

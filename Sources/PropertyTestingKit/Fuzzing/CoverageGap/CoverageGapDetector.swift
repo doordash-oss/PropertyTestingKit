@@ -55,7 +55,7 @@ public struct CoverageGapDetector: Sendable {
     ///   - coveredIndices: Set of edge indices that were executed during fuzzing.
     ///   - projectPath: Optional project root path to filter to project files only.
     /// - Returns: A report of detected coverage gaps.
-    public func detect(from coveredIndices: Set<Int>, projectPath: String? = nil) async -> CoverageGapReport {
+    public func detect(from coveredIndices: Set<UInt32>, projectPath: String? = nil) async -> CoverageGapReport {
         guard SanCovCounters.isAvailable else {
             return CoverageGapReport(
                 gaps: [],
@@ -85,10 +85,11 @@ public struct CoverageGapDetector: Sendable {
         // Collect PCs for all covered edges
         var coveredEdgePCs: [(edgeIndex: Int, pc: UInt)] = []
         for edgeIndex in coveredIndices {
-            guard edgeIndex < totalEdges else { continue }
-            let pc = SanCovCounters.getPC(for: edgeIndex)
+            let idx = Int(edgeIndex)
+            guard idx < totalEdges else { continue }
+            let pc = SanCovCounters.getPC(for: idx)
             if pc > 0 {
-                coveredEdgePCs.append((edgeIndex: edgeIndex, pc: pc))
+                coveredEdgePCs.append((edgeIndex: idx, pc: pc))
             }
         }
 
@@ -203,7 +204,7 @@ public struct CoverageGapDetector: Sendable {
         }
         var uncoveredEdgesNeedingDWARF: [UncoveredEdge] = []
 
-        for edgeIndex in 0..<totalEdges where !coveredSet.contains(edgeIndex) {
+        for edgeIndex in 0..<totalEdges where !coveredSet.contains(UInt32(edgeIndex)) {
             let pc = SanCovCounters.getPC(for: edgeIndex)
 
             // First filter: Global PC range (very fast)

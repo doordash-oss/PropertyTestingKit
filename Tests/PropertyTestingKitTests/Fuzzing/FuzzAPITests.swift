@@ -117,7 +117,6 @@ struct FuzzAPITests {
         } operation: {
             try await fuzz(
                 seeds: ["0", "-0", "-1", "abc", String(Int.max)],
-                iterations: 50,
                 duration: .seconds(5)
             ) { input in
                 let parsed = NumberParser.parse(input)
@@ -240,7 +239,7 @@ struct FuzzAPITests {
             } operation: {
                 // This will throw because the test always fails
                 // Note: Seeds are required to provide type context for the variadic generic
-                _ = try await fuzz(seeds: [true, false], iterations: 10, duration: .seconds(5)) { _ in
+                _ = try await fuzz(seeds: [true, false], duration: .seconds(5)) { _ in
                     throw TestFailure()
                 }
             }
@@ -264,7 +263,7 @@ struct FuzzAPITests {
                 delete: { _ in }
             )
         } operation: {
-            try await fuzz(seeds: ["a", "ab", "abc"], iterations: 20, duration: .seconds(5)) { input in
+            try await fuzz(seeds: ["a", "ab", "abc"], duration: .seconds(5)) { input in
                 _ = input.count
             }
         }
@@ -281,7 +280,7 @@ struct FuzzAPITests {
         let existingCorpus = Corpus<String>(schemaVersion: await CorpusSchema.currentVersion())
         await existingCorpus.add(
             input: "from_corpus",
-            signature: CoverageSignature(edges: [1])
+            signature: CoverageSignature(edges: Set<UInt32>([1]))
         )
         let corpusSnapshot = await existingCorpus.snapshot()
         let corpusData = try JSONEncoder.corpusEncoder.encode(corpusSnapshot)
@@ -303,7 +302,7 @@ struct FuzzAPITests {
             )
         } operation: {
             // Use seeds that include the corpus entry so it gets tested
-            try await fuzz(seeds: ["from_corpus"], iterations: 20, duration: .seconds(5)) { input in
+            try await fuzz(seeds: ["from_corpus"], duration: .seconds(5)) { input in
                 await seenInputs.update { $0.append(input) }
             }
         }
