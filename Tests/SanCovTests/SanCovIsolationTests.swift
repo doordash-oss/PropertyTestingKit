@@ -41,16 +41,17 @@ actor TestResultCollector {
 let sharedCollector = TestResultCollector()
 
 /// Helper to get covered indices from a measurement context
-func getCoveredIndices(context: UnsafeMutableRawPointer?) -> Set<Int> {
-    let count = sancov_snapshot_covered_indices_with_context(context, nil, nil, 0)
+func getCoveredIndices(context: UnsafeMutablePointer<SanCovMeasurementContext>?) -> Set<Int> {
+    let count = sancov_get_covered_count_with_context(context)
     guard count > 0 else { return [] }
 
-    var indices = [UInt32](repeating: 0, count: count)
-    _ = indices.withUnsafeMutableBufferPointer { ptr in
-        sancov_snapshot_covered_indices_with_context(context, ptr.baseAddress, nil, ptr.count)
+    guard let indices = sancov_snapshot_covered_indices_with_context(context) else {
+        return []
     }
+    defer { free(indices) }
 
-    return Set(indices.map { Int($0) })
+    let buffer = UnsafeBufferPointer(start: indices, count: count)
+    return Set(buffer.map { Int($0) })
 }
 
 // MARK: - 20 Test Functions (each with unique local function)

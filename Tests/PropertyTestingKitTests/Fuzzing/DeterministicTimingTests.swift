@@ -12,30 +12,22 @@ import Dependencies
 import FunctionSpy
 @testable import PropertyTestingKit
 
-/// Helper to create a mock CoverageCountersClient with both snapshot and snapshotCoveredArrays.
+/// Helper to create a mock CoverageCountersClient with coverage data.
 private func makeMockCoverageClient(
     countersGenerator: @escaping @Sendable () -> [UInt64]
 ) -> CoverageCountersClient {
-    // Create the snapshotCoveredArrays closure once so we can reuse it
-    let snapshotCoveredArraysClosure: @Sendable () -> SparseCoverage? = {
-        let counters = countersGenerator()
-        var indices: [UInt32] = []
-        for (index, count) in counters.enumerated() where count > 0 {
-            indices.append(UInt32(index))
-        }
-        return SparseCoverage(indices: indices)
-    }
-
     return CoverageCountersClient(
-        snapshot: {
-            let counters = countersGenerator()
-            return SanCovCounters(counters: counters)
-        },
-        snapshotCoveredArrays: snapshotCoveredArraysClosure,
         isAvailable: { true },
         beginMeasurement: { SanCovCounters.MeasurementContext.testInstance() },
         endMeasurement: { _ in },
-        snapshotCoveredArraysWithContext: { _ in snapshotCoveredArraysClosure() }
+        snapshotCoveredArraysWithContext: { _ in
+            let counters = countersGenerator()
+            var indices: [UInt32] = []
+            for (index, count) in counters.enumerated() where count > 0 {
+                indices.append(UInt32(index))
+            }
+            return SparseCoverage(indices: indices)
+        }
     )
 }
 
@@ -73,10 +65,8 @@ struct DeterministicTimingTests {
                 }
             } operation: {
                 let config = FuzzEngine<SingleSeedInt>.Config(
-                    maxIterations: 1000,
                     maxDuration: .seconds(10),
-                    verbose: false,
-                    mutationBatchSize: 1  // Use batch size 1 for precise time limit testing
+                    verbose: false
                 )
 
                 let engine = FuzzEngine<SingleSeedInt>(mutators: SingleSeedInt.defaultMutator, config: config, corpusDirectory: nil)
@@ -107,7 +97,6 @@ struct DeterministicTimingTests {
                 }
             } operation: {
                 let config = FuzzEngine<SingleSeedInt>.Config(
-                    maxIterations: 5,
                     maxDuration: .seconds(100),
                     verbose: false
                 )
@@ -125,36 +114,6 @@ struct DeterministicTimingTests {
             #expect(result.stats.duration == expectedDuration, "Duration should match total inputs * time per test")
         }
 
-        @Test("FuzzEngine prefers iteration limit over time limit when iterations complete first")
-        func testIterationLimitBeforeTimeLimit() async {
-            let currentTime = SyncBox(Date(timeIntervalSince1970: 0))
-
-            let result = await withDependencies {
-                $0.dateClient = DateClient(now: { currentTime.value })
-                $0.coverageCounters = makeMockCoverageClient {
-                    var counters = [UInt64](repeating: 0, count: 100)
-                    let timeIndex = Int(currentTime.value.timeIntervalSince1970) % 100
-                    counters[timeIndex] = UInt64(timeIndex + 1)
-                    return counters
-                }
-            } operation: {
-                let config = FuzzEngine<SingleSeedInt>.Config(
-                    maxIterations: 5,
-                    maxDuration: .seconds(1000),  // Very long time limit
-                    verbose: false
-                )
-
-                let engine = FuzzEngine<SingleSeedInt>(mutators: SingleSeedInt.defaultMutator, config: config, corpusDirectory: nil)
-                return await engine.run { _ in
-                    // Only advance 1 second per test
-                    currentTime.update { $0 = $0.addingTimeInterval(1) }
-                }
-            }
-
-            #expect(result.stats.stopReason == FuzzStats.StopReason.iterationLimit)
-            // Duration = totalInputs * 1 second
-            #expect(result.stats.duration == Double(result.stats.totalInputs))
-        }
     }
 
     // MARK: - TestCaseShrinker Timeout Tests
@@ -588,10 +547,8 @@ struct DeterministicTimingTests {
                 $0.continuousClockClient = testClock
             } operation: {
                 let config = FuzzEngine<Int>.Config(
-                    maxIterations: 3,
                     maxDuration: .seconds(300),
-                    verbose: false,
-                    perInputTimeout: .seconds(1)
+                    verbose: false
                 )
 
                 let engine = FuzzEngine<Int>(mutators: Int.defaultMutator, config: config, corpusDirectory: nil)
@@ -636,10 +593,8 @@ struct DeterministicTimingTests {
                 // No clock override needed - perInputTimeout is nil so clock isn't used
             } operation: {
                 let config = FuzzEngine<Int>.Config(
-                    maxIterations: 3,
                     maxDuration: .seconds(30),
-                    verbose: false,
-                    perInputTimeout: nil  // No timeout
+                    verbose: false
                 )
 
                 let engine = FuzzEngine<Int>(mutators: Int.defaultMutator, config: config, corpusDirectory: nil)
@@ -665,10 +620,8 @@ struct DeterministicTimingTests {
                 $0.continuousClockClient = testClock
             } operation: {
                 let config = FuzzEngine<Int>.Config(
-                    maxIterations: 5,
                     maxDuration: .seconds(300),
-                    verbose: false,
-                    perInputTimeout: .seconds(1)
+                    verbose: false
                 )
 
                 let engine = FuzzEngine<Int>(mutators: Int.defaultMutator, config: config, corpusDirectory: nil)

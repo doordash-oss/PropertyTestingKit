@@ -6,33 +6,14 @@ import Testing
 @Suite("SanCov Coverage API")
 struct SanCovCoverageTests {
 
-    @Test("SanCovCounters.snapshot captures counter state")
-    func testSnapshot() {
-        guard SanCovCounters.isAvailable else {
-            Issue.record("SanCov counters not available (expected when not built with -sanitize-coverage)")
-            return
-        }
-
-        guard let snapshot = SanCovCounters.snapshot() else {
-            Issue.record("Failed to get SanCov snapshot")
-            return
-        }
-
-        #expect(snapshot.count > 0)
-        print("Captured \(snapshot.count) counters")
-    }
-
     @Test("Measurement context provides isolated coverage")
-    func testMeasurementContext() {
+    func testMeasurementContext() throws {
         guard SanCovCounters.isAvailable else {
             Issue.record("SanCov counters not available")
             return
         }
 
-        guard let context = SanCovCounters.beginMeasurement() else {
-            Issue.record("Failed to begin measurement")
-            return
-        }
+        let context = SanCovCounters.beginMeasurement()
         defer { SanCovCounters.endMeasurement(context) }
 
         // Do some work
@@ -41,8 +22,8 @@ struct SanCovCoverageTests {
         _ = sum
 
         // Get coverage from this context
-        let coverage = SanCovCounters.snapshotCoveredArrays(with: context)
-        #expect(coverage != nil, "Should get coverage from context")
+        let coverage = try SanCovCounters.snapshotCoveredArrays(with: context)
+        #expect(coverage.count > 0, "Should get coverage from context")
     }
 }
 

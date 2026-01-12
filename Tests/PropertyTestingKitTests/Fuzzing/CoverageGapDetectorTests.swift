@@ -255,7 +255,6 @@ struct CoverageGapDetectorTests {
         let emptySnapshot = await emptyCorpus.snapshot()
         let stats = FuzzStats(
             totalInputs: 0,
-            newPaths: 0,
             mutations: 0,
             generations: 0,
             duration: 0
@@ -301,7 +300,6 @@ struct CoverageGapDetectorTests {
     @Test("Direct FuzzEngine usage")
     func directFuzzEngineTest() async throws {
         let config = FuzzEngine<Int>.Config(
-            maxIterations: 10,
             corpusMode: .refuzzReplace,
             plugins: []
         )
@@ -315,7 +313,6 @@ struct CoverageGapDetectorTests {
     @Test("Just create FuzzEngine")
     func justCreateFuzzEngine() async throws {
         let config = FuzzEngine<Int>.Config(
-            maxIterations: 10,
             corpusMode: .refuzzReplace,
             plugins: []
         )
@@ -327,7 +324,6 @@ struct CoverageGapDetectorTests {
     @Test("Run with empty closure")
     func runWithEmptyClosure() async throws {
         let config = FuzzEngine<Int>.Config(
-            maxIterations: 1,  // Just 1 iteration
             corpusMode: .refuzzReplace,
             plugins: []
         )

@@ -9,42 +9,35 @@ import Dependencies
 import FunctionSpy
 @testable import PropertyTestingKit
 
-/// Helper to create a mock CoverageCountersClient with both snapshot and snapshotCoveredArrays.
+/// Helper to create a mock CoverageCountersClient with coverage data.
 private func makeMockCoverageClient(
     countersGenerator: @escaping @Sendable () -> [UInt64]
 ) -> CoverageCountersClient {
-    // Create the snapshotCoveredArrays closure once so we can reuse it
-    let snapshotCoveredArraysClosure: @Sendable () -> SparseCoverage? = {
-        let counters = countersGenerator()
-        var indices: [UInt32] = []
-        for (index, count) in counters.enumerated() where count > 0 {
-            indices.append(UInt32(index))
-        }
-        return SparseCoverage(indices: indices)
-    }
-
     return CoverageCountersClient(
-        snapshot: {
-            let counters = countersGenerator()
-            return SanCovCounters(counters: counters)
-        },
-        snapshotCoveredArrays: snapshotCoveredArraysClosure,
         isAvailable: { true },
         beginMeasurement: { SanCovCounters.MeasurementContext.testInstance() },
         endMeasurement: { _ in },
-        snapshotCoveredArraysWithContext: { _ in snapshotCoveredArraysClosure() }
+        snapshotCoveredArraysWithContext: { _ in
+            let counters = countersGenerator()
+            var indices: [UInt32] = []
+            for (index, count) in counters.enumerated() where count > 0 {
+                indices.append(UInt32(index))
+            }
+            return SparseCoverage(indices: indices)
+        }
     )
 }
 
-/// Helper to create a mock CoverageCountersClient that returns nil.
-private func makeNilCoverageClient() -> CoverageCountersClient {
+/// Error for mock coverage client that simulates unavailable coverage.
+private struct MockCoverageUnavailableError: Error {}
+
+/// Helper to create a mock CoverageCountersClient that throws (simulating unavailable coverage).
+private func makeThrowingCoverageClient() -> CoverageCountersClient {
     return CoverageCountersClient(
-        snapshot: { nil },
-        snapshotCoveredArrays: { nil },
         isAvailable: { true },
         beginMeasurement: { SanCovCounters.MeasurementContext.testInstance() },
         endMeasurement: { _ in },
-        snapshotCoveredArraysWithContext: { _ in nil }
+        snapshotCoveredArraysWithContext: { _ in throw MockCoverageUnavailableError() }
     )
 }
 
@@ -92,7 +85,6 @@ struct FuzzEngineTests {
             $0.corpusRegistry = alwaysInterestingRegistry
         } operation: {
             let config = FuzzEngine<Int>.Config(
-                maxIterations: 30,
                 maxDuration: .seconds(5),
                 minimizeCorpus: false,
                 verbose: false            )
@@ -116,7 +108,6 @@ struct FuzzEngineTests {
             $0.corpusRegistry = alwaysInterestingRegistry
         } operation: {
             let config = FuzzEngine<Int>.Config(
-                maxIterations: 20,
                 maxDuration: .seconds(3),
                 verbose: false
             )
@@ -142,7 +133,6 @@ struct FuzzEngineTests {
             $0.corpusRegistry = alwaysInterestingRegistry
         } operation: {
             let config = FuzzEngine<Int>.Config(
-                maxIterations: 50,
                 maxDuration: .seconds(5),
                 verbose: true            )
 
@@ -164,7 +154,6 @@ struct FuzzEngineTests {
             $0.corpusRegistry = alwaysInterestingRegistry
         } operation: {
             let config = FuzzEngine<Int>.Config(
-                maxIterations: 50,
                 maxDuration: .seconds(5),
                 verbose: false
             )
@@ -200,7 +189,6 @@ struct FuzzEngineTests {
             )
         } operation: {
             let config = FuzzEngine<Int>.Config(
-                maxIterations: 30,
                 maxDuration: .seconds(5),
                 minimizeCorpus: true,
                 verbose: true
@@ -230,7 +218,7 @@ struct FuzzEngineTests {
         // So snapshot must always return counters[1]=1 to match.
         // FuzzEngine uses snapshotCoveredArrays (sync) in the hot path
         // Return counters[1]=1 to match the corpus signature
-        let snapshotCoveredArraysFn: @Sendable () -> SparseCoverage? = {
+        let snapshotCoveredArraysFn: @Sendable () -> SparseCoverage = {
             SparseCoverage(indices: [1])
         }
 
@@ -271,8 +259,6 @@ struct FuzzEngineTests {
 
         let result = await withDependencies {
             $0.coverageCounters = CoverageCountersClient(
-                snapshot: { SanCovCounters(counters: testCounters) },
-                snapshotCoveredArrays: snapshotCoveredArraysFn,
                 isAvailable: { true },
                 beginMeasurement: { SanCovCounters.MeasurementContext.testInstance() },
                 endMeasurement: { _ in },
@@ -290,7 +276,6 @@ struct FuzzEngineTests {
             _ = cc
 
             let config = FuzzEngine<Int>.Config(
-                maxIterations: 30,
                 maxDuration: .seconds(5),
                 verbose: true
             )
@@ -324,7 +309,7 @@ struct FuzzEngineTests {
             FuzzEngineTests.makeCounters(1)
         }
         // makeCounters(1) creates counters[1]=2, so snapshotCoveredArrays returns [1] = 2
-        let snapshotCoveredArraysFn: @Sendable () -> SparseCoverage? = {
+        let snapshotCoveredArraysFn: @Sendable () -> SparseCoverage = {
             SparseCoverage(indices: [1])
         }
         let (loadSpy, loadFn) = spy { (_: URL) -> Data in corpusData }
@@ -332,8 +317,6 @@ struct FuzzEngineTests {
 
         let result = await withDependencies {
             $0.coverageCounters = CoverageCountersClient(
-                snapshot: snapshotFn,
-                snapshotCoveredArrays: snapshotCoveredArraysFn,
                 isAvailable: { true },
                 beginMeasurement: { SanCovCounters.MeasurementContext.testInstance() },
                 endMeasurement: { _ in },
@@ -347,7 +330,6 @@ struct FuzzEngineTests {
             )
         } operation: {
             let config = FuzzEngine<Int>.Config(
-                maxIterations: 20,
                 maxDuration: .seconds(5),
                 verbose: true
             )
@@ -382,7 +364,6 @@ struct FuzzEngineTests {
             )
         } operation: {
             let config = FuzzEngine<Int>.Config(
-                maxIterations: 20,
                 maxDuration: .seconds(5),
                 verbose: true
             )
@@ -407,7 +388,6 @@ struct FuzzEngineTests {
             $0.coverageCounters = .liveValue
         } operation: {
             let config = FuzzEngine<Int>.Config(
-                maxIterations: 100,
                 maxDuration: .seconds(10),
                 verbose: true            )
 
@@ -416,7 +396,6 @@ struct FuzzEngineTests {
         }
 
         #expect(result.corpus.count >= 1)
-        #expect(result.stats.newPaths > 0)
     }
 
     @Test("FuzzEngine handles corpus save failure")
@@ -441,7 +420,6 @@ struct FuzzEngineTests {
             )
         } operation: {
             let config = FuzzEngine<Int>.Config(
-                maxIterations: 20,
                 maxDuration: .seconds(5),
                 verbose: true
             )
@@ -463,7 +441,7 @@ struct FuzzEngineTests {
             SanCovCounters(counters: [UInt64](repeating: 0, count: 100))
         }
         // All zeros means empty SparseCoverage
-        let snapshotCoveredArraysFn: @Sendable () -> SparseCoverage? = {
+        let snapshotCoveredArraysFn: @Sendable () -> SparseCoverage = {
             SparseCoverage(indices: [])
         }
 
@@ -484,8 +462,6 @@ struct FuzzEngineTests {
 
         let result = await withDependencies {
             $0.coverageCounters = CoverageCountersClient(
-                snapshot: snapshotFn,
-                snapshotCoveredArrays: snapshotCoveredArraysFn,
                 isAvailable: { true },
                 beginMeasurement: { SanCovCounters.MeasurementContext.testInstance() },
                 endMeasurement: { _ in },
@@ -499,7 +475,6 @@ struct FuzzEngineTests {
             )
         } operation: {
             let config = FuzzEngine<Int>.Config(
-                maxIterations: 10,
                 maxDuration: .seconds(5),
                 verbose: true
             )
@@ -516,20 +491,10 @@ struct FuzzEngineTests {
 
     @Test("FuzzEngine handles coverage unavailable - test succeeds")
     func testCoverageUnavailableSuccess() async throws {
-        let (snapshotSpy, snapshotFn) = spy { () -> SanCovCounters? in nil }
-
         let result = await withDependencies {
-            $0.coverageCounters = CoverageCountersClient(
-                snapshot: snapshotFn,
-                snapshotCoveredArrays: { nil },
-                isAvailable: { true },
-                beginMeasurement: { SanCovCounters.MeasurementContext.testInstance() },
-                endMeasurement: { _ in },
-                snapshotCoveredArraysWithContext: { _ in nil }
-            )
+            $0.coverageCounters = makeThrowingCoverageClient()
         } operation: {
             let config = FuzzEngine<Int>.Config(
-                maxIterations: 10,
                 maxDuration: .seconds(5),
                 verbose: false
             )
@@ -538,7 +503,6 @@ struct FuzzEngineTests {
             return await engine.run { _ in }
         }
 
-        #expect(snapshotSpy.callCount > 0, "Should have called snapshot")
         #expect(result.stats.totalInputs > 0, "Test should have executed")
         #expect(result.corpus.count == 0, "Corpus should be empty without coverage")
         #expect(result.failures.isEmpty)
@@ -548,20 +512,10 @@ struct FuzzEngineTests {
     func testCoverageUnavailableWithError() async throws {
         struct TestError: Error {}
 
-        let (snapshotSpy, snapshotFn) = spy { () -> SanCovCounters? in nil }
-
         let result = await withDependencies {
-            $0.coverageCounters = CoverageCountersClient(
-                snapshot: snapshotFn,
-                snapshotCoveredArrays: { nil },
-                isAvailable: { true },
-                beginMeasurement: { SanCovCounters.MeasurementContext.testInstance() },
-                endMeasurement: { _ in },
-                snapshotCoveredArraysWithContext: { _ in nil }
-            )
+            $0.coverageCounters = makeThrowingCoverageClient()
         } operation: {
             let config = FuzzEngine<Int>.Config(
-                maxIterations: 10,
                 maxDuration: .seconds(5),
                 verbose: false
             )
@@ -572,34 +526,17 @@ struct FuzzEngineTests {
             }
         }
 
-        #expect(snapshotSpy.callCount > 0)
         #expect(!result.failures.isEmpty, "Should capture failures without coverage")
         #expect(result.failures.first?.error is TestError)
     }
 
     @Test("FuzzEngine handles coverage unavailable after test execution")
     func testCoverageUnavailableAfter() async throws {
-        // With reset+snapshot model:
-        // - reset() is called before each test
-        // - snapshot() is called after each test
-        // If snapshot always returns nil, no coverage is ever recorded
-        let (snapshotSpy, snapshotFn) = spy { () -> SanCovCounters? in
-            // Always return nil to simulate coverage unavailable
-            return nil
-        }
-
+        // When snapshotCoveredArraysWithContext throws, no coverage is recorded
         let result = await withDependencies {
-            $0.coverageCounters = CoverageCountersClient(
-                snapshot: snapshotFn,
-                snapshotCoveredArrays: { nil },
-                isAvailable: { true },
-                beginMeasurement: { SanCovCounters.MeasurementContext.testInstance() },
-                endMeasurement: { _ in },
-                snapshotCoveredArraysWithContext: { _ in nil }
-            )
+            $0.coverageCounters = makeThrowingCoverageClient()
         } operation: {
             let config = FuzzEngine<Int>.Config(
-                maxIterations: 5,
                 maxDuration: .seconds(5),
                 verbose: false
             )
@@ -608,8 +545,7 @@ struct FuzzEngineTests {
             return await engine.run { _ in }
         }
 
-        #expect(snapshotSpy.callCount > 0)
-        #expect(result.corpus.count == 0, "Corpus should be empty when snapshot returns nil")
+        #expect(result.corpus.count == 0, "Corpus should be empty when coverage throws")
     }
 
     @Test("FuzzEngine regression detects coverage change and re-fuzzes")
@@ -619,7 +555,7 @@ struct FuzzEngineTests {
         // Corpus has signature {5: 1}, but mock always returns {1: 1}
         // This mismatch triggers coverage change detection
         // FuzzEngine uses snapshotCoveredArrays, so provide that
-        let snapshotCoveredArraysFn: @Sendable () -> SparseCoverage? = {
+        let snapshotCoveredArraysFn: @Sendable () -> SparseCoverage = {
             SparseCoverage(indices: [1])  // Different from corpus signature {5: 1}
         }
 
@@ -648,12 +584,6 @@ struct FuzzEngineTests {
 
         let result = await withDependencies {
             $0.coverageCounters = CoverageCountersClient(
-                snapshot: {
-                    var counters = [UInt64](repeating: 0, count: 100)
-                    counters[1] = 1
-                    return SanCovCounters(counters: counters)
-                },
-                snapshotCoveredArrays: snapshotCoveredArraysFn,
                 isAvailable: { true },
                 beginMeasurement: { SanCovCounters.MeasurementContext.testInstance() },
                 endMeasurement: { _ in },
@@ -667,7 +597,6 @@ struct FuzzEngineTests {
             )
         } operation: {
             let config = FuzzEngine<Int>.Config(
-                maxIterations: 30,
                 maxDuration: .seconds(5),
                 verbose: true
             )
@@ -691,7 +620,6 @@ struct FuzzEngineTests {
             $0.corpusRegistry = alwaysInterestingRegistry
         } operation: {
             let config = FuzzEngine<Int>.Config(
-                maxIterations: 20,  // Will do seeds + iterations
                 maxDuration: .seconds(10),
                 minimizeCorpus: false,
                 verbose: true            )
@@ -714,7 +642,7 @@ struct FuzzEngineTests {
         //
         // All calls return counters[1]=1 to match corpus signature {1: 1}
         // FuzzEngine uses snapshotCoveredArrays in the hot path
-        let snapshotCoveredArraysFn: @Sendable () -> SparseCoverage? = {
+        let snapshotCoveredArraysFn: @Sendable () -> SparseCoverage = {
             SparseCoverage(indices: [1])  // Always return matching coverage
         }
 
@@ -743,12 +671,6 @@ struct FuzzEngineTests {
 
         let result = await withDependencies {
             $0.coverageCounters = CoverageCountersClient(
-                snapshot: {
-                    var counters = [UInt64](repeating: 0, count: 100)
-                    counters[1] = 1
-                    return SanCovCounters(counters: counters)
-                },
-                snapshotCoveredArrays: snapshotCoveredArraysFn,
                 isAvailable: { true },
                 beginMeasurement: { SanCovCounters.MeasurementContext.testInstance() },
                 endMeasurement: { _ in },
@@ -762,7 +684,6 @@ struct FuzzEngineTests {
             )
         } operation: {
             let config = FuzzEngine<Int>.Config(
-                maxIterations: 10,
                 maxDuration: .seconds(5),
                 verbose: true
             )
@@ -789,7 +710,6 @@ struct FuzzEngineTests {
             $0.corpusRegistry = alwaysInterestingRegistry
         } operation: {
             let config = FuzzEngine<EmptyFuzzable>.Config(
-                maxIterations: 10,
                 maxDuration: .seconds(1),
                 verbose: false            )
 
@@ -812,7 +732,6 @@ struct FuzzEngineTests {
             $0.corpusRegistry = alwaysInterestingRegistry
         } operation: {
             let config = FuzzEngine<EmptyMutationsFuzzable>.Config(
-                maxIterations: 20,
                 maxDuration: .seconds(5),
                 verbose: false            )
 

@@ -350,7 +350,6 @@ struct MutatorFuzzEngineTests {
             )
 
             let config = FuzzEngine<String>.Config(
-                maxIterations: 10,
                 maxDuration: .seconds(1)            )
 
             let engine = FuzzEngine<String>(mutators: mutator, config: config)
@@ -381,7 +380,6 @@ struct MutatorFuzzEngineTests {
             )
 
             let config = FuzzEngine<String>.Config(
-                maxIterations: 20,
                 maxDuration: .seconds(2)            )
 
             let engine = FuzzEngine<String>(mutators: mutator, config: config)

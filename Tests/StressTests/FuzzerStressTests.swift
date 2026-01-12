@@ -85,7 +85,7 @@ struct FuzzerStressTests {
 
         #expect(seenAbove, "Should have covered 'above' branch")
         #expect(seenBelow, "Should have covered 'below' branch")
-        print("Easy greater-than: \(result.stats.totalInputs) inputs, \(result.stats.newPaths) paths")
+        print("Easy greater-than: \(result.stats.totalInputs) inputs")
     }
 
     @Test("Easy: Negative check")
@@ -104,7 +104,7 @@ struct FuzzerStressTests {
 
         #expect(seenNegative, "Should have covered 'negative' branch")
         #expect(seenNonNegative, "Should have covered 'non-negative' branch")
-        print("Easy negative: \(result.stats.totalInputs) inputs, \(result.stats.newPaths) paths")
+        print("Easy negative: \(result.stats.totalInputs) inputs")
     }
 
     @Test("Easy: Empty string check")
@@ -123,7 +123,7 @@ struct FuzzerStressTests {
 
         #expect(seenEmpty, "Should have covered 'empty' branch")
         #expect(seenNonEmpty, "Should have covered 'non-empty' branch")
-        print("Easy empty string: \(result.stats.totalInputs) inputs, \(result.stats.newPaths) paths")
+        print("Easy empty string: \(result.stats.totalInputs) inputs")
     }
 
     // MARK: - Medium Tests (should achieve coverage with some effort)
@@ -288,7 +288,7 @@ struct FuzzerStressTests {
         #expect(seenSecondMagic, "Should have covered 'second-magic' branch")
         #expect(seenNeither, "Should have covered 'neither' branch")
         print("Very hard two magic: both=\(seenBothMagic), first=\(seenFirstMagic), second=\(seenSecondMagic), neither=\(seenNeither)")
-        print("  \(result.stats.totalInputs) inputs, \(result.stats.newPaths) paths")
+        print("  \(result.stats.totalInputs) inputs")
     }
 
     @Test("Very Hard: Checksum (b == a * 7 + 3)")
@@ -496,7 +496,7 @@ struct FuzzerStressTests {
         #expect(seenSuffixMatch, "Should have covered 'suffix-match' with string dictionary")
         #expect(seenNoMatch, "Should have covered 'no-match' branch")
         print("Extreme multiple dynamic: full=\(seenFullMatch), prefix=\(seenPrefixMatch), suffix=\(seenSuffixMatch), no=\(seenNoMatch)")
-        print("  \(result.stats.totalInputs) inputs, \(result.stats.newPaths) paths")
+        print("  \(result.stats.totalInputs) inputs")
     }
 
     // MARK: - Loop-Based Tests
@@ -682,7 +682,7 @@ struct FuzzerStressTests {
         #expect(seenError, "Should have covered 'ended-error' (negative values in seeds)")
         #expect(seenSuccess, "Should have covered 'ended-success' (sequence mutations create [1, 2])")
         print("Hard loop state: idle=\(seenIdle), processing=\(seenProcessing), error=\(seenError), success=\(seenSuccess)")
-        print("  \(result.stats.totalInputs) inputs, \(result.stats.newPaths) paths")
+        print("  \(result.stats.totalInputs) inputs")
     }
 
     @Test("Very Hard Loop: Sequence pattern detection")
@@ -733,7 +733,7 @@ struct FuzzerStressTests {
             #expect(seenValid, "Should have covered 'valid-checksum' branch")
         }
         print("Very hard loop checksum: valid=\(seenValid), zero=\(seenZero), invalid=\(seenInvalid), empty=\(seenEmpty)")
-        print("  \(result.stats.totalInputs) inputs, \(result.stats.newPaths) paths")
+        print("  \(result.stats.totalInputs) inputs")
     }
 
     @Test("Extreme Loop: Matrix search with constraints")
@@ -762,7 +762,7 @@ struct FuzzerStressTests {
             #expect(seenConstrained, "Should have covered 'constrained-match' branch")
         }
         print("Extreme loop matrix: constrained=\(seenConstrained), unconstrained=\(seenUnconstrained), noMatch=\(seenNoMatch), invalid=\(seenInvalid)")
-        print("  \(result.stats.totalInputs) inputs, \(result.stats.newPaths) paths")
+        print("  \(result.stats.totalInputs) inputs")
     }
 
     @Test("Extreme Loop: Convergence with magic iteration count")
@@ -791,7 +791,7 @@ struct FuzzerStressTests {
             #expect(seenMagic, "Should have covered 'magic-convergence' branch")
         }
         print("Extreme loop convergence: magic=\(seenMagic), converged=\(seenConverged), notConverged=\(seenNotConverged), invalid=\(seenInvalid)")
-        print("  \(result.stats.totalInputs) inputs, \(result.stats.newPaths) paths")
+        print("  \(result.stats.totalInputs) inputs")
     }
 
     // MARK: - Large Array Tests
@@ -816,7 +816,7 @@ struct FuzzerStressTests {
 
         print("Large array test: negative=\(seenLargeWithNegative), positive=\(seenLargeAllPositive), small=\(seenTooSmall)")
         print("  Max array size reached: \(maxArraySize)")
-        print("  \(result.stats.totalInputs) inputs, \(result.stats.newPaths) paths")
+        print("  \(result.stats.totalInputs) inputs")
 
         #expect(seenTooSmall, "Should have covered 'too-small' branch")
         #expect(seenLargeWithNegative, "Should grow array to 100+ with negative via doubling mutations")
@@ -840,7 +840,7 @@ struct FuzzerStressTests {
 
         print("Very large array test: large=\(seenVeryLarge), small=\(seenTooSmall)")
         print("  Max array size reached: \(maxArraySize)")
-        print("  \(result.stats.totalInputs) inputs, \(result.stats.newPaths) paths")
+        print("  \(result.stats.totalInputs) inputs")
 
         #expect(seenTooSmall, "Should have covered 'too-small' branch")
         #expect(seenVeryLarge, "Should grow array to 200+ via repeated doubling (21->42->84->168->336)")

@@ -26,33 +26,21 @@ struct EventBasedShrinkingPluginTests {
 
         // Test start event
         let startContext = PluginEvent<Int>.StartContext(
-            maxIterations: 100,
             maxDuration: .seconds(60),
-            batchSize: 10,
-            corpusMode: .auto,
-            seedCount: 5
+            corpusMode: .auto
         )
         let startActions = try await plugin.handle(event: PluginEvent<Int>.start(startContext))
         #expect(startActions.isEmpty)
 
         // Test iteration event
         let iterationContext = PluginEvent<Int>.IterationContext(
-            iteration: 1,
-            discoveredNewCoverage: true,
-            elapsed: 1.0,
-            corpusSize: 10
+            discoveredNewCoverage: true
         )
         let iterationActions = try await plugin.handle(event: PluginEvent<Int>.iteration(iterationContext))
         #expect(iterationActions.isEmpty)
 
         // Test end event
         let endContext = PluginEvent<Int>.EndContext(
-            totalIterations: 100,
-            duration: 60.0,
-            corpusSize: 50,
-            failureCount: 0,
-            hangCount: 0,
-            stopReason: .iterationLimit,
             totalCoveredIndices: Set([1, 2, 3]),
             projectPath: nil,
             sourceLocation: SourceLocation(fileID: #fileID, filePath: #filePath, line: #line, column: 1)
@@ -74,8 +62,8 @@ struct EventBasedShrinkingPluginTests {
                     throw TestError.expected
                 }
             },
-            failure: "Array contains 42",
-            sourceLocation: SourceLocation(fileID: #fileID, filePath: #filePath, line: #line, column: 1)
+            sourceLocation: SourceLocation(fileID: #fileID, filePath: #filePath, line: #line, column: 1),
+            coverageSignature: CoverageSignature(edges: [])
         )
 
         let actions = try await plugin.handle(event: PluginEvent<[Int]>.failureFound(failureContext))
@@ -117,8 +105,8 @@ struct EventBasedShrinkingPluginTests {
                     throw TestError.expected
                 }
             },
-            failure: "Array contains 42",
-            sourceLocation: SourceLocation(fileID: #fileID, filePath: #filePath, line: #line, column: 1)
+            sourceLocation: SourceLocation(fileID: #fileID, filePath: #filePath, line: #line, column: 1),
+            coverageSignature: CoverageSignature(edges: [])
         )
 
         let actions = try await plugin.handle(event: PluginEvent<[Int]>.failureFound(failureContext))
@@ -151,11 +139,8 @@ struct EventBasedPlateauDetectorPluginTests {
         let plugin = EventBasedPlateauDetectorPlugin()
 
         let startContext = PluginEvent<Int>.StartContext(
-            maxIterations: 100,
             maxDuration: .seconds(60),
-            batchSize: 10,
-            corpusMode: .auto,
-            seedCount: 5
+            corpusMode: .auto
         )
         let actions = try await plugin.handle(event: PluginEvent<Int>.start(startContext))
         #expect(actions.isEmpty)
@@ -166,15 +151,12 @@ struct EventBasedPlateauDetectorPluginTests {
         let plugin = EventBasedPlateauDetectorPlugin()
 
         // Simulate iterations with new coverage each time
-        for i in 0..<50 {
+        for _ in 0..<50 {
             let context = PluginEvent<Int>.IterationContext(
-                iteration: i,
-                discoveredNewCoverage: true,
-                elapsed: Double(i),
-                corpusSize: i + 1
+                discoveredNewCoverage: true
             )
             let actions = try await plugin.handle(event: PluginEvent<Int>.iteration(context))
-            #expect(actions.isEmpty, "Should not stop when discovering coverage at iteration \(i)")
+            #expect(actions.isEmpty, "Should not stop when discovering coverage")
         }
     }
 
@@ -195,17 +177,14 @@ struct EventBasedPlateauDetectorPluginTests {
         var stoppedAt: Int?
         for i in 0..<100 {
             let context = PluginEvent<Int>.IterationContext(
-                iteration: i,
-                discoveredNewCoverage: false,
-                elapsed: Double(i),
-                corpusSize: 1
+                discoveredNewCoverage: false
             )
             let actions = try await plugin.handle(event: PluginEvent<Int>.iteration(context))
 
             if !actions.isEmpty {
                 // Should be a stop action
                 if case .stop(let stopAction) = actions[0] {
-                    #expect(stopAction.reason == "coverage_plateau")
+                    #expect(stopAction.reason == .custom("coverage_plateau"))
                     stoppedAt = i
                     break
                 }
@@ -233,12 +212,6 @@ struct EventBasedSTADSPluginActionTests {
         let plugin = EventBasedSTADSPlugin()
 
         let endContext = PluginEvent<Int>.EndContext(
-            totalIterations: 100,
-            duration: 60.0,
-            corpusSize: 50,
-            failureCount: 0,
-            hangCount: 0,
-            stopReason: .iterationLimit,
             totalCoveredIndices: Set([1, 2, 3]),
             projectPath: nil,
             sourceLocation: SourceLocation(fileID: #fileID, filePath: #filePath, line: #line, column: 1)
@@ -260,16 +233,13 @@ struct EventBasedSTADSPluginActionTests {
         var stoppedAt: Int?
         for i in 0..<500 {
             let context = PluginEvent<Int>.IterationContext(
-                iteration: i,
-                discoveredNewCoverage: false,
-                elapsed: Double(i),
-                corpusSize: 1
+                discoveredNewCoverage: false
             )
             let actions = try await plugin.handle(event: PluginEvent<Int>.iteration(context))
 
             if !actions.isEmpty {
                 if case .stop(let stopAction) = actions[0] {
-                    #expect(stopAction.reason == "stads_plateau")
+                    #expect(stopAction.reason == .custom("stads_plateau"))
                     stoppedAt = i
                     break
                 }
@@ -292,22 +262,7 @@ struct EventBasedSaturationPluginActionTests {
         #expect(id == "saturation_detector")
     }
 
-    @Test("Plugin returns empty for non-iteration events")
-    func testNonIterationEventsReturnEmpty() async throws {
-        let plugin = EventBasedSaturationPlugin()
-
-        let batchContext = PluginEvent<Int>.BatchContext(
-            batchIndex: 0,
-            batchSize: 10,
-            newPathsInBatch: 5,
-            totalCorpusSize: 50,
-            elapsed: 1.0,
-            failureCount: 0,
-            hangCount: 0
-        )
-        let actions = try await plugin.handle(event: PluginEvent<Int>.batchComplete(batchContext))
-        #expect(actions.isEmpty)
-    }
+    // BatchContext test removed - BatchContext no longer exists in PluginEvent
 
     @Test("Plugin returns stop action when saturated")
     func testStopWhenSaturated() async throws {
@@ -323,16 +278,13 @@ struct EventBasedSaturationPluginActionTests {
         var stoppedAt: Int?
         for i in 0..<500 {
             let context = PluginEvent<Int>.IterationContext(
-                iteration: i,
-                discoveredNewCoverage: false,
-                elapsed: Double(i),
-                corpusSize: 1
+                discoveredNewCoverage: false
             )
             let actions = try await plugin.handle(event: PluginEvent<Int>.iteration(context))
 
             if !actions.isEmpty {
                 if case .stop(let stopAction) = actions[0] {
-                    #expect(stopAction.reason == "saturation_plateau")
+                    #expect(stopAction.reason == .custom("saturation_plateau"))
                     stoppedAt = i
                     break
                 }
@@ -353,10 +305,7 @@ struct EventBasedPluginDispatcherTests {
         var dispatcher = EventBasedPluginDispatcher(plugins: [])
 
         let context = PluginEvent<Int>.IterationContext(
-            iteration: 0,
-            discoveredNewCoverage: true,
-            elapsed: 1.0,
-            corpusSize: 10
+            discoveredNewCoverage: true
         )
         let actions = try await dispatcher.dispatch(event: PluginEvent<Int>.iteration(context))
         #expect(actions.isEmpty)
@@ -379,10 +328,7 @@ struct EventBasedPluginDispatcherTests {
         var actions: [FuzzPluginAction<Int>] = []
         for i in 0..<10 {
             let context = PluginEvent<Int>.IterationContext(
-                iteration: i,
-                discoveredNewCoverage: false,
-                elapsed: Double(i),
-                corpusSize: 1
+                discoveredNewCoverage: false
             )
             actions = try await dispatcher.dispatch(event: PluginEvent<Int>.iteration(context))
             if !actions.isEmpty {
@@ -394,7 +340,7 @@ struct EventBasedPluginDispatcherTests {
         #expect(actions.count == 2)
         for action in actions {
             if case .stop(let stopAction) = action {
-                #expect(stopAction.reason == "coverage_plateau")
+                #expect(stopAction.reason == .custom("coverage_plateau"))
             } else {
                 Issue.record("Expected stop action")
             }
@@ -410,11 +356,8 @@ struct EventBasedPluginDispatcherTests {
         var dispatcher = EventBasedPluginDispatcher(plugins: [plugin1, plugin2])
 
         let context = PluginEvent<Int>.StartContext(
-            maxIterations: 100,
             maxDuration: .seconds(60),
-            batchSize: 10,
-            corpusMode: .auto,
-            seedCount: 5
+            corpusMode: .auto
         )
 
         // Both plugins return empty for start event, but dispatch should work
@@ -439,11 +382,8 @@ struct EventBasedCoverageGapPluginActionTests {
         let plugin = EventBasedCoverageGapPlugin()
 
         let startContext = PluginEvent<Int>.StartContext(
-            maxIterations: 100,
             maxDuration: .seconds(60),
-            batchSize: 10,
-            corpusMode: .auto,
-            seedCount: 5
+            corpusMode: .auto
         )
         let actions = try await plugin.handle(event: PluginEvent<Int>.start(startContext))
         #expect(actions.isEmpty)
@@ -451,185 +391,7 @@ struct EventBasedCoverageGapPluginActionTests {
 
 }
 
-// MARK: - ActionExecutor Tests
-
-@Suite("ActionExecutor")
-struct ActionExecutorTests {
-
-    @Test("Empty actions returns default result")
-    func testEmptyActions() {
-        let executor = ActionExecutor(recordIssues: false)
-        let actions: [FuzzPluginAction<Int>] = []
-
-        let result = executor.execute(actions)
-
-        #expect(result.shouldStop == false)
-        #expect(result.stopReason == nil)
-        #expect(result.inputsToQueue.isEmpty)
-        #expect(result.issuesRecorded == 0)
-        #expect(result.inputsToMutate.isEmpty)
-        #expect(result.corpusInputs.isEmpty)
-    }
-
-    @Test("Stop action sets shouldStop and reason")
-    func testStopAction() {
-        let executor = ActionExecutor(recordIssues: false)
-        let actions: [FuzzPluginAction<Int>] = [
-            .stop(.init(reason: "test_reason"))
-        ]
-
-        let result = executor.execute(actions)
-
-        #expect(result.shouldStop == true)
-        #expect(result.stopReason == "test_reason")
-    }
-
-    @Test("Multiple stop actions uses last reason")
-    func testMultipleStopActions() {
-        let executor = ActionExecutor(recordIssues: false)
-        let actions: [FuzzPluginAction<Int>] = [
-            .stop(.init(reason: "first_reason")),
-            .stop(.init(reason: "second_reason"))
-        ]
-
-        let result = executor.execute(actions)
-
-        #expect(result.shouldStop == true)
-        #expect(result.stopReason == "second_reason")
-    }
-
-    @Test("RecordIssue action counts issues")
-    func testRecordIssueAction() {
-        let executor = ActionExecutor(recordIssues: false)  // Don't actually record
-        let sourceLocation = SourceLocation(fileID: #fileID, filePath: #filePath, line: #line, column: 1)
-        let actions: [FuzzPluginAction<Int>] = [
-            .recordIssue(.init(comment: Comment(rawValue: "Issue 1"), sourceLocation: sourceLocation)),
-            .recordIssue(.init(comment: Comment(rawValue: "Issue 2"), sourceLocation: sourceLocation))
-        ]
-
-        let result = executor.execute(actions)
-
-        #expect(result.issuesRecorded == 2)
-        #expect(result.shouldStop == false)
-    }
-
-    @Test("QueueInputs action collects inputs")
-    func testQueueInputsAction() {
-        let executor = ActionExecutor(recordIssues: false)
-        let data1 = Data([1, 2, 3])
-        let data2 = Data([4, 5, 6])
-        let data3 = Data([7, 8, 9])
-        let actions: [FuzzPluginAction<Int>] = [
-            .queueInputs(.init(inputs: [data1, data2])),
-            .queueInputs(.init(inputs: [data3]))
-        ]
-
-        let result = executor.execute(actions)
-
-        #expect(result.inputsToQueue.count == 3)
-        #expect(result.inputsToQueue[0] == data1)
-        #expect(result.inputsToQueue[1] == data2)
-        #expect(result.inputsToQueue[2] == data3)
-    }
-
-    @Test("SelectForMutation action collects inputs")
-    func testSelectForMutationCollectsInputs() {
-        let executor = ActionExecutor(recordIssues: false)
-        let actions: [FuzzPluginAction<Int>] = [
-            .selectForMutation(.init(input: 42)),
-            .selectForMutation(.init(input: 100))
-        ]
-
-        let result = executor.execute(actions)
-
-        #expect(result.inputsToMutate.count == 2)
-        #expect(result.inputsToMutate[0] == 42)
-        #expect(result.inputsToMutate[1] == 100)
-        #expect(result.corpusInputs.isEmpty)
-    }
-
-    @Test("SubmitToCorpus action collects inputs")
-    func testSubmitToCorpusCollectsInputs() {
-        let executor = ActionExecutor(recordIssues: false)
-        let actions: [FuzzPluginAction<Int>] = [
-            .submitToCorpus(.init(input: 42)),
-            .submitToCorpus(.init(input: 100))
-        ]
-
-        let result = executor.execute(actions)
-
-        #expect(result.corpusInputs.count == 2)
-        #expect(result.corpusInputs[0] == 42)
-        #expect(result.corpusInputs[1] == 100)
-        #expect(result.inputsToMutate.isEmpty)
-    }
-
-    @Test("Mixed actions processed correctly")
-    func testMixedActions() {
-        let executor = ActionExecutor(recordIssues: false)
-        let sourceLocation = SourceLocation(fileID: #fileID, filePath: #filePath, line: #line, column: 1)
-        let data = Data([1, 2, 3])
-        let actions: [FuzzPluginAction<Int>] = [
-            .recordIssue(.init(comment: Comment(rawValue: "Issue"), sourceLocation: sourceLocation)),
-            .queueInputs(.init(inputs: [data])),
-            .selectForMutation(.init(input: 42)),
-            .submitToCorpus(.init(input: 100)),
-            .stop(.init(reason: "done"))
-        ]
-
-        let result = executor.execute(actions)
-
-        #expect(result.shouldStop == true)
-        #expect(result.stopReason == "done")
-        #expect(result.inputsToQueue.count == 1)
-        #expect(result.inputsToQueue[0] == data)
-        #expect(result.issuesRecorded == 1)
-        #expect(result.inputsToMutate.count == 1)
-        #expect(result.inputsToMutate[0] == 42)
-        #expect(result.corpusInputs.count == 1)
-        #expect(result.corpusInputs[0] == 100)
-    }
-
-    @Test("Works with array input type")
-    func testArrayInputType() {
-        let executor = ActionExecutor(recordIssues: false)
-        let actions: [FuzzPluginAction<[Int]>] = [
-            .selectForMutation(.init(input: [1, 2, 3])),
-            .submitToCorpus(.init(input: [4, 5, 6])),
-            .stop(.init(reason: "array_test"))
-        ]
-
-        let result = executor.execute(actions)
-
-        #expect(result.shouldStop == true)
-        #expect(result.stopReason == "array_test")
-        #expect(result.inputsToMutate.count == 1)
-        #expect(result.inputsToMutate[0] == [1, 2, 3])
-        #expect(result.corpusInputs.count == 1)
-        #expect(result.corpusInputs[0] == [4, 5, 6])
-    }
-
-    @Test("Works with string input type")
-    func testStringInputType() {
-        let executor = ActionExecutor(recordIssues: false)
-        let data = Data("test".utf8)
-        let actions: [FuzzPluginAction<String>] = [
-            .queueInputs(.init(inputs: [data])),
-            .selectForMutation(.init(input: "hello")),
-            .submitToCorpus(.init(input: "world"))
-        ]
-
-        let result = executor.execute(actions)
-
-        #expect(result.inputsToQueue.count == 1)
-        #expect(result.inputsToQueue[0] == data)
-        #expect(result.inputsToMutate.count == 1)
-        #expect(result.inputsToMutate[0] == "hello")
-        #expect(result.corpusInputs.count == 1)
-        #expect(result.corpusInputs[0] == "world")
-    }
-
-}
+// ActionExecutor tests removed - ActionExecutor is currently commented out in source
 
 // MARK: - Test Helpers
 

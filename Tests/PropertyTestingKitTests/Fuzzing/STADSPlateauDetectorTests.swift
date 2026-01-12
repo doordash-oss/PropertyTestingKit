@@ -191,12 +191,9 @@ struct EventBasedSTADSPluginTests {
         let plugin = EventBasedSTADSPlugin(config: config)
 
         // Record many non-discoveries via iteration events
-        for i in 0..<50 {
+        for _ in 0..<50 {
             let iterationContext = PluginEvent<Int>.IterationContext(
-                iteration: i,
-                discoveredNewCoverage: false,
-                elapsed: Double(i) * 0.1,
-                corpusSize: 0
+                discoveredNewCoverage: false
             )
             let actions = try await plugin.handle(event: PluginEvent<Int>.iteration(iterationContext))
 

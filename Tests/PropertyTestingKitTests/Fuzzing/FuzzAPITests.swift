@@ -31,7 +31,6 @@ struct FuzzAPITests {
             )
         } operation: {
             let config = FuzzEngine<String>.Config(
-                maxIterations: 100,
                 maxDuration: .seconds(5),
                 minimizeCorpus: true,
                 verbose: true
@@ -88,7 +87,6 @@ struct FuzzAPITests {
             $0.coverageCounters = .liveValue
         } operation: {
             let config = FuzzEngine<String>.Config(
-                maxIterations: 50,
                 maxDuration: .seconds(5),
                 verbose: false
             )
@@ -170,7 +168,6 @@ struct FuzzAPITests {
         } operation: {
             let config: FuzzEngine<String>.Config = .fromEnvironment()
 
-            #expect(config.maxIterations == 500)
             #expect(config.maxDuration == .seconds(30))
             #expect(config.verbose == true)
         }
@@ -183,7 +180,6 @@ struct FuzzAPITests {
         } operation: {
             let config: FuzzEngine<String>.Config = .fromEnvironment()
 
-            #expect(config.maxIterations == 10_000)
             #expect(config.maxDuration == .seconds(60))
             #expect(config.verbose == false)
         }
@@ -202,7 +198,6 @@ struct FuzzAPITests {
             $0.corpusRegistry = alwaysInterestingRegistry
         } operation: {
             let config = FuzzEngine<Bool>.Config(
-                maxIterations: 10,
                 maxDuration: .seconds(5),
                 verbose: false
             )

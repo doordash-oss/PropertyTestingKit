@@ -35,7 +35,6 @@ struct CustomMutatorProvidingTests {
             $0.corpusRegistry = alwaysInterestingRegistry
         } operation: {
             let config = FuzzEngine<TestConfig>.Config(
-                maxIterations: 30,
                 maxDuration: .seconds(5),
                 verbose: false
             )
