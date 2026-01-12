@@ -23,6 +23,7 @@ actor FuzzStateMachine<each Input: Codable & Sendable> {
     private let startTime: Date
     private let dateClient: DateClient
     private var failures: [(input: (repeat each Input), error: Error)] = []
+    private let test: @Sendable ((repeat each Input)) async throws -> Void
 
     private var mutationsCount: Int = 0
 
@@ -40,14 +41,9 @@ actor FuzzStateMachine<each Input: Codable & Sendable> {
             randomInputGenerator: randomInputGenerator
         )
         let corpus = Self.fetchCorpus()
-        let coverageCountersClient = Self.fetchCoverageCounters()
-        let testWithIssueCapture = Self.captureIssues(
-            sourceLocation: config.sourceLocation,
-            test: test
-        )
 
         // Caching the dateclient
-        @Dependency var dateClient: DateClient
+        @Dependency(\.dateClient) var dateClient: DateClient
         self.dateClient = dateClient
         self.startTime = startTime
         self.inputQueue = inputQueue
@@ -55,13 +51,32 @@ actor FuzzStateMachine<each Input: Codable & Sendable> {
         self.config = config
         self.corpus = corpus
         self.mutationGenerator = mutationGenerator
+        self.test = test
+    }
+
+    func addNewFailure(_ failure: (input: (repeat each Input), error: Error)) {
+        failures.append(failure)
+    }
+
+    struct FuzzStateMachineResult {
+        let stats: FuzzStats
+        let corpus: CorpusClient<repeat each Input>
+        let failures: [(input: (repeat each Input), error: Error)]
+    }
+
+    private func setupWorkerPool() {
+        let coverageCountersClient = Self.fetchCoverageCounters()
+        let testWithIssueCapture = Self.captureIssues(
+            sourceLocation: config.sourceLocation,
+            test: test
+        )
 
         // TODO: Avoid reference cycle
         self.workerPool = WorkerPool(
             inputQueue: inputQueue,
             test: { testInput in
                 // Check for halting conditions
-                await self.haltIfAtLimit(startTime: startTime)
+                await self.haltIfAtLimit(startTime: self.startTime)
 
                 let context = coverageCountersClient.beginMeasurement()
                 do {
@@ -71,7 +86,7 @@ actor FuzzStateMachine<each Input: Codable & Sendable> {
                     let coverageSignature = CoverageSignature(
                         sparse: try coverageCountersClient.snapshotCoveredArraysWithContext(context)
                     )
-                    let didAdd = await corpus.addIfInteresting(testInput, coverageSignature)
+                    let didAdd = await self.corpus.addIfInteresting(testInput, coverageSignature)
 
                     try! await self.submitPluginEvent(.iteration(
                         .init(discoveredNewCoverage: didAdd)
@@ -85,7 +100,7 @@ actor FuzzStateMachine<each Input: Codable & Sendable> {
                         .init(
                             input: testInput,
                             test: testWithIssueCapture,
-                            sourceLocation: config.sourceLocation,
+                            sourceLocation: self.config.sourceLocation,
                             coverageSignature: coverageSignature
                         )
                     ))
@@ -95,17 +110,8 @@ actor FuzzStateMachine<each Input: Codable & Sendable> {
         )
     }
 
-    func addNewFailure(_ failure: (input: (repeat each Input), error: Error)) {
-        failures.append(failure)
-    }
-
-    struct FuzzStateMachineResult {
-        let stats: FuzzStats
-        let corpus: CorpusClient<repeat each Input>
-        let failures: [(input: (repeat each Input), error: Error)]
-    }
-
     func start() async throws -> FuzzStateMachineResult {
+        setupWorkerPool()
         try await submitPluginEvent(.start(
             .init(
                 maxDuration: config.maxDuration,
@@ -255,7 +261,7 @@ extension FuzzStateMachine {
     }
 }
 
-actor TestInputQueue<each Input> {
+actor TestInputQueue<each Input: Sendable> {
     var queue: Deque<(repeat each Input)>
     let randomInputGenerator: () -> (repeat each Input)
     fileprivate var generatedCount: Int = 0
@@ -265,7 +271,7 @@ actor TestInputQueue<each Input> {
         self.randomInputGenerator = randomInputGenerator
     }
 
-    func pull() -> (repeat each Input) {
+    func pull() -> sending (repeat each Input) {
         if let next = queue.popFirst() {
             return next
         } else {
@@ -284,7 +290,7 @@ actor TestInputQueue<each Input> {
 }
 
 /// Pool that uses a pull system to request tasks on completion
-actor WorkerPool<each Input> {
+actor WorkerPool<each Input: Sendable> {
     let size: Int
     let inputQueue: TestInputQueue<repeat each Input>
     let test: @Sendable ((repeat each Input)) async throws -> Void
