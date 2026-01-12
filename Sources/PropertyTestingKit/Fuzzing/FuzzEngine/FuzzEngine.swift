@@ -255,11 +255,11 @@ public actor FuzzEngine<each Input: Codable & Sendable> {
         let schemaVersion = CorpusSchema.currentVersion()
         let corpus: CorpusClient<repeat each Input> = corpusRegistry.get(schemaVersion: schemaVersion)
         var failures: [(input: (repeat each Input), error: Error)] = []
-        var hangs: [(input: (repeat each Input), timeout: Duration)] = []
-        var iterationsSinceNewCoverage = 0
-        var totalMutations = 0
-        var totalGenerations = 0
-        var totalDiscoveries = 0
+//        var hangs: [(input: (repeat each Input), timeout: Duration)] = []
+//        var iterationsSinceNewCoverage = 0
+//        var totalMutations = 0
+//        var totalGenerations = 0
+//        var totalDiscoveries = 0
 
         // Initialize event-based plugin dispatcher
         var dispatcher = EventBasedPluginDispatcher(plugins: config.plugins)
@@ -303,7 +303,12 @@ public actor FuzzEngine<each Input: Codable & Sendable> {
             test: test
         )
 
-        try! await stateMachine.waitForCompletion()
+        guard let stateMachineResult = try! await stateMachine.waitForCompletion() else {
+            if config.verbose {
+                print("[Fuzz] No results returned from state machine")
+            }
+            return .empty
+        }
 
 //        // Unified fuzzing loop: seeds and mutations processed together
 //        var iteration = 0
@@ -576,42 +581,41 @@ public actor FuzzEngine<each Input: Codable & Sendable> {
         let duration = dateClient.now().timeIntervalSince(startTime)
 
         // Report hang statistics if any were detected
-        if !hangs.isEmpty && config.verbose {
-            print("[Fuzz] Hang statistics: \(hangs.count) inputs caused timeouts")
-        }
+//        if !hangs.isEmpty && config.verbose {
+//            print("[Fuzz] Hang statistics: \(hangs.count) inputs caused timeouts")
+//        }
 
         let finalCorpusCount = await finalCorpus.count()
         let stats = FuzzStats(
-            totalInputs: iteration,
+            totalInputs: stateMachineResult.iterationCount,
             newPaths: finalCorpusCount,
             mutations: totalMutations,
             generations: totalGenerations,
             duration: duration,
-            stopReason: stopReason,
+            stopReason: stateMachineResult.stopReason,
             plateauStats: nil,
-            failures: failures.count,
-            hangs: hangs.count
+            failures: failures.count
         )
 
         // Dispatch end event to plugins for analysis
-        let totalCoverage = await finalCorpus.totalCoverage()
-        let totalCoveredIndices = totalCoverage.executedIndices
+//        let totalCoverage = await finalCorpus.totalCoverage()
+//        let totalCoveredIndices = totalCoverage.executedIndices
 
-        let endContext = PluginEvent<repeat each Input>.EndContext(
-            totalIterations: iteration,
-            duration: duration,
-            corpusSize: finalCorpusCount,
-            failureCount: failures.count,
-            hangCount: hangs.count,
-            stopReason: stopReason,
-            totalCoveredIndices: totalCoveredIndices,
-            projectPath: config.projectPath,
-            sourceLocation: config.sourceLocation
-        )
-
-        if let actions = try? await dispatcher.dispatch(event: PluginEvent<repeat each Input>.end(endContext)) {
-            _ = executeActions(actions)
-        }
+//        let endContext = PluginEvent<repeat each Input>.EndContext(
+//            totalIterations: iteration,
+//            duration: duration,
+//            corpusSize: finalCorpusCount,
+//            failureCount: failures.count,
+//            hangCount: hangs.count,
+//            stopReason: stopReason,
+//            totalCoveredIndices: totalCoveredIndices,
+//            projectPath: config.projectPath,
+//            sourceLocation: config.sourceLocation
+//        )
+//
+//        if let actions = try? await dispatcher.dispatch(event: PluginEvent<repeat each Input>.end(endContext)) {
+//            _ = executeActions(actions)
+//        }
         // Note: stop and queueInputs not relevant at end event
 
         let finalSnapshot = await finalCorpus.snapshot()

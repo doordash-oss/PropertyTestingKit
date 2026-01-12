@@ -68,9 +68,6 @@ public struct FuzzStats: Sendable {
     /// Number of inputs that caused test failures.
     public let failures: Int
 
-    /// Number of inputs that timed out (potential hangs).
-    public let hangs: Int
-
     /// Reason for stopping the fuzz run.
     public enum StopReason: RawRepresentable, Sendable {
         case iterationLimit
@@ -109,7 +106,6 @@ public struct FuzzStats: Sendable {
         stopReason: StopReason = .iterationLimit,
         plateauStats: PlateauStats? = nil,
         failures: Int = 0,
-        hangs: Int = 0
     ) {
         self.totalInputs = totalInputs
         self.newPaths = newPaths
@@ -119,7 +115,6 @@ public struct FuzzStats: Sendable {
         self.stopReason = stopReason
         self.plateauStats = plateauStats
         self.failures = failures
-        self.hangs = hangs
     }
 }
 
