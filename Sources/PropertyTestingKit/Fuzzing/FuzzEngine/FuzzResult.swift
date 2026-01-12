@@ -42,9 +42,6 @@ public struct FuzzStats: Sendable {
     /// Total inputs tested.
     public let totalInputs: Int
 
-    /// New coverage paths discovered.
-    public let newPaths: Int
-
     /// Number of mutations performed.
     public let mutations: Int
 
@@ -62,15 +59,12 @@ public struct FuzzStats: Sendable {
     /// Why fuzzing stopped.
     public let stopReason: StopReason
 
-    /// Plateau detection statistics (if available).
-    public let plateauStats: PlateauStats?
-
     /// Number of inputs that caused test failures.
     public let failures: Int
 
     /// Reason for stopping the fuzz run.
     public enum StopReason: RawRepresentable, Sendable {
-        case iterationLimit
+//        case iterationLimit
         case timeLimit
         case regression
         case noSeedsAvailable
@@ -78,7 +72,7 @@ public struct FuzzStats: Sendable {
 
         public init?(rawValue: String) {
             switch rawValue {
-            case "iteration_limit": self = .iterationLimit
+//            case "iteration_limit": self = .iterationLimit
             case "time_limit": self = .timeLimit
             case "regression": self = .regression
             case "no_seeds_available": self = .noSeedsAvailable
@@ -88,7 +82,7 @@ public struct FuzzStats: Sendable {
 
         public var rawValue: String {
             switch self {
-            case .iterationLimit: "iteration_limit"
+//            case .iterationLimit: "iteration_limit"
             case .timeLimit: "time_limit"
             case .regression: "regression"
             case .noSeedsAvailable: "no_seeds_available"
@@ -99,21 +93,17 @@ public struct FuzzStats: Sendable {
 
     public init(
         totalInputs: Int,
-        newPaths: Int,
         mutations: Int,
         generations: Int,
         duration: TimeInterval,
-        stopReason: StopReason = .iterationLimit,
-        plateauStats: PlateauStats? = nil,
+        stopReason: StopReason = .timeLimit,
         failures: Int = 0,
     ) {
         self.totalInputs = totalInputs
-        self.newPaths = newPaths
         self.mutations = mutations
         self.generations = generations
         self.duration = duration
         self.stopReason = stopReason
-        self.plateauStats = plateauStats
         self.failures = failures
     }
 }
@@ -131,12 +121,10 @@ extension FuzzResult {
         )
         let emptyStats = FuzzStats(
             totalInputs: 0,
-            newPaths: 0,
             mutations: 0,
             generations: 0,
             duration: 0,
             stopReason: .regression,
-            plateauStats: nil
         )
         return FuzzResult(
             corpus: emptySnapshot,

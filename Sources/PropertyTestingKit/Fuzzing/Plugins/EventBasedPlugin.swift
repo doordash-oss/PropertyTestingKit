@@ -47,19 +47,15 @@ public enum PluginEvent<each T: Sendable>: Sendable {
 
     /// Context provided when fuzzing starts.
     public struct StartContext: Sendable {
-        /// Maximum number of iterations configured.
-        public let maxIterations: Int
         /// Maximum duration in seconds.
         public let maxDuration: Duration
         /// How the corpus is being handled.
         public let corpusMode: CorpusMode
 
         public init(
-            maxIterations: Int,
             maxDuration: Duration,
             corpusMode: CorpusMode
         ) {
-            self.maxIterations = maxIterations
             self.maxDuration = maxDuration
             self.corpusMode = corpusMode
         }

@@ -114,12 +114,9 @@ public func fuzz<each Input: Codable & Sendable, each M: Mutator>(
 
     let testFilePath = String(describing: filePath)
     let config = FuzzEngine<repeat each Input>.Config(
-        maxIterations: iterations,
         maxDuration: duration,
         verbose: environment.environment()["FUZZ_VERBOSE"] != nil,
         corpusMode: corpusMode,
-        perInputTimeout: perInputTimeout,
-        mutationBatchSize: mutationBatchSize,
         projectPath: projectPath(from: filePath),
         fileID: testFilePath,
         filePath: testFilePath,
@@ -213,7 +210,6 @@ private func reportFuzzResult<each Input: Codable & Sendable>(
         // Add context about the fuzz run
         message += "\n\nFuzz run stats:"
         message += "\n  - Total inputs tested: \(result.stats.totalInputs)"
-        message += "\n  - Unique coverage paths: \(result.stats.newPaths)"
         message += "\n  - Stop reason: \(result.stats.stopReason.rawValue)"
 
         Issue.record(
@@ -390,9 +386,9 @@ extension FuzzEngine.Config {
 
         var config = FuzzEngine<repeat each Input>.Config()
 
-        if let iterations = env["FUZZ_ITERATIONS"].flatMap(Int.init) {
-            config.maxIterations = iterations
-        }
+//        if let iterations = env["FUZZ_ITERATIONS"].flatMap(Int.init) {
+//            config.maxIterations = iterations
+//        }
 
         if let duration = env["FUZZ_DURATION"].flatMap(TimeInterval.init) {
             config.maxDuration = .seconds(duration)

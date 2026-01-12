@@ -252,9 +252,9 @@ public actor FuzzEngine<each Input: Codable & Sendable> {
         let startTime = dateClient.now()
         // TODO: I don't think this even makes sense. Current version is based on coverage counters
         // which should be 0 at this point.
-        let schemaVersion = CorpusSchema.currentVersion()
-        let corpus: CorpusClient<repeat each Input> = corpusRegistry.get(schemaVersion: schemaVersion)
-        var failures: [(input: (repeat each Input), error: Error)] = []
+//        let schemaVersion = CorpusSchema.currentVersion()
+//        let corpus: CorpusClient<repeat each Input> = corpusRegistry.get(schemaVersion: schemaVersion)
+//        var failures: [(input: (repeat each Input), error: Error)] = []
 //        var hangs: [(input: (repeat each Input), timeout: Duration)] = []
 //        var iterationsSinceNewCoverage = 0
 //        var totalMutations = 0
@@ -262,7 +262,7 @@ public actor FuzzEngine<each Input: Codable & Sendable> {
 //        var totalDiscoveries = 0
 
         // Initialize event-based plugin dispatcher
-        var dispatcher = EventBasedPluginDispatcher(plugins: config.plugins)
+        let dispatcher = EventBasedPluginDispatcher(plugins: config.plugins)
 
         // Build seed queue: default seeds + user-provided additional seeds
         // Using Deque for O(1) removeFirst() instead of Array's O(n)
@@ -279,10 +279,10 @@ public actor FuzzEngine<each Input: Codable & Sendable> {
 //        _ = try? await dispatcher.dispatch(event: PluginEvent<repeat each Input>.start(startContext))
 
 //        let perTimeout = config.perInputTimeout
-        let verbose = config.verbose
+//        let verbose = config.verbose
 
         // Capture client before loop to avoid @Dependency lookup overhead in hot path
-        let coverageClient = coverageCounters
+//        let coverageClient = coverageCounters
         let allSeeds = additionalSeeds + mutatorSeeds()
 
         // Early exit if no seeds and no way to generate inputs
@@ -293,7 +293,7 @@ public actor FuzzEngine<each Input: Codable & Sendable> {
             return .empty
         }
 
-        let stateMachine = try! await FuzzStateMachine(
+        let stateMachine = FuzzStateMachine(
             seeds: allSeeds,
             pluginDispatcher: dispatcher,
             config: config,
@@ -303,12 +303,7 @@ public actor FuzzEngine<each Input: Codable & Sendable> {
             test: test
         )
 
-        guard let stateMachineResult = try! await stateMachine.waitForCompletion() else {
-            if config.verbose {
-                print("[Fuzz] No results returned from state machine")
-            }
-            return .empty
-        }
+        let stateMachineResult = try! await stateMachine.start()
 
 //        // Unified fuzzing loop: seeds and mutations processed together
 //        var iteration = 0
@@ -552,10 +547,10 @@ public actor FuzzEngine<each Input: Codable & Sendable> {
 //        }
 
         // Phase 3: Minimize corpus
-        var finalCorpus = corpus
-        let corpusCountBeforeMinimize = await corpus.count()
+        var finalCorpus = stateMachineResult.corpus
+        let corpusCountBeforeMinimize = await stateMachineResult.corpus.count()
         if config.minimizeCorpus && corpusCountBeforeMinimize > 1 {
-            let minimizedSnapshot = await corpus.minimized()
+            let minimizedSnapshot = await stateMachineResult.corpus.minimized()
             finalCorpus = CorpusClient.live(corpus: Corpus(from: minimizedSnapshot))
             if config.verbose {
                 let finalCount = await finalCorpus.count()
@@ -578,24 +573,23 @@ public actor FuzzEngine<each Input: Codable & Sendable> {
             }
         }
 
-        let duration = dateClient.now().timeIntervalSince(startTime)
+//        let duration = dateClient.now().timeIntervalSince(startTime)
 
         // Report hang statistics if any were detected
 //        if !hangs.isEmpty && config.verbose {
 //            print("[Fuzz] Hang statistics: \(hangs.count) inputs caused timeouts")
 //        }
 
-        let finalCorpusCount = await finalCorpus.count()
-        let stats = FuzzStats(
-            totalInputs: stateMachineResult.iterationCount,
-            newPaths: finalCorpusCount,
-            mutations: totalMutations,
-            generations: totalGenerations,
-            duration: duration,
-            stopReason: stateMachineResult.stopReason,
-            plateauStats: nil,
-            failures: failures.count
-        )
+//        let finalCorpusCount = await finalCorpus.count()
+//        let stats = FuzzStats(
+//            totalInputs: stateMachineResult.iterationCount,
+//            mutations: totalMutations,
+//            generations: totalGenerations,
+//            duration: duration,
+//            stopReason: stateMachineResult.stopReason,
+//            plateauStats: nil,
+//            failures: failures.count
+//        )
 
         // Dispatch end event to plugins for analysis
 //        let totalCoverage = await finalCorpus.totalCoverage()
@@ -621,8 +615,8 @@ public actor FuzzEngine<each Input: Codable & Sendable> {
         let finalSnapshot = await finalCorpus.snapshot()
         return FuzzResult(
             corpus: finalSnapshot,
-            failures: failures,
-            stats: stats,
+            failures: stateMachineResult.failures,
+            stats: stateMachineResult.stats,
             wasRegression: false,
             coverageChanges: []
         )
@@ -691,12 +685,10 @@ public actor FuzzEngine<each Input: Codable & Sendable> {
         let duration = dateClient.now().timeIntervalSince(startTime)
         let stats = FuzzStats(
             totalInputs: snapshot.count,
-            newPaths: 0,
             mutations: 0,
             generations: 0,
             duration: duration,
             stopReason: .regression,
-            plateauStats: nil
         )
 
         // Dispatch end event to plugins for analysis
@@ -709,20 +701,14 @@ public actor FuzzEngine<each Input: Codable & Sendable> {
             }
 
             let endContext = PluginEvent<repeat each Input>.EndContext(
-                totalIterations: snapshot.count,
-                duration: duration,
-                corpusSize: snapshot.count,
-                failureCount: failures.count,
-                hangCount: 0,
-                stopReason: .iterationLimit,
                 totalCoveredIndices: totalCoveredIndices,
                 projectPath: config.projectPath,
                 sourceLocation: config.sourceLocation
             )
 
-            if let actions = try? await dispatcher.dispatch(event: PluginEvent<repeat each Input>.end(endContext)) {
-                _ = executeActions(actions)
-            }
+//            if let actions = try? await dispatcher.dispatch(event: PluginEvent<repeat each Input>.end(endContext)) {
+//                _ = executeActions(actions)
+//            }
         }
 
         // Return the snapshot directly for the result
@@ -734,7 +720,6 @@ public actor FuzzEngine<each Input: Codable & Sendable> {
             coverageChanges: coverageChanges
         )
     }
-
 }
 
 func runWithTimeout(
