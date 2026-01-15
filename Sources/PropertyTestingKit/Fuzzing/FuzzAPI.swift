@@ -82,9 +82,7 @@ import Dependencies
 ///   - corpusMode: Controls corpus behavior. Use `.refuzzReplace` to start fresh,
 ///     `.refuzzExtend` to add to existing corpus, or `.auto` for default behavior.
 ///     Can also be set via `FUZZ_CORPUS_MODE` environment variable.
-///   - mutationBatchSize: Number of mutations to run in parallel per batch.
-///     0 = auto-tune based on test cost (default), 1 = sequential, 4-16 = manual batching.
-///   - plugins: Event-based plugins for stopping conditions, analysis, and shrinking.
+///   - plugins: Plugins for stopping conditions, analysis, and shrinking.
 ///     Default: empty (only iteration/time limits apply).
 ///   - filePath: Source file path (auto-filled).
 ///   - function: Test function name (auto-filled).
@@ -97,8 +95,7 @@ public func fuzz<each Input: Codable & Sendable, each M: Mutator>(
     seeds: [(repeat each Input)] = [],
     duration: Duration = .seconds(60),
     corpusMode: CorpusMode? = nil,
-    mutationBatchSize: Int = 0,
-    plugins: [any EventBasedPlugin] = [],
+    plugins: [any FuzzPlugin] = [],
     filePath: StaticString = #filePath,
     function: StaticString = #function,
     line: Int = #line,
@@ -139,9 +136,7 @@ public func fuzz<each Input: Codable & Sendable, each M: Mutator>(
 ///   - corpusMode: Controls corpus behavior. Use `.refuzzReplace` to start fresh,
 ///     `.refuzzExtend` to add to existing corpus, or `.auto` for default behavior.
 ///     Can also be set via `FUZZ_CORPUS_MODE` environment variable.
-///   - mutationBatchSize: Number of mutations to run in parallel per batch.
-///     0 = auto-tune based on test cost (default), 1 = sequential, 4-16 = manual batching.
-///   - plugins: Event-based plugins for stopping conditions, analysis, and shrinking.
+///   - plugins: Plugins for stopping conditions, analysis, and shrinking.
 ///     Default: empty (only iteration/time limits apply).
 ///   - filePath: Source file path (auto-filled).
 ///   - function: Test function name (auto-filled).
@@ -153,8 +148,7 @@ public func fuzz<each Input: MutatorProviding & Codable & Sendable>(
     seeds: [(repeat each Input)] = [],
     duration: Duration = .seconds(60),
     corpusMode: CorpusMode? = nil,
-    mutationBatchSize: Int = 0,
-    plugins: [any EventBasedPlugin] = [],
+    plugins: [any FuzzPlugin] = [],
     filePath: StaticString = #filePath,
     function: StaticString = #function,
     line: Int = #line,
@@ -165,7 +159,6 @@ public func fuzz<each Input: MutatorProviding & Codable & Sendable>(
         seeds: seeds,
         duration: duration,
         corpusMode: corpusMode,
-        mutationBatchSize: mutationBatchSize,
         plugins: plugins,
         filePath: filePath,
         function: function,

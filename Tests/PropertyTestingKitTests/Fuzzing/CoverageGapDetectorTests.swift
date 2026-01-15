@@ -275,10 +275,10 @@ struct CoverageGapDetectorTests {
 
     @Test("FuzzEngine.Config has plugins for gap detection")
     func configHasPlugins() {
-        // With plugins, gap detection is enabled by adding EventBasedCoverageGapPlugin
-        let config = FuzzEngine<Int>.Config(plugins: [EventBasedCoverageGapPlugin()])
+        // With plugins, gap detection is enabled by adding CoverageGapPlugin
+        let config = FuzzEngine<Int>.Config(plugins: [CoverageGapPlugin()])
         #expect(config.plugins.count == 1)
-        #expect(config.plugins.contains { $0 is EventBasedCoverageGapPlugin })
+        #expect(config.plugins.contains { $0 is CoverageGapPlugin })
 
         let defaultConfig = FuzzEngine<Int>.Config()
         #expect(defaultConfig.plugins.isEmpty)
@@ -303,10 +303,10 @@ struct CoverageGapDetectorTests {
 
         // This test intentionally creates a coverage gap to verify detection works
         await withKnownIssue("Expected coverage gap in partiallyCoveredFunction") {
-            try await fuzz(
-                duration: .seconds(1),
+            _ = try await fuzzWithMaxIterations(
+                maxIterations: 50,
                 corpusMode: .refuzzReplace,
-                plugins: [EventBasedCoverageGapPlugin()]
+                plugins: [CoverageGapPlugin()]
             ) { (input: Int) in
                 partiallyCoveredFunction(input: input)
             }

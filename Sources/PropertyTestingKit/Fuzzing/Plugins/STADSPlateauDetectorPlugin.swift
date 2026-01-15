@@ -2,14 +2,14 @@
 //  STADSPlateauDetectorPlugin.swift
 //  PropertyTestingKit
 //
-//  Event-based stopping condition plugin using Good-Turing estimator (STADS).
+//  Stopping condition plugin using Good-Turing estimator (STADS).
 //
 
 import Foundation
 
-// MARK: - Event-Based STADS Plugin
+// MARK: - STADS Plugin
 
-/// Event-based stopping condition plugin using STADS Good-Turing estimator.
+/// Stopping condition plugin using STADS Good-Turing estimator.
 ///
 /// Uses statistical principles from species discovery to estimate the
 /// probability of finding new coverage. More principled than simple
@@ -25,7 +25,7 @@ import Foundation
 ///
 /// Böhme, M. (2018). "STADS: Software Testing as Species Discovery"
 /// IEEE Transactions on Software Engineering.
-public actor EventBasedSTADSPlugin: EventBasedPlugin {
+public actor STADSPlugin: FuzzPlugin {
     public let id: String = "stads_detector"
 
     private var detector: STADSPlateauDetector
@@ -60,7 +60,7 @@ public actor EventBasedSTADSPlugin: EventBasedPlugin {
 
 // MARK: - Convenience Constructor
 
-extension EventBasedPlugin where Self == EventBasedSTADSPlugin {
+extension FuzzPlugin where Self == STADSPlugin {
     /// Create a STADS plateau detector stopping condition plugin.
     ///
     /// Uses the Good-Turing estimator to estimate the probability of
@@ -75,8 +75,8 @@ extension EventBasedPlugin where Self == EventBasedSTADSPlugin {
         minDiscoveryProbability: Double = 0.001,
         confirmationChecks: Int = 3,
         checkInterval: Int = 100
-    ) -> EventBasedSTADSPlugin {
-        EventBasedSTADSPlugin(
+    ) -> STADSPlugin {
+        STADSPlugin(
             config: .init(
                 minDiscoveryProbability: minDiscoveryProbability,
                 confirmationChecks: confirmationChecks,
@@ -91,7 +91,7 @@ extension EventBasedPlugin where Self == EventBasedSTADSPlugin {
     /// - Returns: A configured STADS plateau detector plugin.
     public static func stadsDetector(
         config: STADSPlateauDetector.Config
-    ) -> EventBasedSTADSPlugin {
-        EventBasedSTADSPlugin(config: config)
+    ) -> STADSPlugin {
+        STADSPlugin(config: config)
     }
 }

@@ -229,7 +229,7 @@ let benchmarks: @Sendable () -> Void = {
             let config = FuzzEngine<Int>.Config(
                 maxDuration: .seconds(1),
                 corpusMode: .refuzzReplace,
-                plugins: [EventBasedCoverageGapPlugin()]
+                plugins: [CoverageGapPlugin()]
             )
             let engine = FuzzEngine<Int>(mutators: Int.defaultMutator, config: config)
             let _ = await engine.run { input in
@@ -292,7 +292,7 @@ let benchmarks: @Sendable () -> Void = {
         for _ in benchmark.scaledIterations {
             let config = FuzzEngine<Int>.Config(
                 corpusMode: .refuzzReplace,
-                plugins: [EventBasedCoverageGapPlugin()]
+                plugins: [CoverageGapPlugin()]
             )
             let engine = FuzzEngine<Int>(mutators: Int.defaultMutator, config: config)
             let _ = await engine.run { input in
@@ -315,7 +315,7 @@ let benchmarks: @Sendable () -> Void = {
             let _ = try? await fuzz(
                 duration: .seconds(5),
                 corpusMode: .refuzzReplace,
-                plugins: [EventBasedCoverageGapPlugin()]
+                plugins: [CoverageGapPlugin()]
             ) { (i: Int, s: String, b: Bool, d: Double, u: UInt8) in
                 // Exercise all 5 inputs with branching logic
                 if i < 0 {
@@ -352,7 +352,7 @@ let benchmarks: @Sendable () -> Void = {
             let config = FuzzEngine<Int>.Config(
                 maxDuration: .seconds(5),
                 corpusMode: .refuzzReplace,
-                plugins: [EventBasedCoverageGapPlugin()]
+                plugins: [CoverageGapPlugin()]
             )
             let engine = FuzzEngine<Int>(mutators: Int.defaultMutator, config: config)
             let _ = await engine.run { input in

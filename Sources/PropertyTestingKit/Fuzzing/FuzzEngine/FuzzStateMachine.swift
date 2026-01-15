@@ -16,7 +16,7 @@ import Testing
 actor FuzzStateMachine<each Input: Codable & Sendable> {
     private let inputQueue: TestInputQueue<repeat each Input>
     private var workerPool: WorkerPool<repeat each Input>?
-    private var pluginDispatcher: EventBasedPluginDispatcher
+    private var pluginDispatcher: PluginDispatcher
     private let config: FuzzEngine<repeat each Input>.Config
     private let corpus: CorpusClient<repeat each Input>
     private let mutationGenerator: @Sendable ((repeat each Input)) -> [(repeat each Input)]
@@ -29,7 +29,7 @@ actor FuzzStateMachine<each Input: Codable & Sendable> {
 
     init(
         seeds: [(repeat each Input)],
-        pluginDispatcher: EventBasedPluginDispatcher,
+        pluginDispatcher: PluginDispatcher,
         config: FuzzEngine<repeat each Input>.Config,
         startTime: Date,
         randomInputGenerator: @escaping @Sendable () -> (repeat each Input),
@@ -83,13 +83,17 @@ actor FuzzStateMachine<each Input: Codable & Sendable> {
                     // Will throw if either the test throws or if it logs an Issue
                     try await testWithIssueCapture(testInput)
 
-                    let coverageSignature = CoverageSignature(
-                        sparse: try coverageCountersClient.snapshotCoveredArraysWithContext(context)
-                    )
+                    // Coverage snapshot may throw if coverage is unavailable - use empty signature
+                    let coverageSignature: CoverageSignature
+                    if let sparse = try? coverageCountersClient.snapshotCoveredArraysWithContext(context) {
+                        coverageSignature = CoverageSignature(sparse: sparse)
+                    } else {
+                        coverageSignature = CoverageSignature(edges: Set())
+                    }
                     let didAdd = await self.corpus.addIfInteresting(testInput, coverageSignature)
 
                     try! await self.submitPluginEvent(.iteration(
-                        .init(discoveredNewCoverage: didAdd)
+                        .init(discoveredNewCoverage: didAdd, input: testInput)
                     ))
                 } catch {
                     // On failure, try to get coverage but use empty signature if unavailable
@@ -159,47 +163,46 @@ actor FuzzStateMachine<each Input: Codable & Sendable> {
         }
     }
 
-    /// Takes a test case and throws an error if any expectations failed
+    /// Takes a test case and throws an error if any expectations failed.
+    /// Uses `withKnownIssue` to intercept `#expect` failures without recording them.
+    /// Thrown errors are caught inside the body to prevent `withKnownIssue` from logging them.
     private static func captureIssues(
         sourceLocation: SourceLocation,
         test: @escaping @Sendable ((repeat each Input)) async throws -> Void
     ) -> @Sendable ((repeat each Input)) async throws -> Void {
         { input in
-            let issueRecorded = SyncBox(false)
-            try await withKnownIssue(
+            let capturedIssue = SyncBox<(any Error)?>(nil)
+            let thrownError = SyncBox<(any Error)?>(nil)
+
+            // Use withKnownIssue only for #expect failures.
+            // Catch thrown errors inside the body to prevent withKnownIssue from logging them.
+            await withKnownIssue(
                 isIntermittent: true,
                 sourceLocation: sourceLocation,
-                { try await test(input) },
-                matching: { issue in
-                    let comment = Comment.init(rawValue: issue.comments.map { $0.rawValue }.joined())
-                    if let error = issue.error {
-                        if let sourceLocation = issue.sourceLocation {
-                            Issue
-                                .record(
-                                    error,
-                                    comment,
-                                    sourceLocation: sourceLocation
-                                )
-                        } else {
-                            Issue.record(error, comment)
-                        }
-
-                    } else {
-                        if let sourceLocation = issue.sourceLocation {
-                            Issue.record(comment, sourceLocation: sourceLocation)
-                        } else {
-                            Issue.record(comment)
-                        }
+                {
+                    do {
+                        try await test(input)
+                    } catch {
+                        // Capture thrown error before withKnownIssue can log it
+                        thrownError.value = error
                     }
-
-                    issueRecorded.value = true
-
+                },
+                matching: { issue in
+                    // Capture #expect failures (first one wins)
+                    if capturedIssue.value == nil {
+                        capturedIssue.value = issue.error ?? Errors.testFailed
+                    }
+                    // Return true to suppress from test failure - we re-throw manually
                     return true
                 }
             )
 
-            if issueRecorded.value {
-                throw Errors.testFailed
+            // Re-throw captured errors (thrown error takes priority over #expect failure)
+            if let error = thrownError.value {
+                throw error
+            }
+            if let error = capturedIssue.value {
+                throw error
             }
         }
     }

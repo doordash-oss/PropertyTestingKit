@@ -1,5 +1,5 @@
 //
-//  EventBasedPluginDispatcher.swift
+//  PluginDispatcher.swift
 //  PropertyTestingKit
 //
 //  Dispatches events to plugins and collects actions.
@@ -8,15 +8,15 @@
 import Foundation
 
 /// Dispatches plugin events to all registered plugins and collects their actions.
-public struct EventBasedPluginDispatcher: Sendable {
-    private var plugins: [any EventBasedPlugin]
+public struct PluginDispatcher: Sendable {
+    private var plugins: [any FuzzPlugin]
 
     /// Create a dispatcher with the given plugins.
     ///
     /// Plugins are called in array order for each event.
     ///
     /// - Parameter plugins: The plugins to dispatch events to.
-    public init(plugins: [any EventBasedPlugin]) {
+    public init(plugins: [any FuzzPlugin]) {
         self.plugins = plugins
     }
 

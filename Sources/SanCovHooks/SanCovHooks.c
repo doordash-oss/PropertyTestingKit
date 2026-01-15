@@ -263,10 +263,40 @@ static void cleanup_task_map(void* task_id) {
 
 // MARK: - Measurement Context API
 
+// Retain a measurement context (increment refcount)
+static void ctx_retain(SanCovMeasurementContext* ctx) {
+    if (ctx) {
+        atomic_fetch_add(&ctx->refcount, 1);
+    }
+}
+
+// Release a measurement context (decrement refcount, free if zero)
+static void ctx_release(SanCovMeasurementContext* ctx) {
+    if (ctx) {
+        int old_count = atomic_fetch_sub(&ctx->refcount, 1);
+        if (old_count == 1) {
+            // Refcount dropped to zero, free the context
+            cleanup_task_map(ctx);
+            free(ctx);
+        }
+    }
+}
+
+// Helper to update TLS cached measurement context with proper refcounting
+static void set_tls_measurement_context(SanCovMeasurementContext* new_ctx) {
+    SanCovMeasurementContext* old_ctx = tls_cached_measurement_context;
+    if (old_ctx != new_ctx) {
+        ctx_retain(new_ctx);  // Retain new (NULL is safe)
+        tls_cached_measurement_context = new_ctx;
+        ctx_release(old_ctx); // Release old (NULL is safe)
+    }
+}
+
 SanCovMeasurementContext* sancov_begin_measurement(void) {
     SanCovMeasurementContext* ctx = (SanCovMeasurementContext*)xmalloc(sizeof(SanCovMeasurementContext));
     ctx->coverage_map = NULL;
     ctx->covered_count = 0;
+    atomic_init(&ctx->refcount, 1);  // Start with refcount of 1 (owner reference)
 
     // Associate this measurement context with the current task
     void* task = get_current_task_for_measurement();
@@ -282,13 +312,21 @@ SanCovMeasurementContext* sancov_begin_measurement(void) {
             ctx->coverage_map = map;
 
             // Populate TLS caches for the current thread (may help if no hop occurs)
-            tls_cached_measurement_context = ctx;
+            set_tls_measurement_context(ctx);
             tls_cached_coverage_map = map;
             tls_cached_task = task;
             tls_cached_task_map = map;
         }
     }
 
+    return ctx;
+}
+
+SanCovMeasurementContext* sancov_create_dummy_context(void) {
+    SanCovMeasurementContext* ctx = (SanCovMeasurementContext*)xmalloc(sizeof(SanCovMeasurementContext));
+    ctx->coverage_map = NULL;
+    ctx->covered_count = 0;
+    atomic_init(&ctx->refcount, 1);
     return ctx;
 }
 
@@ -300,16 +338,19 @@ void sancov_end_measurement(SanCovMeasurementContext* ctx) {
     void* task = get_current_task_for_measurement();
     remove_measurement_context_for_task(task);
 
-    // Invalidate ALL caches since measurement is ending
+    // Invalidate this thread's TLS cache if it matches
+    // Note: Other threads may still hold TLS references - that's OK because
+    // the refcount will keep the context alive until they release it.
     if (tls_cached_measurement_context == ctx) {
-        tls_cached_measurement_context = NULL;
+        set_tls_measurement_context(NULL);  // Releases our TLS reference
         tls_cached_coverage_map = NULL;
     }
     tls_cached_task = NULL;
     tls_cached_task_map = NULL;
 
-    cleanup_task_map(ctx);
-    free(ctx);
+    // Release the owner reference (context allocated with refcount=1)
+    // The context will be freed when all TLS references are also released
+    ctx_release(ctx);
 }
 
 static const uint8_t* get_counters_with_context(SanCovMeasurementContext* ctx) {
@@ -458,7 +499,7 @@ static uint8_t* get_current_coverage_map(void) {
         // Slow path: lookup or create, then cache
         uint8_t* map = find_or_create_task_map(measurement_ctx);
         if (map != NULL) {
-            tls_cached_measurement_context = measurement_ctx;
+            set_tls_measurement_context(measurement_ctx);  // Properly retain/release
             tls_cached_coverage_map = map;
             tls_cached_task = task;
             tls_cached_task_map = map;

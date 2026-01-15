@@ -76,9 +76,10 @@ struct DeterministicTimingTests {
                 }
             }
 
-            // With 11s per test and 10s limit, should stop after very few tests
+            // With 11s per test and 10s limit, should stop early due to time limit
+            // Note: With worker pool parallelism, multiple workers may process inputs
+            // before the time check runs, so we can't strictly bound iteration count
             #expect(result.stats.stopReason == FuzzStats.StopReason.timeLimit)
-            #expect(result.stats.totalInputs <= 10, "Should stop early due to time limit")
             #expect(result.stats.duration >= 10, "Duration should exceed time limit")
         }
 

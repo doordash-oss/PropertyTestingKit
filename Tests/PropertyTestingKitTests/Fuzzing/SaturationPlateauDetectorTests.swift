@@ -194,12 +194,12 @@ struct SaturationPlateauDetectorTests {
     }
 }
 
-@Suite("EventBasedSaturationPlugin")
-struct EventBasedSaturationPluginTests {
+@Suite("SaturationPlugin")
+struct SaturationPluginTests {
 
     @Test("Plugin has correct ID")
     func testPluginId() async {
-        let plugin = EventBasedSaturationPlugin()
+        let plugin = SaturationPlugin()
         #expect(await plugin.id == "saturation_detector")
     }
 
@@ -211,12 +211,13 @@ struct EventBasedSaturationPluginTests {
             confirmationWindows: 2,
             enabled: true
         )
-        let plugin = EventBasedSaturationPlugin(config: config)
+        let plugin = SaturationPlugin(config: config)
 
         // Record many non-discoveries via iteration events
-        for _ in 0..<50 {
+        for i in 0..<50 {
             let iterationContext = PluginEvent<Int>.IterationContext(
-                discoveredNewCoverage: false
+                discoveredNewCoverage: false,
+                input: i
             )
             let actions = try await plugin.handle(event: PluginEvent<Int>.iteration(iterationContext))
 
@@ -235,7 +236,7 @@ struct EventBasedSaturationPluginTests {
 
     @Test("Convenience constructor creates plugin")
     func testConvenienceConstructor() async {
-        let plugin: EventBasedSaturationPlugin = .saturationDetector(
+        let plugin: SaturationPlugin = .saturationDetector(
             minSaturation: 0.95,
             minGrowthRate: 0.0005,
             windowSize: 100,

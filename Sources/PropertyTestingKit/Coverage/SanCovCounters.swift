@@ -354,8 +354,10 @@ extension SanCovCounters {
         /// Creates a dummy context for testing purposes.
         /// This context should only be used with mock CoverageCountersClients.
         public static func testInstance() -> MeasurementContext {
-            let dummyPtr = UnsafeMutablePointer<SanCovMeasurementContext>.allocate(capacity: 1)
-            dummyPtr.pointee = SanCovMeasurementContext(coverage_map: nil, covered_count: 0)
+            // Use C function to properly initialize all fields including atomic refcount
+            guard let dummyPtr = sancov_create_dummy_context() else {
+                fatalError("Failed to create dummy measurement context")
+            }
             return MeasurementContext(dummyPtr)
         }
     }

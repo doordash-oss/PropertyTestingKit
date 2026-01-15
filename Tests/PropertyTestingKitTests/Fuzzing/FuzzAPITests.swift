@@ -21,7 +21,6 @@ struct FuzzAPITests {
 
         // Use live coverage to verify we hit all branches
         let result = await withDependencies {
-            // Use live coverage counters for real coverage detection
             $0.coverageCounters = .liveValue
             $0.corpusPersistence = CorpusPersistenceClient(
                 save: saveFn,
@@ -31,15 +30,17 @@ struct FuzzAPITests {
             )
         } operation: {
             let config = FuzzEngine<String>.Config(
-                maxDuration: .seconds(5),
+                maxDuration: .seconds(10),
                 minimizeCorpus: true,
                 verbose: true
             )
 
-            let engine = FuzzEngine<String>(mutators: String.defaultMutator, config: config, corpusDirectory: corpusDir)
-
-            // Use String directly with domain-specific seeds
-            return await engine.run(additionalSeeds: numberParserSeeds) { input in
+            return await fuzzEngineWithMaxIterations(
+                maxIterations: 100,
+                config: config,
+                corpusDirectory: corpusDir,
+                additionalSeeds: numberParserSeeds
+            ) { input in
                 // Just call parse - coverage will be tracked automatically
                 _ = NumberParser.parse(input)
 
@@ -75,7 +76,7 @@ struct FuzzAPITests {
         // Create a registry that always returns "always interesting" corpus clients
         let alwaysInterestingRegistry = AlwaysInterestingCorpusRegistry()
 
-        await withDependencies {
+        let result = await withDependencies {
             $0.corpusPersistence = CorpusPersistenceClient(
                 save: saveFn,
                 load: { _ in Data() },
@@ -87,19 +88,23 @@ struct FuzzAPITests {
             $0.coverageCounters = .liveValue
         } operation: {
             let config = FuzzEngine<String>.Config(
-                maxDuration: .seconds(5),
+                maxDuration: .seconds(10),
                 verbose: false
             )
 
-            let engine = FuzzEngine<String>(mutators: String.defaultMutator, config: config, corpusDirectory: corpusDir)
-            let result = await engine.run(additionalSeeds: numberParserSeeds) { input in
+            return await fuzzEngineWithMaxIterations(
+                maxIterations: 100,
+                config: config,
+                corpusDirectory: corpusDir,
+                additionalSeeds: numberParserSeeds
+            ) { input in
                 _ = NumberParser.parse(input)
             }
-
-            #expect(!result.wasRegression, "First run should be fuzzing mode")
-            #expect(result.corpus.count > 0, "Should have corpus entries")
-            #expect(result.failures.isEmpty, "Should have no failures")
         }
+
+        #expect(!result.wasRegression, "First run should be fuzzing mode")
+        #expect(result.corpus.count > 0, "Should have corpus entries")
+        #expect(result.failures.isEmpty, "Should have no failures")
 
         // Verify corpus was saved
         #expect(saveSpy.callCount == 1, "Corpus should be saved")
@@ -115,9 +120,9 @@ struct FuzzAPITests {
             $0.corpusRegistry = alwaysInterestingRegistry
             $0.environment = EnvironmentClient(environment: { [:] })
         } operation: {
-            try await fuzz(
-                seeds: ["0", "-0", "-1", "abc", String(Int.max)],
-                duration: .seconds(5)
+            try await fuzzWithMaxIterations(
+                maxIterations: 100,
+                seeds: ["0", "-0", "-1", "abc", String(Int.max)]
             ) { input in
                 let parsed = NumberParser.parse(input)
 
@@ -197,12 +202,15 @@ struct FuzzAPITests {
             $0.corpusRegistry = alwaysInterestingRegistry
         } operation: {
             let config = FuzzEngine<Bool>.Config(
-                maxDuration: .seconds(5),
+                maxDuration: .seconds(10),
                 verbose: false
             )
 
-            let engine = FuzzEngine<Bool>(mutators: Bool.defaultMutator, config: config)
-            return await engine.run { _ in
+            return await fuzzEngineWithMaxIterations(
+                maxIterations: 100,
+                config: config,
+                additionalSeeds: [true, false]
+            ) { (_: Bool) in
                 // Throw for any input to guarantee a failure
                 throw TestFailure()
             }
@@ -239,7 +247,7 @@ struct FuzzAPITests {
             } operation: {
                 // This will throw because the test always fails
                 // Note: Seeds are required to provide type context for the variadic generic
-                _ = try await fuzz(seeds: [true, false], duration: .seconds(5)) { _ in
+                _ = try await fuzzWithMaxIterations(maxIterations: 100) { (_: Bool) in
                     throw TestFailure()
                 }
             }
@@ -263,7 +271,7 @@ struct FuzzAPITests {
                 delete: { _ in }
             )
         } operation: {
-            try await fuzz(seeds: ["a", "ab", "abc"], duration: .seconds(5)) { input in
+            try await fuzzWithMaxIterations(maxIterations: 50, seeds: ["a", "ab", "abc"]) { input in
                 _ = input.count
             }
         }
@@ -302,7 +310,7 @@ struct FuzzAPITests {
             )
         } operation: {
             // Use seeds that include the corpus entry so it gets tested
-            try await fuzz(seeds: ["from_corpus"], duration: .seconds(5)) { input in
+            try await fuzzWithMaxIterations(maxIterations: 50, seeds: ["from_corpus"]) { input in
                 await seenInputs.update { $0.append(input) }
             }
         }

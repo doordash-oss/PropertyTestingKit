@@ -1,14 +1,14 @@
 //
-//  EventBasedShrinkingPlugin.swift
+//  ShrinkingPlugin.swift
 //  PropertyTestingKit
 //
-//  Event-based shrinking plugin for minimizing failing inputs.
+//  Shrinking plugin for minimizing failing inputs.
 //
 
 import Foundation
 import Testing
 
-// MARK: - Event-Based Shrinking Plugin
+// MARK: - Shrinking Plugin
 
 /// Shrinking plugin that minimizes failing inputs using delta debugging.
 ///
@@ -22,7 +22,7 @@ import Testing
 ///     // Your test here
 /// }
 /// ```
-public struct EventBasedShrinkingPlugin: EventBasedPlugin {
+public struct ShrinkingPlugin: FuzzPlugin {
     public let id: String = "shrinking"
 
     public let config: ShrinkConfig
@@ -107,7 +107,7 @@ public struct EventBasedShrinkingPlugin: EventBasedPlugin {
 
 // MARK: - Convenience Factory
 
-extension EventBasedPlugin where Self == EventBasedShrinkingPlugin {
+extension FuzzPlugin where Self == ShrinkingPlugin {
     /// Create a shrinking plugin that minimizes failing inputs.
     ///
     /// - Parameters:
@@ -117,7 +117,7 @@ extension EventBasedPlugin where Self == EventBasedShrinkingPlugin {
     public static func shrinking(
         config: ShrinkConfig = ShrinkConfig(),
         verbose: Bool = false
-    ) -> EventBasedShrinkingPlugin {
-        EventBasedShrinkingPlugin(config: config, verbose: verbose)
+    ) -> ShrinkingPlugin {
+        ShrinkingPlugin(config: config, verbose: verbose)
     }
 }

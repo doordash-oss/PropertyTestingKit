@@ -13,7 +13,7 @@ extension FuzzEngine {
         public var maxDuration: Duration
 
         /// Whether to minimize the corpus before saving.
-        public var minimizeCorpus: Bool
+        public let minimizeCorpus: Bool
 
         /// Verbose logging.
         public var verbose: Bool
@@ -21,22 +21,31 @@ extension FuzzEngine {
         /// Controls how the fuzzer handles existing corpus files.
         /// Defaults to checking the `FUZZ_CORPUS_MODE` environment variable,
         /// then falling back to `.auto`.
-        public var corpusMode: CorpusMode
+        public let corpusMode: CorpusMode
 
         /// Project root path for filtering coverage gaps to project files only.
         /// When set, only reports gaps in files under this path.
-        public var projectPath: String?
+        public let projectPath: String?
 
         /// Source location where the fuzz test was called.
         /// Used for reporting failures and plugin actions.
-        public var sourceLocation: SourceLocation
+        public let sourceLocation: SourceLocation
 
         // MARK: - Plugin Configuration
 
-        /// Event-based plugins that handle fuzzing events and return actions.
-        /// Plugins run in array order for each event.
-        /// Default: empty (no plugins).
-        public var plugins: [any EventBasedPlugin]
+        /// User-provided plugins that handle fuzzing events and return actions.
+        /// Plugins run in array order for each event, after baseline plugins.
+        /// Default: empty (no additional plugins).
+        public let plugins: [any FuzzPlugin]
+
+        /// These plugins represent core behavior of the fuzzing engine. Users may alter or remove these,
+        /// but doing so could break core functionality.
+        public let defaultBehaviorPlugins: [any FuzzPlugin]
+
+        /// All plugins combined: baseline plugins followed by user plugins.
+        public var allPlugins: [any FuzzPlugin] {
+            defaultBehaviorPlugins + plugins
+        }
 
         public init(
             maxDuration: Duration = .seconds(60),
@@ -48,7 +57,8 @@ extension FuzzEngine {
             filePath: String = #filePath,
             line: Int = #line,
             column: Int = #column,
-            plugins: [any EventBasedPlugin] = []
+            plugins: [any FuzzPlugin] = [],
+            defaultBehaviorPlugins: [any FuzzPlugin] = [MutationPlugin()]
         ) {
             self.maxDuration = maxDuration
             self.minimizeCorpus = minimizeCorpus
@@ -63,6 +73,7 @@ extension FuzzEngine {
                 column: column
             )
             self.plugins = plugins
+            self.defaultBehaviorPlugins = defaultBehaviorPlugins
         }
     }
 }

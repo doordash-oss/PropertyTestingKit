@@ -2,14 +2,14 @@
 //  SaturationPlateauDetectorPlugin.swift
 //  PropertyTestingKit
 //
-//  Event-based stopping condition plugin using saturation-based metrics (Green Fuzzing).
+//  Stopping condition plugin using saturation-based metrics (Green Fuzzing).
 //
 
 import Foundation
 
-// MARK: - Event-Based Saturation Plugin
+// MARK: - Saturation Plugin
 
-/// Event-based stopping condition plugin using saturation-based metrics.
+/// Stopping condition plugin using saturation-based metrics.
 ///
 /// Models coverage growth as an asymptotic process and stops when saturation
 /// approaches the estimated maximum coverage.
@@ -25,7 +25,7 @@ import Foundation
 /// Böhme, M. et al. (2023). "Green Fuzzing: A Saturation-Based Stopping Criterion
 /// using a Probabilistic Model to Predict Fuzzing Progress"
 /// ISSTA 2023.
-public actor EventBasedSaturationPlugin: EventBasedPlugin {
+public actor SaturationPlugin: FuzzPlugin {
     public let id: String = "saturation_detector"
 
     private var detector: SaturationPlateauDetector
@@ -60,7 +60,7 @@ public actor EventBasedSaturationPlugin: EventBasedPlugin {
 
 // MARK: - Convenience Constructor
 
-extension EventBasedPlugin where Self == EventBasedSaturationPlugin {
+extension FuzzPlugin where Self == SaturationPlugin {
     /// Create a saturation plateau detector stopping condition plugin.
     ///
     /// Uses saturation-based metrics to model coverage growth and
@@ -77,8 +77,8 @@ extension EventBasedPlugin where Self == EventBasedSaturationPlugin {
         minGrowthRate: Double = 0.0001,
         windowSize: Int = 500,
         confirmationWindows: Int = 3
-    ) -> EventBasedSaturationPlugin {
-        EventBasedSaturationPlugin(
+    ) -> SaturationPlugin {
+        SaturationPlugin(
             config: .init(
                 minSaturation: minSaturation,
                 minGrowthRate: minGrowthRate,
@@ -94,7 +94,7 @@ extension EventBasedPlugin where Self == EventBasedSaturationPlugin {
     /// - Returns: A configured saturation plateau detector plugin.
     public static func saturationDetector(
         config: SaturationPlateauDetector.Config
-    ) -> EventBasedSaturationPlugin {
-        EventBasedSaturationPlugin(config: config)
+    ) -> SaturationPlugin {
+        SaturationPlugin(config: config)
     }
 }

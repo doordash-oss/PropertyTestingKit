@@ -171,12 +171,12 @@ struct STADSPlateauDetectorTests {
     }
 }
 
-@Suite("EventBasedSTADSPlugin")
-struct EventBasedSTADSPluginTests {
+@Suite("STADSPlugin")
+struct STADSPluginTests {
 
     @Test("Plugin has correct ID")
     func testPluginId() async {
-        let plugin = EventBasedSTADSPlugin()
+        let plugin = STADSPlugin()
         #expect(await plugin.id == "stads_detector")
     }
 
@@ -188,12 +188,13 @@ struct EventBasedSTADSPluginTests {
             checkInterval: 5,
             enabled: true
         )
-        let plugin = EventBasedSTADSPlugin(config: config)
+        let plugin = STADSPlugin(config: config)
 
         // Record many non-discoveries via iteration events
-        for _ in 0..<50 {
+        for i in 0..<50 {
             let iterationContext = PluginEvent<Int>.IterationContext(
-                discoveredNewCoverage: false
+                discoveredNewCoverage: false,
+                input: i
             )
             let actions = try await plugin.handle(event: PluginEvent<Int>.iteration(iterationContext))
 
@@ -212,7 +213,7 @@ struct EventBasedSTADSPluginTests {
 
     @Test("Convenience constructor creates plugin")
     func testConvenienceConstructor() async {
-        let plugin: EventBasedSTADSPlugin = .stadsDetector(
+        let plugin: STADSPlugin = .stadsDetector(
             minDiscoveryProbability: 0.005,
             confirmationChecks: 5,
             checkInterval: 50

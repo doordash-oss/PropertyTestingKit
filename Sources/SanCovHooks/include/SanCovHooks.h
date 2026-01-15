@@ -12,6 +12,7 @@
 #include <stdint.h>
 #include <stddef.h>
 #include <stdbool.h>
+#include <stdatomic.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -101,9 +102,12 @@ size_t sancov_get_covered_locations(SanCovSourceLocation* locations, size_t max_
 // rather than the Swift task or thread, providing true per-measurement isolation.
 
 /// Measurement context for coverage isolation.
+/// Uses atomic reference counting to prevent use-after-free when TLS caches
+/// hold references across thread hops in the worker pool model.
 typedef struct {
     uint8_t* coverage_map;
     size_t covered_count;
+    _Atomic int refcount;
 } SanCovMeasurementContext;
 
 /// Begin a measurement context for coverage isolation.
@@ -112,6 +116,11 @@ SanCovMeasurementContext* sancov_begin_measurement(void);
 
 /// End a measurement context and clean up its resources.
 void sancov_end_measurement(SanCovMeasurementContext* context);
+
+/// Create a dummy measurement context for testing purposes.
+/// The returned context is not registered with any task and should only be used with mocks.
+/// Caller is responsible for freeing the returned pointer.
+SanCovMeasurementContext* sancov_create_dummy_context(void);
 
 /// Get the number of covered edges for a measurement context (O(1)).
 size_t sancov_get_covered_count_with_context(SanCovMeasurementContext* context);

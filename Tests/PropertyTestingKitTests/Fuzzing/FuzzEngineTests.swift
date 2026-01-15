@@ -7,6 +7,7 @@ import Testing
 import Foundation
 import Dependencies
 import FunctionSpy
+import Clocks
 @testable import PropertyTestingKit
 
 /// Helper to create a mock CoverageCountersClient with coverage data.
@@ -74,12 +75,16 @@ struct FuzzEngineTests {
             $0.corpusRegistry = alwaysInterestingRegistry
         } operation: {
             let config = FuzzEngine<Int>.Config(
-                maxDuration: .seconds(5),
+                maxDuration: .seconds(10),
                 minimizeCorpus: false,
-                verbose: false            )
+                verbose: false
+            )
 
-            let engine = FuzzEngine<Int>(mutators: Int.defaultMutator, config: config, corpusDirectory: nil)
-            return await engine.run { _ in }
+            return await fuzzEngineWithMaxIterations(
+                maxIterations: 100,
+                config: config,
+                additionalSeeds: [0, 1, -1, 42]
+            ) { (_: Int) in }
         }
 
         #expect(result.corpus.count >= 1, "Should have corpus entries")
@@ -97,12 +102,16 @@ struct FuzzEngineTests {
             $0.corpusRegistry = alwaysInterestingRegistry
         } operation: {
             let config = FuzzEngine<Int>.Config(
-                maxDuration: .seconds(3),
+                maxDuration: .seconds(10),
                 verbose: false
             )
 
-            let engine = FuzzEngine<Int>(mutators: Int.defaultMutator, config: config, corpusDirectory: nil)
-            return await engine.run { (input: Int) in
+            // Include 42 in seeds to guarantee we hit the failure case
+            return await fuzzEngineWithMaxIterations(
+                maxIterations: 100,
+                config: config,
+                additionalSeeds: [0, 1, 42, -1]
+            ) { (input: Int) in
                 if input == 42 {
                     throw TestError()
                 }
@@ -122,11 +131,15 @@ struct FuzzEngineTests {
             $0.corpusRegistry = alwaysInterestingRegistry
         } operation: {
             let config = FuzzEngine<Int>.Config(
-                maxDuration: .seconds(5),
-                verbose: true            )
+                maxDuration: .seconds(10),
+                verbose: true
+            )
 
-            let engine = FuzzEngine<Int>(mutators: Int.defaultMutator, config: config, corpusDirectory: nil)
-            return await engine.run { _ in }
+            return await fuzzEngineWithMaxIterations(
+                maxIterations: 100,
+                config: config,
+                additionalSeeds: [0, 1, -1, 42]
+            ) { (_: Int) in }
         }
 
         #expect(result.stats.totalInputs > 0)
@@ -143,12 +156,16 @@ struct FuzzEngineTests {
             $0.corpusRegistry = alwaysInterestingRegistry
         } operation: {
             let config = FuzzEngine<Int>.Config(
-                maxDuration: .seconds(5),
+                maxDuration: .seconds(10),
                 verbose: false
             )
 
-            let engine = FuzzEngine<Int>(mutators: Int.defaultMutator, config: config, corpusDirectory: nil)
-            return await engine.run { (input: Int) in
+            // Include multiples of 10 in seeds to guarantee failures
+            return await fuzzEngineWithMaxIterations(
+                maxIterations: 100,
+                config: config,
+                additionalSeeds: [0, 10, 20, 1, 2]
+            ) { (input: Int) in
                 if input % 10 == 0 {
                     throw FuzzError()
                 }
@@ -178,13 +195,17 @@ struct FuzzEngineTests {
             )
         } operation: {
             let config = FuzzEngine<Int>.Config(
-                maxDuration: .seconds(5),
+                maxDuration: .seconds(10),
                 minimizeCorpus: true,
                 verbose: true
             )
 
-            let engine = FuzzEngine<Int>(mutators: Int.defaultMutator, config: config, corpusDirectory: corpusDir)
-            return await engine.run { _ in }
+            return await fuzzEngineWithMaxIterations(
+                maxIterations: 100,
+                config: config,
+                corpusDirectory: corpusDir,
+                additionalSeeds: [0, 1, -1, 42]
+            ) { (_: Int) in }
         }
 
         #expect(result.corpus.count > 0, "Should have corpus entries")
@@ -217,9 +238,10 @@ struct FuzzEngineTests {
 
         // Create corpus with matching signature
         // Note: InputContainer encodes Int 42 as base64 of "42" = "NDI="
+        // Use "v1-0" to match CorpusSchema.currentVersion()
         let corpusJSON = """
         {
-            "schemaVersion": "v1-100",
+            "schemaVersion": "v1-0",
             "entries": [
                 {
                     "input": ["NDI="],
@@ -256,17 +278,10 @@ struct FuzzEngineTests {
                 delete: { _ in }
             )
         } operation: {
-            // Prime the dependency context
-            @Dependency(\.coverageCounters) var cc
-            _ = cc
-
-            let config = FuzzEngine<Int>.Config(
-                maxDuration: .seconds(5),
-                verbose: true
-            )
-
-            let engine = FuzzEngine<Int>(mutators: Int.defaultMutator, config: config, corpusDirectory: corpusDir)
-            return await engine.run { _ in }
+            await fuzzEngineWithMaxIterations(
+                maxIterations: 50,
+                corpusDirectory: corpusDir
+            ) { (_: Int) in }
         }
 
         #expect(existsSpy.callCount >= 1, "Should check if corpus exists")
@@ -311,13 +326,10 @@ struct FuzzEngineTests {
                 delete: { _ in }
             )
         } operation: {
-            let config = FuzzEngine<Int>.Config(
-                maxDuration: .seconds(5),
-                verbose: true
-            )
-
-            let engine = FuzzEngine<Int>(mutators: Int.defaultMutator, config: config, corpusDirectory: corpusDir)
-            return await engine.run { _ in }
+            await fuzzEngineWithMaxIterations(
+                maxIterations: 50,
+                corpusDirectory: corpusDir
+            ) { (_: Int) in }
         }
 
         #expect(existsSpy.callCount >= 1)
@@ -344,13 +356,10 @@ struct FuzzEngineTests {
                 delete: { _ in }
             )
         } operation: {
-            let config = FuzzEngine<Int>.Config(
-                maxDuration: .seconds(5),
-                verbose: true
-            )
-
-            let engine = FuzzEngine<Int>(mutators: Int.defaultMutator, config: config, corpusDirectory: corpusDir)
-            return await engine.run { _ in }
+            await fuzzEngineWithMaxIterations(
+                maxIterations: 50,
+                corpusDirectory: corpusDir
+            ) { (_: Int) in }
         }
 
         #expect(existsSpy.callCount >= 1)
@@ -368,12 +377,7 @@ struct FuzzEngineTests {
             // Explicitly set live coverage to prevent mock leakage from parallel tests
             $0.coverageCounters = .liveValue
         } operation: {
-            let config = FuzzEngine<Int>.Config(
-                maxDuration: .seconds(10),
-                verbose: true            )
-
-            let engine = FuzzEngine<Int>(mutators: Int.defaultMutator, config: config, corpusDirectory: nil)
-            return await engine.run { _ in }
+            await fuzzEngineWithMaxIterations(maxIterations: 50) { (_: Int) in }
         }
 
         #expect(result.corpus.count >= 1)
@@ -400,13 +404,10 @@ struct FuzzEngineTests {
                 delete: { _ in }
             )
         } operation: {
-            let config = FuzzEngine<Int>.Config(
-                maxDuration: .seconds(5),
-                verbose: true
-            )
-
-            let engine = FuzzEngine<Int>(mutators: Int.defaultMutator, config: config, corpusDirectory: corpusDir)
-            return await engine.run { _ in }
+            await fuzzEngineWithMaxIterations(
+                maxIterations: 50,
+                corpusDirectory: corpusDir
+            ) { (_: Int) in }
         }
 
         #expect(saveSpy.callCount == 1, "Should have attempted to save corpus")
@@ -422,10 +423,10 @@ struct FuzzEngineTests {
             SparseCoverage(indices: [])
         }
 
-        // Empty corpus with matching schema version
+        // Empty corpus with matching schema version (v1-0)
         let corpusJSON = """
         {
-            "schemaVersion": "v1-100",
+            "schemaVersion": "v1-0",
             "entries": [],
             "createdAt": "2025-01-01T00:00:00Z",
             "updatedAt": "2025-01-01T00:00:00Z",
@@ -451,13 +452,10 @@ struct FuzzEngineTests {
                 delete: { _ in }
             )
         } operation: {
-            let config = FuzzEngine<Int>.Config(
-                maxDuration: .seconds(5),
-                verbose: true
-            )
-
-            let engine = FuzzEngine<Int>(mutators: Int.defaultMutator, config: config, corpusDirectory: corpusDir)
-            return await engine.run { _ in }
+            await fuzzEngineWithMaxIterations(
+                maxIterations: 50,
+                corpusDirectory: corpusDir
+            ) { (_: Int) in }
         }
 
         #expect(existsSpy.callCount >= 1)
@@ -470,13 +468,7 @@ struct FuzzEngineTests {
         let result = await withDependencies {
             $0.coverageCounters = makeThrowingCoverageClient()
         } operation: {
-            let config = FuzzEngine<Int>.Config(
-                maxDuration: .seconds(5),
-                verbose: false
-            )
-
-            let engine = FuzzEngine<Int>(mutators: Int.defaultMutator, config: config, corpusDirectory: nil)
-            return await engine.run { _ in }
+            await fuzzEngineWithMaxIterations(maxIterations: 50) { (_: Int) in }
         }
 
         #expect(result.stats.totalInputs > 0, "Test should have executed")
@@ -491,13 +483,7 @@ struct FuzzEngineTests {
         let result = await withDependencies {
             $0.coverageCounters = makeThrowingCoverageClient()
         } operation: {
-            let config = FuzzEngine<Int>.Config(
-                maxDuration: .seconds(5),
-                verbose: false
-            )
-
-            let engine = FuzzEngine<Int>(mutators: Int.defaultMutator, config: config, corpusDirectory: nil)
-            return await engine.run { _ in
+            await fuzzEngineWithMaxIterations(maxIterations: 50) { (_: Int) in
                 throw TestError()
             }
         }
@@ -512,13 +498,7 @@ struct FuzzEngineTests {
         let result = await withDependencies {
             $0.coverageCounters = makeThrowingCoverageClient()
         } operation: {
-            let config = FuzzEngine<Int>.Config(
-                maxDuration: .seconds(5),
-                verbose: false
-            )
-
-            let engine = FuzzEngine<Int>(mutators: Int.defaultMutator, config: config, corpusDirectory: nil)
-            return await engine.run { _ in }
+            await fuzzEngineWithMaxIterations(maxIterations: 50) { (_: Int) in }
         }
 
         #expect(result.corpus.count == 0, "Corpus should be empty when coverage throws")
@@ -538,9 +518,10 @@ struct FuzzEngineTests {
         // Corpus has signature {5: 1} (bucket index 5, bucket value 1=one)
         // Mock returns {1: 1} which is different, triggering coverage change
         // Note: InputContainer encodes Int 42 as base64 of "42" = "NDI="
+        // Use v1-0 to enter regression mode, then detect coverage change and re-fuzz
         let corpusJSON = """
         {
-            "schemaVersion": "v1-100",
+            "schemaVersion": "v1-0",
             "entries": [
                 {
                     "input": ["NDI="],
@@ -572,13 +553,10 @@ struct FuzzEngineTests {
                 delete: { _ in }
             )
         } operation: {
-            let config = FuzzEngine<Int>.Config(
-                maxDuration: .seconds(5),
-                verbose: true
-            )
-
-            let engine = FuzzEngine<Int>(mutators: Int.defaultMutator, config: config, corpusDirectory: corpusDir)
-            return await engine.run { _ in }
+            await fuzzEngineWithMaxIterations(
+                maxIterations: 50,
+                corpusDirectory: corpusDir
+            ) { (_: Int) in }
         }
 
         #expect(existsSpy.callCount >= 1)
@@ -598,10 +576,13 @@ struct FuzzEngineTests {
             let config = FuzzEngine<Int>.Config(
                 maxDuration: .seconds(10),
                 minimizeCorpus: false,
-                verbose: true            )
+                verbose: true
+            )
 
-            let engine = FuzzEngine<Int>(mutators: Int.defaultMutator, config: config, corpusDirectory: nil)
-            return await engine.run { _ in }
+            return await fuzzEngineWithMaxIterations(
+                maxIterations: 50,
+                config: config
+            ) { (_: Int) in }
         }
 
         #expect(result.corpus.count >= 1, "Should have corpus entries")
@@ -612,10 +593,6 @@ struct FuzzEngineTests {
     func testRegressionFailures() async throws {
         let corpusDir = URL(fileURLWithPath: "/test/fuzz-regression-fail")
 
-        // With reset+snapshot model:
-        // - Call 1: schema version check (needs count=100 for "v1-100")
-        // - Subsequent calls: after each test, return matching signature {1: 1}
-        //
         // All calls return counters[1]=1 to match corpus signature {1: 1}
         // FuzzEngine uses snapshotCoveredArrays in the hot path
         let snapshotCoveredArraysFn: @Sendable () -> SparseCoverage = {
@@ -624,9 +601,10 @@ struct FuzzEngineTests {
 
         // Corpus with signature {1: 1}
         // Note: InputContainer encodes Int 42 as base64 of "42" = "NDI="
+        // Use v1-0 to match CorpusSchema.currentVersion()
         let corpusJSON = """
         {
-            "schemaVersion": "v1-100",
+            "schemaVersion": "v1-0",
             "entries": [
                 {
                     "input": ["NDI="],
@@ -659,13 +637,10 @@ struct FuzzEngineTests {
                 delete: { _ in }
             )
         } operation: {
-            let config = FuzzEngine<Int>.Config(
-                maxDuration: .seconds(5),
-                verbose: true
-            )
-
-            let engine = FuzzEngine<Int>(mutators: Int.defaultMutator, config: config, corpusDirectory: corpusDir)
-            return await engine.run { (input: Int) in
+            await fuzzEngineWithMaxIterations(
+                maxIterations: 50,
+                corpusDirectory: corpusDir
+            ) { (input: Int) in
                 if input == 42 {
                     throw RegressionError()
                 }
@@ -685,12 +660,7 @@ struct FuzzEngineTests {
         let result = await withDependencies {
             $0.corpusRegistry = alwaysInterestingRegistry
         } operation: {
-            let config = FuzzEngine<EmptyFuzzable>.Config(
-                maxDuration: .seconds(1),
-                verbose: false            )
-
-            let engine = FuzzEngine<EmptyFuzzable>(mutators: EmptyFuzzable.defaultMutator, config: config, corpusDirectory: nil)
-            return await engine.run { _ in }
+            await fuzzEngineWithMaxIterations(maxIterations: 20) { (_: EmptyFuzzable) in }
         }
 
         // With empty seeds, no seeds are processed and iterations skip via guard
@@ -707,15 +677,11 @@ struct FuzzEngineTests {
         let result = await withDependencies {
             $0.corpusRegistry = alwaysInterestingRegistry
         } operation: {
-            let config = FuzzEngine<EmptyMutationsFuzzable>.Config(
-                maxDuration: .seconds(5),
-                verbose: false            )
-
-            let engine = FuzzEngine<EmptyMutationsFuzzable>(mutators: EmptyMutationsFuzzable.defaultMutator, config: config, corpusDirectory: nil)
-            return await engine.run { _ in }
+            await fuzzEngineWithMaxIterations(maxIterations: 20) { (_: EmptyMutationsFuzzable) in }
         }
 
         // With one seed value, corpus gets one entry, then mutations fail
         #expect(result.corpus.count >= 0)  // May have seed entry
     }
 }
+

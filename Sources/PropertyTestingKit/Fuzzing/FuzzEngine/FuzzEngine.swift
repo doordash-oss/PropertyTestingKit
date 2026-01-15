@@ -242,8 +242,8 @@ public actor FuzzEngine<each Input: Codable & Sendable> {
     ) async -> FuzzResult<repeat each Input> {
         let startTime = dateClient.now()
 
-        // Initialize event-based plugin dispatcher
-        let dispatcher = EventBasedPluginDispatcher(plugins: config.plugins)
+        // Initialize plugin dispatcher with baseline + user plugins
+        let dispatcher = PluginDispatcher(plugins: config.allPlugins)
 
         let allSeeds = additionalSeeds + mutatorSeeds()
 
@@ -375,7 +375,7 @@ public actor FuzzEngine<each Input: Codable & Sendable> {
 
         // Dispatch end event to plugins for analysis
         if !config.plugins.isEmpty {
-            var dispatcher = EventBasedPluginDispatcher(plugins: config.plugins)
+            var dispatcher = PluginDispatcher(plugins: config.plugins)
             let totalCoveredIndices = snapshot.totalCoverage.executedIndices
 
             if config.verbose {

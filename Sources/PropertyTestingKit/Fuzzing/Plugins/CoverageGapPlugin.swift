@@ -1,12 +1,12 @@
 //
-//  EventBasedCoverageGapPlugin.swift
+//  CoverageGapPlugin.swift
 //  Copyright © 2025 DoorDash. All rights reserved.
 //
 
 import Testing
 import Foundation
 
-public struct EventBasedCoverageGapPlugin: EventBasedPlugin {
+public struct CoverageGapPlugin: FuzzPlugin {
     public var id: String { "coverage_gap" }
 
     private let detector: CoverageGapDetector

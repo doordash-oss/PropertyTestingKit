@@ -1,8 +1,8 @@
 //
-//  EventBasedPlugin.swift
+//  FuzzPlugin.swift
 //  PropertyTestingKit
 //
-//  Unified event-based plugin system for FuzzEngine.
+//  Unified plugin system for FuzzEngine.
 //
 
 import Testing
@@ -10,11 +10,11 @@ import Foundation
 
 // MARK: - Plugin Protocol
 
-/// Protocol for event-based FuzzEngine plugins.
+/// Protocol for FuzzEngine plugins.
 ///
 /// Plugins receive events from the fuzz engine and return actions to be executed.
 /// Plugins run in array order - first plugin handles event first.
-public protocol EventBasedPlugin: Sendable {
+public protocol FuzzPlugin: Sendable {
     /// Unique identifier for this plugin (for logging).
     var id: String { get }
 
@@ -108,11 +108,15 @@ public enum PluginEvent<each T: Sendable>: Sendable {
     public struct IterationContext: Sendable {
         /// Whether this iteration discovered new coverage.
         public let discoveredNewCoverage: Bool
+        /// The input that was tested in this iteration.
+        public let input: (repeat each T)
 
         public init(
-            discoveredNewCoverage: Bool
+            discoveredNewCoverage: Bool,
+            input: (repeat each T)
         ) {
             self.discoveredNewCoverage = discoveredNewCoverage
+            self.input = input
         }
     }
 }

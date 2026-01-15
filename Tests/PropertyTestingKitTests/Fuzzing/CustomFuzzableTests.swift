@@ -34,14 +34,7 @@ struct CustomMutatorProvidingTests {
         let result = await withDependencies {
             $0.corpusRegistry = alwaysInterestingRegistry
         } operation: {
-            let config = FuzzEngine<TestConfig>.Config(
-                maxDuration: .seconds(5),
-                verbose: false
-            )
-
-            let engine = FuzzEngine<TestConfig>(mutators: TestConfig.defaultMutator, config: config, corpusDirectory: nil)
-
-            return await engine.run { input in
+            await fuzzEngineWithMaxIterations(maxIterations: 50) { (input: TestConfig) in
                 await seenTimeouts.update { $0.insert(input.timeout) }
                 await seenRetries.update { $0.insert(input.retries) }
             }

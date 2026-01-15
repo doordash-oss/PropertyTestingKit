@@ -1,11 +1,11 @@
 //
-//  EventBasedPlateauDetectorPlugin.swift
+//  PlateauDetectorPlugin.swift
 //  Copyright © 2025 DoorDash. All rights reserved.
 //
 
 import Foundation
 
-public actor EventBasedPlateauDetectorPlugin: EventBasedPlugin {
+public actor PlateauDetectorPlugin: FuzzPlugin {
     public let id: String = "plateau_detector" 
 
     private var detector: SimpleCoveragePlateauDetector
