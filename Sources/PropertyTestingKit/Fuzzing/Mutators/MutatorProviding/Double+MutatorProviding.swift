@@ -7,8 +7,9 @@ import Dependencies
 import Foundation
 
 extension Double: MutatorProviding {
-    public static var defaultMutator: AnyMutator<Double> {
+    public static let defaultMutator: AnyMutator<Double> = {
         @Dependency(\.random) var random
+        let cachedRandom = random  // Cache to avoid repeated TaskLocal lookups
         return AnyMutator(
             seeds: [
                 0.0,
@@ -37,7 +38,7 @@ extension Double: MutatorProviding {
                 return mutations
             },
             generate: {
-                random { rng in
+                cachedRandom { rng in
                     // Mix of strategies for interesting random double generation
                     let strategy = Int.random(in: 0..<10, using: &rng)
                     switch strategy {
@@ -80,5 +81,5 @@ extension Double: MutatorProviding {
                 }
             }
         )
-    }
+    }()
 }

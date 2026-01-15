@@ -62,3 +62,39 @@ Potential improvements and optimizations that have been investigated but not yet
 - L2 cache is very fast on Apple Silicon, so spilling L1 isn't catastrophic
 
 **Decision:** Not worth the complexity. Typical test binaries have 50K-200K edges. The byte array fits in L2, and L2 is fast enough that the gains don't justify the added complexity.
+
+## Silent Issue Detection During Shrinking
+
+**Status:** Blocked by Swift Testing API limitations
+
+**Summary:** The test case shrinker needs to detect when `#expect` fails to know if a shrunk input still triggers the failure. Currently, it uses `withKnownIssue` which logs each failure as a "known issue", producing noisy output during shrinking.
+
+**Goal:** Detect `#expect` failures without recording any issues (known or otherwise).
+
+**Findings:**
+
+Swift Testing's issue suppression mechanism (Issue Handling Traits, ST-0011) works via `Configuration.withCurrent`, which wraps the event handler to intercept `.issueRecorded` events. However:
+
+- `Configuration.withCurrent` is `internal`, not `public`
+- `@testable import Testing` fails because the Testing framework is compiled without `-enable-testing`
+- Issue Handling Traits (`.filterIssues`, `.compactMapIssues`) only work as test annotations (`@Test(.filterIssues {...})`), not as runtime APIs
+- There is no public API to programmatically suppress issue recording
+
+**Current behavior:**
+```
+◯ Test "..." recorded a known issue at ...: Expectation failed: ...
+◯ Test "..." recorded a known issue at ...: Expectation failed: ...
+◯ Test "..." passed after 0.006 seconds with 8 known issues.
+```
+
+The test passes correctly; the known issues are just noise in the output.
+
+**Potential future solutions:**
+
+1. **Swift Testing adds public API** - If `Configuration.withCurrent` becomes public or a programmatic issue filtering API is added, we could suppress issues during shrinking.
+
+2. **Custom check function** - Provide `fuzzCheck(_ condition: Bool) throws` that users use instead of `#expect` inside fuzz closures. It would throw on failure instead of recording an issue.
+
+3. **Change fuzz API** - Require fuzz closures to return `Bool` or throw errors explicitly instead of using `#expect`.
+
+**Decision:** Accept current behavior. Known issues during shrinking are cosmetic noise but don't affect correctness. Revisit if Swift Testing adds a public issue suppression API.

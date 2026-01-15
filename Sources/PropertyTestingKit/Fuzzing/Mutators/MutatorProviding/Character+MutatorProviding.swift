@@ -12,13 +12,14 @@ extension Character: MutatorProviding {
     private static let _alphanumeric: [Character] = Array("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
     private static let _asciiPrintable: [Character] = Array(" !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~")
 
-    public static var defaultMutator: AnyMutator<Character> {
+    public static let defaultMutator: AnyMutator<Character> = {
         @Dependency(\.random) var random
+        let cachedRandom = random  // Cache to avoid repeated TaskLocal lookups
         return AnyMutator(
             seeds: _seeds,
             mutate: { value in _seeds.filter { $0 != value } },
             generate: {
-                random { rng in
+                cachedRandom { rng in
                     let strategy = Int.random(in: 0..<6, using: &rng)
                     switch strategy {
                     case 0:
@@ -48,5 +49,5 @@ extension Character: MutatorProviding {
                 }
             }
         )
-    }
+    }()
 }

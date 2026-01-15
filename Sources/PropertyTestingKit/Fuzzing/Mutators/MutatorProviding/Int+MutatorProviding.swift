@@ -6,8 +6,9 @@
 import Dependencies
 
 extension Int: MutatorProviding {
-    public static var defaultMutator: AnyMutator<Int> {
+    public static let defaultMutator: AnyMutator<Int> = {
         @Dependency(\.random) var random
+        let cachedRandom = random  // Cache to avoid repeated TaskLocal lookups
         return AnyMutator(
             seeds: [
                 // Extremes and zero
@@ -73,7 +74,7 @@ extension Int: MutatorProviding {
                 return mutations
             },
             generate: {
-                random { rng in
+                cachedRandom { rng in
                     // Mix of strategies for interesting random generation
                     let strategy = Int.random(in: 0..<10, using: &rng)
                     switch strategy {
@@ -118,5 +119,5 @@ extension Int: MutatorProviding {
                 }
             }
         )
-    }
+    }()
 }

@@ -260,66 +260,73 @@ let benchmarks: @Sendable () -> Void = {
     }
 
     Benchmark(
-        "fuzz(Int) - 1000 iterations, refuzzReplace",
+        "fuzz(Int) - iterations/sec, refuzzReplace",
         configuration: .init(
-            metrics: [.wallClock],
+            metrics: [.custom("Iterations/sec (K)", polarity: .prefersLarger, useScalingFactor: false)],
             warmupIterations: 0,
             scalingFactor: .one,
-            maxDuration: .seconds(60),
-            maxIterations: 1000
+            maxDuration: .seconds(120),
+            maxIterations: 100
         )
     ) { benchmark in
+        let config = FuzzEngine<Int>.Config(
+            maxDuration: .seconds(0.1),
+            corpusMode: .refuzzReplace
+        )
+        let engine = FuzzEngine<Int>(mutators: Int.defaultMutator, config: config)
         for _ in benchmark.scaledIterations {
-            let config = FuzzEngine<Int>.Config(
-                corpusMode: .refuzzReplace            )
-            let engine = FuzzEngine<Int>(mutators: Int.defaultMutator, config: config)
-            let _ = await engine.run { input in
+            let result = await engine.run { input in
                 try parseAndValidate(input)
             }
+            // Multiply by 10 to convert 0.1s -> 1s, divide by 1000 for (K) display
+            benchmark.measurement(.custom("Iterations/sec (K)", polarity: .prefersLarger, useScalingFactor: false), result.stats.totalInputs / 100)
         }
     }
 
     Benchmark(
-        "fuzz(Int) - 1000 iterations, with gap detection",
+        "fuzz(Int) - iterations/sec, with gap detection",
         configuration: .init(
-            metrics: [.wallClock],
+            metrics: [.custom("Iterations/sec (K)", polarity: .prefersLarger, useScalingFactor: false)],
             warmupIterations: 0,
             scalingFactor: .one,
-            maxDuration: .seconds(60),
-            maxIterations: 1000
+            maxDuration: .seconds(120),
+            maxIterations: 100
         )
     ) { benchmark in
+        let config = FuzzEngine<Int>.Config(
+            maxDuration: .seconds(0.1),
+            corpusMode: .refuzzReplace,
+            plugins: [CoverageGapPlugin()]
+        )
+        let engine = FuzzEngine<Int>(mutators: Int.defaultMutator, config: config)
         for _ in benchmark.scaledIterations {
-            let config = FuzzEngine<Int>.Config(
-                corpusMode: .refuzzReplace,
-                plugins: [CoverageGapPlugin()]
-            )
-            let engine = FuzzEngine<Int>(mutators: Int.defaultMutator, config: config)
-            let _ = await engine.run { input in
+            let result = await engine.run { input in
                 try parseAndValidate(input)
             }
+            // Multiply by 10 to convert 0.1s -> 1s, divide by 1000 for (K) display
+            benchmark.measurement(.custom("Iterations/sec (K)", polarity: .prefersLarger, useScalingFactor: false), result.stats.totalInputs / 100)
         }
     }
 
     Benchmark(
-        "fuzz(Int, String, Bool, Double, UInt8) - 1000 iterations, with gap detection",
+        "fuzz(Int, String, Bool, Double, UInt8) - iterations/sec, with gap detection",
         configuration: .init(
-            metrics: [.wallClock],
+            metrics: [.custom("Iterations/sec (K)", polarity: .prefersLarger, useScalingFactor: false)],
             warmupIterations: 0,
             scalingFactor: .one,
-            maxDuration: .seconds(60),
-            maxIterations: 1000
+            maxDuration: .seconds(120),
+            maxIterations: 100
         )
     ) { benchmark in
         for _ in benchmark.scaledIterations {
-            let _ = try? await fuzz(
-                duration: .seconds(5),
+            let result = try? await fuzz(
+                duration: .seconds(0.1),
                 corpusMode: .refuzzReplace,
                 plugins: [CoverageGapPlugin()]
             ) { (i: Int, s: String, b: Bool, d: Double, u: UInt8) in
                 // Exercise all 5 inputs with branching logic
                 if i < 0 {
-                    blackHole(abs(i))
+                    blackHole(i.magnitude)  // Use magnitude to avoid overflow on Int.min
                 }
                 if s.isEmpty {
                     blackHole("empty")
@@ -334,6 +341,10 @@ let benchmarks: @Sendable () -> Void = {
                 if u > 128 {
                     blackHole(u &- 128)
                 }
+            }
+            if let result {
+                // Multiply by 10 to convert 0.1s -> 1s, divide by 1000 for (K) display
+                benchmark.measurement(.custom("Iterations/sec (K)", polarity: .prefersLarger, useScalingFactor: false), result.stats.totalInputs / 100)
             }
         }
     }
@@ -796,9 +807,9 @@ let benchmarks: @Sendable () -> Void = {
 
     // Benchmark to test mutex contention with parallel fuzz engines
     Benchmark(
-        "fuzz(Int) - 8 parallel engines, 100 iterations each",
+        "fuzz(Int) - 8 parallel engines, iterations/sec",
         configuration: .init(
-            metrics: [.wallClock],
+            metrics: [.custom("Iterations/sec (K)", polarity: .prefersLarger, useScalingFactor: false)],
             warmupIterations: 0,
             scalingFactor: .one,
             maxDuration: .seconds(120),
@@ -806,27 +817,32 @@ let benchmarks: @Sendable () -> Void = {
         )
     ) { benchmark in
         for _ in benchmark.scaledIterations {
-            await withTaskGroup(of: Void.self) { group in
+            let totalIterations = await withTaskGroup(of: Int.self, returning: Int.self) { group in
                 for _ in 0..<8 {
                     group.addTask {
                         let config = FuzzEngine<Int>.Config(
+                            maxDuration: .seconds(0.1),
                             corpusMode: .refuzzReplace
                         )
                         let engine = FuzzEngine<Int>(mutators: Int.defaultMutator, config: config)
-                        let _ = await engine.run { input in
+                        let result = await engine.run { input in
                             try parseAndValidate(input)
                         }
+                        return result.stats.totalInputs
                     }
                 }
+                return await group.reduce(0, +)
             }
+            // Multiply by 10 to convert 0.1s -> 1s, divide by 1000 for (K) display
+            benchmark.measurement(.custom("Iterations/sec (K)", polarity: .prefersLarger, useScalingFactor: false), totalIterations / 100)
         }
     }
 
     // Even more parallel engines to stress test
     Benchmark(
-        "fuzz(Int) - 16 parallel engines, 100 iterations each",
+        "fuzz(Int) - 16 parallel engines, iterations/sec",
         configuration: .init(
-            metrics: [.wallClock],
+            metrics: [.custom("Iterations/sec (K)", polarity: .prefersLarger, useScalingFactor: false)],
             warmupIterations: 0,
             scalingFactor: .one,
             maxDuration: .seconds(120),
@@ -834,19 +850,24 @@ let benchmarks: @Sendable () -> Void = {
         )
     ) { benchmark in
         for _ in benchmark.scaledIterations {
-            await withTaskGroup(of: Void.self) { group in
+            let totalIterations = await withTaskGroup(of: Int.self, returning: Int.self) { group in
                 for _ in 0..<16 {
                     group.addTask {
                         let config = FuzzEngine<Int>.Config(
+                            maxDuration: .seconds(0.1),
                             corpusMode: .refuzzReplace
                         )
                         let engine = FuzzEngine<Int>(mutators: Int.defaultMutator, config: config)
-                        let _ = await engine.run { input in
+                        let result = await engine.run { input in
                             try parseAndValidate(input)
                         }
+                        return result.stats.totalInputs
                     }
                 }
+                return await group.reduce(0, +)
             }
+            // Multiply by 10 to convert 0.1s -> 1s, divide by 1000 for (K) display
+            benchmark.measurement(.custom("Iterations/sec (K)", polarity: .prefersLarger, useScalingFactor: false), totalIterations / 100)
         }
     }
 

@@ -49,8 +49,9 @@ extension String: MutatorProviding {
     private static let alphanumericChars = Array("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
     private static let asciiPrintableChars = Array(" !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~")
 
-    public static var defaultMutator: AnyMutator<String> {
+    public static let defaultMutator: AnyMutator<String> = {
         @Dependency(\.random) var random
+        let cachedRandom = random  // Cache to avoid repeated TaskLocal lookups
         return AnyMutator(
             seeds: _cachedSeeds,
             mutate: { value in
@@ -99,7 +100,7 @@ extension String: MutatorProviding {
                 return mutations.filter { $0 != value }
             },
             generate: {
-                random { rng in
+                cachedRandom { rng in
                     // Mix of strategies for interesting random string generation
                     let strategy = Int.random(in: 0..<10, using: &rng)
                     switch strategy {
@@ -151,5 +152,5 @@ extension String: MutatorProviding {
                 }
             }
         )
-    }
+    }()
 }

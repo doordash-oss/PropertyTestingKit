@@ -73,6 +73,7 @@ actor FuzzStateMachine<each Input: Codable & Sendable> {
 
         // TODO: Avoid reference cycle
         self.workerPool = WorkerPool(
+            verbose: config.verbose,
             inputQueue: inputQueue,
             test: { testInput in
                 // Check for halting conditions
@@ -119,6 +120,9 @@ actor FuzzStateMachine<each Input: Codable & Sendable> {
     }
 
     func start() async throws -> FuzzStateMachineResult {
+        if config.verbose {
+            print("[FUZZ] FuzzStateMachine.start() called, maxDuration=\(config.maxDuration)")
+        }
         setupWorkerPool()
         try await submitPluginEvent(.start(
             .init(
@@ -150,6 +154,9 @@ actor FuzzStateMachine<each Input: Codable & Sendable> {
             failures: failures.count
         )
 
+        if config.verbose {
+            print("[FUZZ] FuzzStateMachine.start() finished: totalInputs=\(stats.totalInputs), duration=\(stats.duration), stopReason=\(stats.stopReason)")
+        }
         return FuzzStateMachineResult(
             stats: stats,
             corpus: corpus,
@@ -158,7 +165,11 @@ actor FuzzStateMachine<each Input: Codable & Sendable> {
     }
 
     private func haltIfAtLimit(startTime: Date) async {
-        if Duration.seconds(dateClient.now().timeIntervalSince(startTime)) >= config.maxDuration {
+        let elapsed = Duration.seconds(dateClient.now().timeIntervalSince(startTime))
+        if elapsed >= config.maxDuration {
+            if config.verbose {
+                print("[FUZZ] haltIfAtLimit: elapsed=\(elapsed), maxDuration=\(config.maxDuration) -> HALTING")
+            }
             await workerPool!.halt(reason: .timeLimit)
         }
     }
@@ -299,6 +310,7 @@ actor TestInputQueue<each Input: Sendable> {
 /// Pool that uses a pull system to request tasks on completion
 actor WorkerPool<each Input: Sendable> {
     let size: Int
+    let verbose: Bool
     let inputQueue: TestInputQueue<repeat each Input>
     let test: @Sendable ((repeat each Input)) async throws -> Void
     private var poolTask: Task<Void, any Error>?
@@ -308,12 +320,14 @@ actor WorkerPool<each Input: Sendable> {
 
     init(
         size: Int = ProcessInfo.processInfo.processorCount,
+        verbose: Bool = false,
         inputQueue: TestInputQueue<repeat each Input>,
         test: @escaping @Sendable ((repeat each Input)) async throws -> Void,
     ) {
         // Workers at least 1
         let size = max(1, size)
         self.size = size
+        self.verbose = verbose
         self.inputQueue = inputQueue
         self.test = test
     }
@@ -325,14 +339,23 @@ actor WorkerPool<each Input: Sendable> {
 
     // TODO: Avoid reference cycle
     func work() async throws -> WorkerPoolResult {
+        if verbose {
+            print("[FUZZ] WorkerPool.work() starting with size=\(size)")
+        }
+        let verboseCapture = verbose
         poolTask = Task {
             try await withThrowingTaskGroup { group in
-                for _ in 0..<self.size {
+                for workerIndex in 0..<self.size {
                     group.addTask {
+                        var iterationCount = 0
                         while !Task.isCancelled {
                             let input = await self.inputQueue.pull()
                             try await self.test(input)
                             await self.incrementProcessCount()
+                            iterationCount += 1
+                        }
+                        if verboseCapture {
+                            print("[FUZZ] Worker \(workerIndex) exiting: Task.isCancelled=\(Task.isCancelled), iterations=\(iterationCount)")
                         }
                     }
                 }
@@ -342,6 +365,9 @@ actor WorkerPool<each Input: Sendable> {
         }
 
         _ = await poolTask?.result
+        if verbose {
+            print("[FUZZ] WorkerPool.work() finished, processCount=\(processCount), stopReason=\(String(describing: stopReason))")
+        }
         return WorkerPoolResult(
             iterationCount: processCount,
             stopReason: stopReason ?? FuzzStats.StopReason.timeLimit
@@ -349,8 +375,14 @@ actor WorkerPool<each Input: Sendable> {
     }
 
     func halt(reason: FuzzStats.StopReason) {
+        if verbose {
+            print("[FUZZ] WorkerPool.halt called with reason: \(reason), poolTask=\(poolTask != nil ? "present" : "nil")")
+        }
         stopReason = reason
         poolTask?.cancel()
+        if verbose {
+            print("[FUZZ] WorkerPool.halt: cancel() called")
+        }
     }
 
     func incrementProcessCount() {

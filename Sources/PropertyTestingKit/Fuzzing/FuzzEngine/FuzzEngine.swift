@@ -92,11 +92,46 @@ public actor FuzzEngine<each Input: Codable & Sendable> {
 
     // MARK: - Mutator Helpers
 
-    /// Extract seeds from a tuple of mutators and compute cartesian product.
+    /// Extract seeds from mutators using position rotation.
+    ///
+    /// Instead of computing full cartesian product (O(n1 * n2 * ... * nk)),
+    /// we rotate through each position's seeds while using a fixed seed for others.
+    /// This ensures every seed is tested at least once with O(n1 + n2 + ... + nk) combinations.
+    ///
+    /// For example, with seeds [a, b] and [1, 2, 3]:
+    /// - Position 0 rotation: (a, 1), (b, 1)  -- all of position 0 with fixed position 1
+    /// - Position 1 rotation: (a, 1), (a, 2), (a, 3)  -- fixed position 0 with all of position 1
+    /// - Total: 5 combinations instead of 6 (cartesian product)
+    ///
+    /// The savings grow dramatically with more positions:
+    /// - 5 positions with [23, 24, 2, 11, 7] seeds: 67 vs 84,744
     private static func extractMutatorSeeds<each M: Mutator>(
         mutators: (repeat each M)
     ) -> [(repeat each Input)] where (repeat (each M).Value) == (repeat each Input) {
-        cartesianProduct(repeat (each mutators).seeds)
+        // Count the number of mutators/positions
+        var count = 0
+        (repeat { _ = each mutators; count += 1 }())
+
+        // For each position, create a tuple of arrays where:
+        // - The expanded position contains all seeds from that mutator
+        // - Other positions contain just the first seed (as a fixed reference value)
+        let positionsExpanded: [(repeat [each Input])] = (0..<count).map { expandIndex in
+            var currentIndex = 0
+            return (repeat {
+                defer { currentIndex += 1 }
+                let seeds = (each mutators).seeds
+                if currentIndex == expandIndex {
+                    // This position: iterate through all seeds
+                    return seeds
+                } else {
+                    // Other positions: use first seed as fixed value
+                    return [seeds[0]]
+                }
+            }())
+        }
+
+        // Use cartesianProduct to expand each position's arrays into full tuples
+        return positionsExpanded.flatMap(cartesianProduct)
     }
 
     /// Count the number of elements in a parameter pack.

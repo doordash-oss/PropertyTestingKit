@@ -7,16 +7,18 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		0194A2B0922DC21A5E35E179 /* ShrinkingPluginTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9038D6C2FF93F7F004830619 /* ShrinkingPluginTests.swift */; };
 		01C409E9A774CE4770B6DC3B /* CoverageGapReport.swift in Sources */ = {isa = PBXBuildFile; fileRef = F3E63606AF341F913872CB76 /* CoverageGapReport.swift */; };
 		0469AB3AB668C05713B4CEEC /* CorpusClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = FFF4F63E42A1153F798F4A15 /* CorpusClient.swift */; };
+		073726C59F65CF54C9DB2A9D /* STADSPluginTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9475EBCF152B8D2EEACB5111 /* STADSPluginTests.swift */; };
 		08723356674CF23AB08EFC98 /* WorkerPoolPatternTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3C4BEC4C9B5FC9BAEF5F9ECE /* WorkerPoolPatternTests.swift */; };
 		0A0B966D3B103DDD9ADC457C /* CoverageCountersClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B7DA3E55A8132FE210D8EAF /* CoverageCountersClient.swift */; };
 		0AEA251D3FF9432F04D9FC04 /* CoverageGapDetectorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5A7DD272E538B8E8CFE5C75 /* CoverageGapDetectorTests.swift */; };
 		1226F62189C28475B8A01EE4 /* Int+MutatorProviding.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC834389B8A7AF84299B4237 /* Int+MutatorProviding.swift */; };
 		125D3FB66141B63E3542572E /* FuzzResult.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7769DE997855D0C94C1C405F /* FuzzResult.swift */; };
+		1426388F8F61D31CB0AC925C /* PlateauDetectorPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = F5F59F7C0FD59FAD26BADFE6 /* PlateauDetectorPlugin.swift */; };
 		14CE5AF65788D0ED532C423D /* PropertyBasedSelfTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F7B5F39FFCE93451B38B3FBA /* PropertyBasedSelfTests.swift */; };
 		154F79A2EEDDE650511A586D /* CustomFuzzableTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 683A330BCB90F626B21D2422 /* CustomFuzzableTests.swift */; };
-		1676A6251DF285939A232329 /* EventBasedCoverageGapPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1BAB215F45EB4C8CA1934BEF /* EventBasedCoverageGapPlugin.swift */; };
 		17D551F0DC9A49573320CBC2 /* ck_ht.c in Sources */ = {isa = PBXBuildFile; fileRef = DF69D0BBA6357FA0A5F78ABC /* ck_ht.c */; };
 		194E2180758E8A2A82D69A19 /* SyncBox.swift in Sources */ = {isa = PBXBuildFile; fileRef = 807ED515190705E70EEBD7FE /* SyncBox.swift */; };
 		19E5E7F83FA7FB0675B65818 /* MockDatabase.swift in Sources */ = {isa = PBXBuildFile; fileRef = B64D06718A05E1272E84861D /* MockDatabase.swift */; };
@@ -31,13 +33,12 @@
 		29AD704E75D749B097C95BAA /* CorpusEntryType.swift in Sources */ = {isa = PBXBuildFile; fileRef = 49412A507ECD93C3E85C649B /* CorpusEntryType.swift */; };
 		2DC1B96A3FA7B3578DB69E7F /* PropertyTestingKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 2595E9AD80DBFC77F241A7E7 /* PropertyTestingKit.framework */; };
 		2E6CDCBF7B91A07E9402C82F /* ConcurrentFuzzLoadTest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00EBA13944AF0B757005638A /* ConcurrentFuzzLoadTest.swift */; };
+		3308E8DA9485458FE5DE69A4 /* MutationPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = C07CB963AFB9D07FD0B05E2D /* MutationPlugin.swift */; };
 		3623AE0B84CB07558F777090 /* PortMutator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5F0A30CF764B199509AB0614 /* PortMutator.swift */; };
 		37A87717B2EB72E8BA3B0DFB /* StringBoundaryMutator.swift in Sources */ = {isa = PBXBuildFile; fileRef = F853A816879F7A6E163BE7B4 /* StringBoundaryMutator.swift */; };
-		383216502C8ADDDC63DC0FDB /* EventBasedPluginDispatcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2B78883BB69E251950656D0 /* EventBasedPluginDispatcher.swift */; };
 		3AE90F2D2F5E78080AAB081C /* FuzzAPITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 99DF2D2D7A9C78BEFDA1C9FF /* FuzzAPITests.swift */; };
 		3C0A06D9F8141B7C2EEC9073 /* XSSMutator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 987822C1AE1DD0059B1B19EB /* XSSMutator.swift */; };
 		3D278F94AC182188C4B835AF /* FuzzStateMachine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 248285724DB5F6586AE70506 /* FuzzStateMachine.swift */; };
-		40BBDB105DB39C8B70D658CE /* EventBasedPlateauDetectorPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = DCDB2199470F533775067DB9 /* EventBasedPlateauDetectorPlugin.swift */; };
 		413720205EA64C2558BD9F04 /* FuzzAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = A18400D950AE2D1D13443E9A /* FuzzAPI.swift */; };
 		432A7C1997D44CD9561448F1 /* CorpusMode.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7F23079959F6B89989AD2EB /* CorpusMode.swift */; };
 		4663EC7618D3511158524207 /* RaceConditionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 797B369A783CF8DA4F7C9190 /* RaceConditionTests.swift */; };
@@ -52,7 +53,7 @@
 		56D29B8C49300786D2ACBD1A /* NegativeIntMutator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4091F4EF6449C34BCC32E57C /* NegativeIntMutator.swift */; };
 		589D0164A415C152CDD4B160 /* Benchmark in Frameworks */ = {isa = PBXBuildFile; productRef = E6A87E5EFC33D405ECEDD0E1 /* Benchmark */; };
 		5CE75ACE29DD3F8860FAA19D /* STADSPlateauDetector.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1733E8C2C5D2FC2BC7394036 /* STADSPlateauDetector.swift */; };
-		5D4F6868F443A4D25BE68A3F /* EventBasedPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = 93B1250EDF5B0A9EBB249819 /* EventBasedPlugin.swift */; };
+		5D7BD139A169A1190764B4E8 /* CoverageGapPluginTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3DCC188A42F8F55099B6EC2C /* CoverageGapPluginTests.swift */; };
 		605B9C253222E341C0385AB9 /* Double+MutatorProviding.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E987090D06715A5F99BEC1A /* Double+MutatorProviding.swift */; };
 		60F4B0B951427866AB7380DC /* CorpusEntry.swift in Sources */ = {isa = PBXBuildFile; fileRef = D708E6A5A1B65DA927AFEA9E /* CorpusEntry.swift */; };
 		61031F0CE3C1B19C1D04DF89 /* PropertyTestingKit.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 2595E9AD80DBFC77F241A7E7 /* PropertyTestingKit.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
@@ -65,9 +66,9 @@
 		7177FDDC6C703BE6ED195B56 /* PhoneNumberMutator.swift in Sources */ = {isa = PBXBuildFile; fileRef = F13B7E4AC8104D85F98B8418 /* PhoneNumberMutator.swift */; };
 		721B918F0C92F521E1CD4FC3 /* TestCaseShrinkerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F58C560D0D81EBCA41AC8282 /* TestCaseShrinkerTests.swift */; };
 		77318276C93EAB250B715AAD /* SaturationPlateauDetectorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B37ED10677A92DC01DD0B289 /* SaturationPlateauDetectorTests.swift */; };
+		7860427F4252E7CF955018E1 /* SaturationPluginTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 543E53F7A2745CDD7F2C03DE /* SaturationPluginTests.swift */; };
 		79D489B6D89C771503E3F4C8 /* libCLLVMSymbolizer.a in Frameworks */ = {isa = PBXBuildFile; fileRef = EF7AA1611BFAAB73EE70CA85 /* libCLLVMSymbolizer.a */; };
 		7B7ADDE2BFF43D15DE86328A /* Array+Shrinkable.swift in Sources */ = {isa = PBXBuildFile; fileRef = B60A0F1AE1DD32B9E72168DE /* Array+Shrinkable.swift */; };
-		7BB664399FD8D3232BC2FA7E /* PluginTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9A1BE2F7DB7138740E24CF3 /* PluginTests.swift */; };
 		7CB8AB059E1825789CCB0F93 /* SpecialDoubleMutator.swift in Sources */ = {isa = PBXBuildFile; fileRef = C80829DB919B1E7D80F66C9B /* SpecialDoubleMutator.swift */; };
 		808DEDCEF3F72F26E4C97724 /* CorpusTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9E53225F99BA35278DB06DA6 /* CorpusTests.swift */; };
 		8583A6B9CC8AE06E1F34F8C4 /* CoverageBenchmarks.swift in Sources */ = {isa = PBXBuildFile; fileRef = EF833B020283C4892D55D53C /* CoverageBenchmarks.swift */; };
@@ -75,13 +76,14 @@
 		86C59AD712113969EAC68CF0 /* ActionExecutor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 21FA35545B727DBF0891946C /* ActionExecutor.swift */; };
 		87CB37DFCDC351E3E53BE7F1 /* TestCaseShrinker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7DA5B74380237260F7E42D71 /* TestCaseShrinker.swift */; };
 		890F51672DF9C141E63233FB /* ArrayLengthTargetedMutator.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF13CC15C322A9D79BD1BD06 /* ArrayLengthTargetedMutator.swift */; };
+		8B579976B02390E00CABC9A1 /* PluginDispatcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2DA39B375E58A196C8ADC6A0 /* PluginDispatcher.swift */; };
 		8B77076135753B47C626A029 /* FuzzEngine+Config.swift in Sources */ = {isa = PBXBuildFile; fileRef = ACE4D8AA0A411B9988FA7E7C /* FuzzEngine+Config.swift */; };
 		8CBB720CE81E97F2750950E1 /* libSanCovHooks.a in Frameworks */ = {isa = PBXBuildFile; fileRef = FC16934A7D0ADDA3859FDFCA /* libSanCovHooks.a */; };
+		8D27AFB1254FC22918527BA3 /* CoverageGapPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = 112824CF90673942F0DC8528 /* CoverageGapPlugin.swift */; };
 		902AD170388F6A40C15ECCA5 /* MutatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C2AB425C1886E9C43DA056F /* MutatorTests.swift */; };
 		92C0A97FA308BAE7318F09BE /* UInt+MutatorProviding.swift in Sources */ = {isa = PBXBuildFile; fileRef = C94A378F579D36D7A0DE6F8D /* UInt+MutatorProviding.swift */; };
 		93A29BA964CA290588A5D762 /* IntMutators.swift in Sources */ = {isa = PBXBuildFile; fileRef = CED4705CAFB71E914729EBE5 /* IntMutators.swift */; };
 		93B2E23B1BBADC7F513EC48E /* String+MutatorProviding.swift in Sources */ = {isa = PBXBuildFile; fileRef = 87964E15BDAEE902B7B38D6E /* String+MutatorProviding.swift */; };
-		93D7271DB3BEA0544BCA0238 /* EventBasedMutationPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7016E31E6EFDCCEF6C8718A7 /* EventBasedMutationPlugin.swift */; };
 		9411D6055035E20DD3490798 /* CorpusSchema.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F25239605AF76FC51FDDF99 /* CorpusSchema.swift */; };
 		965AC1F59968645673F07841 /* corpus.json in Resources */ = {isa = PBXBuildFile; fileRef = 87C13394409DA48E4BE31930 /* corpus.json */; };
 		995888DFC95845A88625B91A /* FailureInfo.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CF3A4D9068E7899D99B8C01 /* FailureInfo.swift */; };
@@ -91,12 +93,14 @@
 		9DADB5A1F40BF13558A2BD55 /* Synchronized.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF1E91685C6019AA1D8E23F9 /* Synchronized.swift */; };
 		9E5C3463A81E92C8411CBBC4 /* WhitespaceMutator.swift in Sources */ = {isa = PBXBuildFile; fileRef = D836E824C1D4857069D00DA4 /* WhitespaceMutator.swift */; };
 		9E681FD7857BB0E8B54236DD /* Mutator.swift in Sources */ = {isa = PBXBuildFile; fileRef = D51DB081E26BBC926EBD26BD /* Mutator.swift */; };
-		9F6155B98EEEB63EFDB185DC /* EventBasedShrinkingPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = 36CC899B2CDB1E06A154526E /* EventBasedShrinkingPlugin.swift */; };
 		A11656F32C1DA89DAC5AE4B1 /* EnvironmentClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = F46057CB7F84DA3671178057 /* EnvironmentClient.swift */; };
 		A1B5C9D7B4345854FF5D488A /* PropertyTestingKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 2595E9AD80DBFC77F241A7E7 /* PropertyTestingKit.framework */; };
 		A37D8BF967DDC59F6674C589 /* CartesianProduct.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3DC7247C29C4368A12DBDC7 /* CartesianProduct.swift */; };
 		A4917FD92F876D60CD8646DC /* FuzzerStressTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E6E3AD5DC96FE62C844BFA88 /* FuzzerStressTests.swift */; };
+		A791F464FE3BDDB8A76320B5 /* FuzzPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = C46A7E2288E1AE7A59B100CF /* FuzzPlugin.swift */; };
+		A83B1E6ED0E311CB070A1E54 /* PluginDispatcherTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D58BF7E8DC55727F1D5D2F3 /* PluginDispatcherTests.swift */; };
 		A8AB88E38D9F9BBE8CCCD77B /* CorpusCoder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3FFCEA0CB033829BFBAEFA52 /* CorpusCoder.swift */; };
+		AB89E6673C3749E9B3F3A882 /* PlateauDetectorPluginTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BA01B2725BCFE68C918C2336 /* PlateauDetectorPluginTests.swift */; };
 		AC0EB1E931DDE5907D9E63F7 /* Optional+MutatorProviding.swift in Sources */ = {isa = PBXBuildFile; fileRef = E65E1585E4A2E6E29044F7C6 /* Optional+MutatorProviding.swift */; };
 		ADF49AE0B09D08080E515387 /* CoverageCountersTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4C33B33085A4DB5D1981F0A /* CoverageCountersTests.swift */; };
 		AE4F51213F59E5755867F166 /* Character+MutatorProviding.swift in Sources */ = {isa = PBXBuildFile; fileRef = ED3D3A4715807897A071483B /* Character+MutatorProviding.swift */; };
@@ -141,6 +145,7 @@
 		E7500FB62C682AC6EC216A82 /* ProfiledBenchmark.swift in Sources */ = {isa = PBXBuildFile; fileRef = 72EFC8FC26036551EE41795E /* ProfiledBenchmark.swift */; };
 		E84A0D3FEB919703F75C1BA1 /* UnicodeMutator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 920C7E046C3C079B33F40A8F /* UnicodeMutator.swift */; };
 		E914B1D593A03C40C576C93A /* UInt8+MutatorProviding.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2A04C16608308FDC4F6ADE4 /* UInt8+MutatorProviding.swift */; };
+		E94E382B579A8EAEA05F2A12 /* ShrinkingPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = 19A4AA0D8D28393DDC7CDD33 /* ShrinkingPlugin.swift */; };
 		EDA4F3DF2A8772887434F792 /* Testing.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 3F5DD8CB2128FA92846AA71F /* Testing.framework */; };
 		EED2A378ADF17C64DC50D6C8 /* ArrayMutators.swift in Sources */ = {isa = PBXBuildFile; fileRef = D82933D55EE528E5E866C257 /* ArrayMutators.swift */; };
 		F175208C6823ED3BC2A92224 /* PropertyTestingKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 2595E9AD80DBFC77F241A7E7 /* PropertyTestingKit.framework */; };
@@ -276,12 +281,13 @@
 		0BC4138150CDC1ABC2DE7C65 /* FuzzEngineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FuzzEngineTests.swift; sourceTree = "<group>"; };
 		0BF3BAC10EF47D6C57388C35 /* SanCovHooks.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = SanCovHooks.h; sourceTree = "<group>"; };
 		0F9D24C887A6D36D7A6EFDB8 /* ck_pr.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ck_pr.h; sourceTree = "<group>"; };
+		112824CF90673942F0DC8528 /* CoverageGapPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoverageGapPlugin.swift; sourceTree = "<group>"; };
 		13045E2C359AB3AFCD8C3FF9 /* AnyShrinkable.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnyShrinkable.swift; sourceTree = "<group>"; };
 		137A6EE309F1056E3F217831 /* ck_pr.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ck_pr.h; sourceTree = "<group>"; };
 		146B4C7BE9FB4A557084104F /* STADSPlateauDetectorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = STADSPlateauDetectorTests.swift; sourceTree = "<group>"; };
 		1733E8C2C5D2FC2BC7394036 /* STADSPlateauDetector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = STADSPlateauDetector.swift; sourceTree = "<group>"; };
+		19A4AA0D8D28393DDC7CDD33 /* ShrinkingPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShrinkingPlugin.swift; sourceTree = "<group>"; };
 		1B7FA0AAC10E7E2DB5FD6CDE /* TSanTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = TSanTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
-		1BAB215F45EB4C8CA1934BEF /* EventBasedCoverageGapPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventBasedCoverageGapPlugin.swift; sourceTree = "<group>"; };
 		207ADDE793917BD26C4770EB /* CLLVMSymbolizer.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = CLLVMSymbolizer.h; sourceTree = "<group>"; };
 		21FA35545B727DBF0891946C /* ActionExecutor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActionExecutor.swift; sourceTree = "<group>"; };
 		233B765E89E5C522C4158B51 /* URLMutator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = URLMutator.swift; sourceTree = "<group>"; };
@@ -290,12 +296,13 @@
 		2A865DFA08A7E0DE3F588EDB /* SanCovCounters.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SanCovCounters.swift; sourceTree = "<group>"; };
 		2C2AB425C1886E9C43DA056F /* MutatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MutatorTests.swift; sourceTree = "<group>"; };
 		2CF3A4D9068E7899D99B8C01 /* FailureInfo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FailureInfo.swift; sourceTree = "<group>"; };
+		2DA39B375E58A196C8ADC6A0 /* PluginDispatcher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PluginDispatcher.swift; sourceTree = "<group>"; };
 		2F5D17F7EF3F37D6C60A6EBF /* ck_stdbool.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ck_stdbool.h; sourceTree = "<group>"; };
 		34658F2420967EA35E38058D /* SanCovIsolationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SanCovIsolationTests.swift; sourceTree = "<group>"; };
-		36CC899B2CDB1E06A154526E /* EventBasedShrinkingPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventBasedShrinkingPlugin.swift; sourceTree = "<group>"; };
 		3B56C4B9B3773FB6734D0821 /* SimpleCoveragePlateauDetectorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SimpleCoveragePlateauDetectorTests.swift; sourceTree = "<group>"; };
 		3B6534DD92D12382387899CD /* ck_f_pr.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ck_f_pr.h; sourceTree = "<group>"; };
 		3C4BEC4C9B5FC9BAEF5F9ECE /* WorkerPoolPatternTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkerPoolPatternTests.swift; sourceTree = "<group>"; };
+		3DCC188A42F8F55099B6EC2C /* CoverageGapPluginTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoverageGapPluginTests.swift; sourceTree = "<group>"; };
 		3F1917814603DE56511E5F24 /* DWARFSymbolizer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DWARFSymbolizer.swift; sourceTree = "<group>"; };
 		3F5DD8CB2128FA92846AA71F /* Testing.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; path = Testing.framework; sourceTree = "<group>"; };
 		3FFCEA0CB033829BFBAEFA52 /* CorpusCoder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CorpusCoder.swift; sourceTree = "<group>"; };
@@ -314,6 +321,7 @@
 		52C1DEE9A4340554236C9F32 /* SparseCoverage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SparseCoverage.swift; sourceTree = "<group>"; };
 		5305591133199EC528A0A92D /* UserService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserService.swift; sourceTree = "<group>"; };
 		5357FB37687D2D3BDA8DABED /* ck_pr.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ck_pr.h; sourceTree = "<group>"; };
+		543E53F7A2745CDD7F2C03DE /* SaturationPluginTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaturationPluginTests.swift; sourceTree = "<group>"; };
 		5694654408A37C1D96C8CCA5 /* TestHelpers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TestHelpers.swift; sourceTree = "<group>"; };
 		57EB1A242BFD17108D7B7C76 /* ck_f_pr.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ck_f_pr.h; sourceTree = "<group>"; };
 		5808442EF808C1EDDA75846C /* ck_cc.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ck_cc.h; sourceTree = "<group>"; };
@@ -330,7 +338,6 @@
 		6B7DA3E55A8132FE210D8EAF /* CoverageCountersClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoverageCountersClient.swift; sourceTree = "<group>"; };
 		6C6089DAA244C9F5FEF045C2 /* ck_ht_hash.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ck_ht_hash.h; sourceTree = "<group>"; };
 		6E542601AA461AC5A1E637A8 /* ck_pr.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ck_pr.h; sourceTree = "<group>"; };
-		7016E31E6EFDCCEF6C8718A7 /* EventBasedMutationPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventBasedMutationPlugin.swift; sourceTree = "<group>"; };
 		71AD2B2875AE058F4041293D /* ck_internal.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ck_internal.h; sourceTree = "<group>"; };
 		72EFC8FC26036551EE41795E /* ProfiledBenchmark.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfiledBenchmark.swift; sourceTree = "<group>"; };
 		7769DE997855D0C94C1C405F /* FuzzResult.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FuzzResult.swift; sourceTree = "<group>"; };
@@ -350,13 +357,15 @@
 		87C13394409DA48E4BE31930 /* corpus.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = corpus.json; sourceTree = "<group>"; };
 		88F5B7FC44F425E39676B1D3 /* PowerOfTwoMutator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PowerOfTwoMutator.swift; sourceTree = "<group>"; };
 		8A0CC115EE184F1E93C3A0E0 /* ck_string.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ck_string.h; sourceTree = "<group>"; };
+		8D58BF7E8DC55727F1D5D2F3 /* PluginDispatcherTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PluginDispatcherTests.swift; sourceTree = "<group>"; };
 		8D5B1DD3570EBB6E7D12F912 /* FuzzableProtocolTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FuzzableProtocolTests.swift; sourceTree = "<group>"; };
 		8DCFCD27F236B21539FDC070 /* DateClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DateClient.swift; sourceTree = "<group>"; };
 		8E87A51CF22639FAC9BB2577 /* SQLInjectionMutator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SQLInjectionMutator.swift; sourceTree = "<group>"; };
 		8FED37BAA14224125F5AD7CA /* CorpusPersistenceClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CorpusPersistenceClient.swift; sourceTree = "<group>"; };
+		9038D6C2FF93F7F004830619 /* ShrinkingPluginTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShrinkingPluginTests.swift; sourceTree = "<group>"; };
 		909450826B23F3420A39E22F /* CartesianProductTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CartesianProductTests.swift; sourceTree = "<group>"; };
 		920C7E046C3C079B33F40A8F /* UnicodeMutator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UnicodeMutator.swift; sourceTree = "<group>"; };
-		93B1250EDF5B0A9EBB249819 /* EventBasedPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventBasedPlugin.swift; sourceTree = "<group>"; };
+		9475EBCF152B8D2EEACB5111 /* STADSPluginTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = STADSPluginTests.swift; sourceTree = "<group>"; };
 		94EB367A0BBDEA977C219F3A /* SimpleCoveragePlateauDetector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SimpleCoveragePlateauDetector.swift; sourceTree = "<group>"; };
 		955C5983D6125F89C2DE0E3E /* DoubleMutators.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DoubleMutators.swift; sourceTree = "<group>"; };
 		987822C1AE1DD0059B1B19EB /* XSSMutator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = XSSMutator.swift; sourceTree = "<group>"; };
@@ -372,17 +381,18 @@
 		A3DC7247C29C4368A12DBDC7 /* CartesianProduct.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CartesianProduct.swift; sourceTree = "<group>"; };
 		A4A90F27F22BE17810AE1B6F /* ContinuousClockClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContinuousClockClient.swift; sourceTree = "<group>"; };
 		A5A7DD272E538B8E8CFE5C75 /* CoverageGapDetectorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoverageGapDetectorTests.swift; sourceTree = "<group>"; };
-		A9A1BE2F7DB7138740E24CF3 /* PluginTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PluginTests.swift; sourceTree = "<group>"; };
 		ACE4D8AA0A411B9988FA7E7C /* FuzzEngine+Config.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "FuzzEngine+Config.swift"; sourceTree = "<group>"; };
 		AD73DE80764A2587F59AEEEB /* Bool+MutatorProviding.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Bool+MutatorProviding.swift"; sourceTree = "<group>"; };
 		AF1E91685C6019AA1D8E23F9 /* Synchronized.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Synchronized.swift; sourceTree = "<group>"; };
 		B155EAF0286844D09A5709EC /* TaskResults.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskResults.swift; sourceTree = "<group>"; };
-		B2B78883BB69E251950656D0 /* EventBasedPluginDispatcher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventBasedPluginDispatcher.swift; sourceTree = "<group>"; };
 		B37ED10677A92DC01DD0B289 /* SaturationPlateauDetectorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaturationPlateauDetectorTests.swift; sourceTree = "<group>"; };
 		B60A0F1AE1DD32B9E72168DE /* Array+Shrinkable.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Array+Shrinkable.swift"; sourceTree = "<group>"; };
 		B64D06718A05E1272E84861D /* MockDatabase.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockDatabase.swift; sourceTree = "<group>"; };
+		BA01B2725BCFE68C918C2336 /* PlateauDetectorPluginTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlateauDetectorPluginTests.swift; sourceTree = "<group>"; };
 		C02CEB72860556B925E49CC9 /* ck_pr.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ck_pr.h; sourceTree = "<group>"; };
+		C07CB963AFB9D07FD0B05E2D /* MutationPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MutationPlugin.swift; sourceTree = "<group>"; };
 		C45F1F52B8DBAE4FADF5B5C0 /* ck_md.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ck_md.h; sourceTree = "<group>"; };
+		C46A7E2288E1AE7A59B100CF /* FuzzPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FuzzPlugin.swift; sourceTree = "<group>"; };
 		C4C33B33085A4DB5D1981F0A /* CoverageCountersTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoverageCountersTests.swift; sourceTree = "<group>"; };
 		C507F3A635BA3903F890009B /* Array+MutatorProviding.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Array+MutatorProviding.swift"; sourceTree = "<group>"; };
 		C5A515E40A855C623BC509BC /* CoverageGapDetector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoverageGapDetector.swift; sourceTree = "<group>"; };
@@ -409,7 +419,6 @@
 		D836E824C1D4857069D00DA4 /* WhitespaceMutator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WhitespaceMutator.swift; sourceTree = "<group>"; };
 		DA3C0B16540F4626B5B88CD7 /* Corpus.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Corpus.swift; sourceTree = "<group>"; };
 		DAC6B4B0A9A99E0B2637413E /* module.modulemap */ = {isa = PBXFileReference; lastKnownFileType = "sourcecode.module-map"; path = module.modulemap; sourceTree = "<group>"; };
-		DCDB2199470F533775067DB9 /* EventBasedPlateauDetectorPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventBasedPlateauDetectorPlugin.swift; sourceTree = "<group>"; };
 		DF13CC15C322A9D79BD1BD06 /* ArrayLengthTargetedMutator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArrayLengthTargetedMutator.swift; sourceTree = "<group>"; };
 		DF69D0BBA6357FA0A5F78ABC /* ck_ht.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = ck_ht.c; sourceTree = "<group>"; };
 		E0ABBB2AC9890A3F64DAF698 /* SaturationPlateauDetector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaturationPlateauDetector.swift; sourceTree = "<group>"; };
@@ -434,6 +443,7 @@
 		F46057CB7F84DA3671178057 /* EnvironmentClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EnvironmentClient.swift; sourceTree = "<group>"; };
 		F4BDE3BB5DB51115A5922433 /* EmailMutator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmailMutator.swift; sourceTree = "<group>"; };
 		F58C560D0D81EBCA41AC8282 /* TestCaseShrinkerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TestCaseShrinkerTests.swift; sourceTree = "<group>"; };
+		F5F59F7C0FD59FAD26BADFE6 /* PlateauDetectorPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlateauDetectorPlugin.swift; sourceTree = "<group>"; };
 		F5FAD6386630E58099EFA884 /* ck_pr.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ck_pr.h; sourceTree = "<group>"; };
 		F7B5F39FFCE93451B38B3FBA /* PropertyBasedSelfTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PropertyBasedSelfTests.swift; sourceTree = "<group>"; };
 		F853A816879F7A6E163BE7B4 /* StringBoundaryMutator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StringBoundaryMutator.swift; sourceTree = "<group>"; };
@@ -1014,6 +1024,7 @@
 				00EBA13944AF0B757005638A /* ConcurrentFuzzLoadTest.swift */,
 				9E53225F99BA35278DB06DA6 /* CorpusTests.swift */,
 				A5A7DD272E538B8E8CFE5C75 /* CoverageGapDetectorTests.swift */,
+				3DCC188A42F8F55099B6EC2C /* CoverageGapPluginTests.swift */,
 				09F9A66C1671353C4CCF4F16 /* CoverageSignatureTests.swift */,
 				683A330BCB90F626B21D2422 /* CustomFuzzableTests.swift */,
 				5DE9A7DAD99528274ED05439 /* DeterministicTimingTests.swift */,
@@ -1021,10 +1032,14 @@
 				99DF2D2D7A9C78BEFDA1C9FF /* FuzzAPITests.swift */,
 				0BC4138150CDC1ABC2DE7C65 /* FuzzEngineTests.swift */,
 				2C2AB425C1886E9C43DA056F /* MutatorTests.swift */,
-				A9A1BE2F7DB7138740E24CF3 /* PluginTests.swift */,
+				BA01B2725BCFE68C918C2336 /* PlateauDetectorPluginTests.swift */,
+				8D58BF7E8DC55727F1D5D2F3 /* PluginDispatcherTests.swift */,
 				B37ED10677A92DC01DD0B289 /* SaturationPlateauDetectorTests.swift */,
+				543E53F7A2745CDD7F2C03DE /* SaturationPluginTests.swift */,
+				9038D6C2FF93F7F004830619 /* ShrinkingPluginTests.swift */,
 				3B56C4B9B3773FB6734D0821 /* SimpleCoveragePlateauDetectorTests.swift */,
 				146B4C7BE9FB4A557084104F /* STADSPlateauDetectorTests.swift */,
+				9475EBCF152B8D2EEACB5111 /* STADSPluginTests.swift */,
 				F58C560D0D81EBCA41AC8282 /* TestCaseShrinkerTests.swift */,
 			);
 			path = Fuzzing;
@@ -1047,13 +1062,13 @@
 			isa = PBXGroup;
 			children = (
 				21FA35545B727DBF0891946C /* ActionExecutor.swift */,
-				1BAB215F45EB4C8CA1934BEF /* EventBasedCoverageGapPlugin.swift */,
-				7016E31E6EFDCCEF6C8718A7 /* EventBasedMutationPlugin.swift */,
-				DCDB2199470F533775067DB9 /* EventBasedPlateauDetectorPlugin.swift */,
-				93B1250EDF5B0A9EBB249819 /* EventBasedPlugin.swift */,
-				B2B78883BB69E251950656D0 /* EventBasedPluginDispatcher.swift */,
-				36CC899B2CDB1E06A154526E /* EventBasedShrinkingPlugin.swift */,
+				112824CF90673942F0DC8528 /* CoverageGapPlugin.swift */,
+				C46A7E2288E1AE7A59B100CF /* FuzzPlugin.swift */,
+				C07CB963AFB9D07FD0B05E2D /* MutationPlugin.swift */,
+				F5F59F7C0FD59FAD26BADFE6 /* PlateauDetectorPlugin.swift */,
+				2DA39B375E58A196C8ADC6A0 /* PluginDispatcher.swift */,
 				CF44990BD642A0A6FBF94C6F /* SaturationPlateauDetectorPlugin.swift */,
+				19A4AA0D8D28393DDC7CDD33 /* ShrinkingPlugin.swift */,
 				40672CAD432576A4635C1676 /* STADSPlateauDetectorPlugin.swift */,
 			);
 			path = Plugins;
@@ -1370,6 +1385,7 @@
 				808DEDCEF3F72F26E4C97724 /* CorpusTests.swift in Sources */,
 				ADF49AE0B09D08080E515387 /* CoverageCountersTests.swift in Sources */,
 				0AEA251D3FF9432F04D9FC04 /* CoverageGapDetectorTests.swift in Sources */,
+				5D7BD139A169A1190764B4E8 /* CoverageGapPluginTests.swift in Sources */,
 				D304EFC84705417D212EA91D /* CoverageSignatureTests.swift in Sources */,
 				154F79A2EEDDE650511A586D /* CustomFuzzableTests.swift in Sources */,
 				4EB9436B27158A5C6839F9BA /* DWARFSymbolizerTests.swift in Sources */,
@@ -1379,11 +1395,15 @@
 				B589BFFA6C70C0D16C75E1AD /* FuzzableProtocolTests.swift in Sources */,
 				19E5E7F83FA7FB0675B65818 /* MockDatabase.swift in Sources */,
 				902AD170388F6A40C15ECCA5 /* MutatorTests.swift in Sources */,
-				7BB664399FD8D3232BC2FA7E /* PluginTests.swift in Sources */,
+				AB89E6673C3749E9B3F3A882 /* PlateauDetectorPluginTests.swift in Sources */,
+				A83B1E6ED0E311CB070A1E54 /* PluginDispatcherTests.swift in Sources */,
 				14CE5AF65788D0ED532C423D /* PropertyBasedSelfTests.swift in Sources */,
 				B269AC60201884DB429C947C /* STADSPlateauDetectorTests.swift in Sources */,
+				073726C59F65CF54C9DB2A9D /* STADSPluginTests.swift in Sources */,
 				77318276C93EAB250B715AAD /* SaturationPlateauDetectorTests.swift in Sources */,
+				7860427F4252E7CF955018E1 /* SaturationPluginTests.swift in Sources */,
 				FAE454D657D928B2962AB47B /* SeededRandomNumberGenerator.swift in Sources */,
+				0194A2B0922DC21A5E35E179 /* ShrinkingPluginTests.swift in Sources */,
 				CF148FE630379ED6CAF42AA4 /* SimpleCoveragePlateauDetectorTests.swift in Sources */,
 				9DADB5A1F40BF13558A2BD55 /* Synchronized.swift in Sources */,
 				721B918F0C92F521E1CD4FC3 /* TestCaseShrinkerTests.swift in Sources */,
@@ -1422,6 +1442,7 @@
 				0A0B966D3B103DDD9ADC457C /* CoverageCountersClient.swift in Sources */,
 				997046243B39595955A73A07 /* CoverageGap.swift in Sources */,
 				C3CCD2C9B56E9E0FC0574642 /* CoverageGapDetector.swift in Sources */,
+				8D27AFB1254FC22918527BA3 /* CoverageGapPlugin.swift in Sources */,
 				01C409E9A774CE4770B6DC3B /* CoverageGapReport.swift in Sources */,
 				52C260E19A743BA5BCADC703 /* CoverageSignature.swift in Sources */,
 				E22FD5BA11720007BFEC6E1E /* DWARFSourceLocation.swift in Sources */,
@@ -1436,18 +1457,13 @@
 				FD441F5D3E24D693D0A26B7B /* EmailMutator.swift in Sources */,
 				C029DB863E81D5730107E9F9 /* EmptyStringMutator.swift in Sources */,
 				A11656F32C1DA89DAC5AE4B1 /* EnvironmentClient.swift in Sources */,
-				1676A6251DF285939A232329 /* EventBasedCoverageGapPlugin.swift in Sources */,
-				93D7271DB3BEA0544BCA0238 /* EventBasedMutationPlugin.swift in Sources */,
-				40BBDB105DB39C8B70D658CE /* EventBasedPlateauDetectorPlugin.swift in Sources */,
-				5D4F6868F443A4D25BE68A3F /* EventBasedPlugin.swift in Sources */,
-				383216502C8ADDDC63DC0FDB /* EventBasedPluginDispatcher.swift in Sources */,
-				9F6155B98EEEB63EFDB185DC /* EventBasedShrinkingPlugin.swift in Sources */,
 				995888DFC95845A88625B91A /* FailureInfo.swift in Sources */,
 				D3BBDD6471BDB998F4979E48 /* FileManagerClient.swift in Sources */,
 				AFDDC40C6C111A0C8359403D /* FunctionSizeLookup.swift in Sources */,
 				413720205EA64C2558BD9F04 /* FuzzAPI.swift in Sources */,
 				8B77076135753B47C626A029 /* FuzzEngine+Config.swift in Sources */,
 				B0B276C037B14EAA3010672E /* FuzzEngine.swift in Sources */,
+				A791F464FE3BDDB8A76320B5 /* FuzzPlugin.swift in Sources */,
 				125D3FB66141B63E3542572E /* FuzzResult.swift in Sources */,
 				3D278F94AC182188C4B835AF /* FuzzStateMachine.swift in Sources */,
 				C6E708A0F04FED6D2E5A5DF0 /* HTTPStatusCodeMutator.swift in Sources */,
@@ -1455,11 +1471,14 @@
 				F4F5214CABA1CC0BBFD80985 /* IntBoundaryMutator.swift in Sources */,
 				93A29BA964CA290588A5D762 /* IntMutators.swift in Sources */,
 				1F8C42A1E118D08E319AF582 /* MultiComponentShrinker.swift in Sources */,
+				3308E8DA9485458FE5DE69A4 /* MutationPlugin.swift in Sources */,
 				9E681FD7857BB0E8B54236DD /* Mutator.swift in Sources */,
 				56D29B8C49300786D2ACBD1A /* NegativeIntMutator.swift in Sources */,
 				AC0EB1E931DDE5907D9E63F7 /* Optional+MutatorProviding.swift in Sources */,
 				1CEE9C52E71296E5382DD285 /* PercentageMutator.swift in Sources */,
 				7177FDDC6C703BE6ED195B56 /* PhoneNumberMutator.swift in Sources */,
+				1426388F8F61D31CB0AC925C /* PlateauDetectorPlugin.swift in Sources */,
+				8B579976B02390E00CABC9A1 /* PluginDispatcher.swift in Sources */,
 				3623AE0B84CB07558F777090 /* PortMutator.swift in Sources */,
 				86364D3C2F2DBEA2A9B62EA0 /* PowerOfTwoMutator.swift in Sources */,
 				F8CA279E1D5C86F49E55C093 /* RandomNumberGeneratorClient.swift in Sources */,
@@ -1473,6 +1492,7 @@
 				BD0CC959DAB2216FB5A5AE9E /* ShrinkResult.swift in Sources */,
 				6632F732A4FAECE34A80F544 /* ShrinkStats.swift in Sources */,
 				B12BA13984E49118CD620DA9 /* Shrinkable.swift in Sources */,
+				E94E382B579A8EAEA05F2A12 /* ShrinkingPlugin.swift in Sources */,
 				F854221602A30DC642BC0670 /* SimpleCoveragePlateauDetector.swift in Sources */,
 				26A3CB5877617786D4DAC208 /* SparseCoverage.swift in Sources */,
 				7CB8AB059E1825789CCB0F93 /* SpecialDoubleMutator.swift in Sources */,

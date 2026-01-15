@@ -6,8 +6,9 @@
 import Dependencies
 
 extension UInt: MutatorProviding {
-    public static var defaultMutator: AnyMutator<UInt> {
+    public static let defaultMutator: AnyMutator<UInt> = {
         @Dependency(\.random) var random
+        let cachedRandom = random  // Cache to avoid repeated TaskLocal lookups
         return AnyMutator(
             seeds: [0, 1, UInt.max, UInt.max / 2, 42, 100, 1000],
             mutate: { value in
@@ -19,7 +20,7 @@ extension UInt: MutatorProviding {
                 return mutations
             },
             generate: {
-                random { rng in
+                cachedRandom { rng in
                     let strategy = Int.random(in: 0..<8, using: &rng)
                     switch strategy {
                     case 0:
@@ -53,5 +54,5 @@ extension UInt: MutatorProviding {
                 }
             }
         )
-    }
+    }()
 }

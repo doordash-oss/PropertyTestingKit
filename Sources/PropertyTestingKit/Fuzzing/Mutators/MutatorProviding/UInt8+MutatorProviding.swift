@@ -6,8 +6,9 @@
 import Dependencies
 
 extension UInt8: MutatorProviding {
-    public static var defaultMutator: AnyMutator<UInt8> {
+    public static let defaultMutator: AnyMutator<UInt8> = {
         @Dependency(\.random) var random
+        let cachedRandom = random  // Cache to avoid repeated TaskLocal lookups
         return AnyMutator(
             seeds: [0, 1, 127, 128, 255, 42, 100],
             mutate: { value in
@@ -20,8 +21,8 @@ extension UInt8: MutatorProviding {
             },
             generate: {
                 // Uniform random across full byte range
-                random { rng in UInt8.random(in: 0...255, using: &rng) }
+                cachedRandom { rng in UInt8.random(in: 0...255, using: &rng) }
             }
         )
-    }
+    }()
 }
