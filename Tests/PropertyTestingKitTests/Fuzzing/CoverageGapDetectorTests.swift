@@ -303,8 +303,8 @@ struct CoverageGapDetectorTests {
 
         // This test intentionally creates a coverage gap to verify detection works
         await withKnownIssue("Expected coverage gap in partiallyCoveredFunction") {
-            _ = try await fuzzWithMaxIterations(
-                maxIterations: 50,
+            _ = try await fuzz(
+                duration: .seconds(0.1),
                 corpusMode: .refuzzReplace,
                 plugins: [CoverageGapPlugin()]
             ) { (input: Int) in

@@ -57,34 +57,23 @@ let benchmarks: @Sendable () -> Void = {
             maxIterations: 100
         )
     ) { benchmark in
+        let config = FuzzEngine<String>.Config(
+            maxDuration: .seconds(0.1),
+            corpusMode: .refuzzReplace,
+            plugins: [CoverageGapPlugin()]
+        )
+        let engine = FuzzEngine<String>(mutators: String.defaultMutator, config: config)
         for _ in benchmark.scaledIterations {
-            let result = try? await fuzz(
-                duration: .seconds(0.1),
-                corpusMode: .refuzzReplace,
-                plugins: [CoverageGapPlugin()]
-            ) { (i: Int, s: String, b: Bool, d: Double, u: UInt8) in
-                // Exercise all 5 inputs with branching logic
-                if i < 0 {
-                    blackHole(i.magnitude)  // Use magnitude to avoid overflow on Int.min
-                }
-                if s.isEmpty {
+            let result = await engine.run { input in
+                if input.isEmpty {
                     blackHole("empty")
-                } else if s.count > 10 {
-                    blackHole(s.prefix(10))
-                }
-                if b {
-                    blackHole(d * 2)
+                } else if input.count > 10 {
+                    blackHole(input.prefix(10))
                 } else {
-                    blackHole(d / 2)
-                }
-                if u > 128 {
-                    blackHole(u &- 128)
+                    blackHole(input)
                 }
             }
-            if let result {
-                // Multiply by 10 to convert 0.1s -> 1s, divide by 1000 for (K) display
-                benchmark.measurement(.custom("Iterations/sec (K)", polarity: .prefersLarger, useScalingFactor: false), result.stats.totalInputs / 100)
-            }
+            benchmark.measurement(.custom("Iterations/sec (K)", polarity: .prefersLarger, useScalingFactor: false), result.stats.totalInputs / 100)
         }
     }
 }

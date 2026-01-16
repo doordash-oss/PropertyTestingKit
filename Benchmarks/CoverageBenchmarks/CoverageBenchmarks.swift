@@ -309,7 +309,165 @@ let benchmarks: @Sendable () -> Void = {
     }
 
     Benchmark(
-        "fuzz(Int, String, Bool, Double, UInt8) - iterations/sec, with gap detection",
+        "fuzz(String) - iterations/sec, with gap detection (1 input)",
+        configuration: .init(
+            metrics: [.custom("Iterations/sec (K)", polarity: .prefersLarger, useScalingFactor: false)],
+            warmupIterations: 0,
+            scalingFactor: .one,
+            maxDuration: .seconds(120),
+            maxIterations: 100
+        )
+    ) { benchmark in
+        let config = FuzzEngine<String>.Config(
+            maxDuration: .seconds(0.1),
+            corpusMode: .refuzzReplace,
+            plugins: [CoverageGapPlugin()]
+        )
+        let engine = FuzzEngine<String>(mutators: String.defaultMutator, config: config)
+        for _ in benchmark.scaledIterations {
+            let result = await engine.run { input in
+                if input.isEmpty {
+                    blackHole("empty")
+                } else if input.count > 10 {
+                    blackHole(input.prefix(10))
+                }
+            }
+            benchmark.measurement(.custom("Iterations/sec (K)", polarity: .prefersLarger, useScalingFactor: false), result.stats.totalInputs / 100)
+        }
+    }
+
+    Benchmark(
+        "fuzz(Int, Int) - iterations/sec, with gap detection (2 inputs)",
+        configuration: .init(
+            metrics: [.custom("Iterations/sec (K)", polarity: .prefersLarger, useScalingFactor: false)],
+            warmupIterations: 0,
+            scalingFactor: .one,
+            maxDuration: .seconds(120),
+            maxIterations: 100
+        )
+    ) { benchmark in
+        for _ in benchmark.scaledIterations {
+            let result = try? await fuzz(
+                duration: .seconds(0.1),
+                corpusMode: .refuzzReplace,
+                plugins: [CoverageGapPlugin()]
+            ) { (i1: Int, i2: Int) in
+                if i1 < 0 {
+                    blackHole(i1.magnitude)
+                }
+                if i2 > 1000 {
+                    blackHole(i2 / 2)
+                }
+            }
+            if let result {
+                benchmark.measurement(.custom("Iterations/sec (K)", polarity: .prefersLarger, useScalingFactor: false), result.stats.totalInputs / 100)
+            }
+        }
+    }
+
+    Benchmark(
+        "fuzz(Int, String) - iterations/sec, with gap detection (2 inputs)",
+        configuration: .init(
+            metrics: [.custom("Iterations/sec (K)", polarity: .prefersLarger, useScalingFactor: false)],
+            warmupIterations: 0,
+            scalingFactor: .one,
+            maxDuration: .seconds(120),
+            maxIterations: 100
+        )
+    ) { benchmark in
+        for _ in benchmark.scaledIterations {
+            let result = try? await fuzz(
+                duration: .seconds(0.1),
+                corpusMode: .refuzzReplace,
+                plugins: [CoverageGapPlugin()]
+            ) { (i: Int, s: String) in
+                if i < 0 {
+                    blackHole(i.magnitude)
+                }
+                if s.isEmpty {
+                    blackHole("empty")
+                } else if s.count > 10 {
+                    blackHole(s.prefix(10))
+                }
+            }
+            if let result {
+                benchmark.measurement(.custom("Iterations/sec (K)", polarity: .prefersLarger, useScalingFactor: false), result.stats.totalInputs / 100)
+            }
+        }
+    }
+
+    Benchmark(
+        "fuzz(Int, String, Bool) - iterations/sec, with gap detection (3 inputs)",
+        configuration: .init(
+            metrics: [.custom("Iterations/sec (K)", polarity: .prefersLarger, useScalingFactor: false)],
+            warmupIterations: 0,
+            scalingFactor: .one,
+            maxDuration: .seconds(120),
+            maxIterations: 100
+        )
+    ) { benchmark in
+        for _ in benchmark.scaledIterations {
+            let result = try? await fuzz(
+                duration: .seconds(0.1),
+                corpusMode: .refuzzReplace,
+                plugins: [CoverageGapPlugin()]
+            ) { (i: Int, s: String, b: Bool) in
+                if i < 0 {
+                    blackHole(i.magnitude)
+                }
+                if s.isEmpty {
+                    blackHole("empty")
+                } else if s.count > 10 {
+                    blackHole(s.prefix(10))
+                }
+                if b {
+                    blackHole("true")
+                }
+            }
+            if let result {
+                benchmark.measurement(.custom("Iterations/sec (K)", polarity: .prefersLarger, useScalingFactor: false), result.stats.totalInputs / 100)
+            }
+        }
+    }
+
+    Benchmark(
+        "fuzz(Int, String, Bool, Double) - iterations/sec, with gap detection (4 inputs)",
+        configuration: .init(
+            metrics: [.custom("Iterations/sec (K)", polarity: .prefersLarger, useScalingFactor: false)],
+            warmupIterations: 0,
+            scalingFactor: .one,
+            maxDuration: .seconds(120),
+            maxIterations: 100
+        )
+    ) { benchmark in
+        for _ in benchmark.scaledIterations {
+            let result = try? await fuzz(
+                duration: .seconds(0.1),
+                corpusMode: .refuzzReplace,
+                plugins: [CoverageGapPlugin()]
+            ) { (i: Int, s: String, b: Bool, d: Double) in
+                if i < 0 {
+                    blackHole(i.magnitude)
+                }
+                if s.isEmpty {
+                    blackHole("empty")
+                } else if s.count > 10 {
+                    blackHole(s.prefix(10))
+                }
+                if b {
+                    blackHole(d * 2)
+                } else {
+                    blackHole(d / 2)
+                }
+            }
+            if let result {
+                benchmark.measurement(.custom("Iterations/sec (K)", polarity: .prefersLarger, useScalingFactor: false), result.stats.totalInputs / 100)
+            }
+        }
+    }
+
+    Benchmark(
+        "fuzz(Int, String, Bool, Double, UInt8) - iterations/sec, with gap detection (5 inputs)",
         configuration: .init(
             metrics: [.custom("Iterations/sec (K)", polarity: .prefersLarger, useScalingFactor: false)],
             warmupIterations: 0,

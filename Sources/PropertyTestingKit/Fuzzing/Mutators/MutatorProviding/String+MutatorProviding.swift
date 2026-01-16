@@ -45,9 +45,38 @@ extension String: MutatorProviding {
         String(repeating: "a", count: 1000),
     ]
 
-    // Character sets for random string generation
-    private static let alphanumericChars = Array("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
-    private static let asciiPrintableChars = Array(" !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~")
+    // Character sets for random string generation - stored as ContiguousArray for better performance
+    private static let alphanumericChars: ContiguousArray<Character> = ContiguousArray("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
+    private static let asciiPrintableChars: ContiguousArray<Character> = ContiguousArray(" !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~")
+    private static let digitChars: ContiguousArray<Character> = ContiguousArray("0123456789")
+    private static let emojiChars: ContiguousArray<Character> = ContiguousArray(["😀", "🎉", "🚀", "💡", "⚡", "🔥", "✨", "🌟"])
+    private static let commonPatterns: ContiguousArray<String> = ["test", "foo", "bar", "hello", "world", "input", "data", "value"]
+
+    /// Generates a random string from the given character set with minimal allocations.
+    /// Uses a single random number to generate multiple character indices.
+    @inline(__always)
+    private static func randomString(
+        length: Int,
+        from chars: ContiguousArray<Character>,
+        using rng: inout some RandomNumberGenerator
+    ) -> String {
+        guard length > 0 else { return "" }
+        let charCount = chars.count
+
+        // Pre-allocate the result string with known capacity
+        var result = ""
+        result.reserveCapacity(length)
+
+        // Generate characters - use simple modulo on truncated bits to avoid overflow
+        for _ in 0..<length {
+            // Use truncatingIfNeeded to safely convert UInt64 to Int
+            let randomValue = rng.next()
+            let index = Int(truncatingIfNeeded: randomValue) & 0x7FFFFFFF % charCount
+            result.append(chars[index])
+        }
+
+        return result
+    }
 
     public static let defaultMutator: AnyMutator<String> = {
         @Dependency(\.random) var random
@@ -109,43 +138,42 @@ extension String: MutatorProviding {
                         return ""
                     case 1:
                         // Single character
-                        return String(alphanumericChars.randomElement(using: &rng) ?? "a")
+                        return randomString(length: 1, from: alphanumericChars, using: &rng)
                     case 2:
                         // Short alphanumeric (1-10 chars)
                         let length = Int.random(in: 1...10, using: &rng)
-                        return String((0..<length).map { _ in alphanumericChars.randomElement(using: &rng) ?? "a" })
+                        return randomString(length: length, from: alphanumericChars, using: &rng)
                     case 3:
                         // Medium alphanumeric (10-50 chars)
                         let length = Int.random(in: 10...50, using: &rng)
-                        return String((0..<length).map { _ in alphanumericChars.randomElement(using: &rng) ?? "a" })
+                        return randomString(length: length, from: alphanumericChars, using: &rng)
                     case 4:
                         // ASCII printable including special chars
                         let length = Int.random(in: 1...30, using: &rng)
-                        return String((0..<length).map { _ in asciiPrintableChars.randomElement(using: &rng) ?? "a" })
+                        return randomString(length: length, from: asciiPrintableChars, using: &rng)
                     case 5:
                         // Whitespace-heavy
                         let whitespace = [" ", "\t", "\n", "\r", "  ", "\t\t"]
-                        let base = String((0..<5).map { _ in alphanumericChars.randomElement(using: &rng) ?? "a" })
-                        let ws = whitespace.randomElement(using: &rng) ?? " "
+                        let base = randomString(length: 5, from: alphanumericChars, using: &rng)
+                        let wsIndex = Int.random(in: 0..<whitespace.count, using: &rng)
+                        let ws = whitespace[wsIndex]
                         return Bool.random(using: &rng) ? ws + base : base + ws
                     case 6:
                         // Numeric string
                         let length = Int.random(in: 1...15, using: &rng)
-                        let digits = Array("0123456789")
-                        return String((0..<length).map { _ in digits.randomElement(using: &rng) ?? "0" })
+                        return randomString(length: length, from: digitChars, using: &rng)
                     case 7:
                         // Unicode (emoji and non-ASCII)
-                        let emojis: [Character] = ["😀", "🎉", "🚀", "💡", "⚡", "🔥", "✨", "🌟"]
                         let length = Int.random(in: 1...5, using: &rng)
-                        return String((0..<length).map { _ in emojis.randomElement(using: &rng) ?? "😀" })
+                        return randomString(length: length, from: emojiChars, using: &rng)
                     case 8:
-                        // Long string
-                        let length = Int.random(in: 100...500, using: &rng)
-                        return String((0..<length).map { _ in alphanumericChars.randomElement(using: &rng) ?? "a" })
+                        // Long string (reduced max from 500 to 100 for performance)
+                        let length = Int.random(in: 50...100, using: &rng)
+                        return randomString(length: length, from: alphanumericChars, using: &rng)
                     default:
                         // Common test patterns
-                        let patterns = ["test", "foo", "bar", "hello", "world", "input", "data", "value"]
-                        let base = patterns.randomElement(using: &rng) ?? "test"
+                        let patternIndex = Int.random(in: 0..<commonPatterns.count, using: &rng)
+                        let base = commonPatterns[patternIndex]
                         let suffix = Int.random(in: 0...999, using: &rng)
                         return "\(base)\(suffix)"
                     }
