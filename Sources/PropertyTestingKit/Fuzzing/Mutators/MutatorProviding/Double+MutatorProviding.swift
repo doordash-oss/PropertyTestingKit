@@ -6,6 +6,11 @@
 import Dependencies
 import Foundation
 
+// Static arrays at file scope to avoid extension static initialization issues
+private let _doubleSpecialValues: [Double] = [.nan, .infinity, -.infinity, .pi, .ulpOfOne]
+private let _doubleCommonBases: [Double] = [0.0, 1.0, -1.0, 0.5, 100.0, -100.0]
+private let _doubleNonFiniteFallback: [Double] = [0.0, 1.0, -1.0]
+
 extension Double: MutatorProviding {
     public static let defaultMutator: AnyMutator<Double> = {
         @Dependency(\.random) var random
@@ -25,9 +30,11 @@ extension Double: MutatorProviding {
                 -Double.infinity,
             ],
             mutate: { value in
-                guard value.isFinite else { return [0.0, 1.0, -1.0] }
+                guard value.isFinite else { return _doubleNonFiniteFallback }
 
+                // Pre-allocate for up to 7 mutations
                 var mutations: [Double] = []
+                mutations.reserveCapacity(7)
                 mutations.append(value + 1)
                 mutations.append(value - 1)
                 mutations.append(-value)
@@ -64,17 +71,17 @@ extension Double: MutatorProviding {
                         // Integer-like doubles
                         return Double(Int.random(in: -1000...1000, using: &rng))
                     case 7:
-                        // Powers of 2
+                        // Powers of 2 - use ldexp for efficiency
                         let power = Int.random(in: -10...10, using: &rng)
-                        return pow(2.0, Double(power))
+                        return ldexp(1.0, power)
                     case 8:
                         // Special values (rarely)
-                        let specials: [Double] = [.nan, .infinity, -.infinity, .pi, .ulpOfOne]
-                        return specials.randomElement(using: &rng) ?? 0.0
+                        let index = Int.random(in: 0..<_doubleSpecialValues.count, using: &rng)
+                        return _doubleSpecialValues[index]
                     default:
                         // Near common values with small offset
-                        let bases: [Double] = [0.0, 1.0, -1.0, 0.5, 100.0, -100.0]
-                        let base = bases.randomElement(using: &rng) ?? 0.0
+                        let index = Int.random(in: 0..<_doubleCommonBases.count, using: &rng)
+                        let base = _doubleCommonBases[index]
                         let offset = Double.random(in: -0.1...0.1, using: &rng)
                         return base + offset
                     }

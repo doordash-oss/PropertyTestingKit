@@ -5,6 +5,10 @@
 
 import Dependencies
 
+// Static arrays at file scope to avoid extension static initialization issues
+private let _intDivisibilityFactors: [Int] = [7, 11, 13, 77]
+private let _intMagicBases: [Int] = [42, 1337, 31337, 0xDEAD, 0xBEEF, 0xCAFE]
+
 extension Int: MutatorProviding {
     public static let defaultMutator: AnyMutator<Int> = {
         @Dependency(\.random) var random
@@ -45,7 +49,9 @@ extension Int: MutatorProviding {
                 -1_000_000,
             ],
             mutate: { value in
+                // Pre-allocate: up to 7 basic + 8 divisibility = 15 mutations
                 var mutations: [Int] = []
+                mutations.reserveCapacity(15)
 
                 // Basic arithmetic mutations (with overflow protection)
                 if value != Int.max { mutations.append(value + 1) }
@@ -59,7 +65,7 @@ extension Int: MutatorProviding {
                 if value != 0 { mutations.append(value ^ 1) }  // Flip LSB
 
                 // Divisibility-aware mutations: try nearby multiples of common factors
-                for factor in [7, 11, 13, 77] {
+                for factor in _intDivisibilityFactors {
                     let nearestMultiple = (value / factor) * factor
                     if nearestMultiple != value && nearestMultiple != 0 {
                         mutations.append(nearestMultiple)
@@ -108,8 +114,8 @@ extension Int: MutatorProviding {
                         return Int.random(in: 0...255, using: &rng) * (Bool.random(using: &rng) ? 1 : -1)
                     case 7:
                         // Common magic numbers with variations
-                        let bases = [42, 1337, 31337, 0xDEAD, 0xBEEF, 0xCAFE]
-                        let base = bases.randomElement(using: &rng) ?? 0
+                        let baseIndex = Int.random(in: 0..<_intMagicBases.count, using: &rng)
+                        let base = _intMagicBases[baseIndex]
                         let offset = Int.random(in: -10...10, using: &rng)
                         return base + offset
                     default:

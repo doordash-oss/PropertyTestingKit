@@ -69,6 +69,7 @@ public actor FuzzEngine<each Input: Codable & Sendable> {
         config: Config = Config(),
         corpusDirectory: URL? = nil
     ) where (repeat (each M).Value) == (repeat each Input) {
+        let inputSize = Self.inputCount(for: repeat (each Input).self)
         self.config = config
         self.corpusDirectory = corpusDirectory
 
@@ -81,7 +82,7 @@ public actor FuzzEngine<each Input: Codable & Sendable> {
 
         // Capture mutators directly in the closure - no type erasure needed
         self.mutatorMutate = { input in
-            Self.mutateWithMutators(input: input, mutators: mutators)
+            Self.mutateWithMutators(inputSize: inputSize, input: input, mutators: mutators)
         }
 
         // Capture generate functionality from mutators
@@ -135,7 +136,7 @@ public actor FuzzEngine<each Input: Codable & Sendable> {
     }
 
     /// Count the number of elements in a parameter pack.
-    private static func inputCount(for input: repeat each Input) -> Int {
+    private static func inputCount(for input: repeat (each Input).Type) -> Int {
         var count = 0
         (repeat { _ = each input; count += 1 }())
         return count
@@ -152,15 +153,14 @@ public actor FuzzEngine<each Input: Codable & Sendable> {
     /// Mutate an input using the provided mutators.
     /// Uses parameter pack expansion to avoid type erasure.
     private static func mutateWithMutators<each M: Mutator>(
+        inputSize: Int,
         input: (repeat each Input),
         mutators: (repeat each M)
     ) -> [(repeat each Input)] where (repeat (each M).Value) == (repeat each Input) {
-        let count = inputCount(for: repeat each input)
-
         // For each position, create a tuple of arrays where:
         // - The mutated position contains all mutations from the mutator
         // - Other positions contain just the original value wrapped in an array
-        let positionsMutated: [(repeat [each Input])] = (0..<count).map { replacementIndex in
+        let positionsMutated: [(repeat [each Input])] = (0..<inputSize).map { replacementIndex in
             var currentIndex = 0
             return (repeat {
                 defer { currentIndex += 1 }
