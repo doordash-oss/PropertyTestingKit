@@ -573,7 +573,7 @@ struct MutatorPublicAPITests {
                 readData: { _ in Data() }
             )
             // Use a seeded RNG for deterministic test behavior
-            $0.random = RandomNumberGeneratorClient(SeededRandomNumberGenerator(seed: 42))
+            $0.random = RandomNumberGeneratorClient { SeededRandomNumberGenerator(seed: 42) }
         } operation: {
             // Compose multiple strategies for a single String input
             // Need more iterations to reliably generate cross-strategy mutations

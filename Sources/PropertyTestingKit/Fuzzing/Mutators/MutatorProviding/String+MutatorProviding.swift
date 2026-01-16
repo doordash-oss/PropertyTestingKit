@@ -52,6 +52,10 @@ extension String: MutatorProviding {
     private static let emojiChars: ContiguousArray<Character> = ContiguousArray(["😀", "🎉", "🚀", "💡", "⚡", "🔥", "✨", "🌟"])
     private static let commonPatterns: ContiguousArray<String> = ["test", "foo", "bar", "hello", "world", "input", "data", "value"]
 
+    // Static arrays for mutation to avoid per-call allocations
+    private static let prefixMutations: [String] = ["SECRET_", "PRIVATE_", "API_", "TOKEN_"]
+    private static let targetLengths: [Int] = [5, 8, 16, 32]
+
     /// Generates a random string from the given character set with minimal allocations.
     /// Uses a single random number to generate multiple character indices.
     @inline(__always)
@@ -84,49 +88,59 @@ extension String: MutatorProviding {
         return AnyMutator(
             seeds: _cachedSeeds,
             mutate: { value in
+                // Pre-allocate with estimated capacity to avoid reallocations
                 var mutations: [String] = []
+                mutations.reserveCapacity(20)
+
+                // Cache count once (O(n) operation for String)
+                let valueCount = value.utf8.count  // Use utf8.count for O(1)
+                let isEmpty = valueCount == 0
 
                 // Length mutations
-                if !value.isEmpty {
+                if !isEmpty {
                     mutations.append(String(value.dropLast()))
                     mutations.append(String(value.dropFirst()))
                 }
                 mutations.append(value + "x")
                 mutations.append("x" + value)
 
-                // Case mutations
-                mutations.append(value.uppercased())
-                mutations.append(value.lowercased())
+                // Case mutations - only if they would differ
+                let upper = value.uppercased()
+                if upper != value { mutations.append(upper) }
+                let lower = value.lowercased()
+                if lower != value { mutations.append(lower) }
 
-                // Character mutations
-                if !value.isEmpty {
-                    var chars = Array(value)
-                    chars[0] = "X"
-                    mutations.append(String(chars))
+                // Character mutations - only for non-empty strings
+                if !isEmpty, let firstChar = value.first, firstChar != "X" {
+                    var result = value
+                    let idx = result.startIndex
+                    result.replaceSubrange(idx...idx, with: "X")
+                    mutations.append(result)
                 }
 
                 // Whitespace mutations
                 mutations.append(value + " ")
                 mutations.append(" " + value)
-                mutations.append(value.trimmingCharacters(in: .whitespaces))
+                let trimmed = value.trimmingCharacters(in: .whitespaces)
+                if trimmed != value { mutations.append(trimmed) }
 
-                // Prefix mutations - try common prefixes
-                for prefix in ["SECRET_", "PRIVATE_", "API_", "TOKEN_"] {
+                // Prefix mutations - use static array to avoid allocations
+                for prefix in prefixMutations {
                     if !value.hasPrefix(prefix) {
                         mutations.append(prefix + value)
                     }
                 }
 
-                // Length-targeted mutations: try to hit common lengths
-                for targetLen in [5, 8, 16, 32] {
-                    if value.count < targetLen {
-                        mutations.append(value + String(repeating: "x", count: targetLen - value.count))
-                    } else if value.count > targetLen && targetLen > 0 {
+                // Length-targeted mutations - use cached count
+                for targetLen in targetLengths {
+                    if valueCount < targetLen {
+                        mutations.append(value + String(repeating: "x", count: targetLen - valueCount))
+                    } else if valueCount > targetLen {
                         mutations.append(String(value.prefix(targetLen)))
                     }
                 }
 
-                return mutations.filter { $0 != value }
+                return mutations
             },
             generate: {
                 cachedRandom { rng in

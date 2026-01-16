@@ -57,23 +57,24 @@ let benchmarks: @Sendable () -> Void = {
             maxIterations: 100
         )
     ) { benchmark in
-        let config = FuzzEngine<String>.Config(
-            maxDuration: .seconds(0.1),
-            corpusMode: .refuzzReplace,
-            plugins: [CoverageGapPlugin()]
-        )
-        let engine = FuzzEngine<String>(mutators: String.defaultMutator, config: config)
         for _ in benchmark.scaledIterations {
-            let result = await engine.run { input in
-                if input.isEmpty {
+            let result = try? await fuzz(
+                duration: .seconds(0.1),
+                corpusMode: .refuzzReplace,
+                plugins: [CoverageGapPlugin()]
+            ) { (i: Int, s: String) in
+                if i < 0 {
+                    blackHole(i.magnitude)
+                }
+                if s.isEmpty {
                     blackHole("empty")
-                } else if input.count > 10 {
-                    blackHole(input.prefix(10))
-                } else {
-                    blackHole(input)
+                } else if s.count > 10 {
+                    blackHole(s.prefix(10))
                 }
             }
-            benchmark.measurement(.custom("Iterations/sec (K)", polarity: .prefersLarger, useScalingFactor: false), result.stats.totalInputs / 100)
+            if let result {
+                benchmark.measurement(.custom("Iterations/sec (K)", polarity: .prefersLarger, useScalingFactor: false), result.stats.totalInputs / 100)
+            }
         }
     }
 }
