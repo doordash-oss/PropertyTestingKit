@@ -24,13 +24,10 @@ public enum CorpusSchema {
         // 1. Number of counters
         // 2. Build timestamp or similar
 
-        guard let counters = coverageCounters.snapshot() else {
-            return "unknown"
-        }
-
         // Simple version: just the counter count
         // In practice, we'd hash more metadata
-        return "v1-\(counters.count)"
+        // TODO: This needs to be implemented so we refuzz less
+        return "v1-0"
     }
 
     /// Check if a schema version is compatible with the current code.

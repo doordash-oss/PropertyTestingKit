@@ -103,21 +103,18 @@ public actor Corpus<each Input: Codable & Sendable>: Sendable {
     @discardableResult
     public func addIfInteresting(
         input: repeat each Input,
-        signature: CoverageSignature,
-        parentIndex: Int? = nil
+        signature: CoverageSignature
     ) -> Bool {
         return addIfInteresting(
             input: (repeat each input),
-            signature: signature,
-            parentIndex: parentIndex
+            signature: signature
         )
     }
 
     @discardableResult
     public func addIfInteresting(
         input: (repeat each Input),
-        signature: CoverageSignature,
-        parentIndex: Int? = nil
+        signature: CoverageSignature
     ) -> Bool {
         // Check if this signature adds new coverage
         guard signature.hasUniqueCoverage(comparedTo: totalCoverage) else {
@@ -126,8 +123,7 @@ public actor Corpus<each Input: Codable & Sendable>: Sendable {
 
         let entry = CorpusEntry(
             input: repeat each input,
-            signature: signature,
-            parentIndex: parentIndex
+            signature: signature
         )
         entries.append(entry)
         totalCoverage.merge(with: signature)
@@ -139,12 +135,10 @@ public actor Corpus<each Input: Codable & Sendable>: Sendable {
     public struct CandidateEntry: Sendable {
         public let input: (repeat each Input)
         public let signature: CoverageSignature
-        public let parentIndex: Int?
 
-        public init(input: (repeat each Input), signature: CoverageSignature, parentIndex: Int?) {
+        public init(input: (repeat each Input), signature: CoverageSignature) {
             self.input = input
             self.signature = signature
-            self.parentIndex = parentIndex
         }
     }
 
@@ -153,7 +147,7 @@ public actor Corpus<each Input: Codable & Sendable>: Sendable {
     /// This method processes all candidates in a single actor call, avoiding
     /// multiple actor boundary crossings. Returns which entries were added.
     ///
-    /// - Parameter candidates: Array of (input, signature, parentIndex) tuples.
+    /// - Parameter candidates: Array of (input, signature) tuples.
     /// - Returns: Array of booleans indicating which candidates were added (in order).
     public func batchAddIfInteresting(_ candidates: [CandidateEntry]) -> [Bool] {
         var results: [Bool] = []
@@ -169,8 +163,7 @@ public actor Corpus<each Input: Codable & Sendable>: Sendable {
 
             let entry = CorpusEntry(
                 input: repeat each candidate.input,
-                signature: candidate.signature,
-                parentIndex: candidate.parentIndex
+                signature: candidate.signature
             )
             entries.append(entry)
             totalCoverage.merge(with: candidate.signature)
@@ -189,31 +182,26 @@ public actor Corpus<each Input: Codable & Sendable>: Sendable {
     public func add(
         input: repeat each Input,
         signature: CoverageSignature,
-        parentIndex: Int? = nil,
         entryType: CorpusEntryType = .coverage,
         failure: FailureInfo? = nil
     ) {
         add(
             input: (repeat each input),
             signature: signature,
-            parentIndex: parentIndex,
             entryType: entryType,
             failure: failure
         )
-
     }
 
     public func add(
         input: (repeat each Input),
         signature: CoverageSignature,
-        parentIndex: Int? = nil,
         entryType: CorpusEntryType = .coverage,
         failure: FailureInfo? = nil
     ) {
         let entry = CorpusEntry(
             input: repeat each input,
             signature: signature,
-            parentIndex: parentIndex,
             entryType: entryType,
             failure: failure
         )
@@ -320,15 +308,6 @@ public actor Corpus<each Input: Codable & Sendable>: Sendable {
         )
     }
 
-    // MARK: - Selection for Mutation
-
-    /// Select an entry for mutation.
-    ///
-    /// Uses uniform random selection from the corpus.
-    public func selectForMutation() -> Int? {
-        guard !entries.isEmpty else { return nil }
-        return entries.indices.randomElement()
-    }
 }
 
 /// Coding keys for Corpus serialization.
@@ -439,13 +418,5 @@ public struct CorpusBatchState<each Input: Codable & Sendable>: Sendable {
         self.isEmpty = isEmpty
         self.count = count
         self.entries = entries
-    }
-
-    /// Select a random entry index for mutation.
-    ///
-    /// Uses uniform random selection from available entries.
-    public func selectForMutation() -> Int? {
-        guard !entries.isEmpty else { return nil }
-        return entries.indices.randomElement()
     }
 }

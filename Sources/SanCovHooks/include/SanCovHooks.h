@@ -12,6 +12,7 @@
 #include <stdint.h>
 #include <stddef.h>
 #include <stdbool.h>
+#include <stdatomic.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -25,10 +26,6 @@ extern "C" {
 /// Check if inline 8-bit counters are available.
 /// Returns true if the binary was compiled with -sanitize-coverage=inline-8bit-counters.
 bool sancov_counters_available(void);
-
-/// Reset all coverage counters to zero.
-/// Safe to call even if counters are not available (no-op).
-void sancov_reset_counters(void);
 
 /// Get the number of instrumented edges (total counter count).
 size_t sancov_get_counter_count(void);
@@ -46,13 +43,12 @@ const uint8_t* sancov_get_counters(void);
 /// If buffer is NULL, returns the required buffer size.
 size_t sancov_snapshot_counters(uint8_t* buffer, size_t buffer_size);
 
-/// Get only the covered (non-zero) counter indices and their values.
+/// Get only the covered (non-zero) counter indices.
 /// Returns the number of entries filled, or if indices is NULL, the count of covered edges.
 /// This is more efficient than snapshot_counters when coverage is sparse.
 /// @param indices Output array of covered edge indices (can be NULL to just get count)
-/// @param counts Output array of counter values (can be NULL if only indices needed)
 /// @param max_entries Maximum number of entries to fill
-size_t sancov_snapshot_covered_indices(uint32_t* indices, uint8_t* counts, size_t max_entries);
+size_t sancov_snapshot_covered_indices(uint32_t* indices, size_t max_entries);
 
 // MARK: - PC-to-Source Mapping API
 // Maps SanCov edge indices to source locations using dladdr.
@@ -105,41 +101,35 @@ size_t sancov_get_covered_locations(SanCovSourceLocation* locations, size_t max_
 // When a measurement context is active, coverage is keyed by the context
 // rather than the Swift task or thread, providing true per-measurement isolation.
 
-/// Begin a measurement context for synchronous coverage isolation.
-/// Returns an opaque context pointer that must be passed to sancov_end_measurement.
+/// Measurement context for coverage isolation.
+/// Uses atomic reference counting to prevent use-after-free when TLS caches
+/// hold references across thread hops in the worker pool model.
+typedef struct {
+    uint8_t* coverage_map;
+    size_t covered_count;
+    _Atomic int refcount;
+} SanCovMeasurementContext;
+
+/// Begin a measurement context for coverage isolation.
 /// Coverage recorded while a context is active will be isolated to that context.
-/// The context takes priority over Swift task and thread-local coverage maps.
-void* sancov_begin_measurement(void);
+SanCovMeasurementContext* sancov_begin_measurement(void);
 
 /// End a measurement context and clean up its resources.
-/// This frees the context and removes its coverage map from the registry.
-/// Must be called with the same context pointer returned by sancov_begin_measurement.
-void sancov_end_measurement(void* context);
+void sancov_end_measurement(SanCovMeasurementContext* context);
 
-// MARK: - Context-Aware API
-// These functions operate directly on a measurement context, bypassing TLS lookup.
-// This is critical for Swift concurrency where tasks can hop between threads.
+/// Create a dummy measurement context for testing purposes.
+/// The returned context is not registered with any task and should only be used with mocks.
+/// Caller is responsible for freeing the returned pointer.
+SanCovMeasurementContext* sancov_create_dummy_context(void);
 
-/// Reset counters for a specific measurement context.
-/// This bypasses TLS lookup by using the context directly.
-/// Much faster than sancov_reset_counters when the context is known.
-void sancov_reset_counters_with_context(void* context);
+/// Get the number of covered edges for a measurement context (O(1)).
+size_t sancov_get_covered_count_with_context(SanCovMeasurementContext* context);
 
-/// Get the counters pointer for a specific measurement context.
-/// Returns the coverage map for the context, or NULL if not found.
-const uint8_t* sancov_get_counters_with_context(void* context);
-
-/// Get covered indices for a specific measurement context.
-/// Same as sancov_snapshot_covered_indices but operates on the given context.
-size_t sancov_snapshot_covered_indices_with_context(void* context, uint32_t* indices, uint8_t* counts, size_t max_entries);
-
-// MARK: - Debug API
-
-/// Get the number of measurement registry failures.
-/// This counts how many times the measurement registry was full when trying to
-/// register a new task→context mapping. If this is non-zero, some measurements
-/// may have received incorrect coverage data due to task hops.
-size_t sancov_get_measurement_registry_failures(void);
+/// Allocate and fill an array of covered edge indices.
+/// Returns a newly allocated array that the caller must free().
+/// Returns NULL if context is NULL or no edges are covered.
+/// Use sancov_get_covered_count_with_context() to get the array size.
+uint32_t* sancov_snapshot_covered_indices_with_context(SanCovMeasurementContext* context);
 
 #ifdef __cplusplus
 }

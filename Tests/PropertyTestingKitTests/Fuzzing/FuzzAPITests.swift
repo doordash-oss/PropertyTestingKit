@@ -21,7 +21,6 @@ struct FuzzAPITests {
 
         // Use live coverage to verify we hit all branches
         let result = await withDependencies {
-            // Use live coverage counters for real coverage detection
             $0.coverageCounters = .liveValue
             $0.corpusPersistence = CorpusPersistenceClient(
                 save: saveFn,
@@ -31,19 +30,17 @@ struct FuzzAPITests {
             )
         } operation: {
             let config = FuzzEngine<String>.Config(
-                maxIterations: 100,
-                maxDuration: .seconds(5),
-                generationRatio: 0.2,
+                maxDuration: .seconds(10),
                 minimizeCorpus: true,
-                verbose: true,
-                stoppingPlugins: [],
-                analysisPlugins: [.coverageGaps()]
+                verbose: true
             )
 
-            let engine = FuzzEngine<String>(config: config, corpusDirectory: corpusDir)
-
-            // Use String directly with domain-specific seeds
-            return await engine.run(additionalSeeds: numberParserSeeds) { input in
+            return await fuzzEngineWithMaxIterations(
+                maxIterations: 100,
+                config: config,
+                corpusDirectory: corpusDir,
+                additionalSeeds: numberParserSeeds
+            ) { input in
                 // Just call parse - coverage will be tracked automatically
                 _ = NumberParser.parse(input)
 
@@ -67,32 +64,6 @@ struct FuzzAPITests {
             print("  \(i + 1). \"\(entry.input)\" → \(parsed.map(String.init) ?? "nil")")
         }
 
-        // Check coverage gap report
-        if let gapReport = result.coverageGapReport {
-            print("\n=== Coverage Gap Report ===")
-            print(gapReport.detailedSummary)
-
-            // Verify NumberParser.parse has 100% coverage (no gaps)
-            let parseGap = gapReport.gaps.first { $0.functionName.contains("NumberParser.parse") }
-
-            if let gap = parseGap {
-                print("\nNumberParser.parse coverage: \(String(format: "%.0f", gap.coveragePercentage))%")
-                print("  Covered edges: \(gap.coveredEdgeCount)/\(gap.totalEdgeCount)")
-                for region in gap.uncoveredRegions {
-                    print("  - Line \(region.lineStart): not covered (edge \(region.edgeIndex))")
-                }
-
-                #expect(
-                    gap.uncoveredRegions.isEmpty,
-                    "NumberParser.parse should have 100% coverage, but has gaps at edges: \(gap.uncoveredRegions.map { $0.edgeIndex })"
-                )
-            } else {
-                print("\nNumberParser.parse: 100% coverage achieved")
-            }
-        } else {
-            print("\nNote: Coverage gap detection not available (requires SanCov instrumentation)")
-        }
-
         #expect(result.failures.isEmpty, "No test errors should occur")
         #expect(saveSpy.callCount == 1, "Corpus should be saved")
     }
@@ -105,7 +76,7 @@ struct FuzzAPITests {
         // Create a registry that always returns "always interesting" corpus clients
         let alwaysInterestingRegistry = AlwaysInterestingCorpusRegistry()
 
-        await withDependencies {
+        let result = await withDependencies {
             $0.corpusPersistence = CorpusPersistenceClient(
                 save: saveFn,
                 load: { _ in Data() },
@@ -117,21 +88,23 @@ struct FuzzAPITests {
             $0.coverageCounters = .liveValue
         } operation: {
             let config = FuzzEngine<String>.Config(
-                maxIterations: 50,
-                maxDuration: .seconds(5),
-                verbose: false,
-                stoppingPlugins: []
+                maxDuration: .seconds(10),
+                verbose: false
             )
 
-            let engine = FuzzEngine<String>(config: config, corpusDirectory: corpusDir)
-            let result = await engine.run(additionalSeeds: numberParserSeeds) { input in
+            return await fuzzEngineWithMaxIterations(
+                maxIterations: 100,
+                config: config,
+                corpusDirectory: corpusDir,
+                additionalSeeds: numberParserSeeds
+            ) { input in
                 _ = NumberParser.parse(input)
             }
-
-            #expect(!result.wasRegression, "First run should be fuzzing mode")
-            #expect(result.corpus.count > 0, "Should have corpus entries")
-            #expect(result.failures.isEmpty, "Should have no failures")
         }
+
+        #expect(!result.wasRegression, "First run should be fuzzing mode")
+        #expect(result.corpus.count > 0, "Should have corpus entries")
+        #expect(result.failures.isEmpty, "Should have no failures")
 
         // Verify corpus was saved
         #expect(saveSpy.callCount == 1, "Corpus should be saved")
@@ -147,10 +120,9 @@ struct FuzzAPITests {
             $0.corpusRegistry = alwaysInterestingRegistry
             $0.environment = EnvironmentClient(environment: { [:] })
         } operation: {
-            try await fuzz(
-                seeds: ["0", "-0", "-1", "abc", String(Int.max)],
-                iterations: 50,
-                duration: .seconds(5)
+            try await fuzzWithMaxIterations(
+                maxIterations: 100,
+                seeds: ["0", "-0", "-1", "abc", String(Int.max)]
             ) { input in
                 let parsed = NumberParser.parse(input)
 
@@ -200,7 +172,6 @@ struct FuzzAPITests {
         } operation: {
             let config: FuzzEngine<String>.Config = .fromEnvironment()
 
-            #expect(config.maxIterations == 500)
             #expect(config.maxDuration == .seconds(30))
             #expect(config.verbose == true)
         }
@@ -213,7 +184,6 @@ struct FuzzAPITests {
         } operation: {
             let config: FuzzEngine<String>.Config = .fromEnvironment()
 
-            #expect(config.maxIterations == 10_000)
             #expect(config.maxDuration == .seconds(60))
             #expect(config.verbose == false)
         }
@@ -232,13 +202,15 @@ struct FuzzAPITests {
             $0.corpusRegistry = alwaysInterestingRegistry
         } operation: {
             let config = FuzzEngine<Bool>.Config(
-                maxIterations: 10,
-                maxDuration: .seconds(5),
+                maxDuration: .seconds(10),
                 verbose: false
             )
 
-            let engine = FuzzEngine<Bool>(config: config)
-            return await engine.run { _ in
+            return await fuzzEngineWithMaxIterations(
+                maxIterations: 100,
+                config: config,
+                additionalSeeds: [true, false]
+            ) { (_: Bool) in
                 // Throw for any input to guarantee a failure
                 throw TestFailure()
             }
@@ -275,7 +247,7 @@ struct FuzzAPITests {
             } operation: {
                 // This will throw because the test always fails
                 // Note: Seeds are required to provide type context for the variadic generic
-                _ = try await fuzz(seeds: [true, false], iterations: 10, duration: .seconds(5)) { _ in
+                _ = try await fuzzWithMaxIterations(maxIterations: 100) { (_: Bool) in
                     throw TestFailure()
                 }
             }
@@ -299,7 +271,7 @@ struct FuzzAPITests {
                 delete: { _ in }
             )
         } operation: {
-            try await fuzz(seeds: ["a", "ab", "abc"], iterations: 20, duration: .seconds(5)) { input in
+            try await fuzzWithMaxIterations(maxIterations: 50, seeds: ["a", "ab", "abc"]) { input in
                 _ = input.count
             }
         }
@@ -316,7 +288,7 @@ struct FuzzAPITests {
         let existingCorpus = Corpus<String>(schemaVersion: await CorpusSchema.currentVersion())
         await existingCorpus.add(
             input: "from_corpus",
-            signature: CoverageSignature(edges: [1])
+            signature: CoverageSignature(edges: Set<UInt32>([1]))
         )
         let corpusSnapshot = await existingCorpus.snapshot()
         let corpusData = try JSONEncoder.corpusEncoder.encode(corpusSnapshot)
@@ -338,7 +310,7 @@ struct FuzzAPITests {
             )
         } operation: {
             // Use seeds that include the corpus entry so it gets tested
-            try await fuzz(seeds: ["from_corpus"], iterations: 20, duration: .seconds(5)) { input in
+            try await fuzzWithMaxIterations(maxIterations: 50, seeds: ["from_corpus"]) { input in
                 await seenInputs.update { $0.append(input) }
             }
         }

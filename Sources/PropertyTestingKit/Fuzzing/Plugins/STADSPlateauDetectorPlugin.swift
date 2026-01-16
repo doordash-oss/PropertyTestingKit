@@ -7,7 +7,9 @@
 
 import Foundation
 
-/// Stopping condition plugin using STADS Good-Turing estimator (Böhme 2018).
+// MARK: - STADS Plugin
+
+/// Stopping condition plugin using STADS Good-Turing estimator.
 ///
 /// Uses statistical principles from species discovery to estimate the
 /// probability of finding new coverage. More principled than simple
@@ -16,58 +18,38 @@ import Foundation
 /// ## Usage
 ///
 /// ```swift
-/// try fuzz(stoppingPlugins: [.stadsDetector()]) { input in ... }
+/// try fuzz(plugins: [.stadsDetector()]) { input in ... }
 /// ```
 ///
 /// ## Reference
 ///
 /// Böhme, M. (2018). "STADS: Software Testing as Species Discovery"
 /// IEEE Transactions on Software Engineering.
-///
-/// For simpler approaches, see ``PlateauDetectorPlugin``.
-/// For saturation-based metrics, see ``SaturationPlateauDetectorPlugin``.
-public struct STADSPlateauDetectorPlugin: StoppingConditionPlugin, @unchecked Sendable {
-    public let id: String = "stadsDetector"
-    public let priority: Int
+public actor STADSPlugin: FuzzPlugin {
+    public let id: String = "stads_detector"
 
     private var detector: STADSPlateauDetector
 
     /// Create a STADS plateau detector plugin.
     ///
-    /// - Parameters:
-    ///   - config: Configuration for STADS detection.
-    ///   - priority: Plugin priority (higher runs first). Default is 100.
-    public init(
-        config: STADSPlateauDetector.Config = .init(),
-        priority: Int = 100
-    ) {
+    /// - Parameter config: Configuration for STADS detection.
+    public init(config: STADSPlateauDetector.Config = .init()) {
         self.detector = STADSPlateauDetector(config: config)
-        self.priority = priority
     }
 
-    public mutating func recordIteration(discoveredNewCoverage: Bool) {
-        detector.record(discoveredNewCoverage: discoveredNewCoverage)
-    }
+    public func handle<each T: Sendable>(event: PluginEvent<repeat each T>) async throws -> [FuzzPluginAction<repeat each T>] {
+        switch event {
+        case let .iteration(context):
+            detector.record(discoveredNewCoverage: context.discoveredNewCoverage)
 
-    public func shouldStop(context: FuzzPluginContext.StoppingContext) -> StoppingDecision {
-        if detector.hasPlateaued {
-            return .stop(reason: "stads_plateau")
+            if detector.hasPlateaued {
+                return [.stop(FuzzPluginAction<repeat each T>.StopAction(reason: .custom("stads_plateau")))]
+            }
+
+            return []
+        default:
+            return []
         }
-        return .continue
-    }
-
-    public func stats() -> StoppingConditionStats {
-        let stadsStats = detector.stats()
-        return StoppingConditionStats(
-            pluginId: id,
-            hasTriggered: detector.hasPlateaued,
-            details: [
-                "discoveryProbability": String(format: "%.6f", stadsStats.discoveryProbability),
-                "singletonCount": String(stadsStats.singletonCount),
-                "totalDiscoveries": String(stadsStats.totalDiscoveries),
-                "lowProbabilityChecks": String(stadsStats.lowProbabilityChecks)
-            ]
-        )
     }
 
     /// Get the underlying STADS detection statistics.
@@ -78,7 +60,7 @@ public struct STADSPlateauDetectorPlugin: StoppingConditionPlugin, @unchecked Se
 
 // MARK: - Convenience Constructor
 
-extension StoppingConditionPlugin where Self == STADSPlateauDetectorPlugin {
+extension FuzzPlugin where Self == STADSPlugin {
     /// Create a STADS plateau detector stopping condition plugin.
     ///
     /// Uses the Good-Turing estimator to estimate the probability of
@@ -93,8 +75,8 @@ extension StoppingConditionPlugin where Self == STADSPlateauDetectorPlugin {
         minDiscoveryProbability: Double = 0.001,
         confirmationChecks: Int = 3,
         checkInterval: Int = 100
-    ) -> STADSPlateauDetectorPlugin {
-        STADSPlateauDetectorPlugin(
+    ) -> STADSPlugin {
+        STADSPlugin(
             config: .init(
                 minDiscoveryProbability: minDiscoveryProbability,
                 confirmationChecks: confirmationChecks,
@@ -109,7 +91,7 @@ extension StoppingConditionPlugin where Self == STADSPlateauDetectorPlugin {
     /// - Returns: A configured STADS plateau detector plugin.
     public static func stadsDetector(
         config: STADSPlateauDetector.Config
-    ) -> STADSPlateauDetectorPlugin {
-        STADSPlateauDetectorPlugin(config: config)
+    ) -> STADSPlugin {
+        STADSPlugin(config: config)
     }
 }

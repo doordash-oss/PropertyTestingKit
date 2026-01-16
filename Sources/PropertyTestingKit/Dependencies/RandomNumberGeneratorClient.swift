@@ -2,50 +2,56 @@
 //  RandomNumberGeneratorClient.swift
 //  PropertyTestingKit
 //
-//  Wrapper around withRandomNumberGenerator that uses live value in tests by default.
+//  Lock-free random number generation following swift-gen's approach.
 //
 
 import Dependencies
 
 /// Dependency client for random number generation.
 ///
-/// This wraps the `withRandomNumberGenerator` dependency from swift-dependencies
-/// but uses the live (system) random number generator as the test value by default.
-/// This avoids requiring every test to inject a random number generator.
+/// Uses a lock-free approach where each call creates a fresh RNG instance.
+/// This eliminates lock contention in concurrent fuzzing workloads.
 ///
-/// Tests that need deterministic randomness can override with a seeded generator:
+/// For deterministic testing, inject a factory that creates seeded generators:
 /// ```swift
 /// withDependencies {
-///     $0.random = RandomNumberGeneratorClient(SeededRandomNumberGenerator(seed: 42))
+///     $0.random = RandomNumberGeneratorClient { SeededRandomNumberGenerator(seed: 42) }
 /// } operation: {
-///     // deterministic random behavior
+///     // deterministic random behavior (note: each call gets a fresh seeded generator)
 /// }
 /// ```
 public struct RandomNumberGeneratorClient: Sendable {
-    private let generator: LockIsolated<any RandomNumberGenerator & Sendable>
+    private let makeGenerator: @Sendable () -> any RandomNumberGenerator & Sendable
 
-    public init(_ generator: some RandomNumberGenerator & Sendable) {
-        self.generator = LockIsolated(generator)
+    /// Initialize with a generator factory.
+    /// The factory is called each time randomness is needed, creating a fresh instance.
+    public init(_ makeGenerator: @escaping @Sendable () -> any RandomNumberGenerator & Sendable) {
+        self.makeGenerator = makeGenerator
     }
 
-    /// Execute a closure with access to the random number generator.
+    /// Convenience initializer that creates a factory returning the system RNG.
+    public init() {
+        self.makeGenerator = { SystemRandomNumberGenerator() }
+    }
+
+    /// Execute a closure with access to a fresh random number generator.
+    /// Each call gets its own RNG instance - no locks, no shared state.
     public func callAsFunction<R: Sendable>(
         _ work: @Sendable (inout any RandomNumberGenerator & Sendable) -> R
     ) -> R {
-        generator.withValue { rng in
-            work(&rng)
-        }
+        var rng = makeGenerator()
+        return work(&rng)
     }
 }
 
 // MARK: - Dependency Key
 
 extension RandomNumberGeneratorClient: DependencyKey {
-    /// Live value uses the system random number generator.
-    public static let liveValue = RandomNumberGeneratorClient(SystemRandomNumberGenerator())
+    /// Live value creates a fresh SystemRandomNumberGenerator for each call.
+    public static let liveValue = RandomNumberGeneratorClient()
 
-    /// Test value also uses the system random number generator by default.
-    /// This avoids requiring tests to inject a generator unless they need determinism.
+    /// Test value also uses system randomness by default.
+    /// Override with a seeded generator factory for deterministic tests.
     public static let testValue = liveValue
 }
 
@@ -53,7 +59,7 @@ extension DependencyValues {
     /// Random number generator client.
     ///
     /// Uses system randomness by default in both live and test contexts.
-    /// Override with a seeded generator for deterministic tests.
+    /// Each call gets a fresh RNG instance - no lock overhead.
     public var random: RandomNumberGeneratorClient {
         get { self[RandomNumberGeneratorClient.self] }
         set { self[RandomNumberGeneratorClient.self] = newValue }

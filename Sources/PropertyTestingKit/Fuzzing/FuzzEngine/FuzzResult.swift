@@ -22,39 +22,18 @@ public struct FuzzResult<each Input: Codable & Sendable>: Sendable {
     /// Inputs that had different coverage than expected (regression only).
     public let coverageChanges: [(input: (repeat each Input), expected: CoverageSignature, actual: CoverageSignature)]
 
-    /// Reports from analysis plugins.
-    public let analysisReports: [AnyAnalysisReport]
-
-    /// Shrinking statistics for each failure (parallel array with failures).
-    /// Only populated if shrinking was performed.
-    public let shrinkingStats: [ShrinkStats]
-
     public init(
         corpus: CorpusSnapshot<repeat each Input>,
         failures: [(input: (repeat each Input), error: Error)],
         stats: FuzzStats,
         wasRegression: Bool,
-        coverageChanges: [(input: (repeat each Input), expected: CoverageSignature, actual: CoverageSignature)],
-        analysisReports: [AnyAnalysisReport] = [],
-        shrinkingStats: [ShrinkStats] = []
+        coverageChanges: [(input: (repeat each Input), expected: CoverageSignature, actual: CoverageSignature)]
     ) {
         self.corpus = corpus
         self.failures = failures
         self.stats = stats
         self.wasRegression = wasRegression
         self.coverageChanges = coverageChanges
-        self.analysisReports = analysisReports
-        self.shrinkingStats = shrinkingStats
-    }
-
-    /// Get a specific analysis report by plugin ID.
-    public func analysisReport<R>(for pluginId: String, as type: R.Type) -> R? {
-        analysisReports.first { $0.pluginId == pluginId }?.report(as: type)
-    }
-
-    /// Get the coverage gap report if gap detection was enabled.
-    public var coverageGapReport: CoverageGapReport? {
-        analysisReport(for: "coverageGaps", as: CoverageGapReport.self)
     }
 }
 
@@ -62,9 +41,6 @@ public struct FuzzResult<each Input: Codable & Sendable>: Sendable {
 public struct FuzzStats: Sendable {
     /// Total inputs tested.
     public let totalInputs: Int
-
-    /// New coverage paths discovered.
-    public let newPaths: Int
 
     /// Number of mutations performed.
     public let mutations: Int
@@ -83,44 +59,49 @@ public struct FuzzStats: Sendable {
     /// Why fuzzing stopped.
     public let stopReason: StopReason
 
-    /// Plateau detection statistics (if available).
-    public let plateauStats: PlateauStats?
-
     /// Number of inputs that caused test failures.
     public let failures: Int
 
-    /// Number of inputs that timed out (potential hangs).
-    public let hangs: Int
-
     /// Reason for stopping the fuzz run.
-    public enum StopReason: String, Sendable {
-        case iterationLimit = "iteration_limit"
-        case timeLimit = "time_limit"
-        case coveragePlateau = "coverage_plateau"
-        case regression = "regression"
-        case noSeedsAvailable = "no_seeds_available"
+    public enum StopReason: RawRepresentable, Sendable {
+        case timeLimit
+        case regression
+        case noSeedsAvailable
+        case custom(String)
+
+        public init?(rawValue: String) {
+            switch rawValue {
+            case "time_limit": self = .timeLimit
+            case "regression": self = .regression
+            case "no_seeds_available": self = .noSeedsAvailable
+            default: self = .custom(rawValue)
+            }
+        }
+
+        public var rawValue: String {
+            switch self {
+            case .timeLimit: "time_limit"
+            case .regression: "regression"
+            case .noSeedsAvailable: "no_seeds_available"
+            case let .custom(reason): reason
+            }
+        }
     }
 
     public init(
         totalInputs: Int,
-        newPaths: Int,
         mutations: Int,
         generations: Int,
         duration: TimeInterval,
-        stopReason: StopReason = .iterationLimit,
-        plateauStats: PlateauStats? = nil,
+        stopReason: StopReason = .timeLimit,
         failures: Int = 0,
-        hangs: Int = 0
     ) {
         self.totalInputs = totalInputs
-        self.newPaths = newPaths
         self.mutations = mutations
         self.generations = generations
         self.duration = duration
         self.stopReason = stopReason
-        self.plateauStats = plateauStats
         self.failures = failures
-        self.hangs = hangs
     }
 }
 
@@ -130,19 +111,17 @@ extension FuzzResult {
 
         let emptySnapshot = CorpusSnapshot<repeat each Input>(
             entries: [],
-            schemaVersion: CorpusSchema.currentVersion(),
+            schemaVersion: "",
             createdAt: dateClient.now(),
             updatedAt: dateClient.now(),
             totalCoverage: CoverageSignature(edges: [])
         )
         let emptyStats = FuzzStats(
             totalInputs: 0,
-            newPaths: 0,
             mutations: 0,
             generations: 0,
             duration: 0,
             stopReason: .regression,
-            plateauStats: nil
         )
         return FuzzResult(
             corpus: emptySnapshot,

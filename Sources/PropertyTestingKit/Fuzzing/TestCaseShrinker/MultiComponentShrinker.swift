@@ -26,6 +26,7 @@ struct MultiComponentShrinker: Sendable {
     /// a candidate for one component, the other components retain their current
     /// (possibly already shrunk) values. This ensures the failure condition is
     /// preserved throughout the shrinking process.
+    // TODO: make this use parameter packs like we did in FuzzEngine
     public func shrink<each T: Sendable>(
         input: (repeat each T),
         test: @escaping ((repeat each T)) async -> ShrinkResult

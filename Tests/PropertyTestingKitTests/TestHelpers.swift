@@ -1,0 +1,175 @@
+//
+//  TestHelpers.swift
+//  PropertyTestingKitTests
+//
+//  Shared test utilities for PropertyTestingKit tests.
+//
+
+import Testing
+import Foundation
+import Clocks
+import Dependencies
+@testable import PropertyTestingKit
+
+/// Runs a fuzz test with a controlled number of iterations using a test clock.
+///
+/// This helper advances a test clock after each iteration, making tests deterministic
+/// and fast since they don't wait for real time to pass.
+///
+/// - Parameters:
+///   - maxIterations: The maximum number of iterations to run before the clock triggers timeout.
+///   - seeds: Initial seed values for fuzzing.
+///   - duration: The virtual duration (defaults to 60 seconds, but clock is advanced to complete in maxIterations).
+///   - corpusMode: How to handle existing corpus files.
+///   - plugins: Additional plugins to use during fuzzing.
+///   - filePath: Source file path for error reporting.
+///   - function: Function name for error reporting.
+///   - line: Line number for error reporting.
+///   - test: The test closure to run for each input.
+/// - Returns: The fuzz result containing corpus, failures, and stats.
+func fuzzWithMaxIterations<each Input: MutatorProviding & Codable & Sendable>(
+    maxIterations: Int,
+    seeds: [(repeat each Input)] = [],
+    duration: Duration = .seconds(60),
+    corpusMode: CorpusMode? = nil,
+    plugins: [any FuzzPlugin] = [],
+    filePath: StaticString = #filePath,
+    function: StaticString = #function,
+    line: Int = #line,
+    test: @escaping @Sendable ((repeat each Input)) async throws -> Void
+) async throws -> FuzzResult<repeat each Input> {
+    let advancement = 10.0 / Double(maxIterations)
+    let testClock = TestClock()
+    // Track virtual time for DateClient (SyncBox for sync access from @Sendable closure)
+    let virtualTime = SyncBox<TimeInterval>(0)
+    let startDate = Date()
+    return try await withDependencies({
+        // FuzzEngine uses continuousClockClient for timeout
+        $0.continuousClockClient = testClock
+        // FuzzStateMachine uses dateClient to check elapsed time
+        $0.dateClient = DateClient(now: {
+            startDate.addingTimeInterval(virtualTime.value)
+        })
+    }, operation: {
+        try await fuzz(
+            seeds: seeds,
+            duration: .seconds(10),
+            corpusMode: corpusMode,
+            plugins: plugins,
+            filePath: filePath,
+            function: function,
+            line: line,
+            test: { input in
+                defer {
+                    virtualTime.update { $0 += advancement }
+                }
+                try await test(input)
+            }
+        )
+    })
+}
+
+/// Runs a FuzzEngine with a controlled number of iterations using a test clock.
+///
+/// This helper advances a test clock after each iteration, making tests deterministic
+/// and fast since they don't wait for real time to pass.
+///
+/// - Parameters:
+///   - maxIterations: The maximum number of iterations to run before the clock triggers timeout.
+///   - config: Optional custom config. If nil, uses default config with test clock duration.
+///   - corpusDirectory: Optional corpus directory for persistence.
+///   - additionalSeeds: Additional seed values for fuzzing.
+///   - test: The test closure to run for each input.
+/// - Returns: The fuzz result containing corpus, failures, and stats.
+func fuzzEngineWithMaxIterations<each Input: MutatorProviding & Codable & Sendable>(
+    maxIterations: Int,
+    config: FuzzEngine<repeat each Input>.Config? = nil,
+    corpusDirectory: URL? = nil,
+    additionalSeeds: [(repeat each Input)] = [],
+    test: @escaping @Sendable ((repeat each Input)) async throws -> Void
+) async -> FuzzResult<repeat each Input> {
+    let advancement = 10.0 / Double(maxIterations)
+    let testClock = TestClock()
+    // Track virtual time for DateClient (SyncBox for sync access from @Sendable closure)
+    let virtualTime = SyncBox<TimeInterval>(0)
+    let startDate = Date()
+    return await withDependencies({
+        // FuzzEngine uses continuousClockClient for timeout
+        $0.continuousClockClient = testClock
+        // FuzzStateMachine uses dateClient to check elapsed time
+        $0.dateClient = DateClient(now: {
+            startDate.addingTimeInterval(virtualTime.value)
+        })
+    }, operation: {
+        let effectiveConfig = config ?? FuzzEngine<repeat each Input>.Config(maxDuration: .seconds(10))
+        let engine = FuzzEngine<repeat each Input>(
+            mutators: (repeat (each Input).defaultMutator),
+            config: effectiveConfig,
+            corpusDirectory: corpusDirectory
+        )
+        return await engine.run(additionalSeeds: additionalSeeds) { input in
+            defer {
+                virtualTime.update { $0 += advancement }
+            }
+            try await test(input)
+        }
+    })
+}
+
+/// Runs a fuzz test with custom mutators and a controlled number of iterations using a test clock.
+///
+/// This helper is for tests that use `fuzz(using:...)` with custom mutator strategies.
+///
+/// - Parameters:
+///   - maxIterations: The maximum number of iterations to run before the clock triggers timeout.
+///   - mutators: The custom mutators to use for fuzzing.
+///   - seeds: Initial seed values for fuzzing.
+///   - corpusMode: How to handle existing corpus files.
+///   - plugins: Additional plugins to use during fuzzing.
+///   - filePath: Source file path for error reporting.
+///   - function: Function name for error reporting.
+///   - line: Line number for error reporting.
+///   - test: The test closure to run for each input.
+/// - Returns: The fuzz result containing corpus, failures, and stats.
+func fuzzWithMaxIterations<each Input: Codable & Sendable, each M: Mutator>(
+    maxIterations: Int,
+    using mutators: repeat each M,
+    seeds: [(repeat each Input)] = [],
+    corpusMode: CorpusMode? = nil,
+    plugins: [any FuzzPlugin] = [],
+    filePath: StaticString = #filePath,
+    function: StaticString = #function,
+    line: Int = #line,
+    test: @escaping @Sendable ((repeat each Input)) async throws -> Void
+) async throws -> FuzzResult<repeat each Input> where (repeat (each M).Value) == (repeat each Input) {
+    let advancement = 10.0 / Double(maxIterations)
+    let testClock = TestClock()
+    // Track virtual time for DateClient (SyncBox for sync access from @Sendable closure)
+    let virtualTime = SyncBox<TimeInterval>(0)
+    let startDate = Date()
+    return try await withDependencies({
+        // FuzzEngine uses continuousClockClient for timeout
+        $0.continuousClockClient = testClock
+        // FuzzStateMachine uses dateClient to check elapsed time
+        $0.dateClient = DateClient(now: {
+            startDate.addingTimeInterval(virtualTime.value)
+        })
+    }, operation: {
+        try await fuzz(
+            using: repeat each mutators,
+            seeds: seeds,
+            duration: .seconds(10),
+            corpusMode: corpusMode,
+            plugins: plugins,
+            filePath: filePath,
+            function: function,
+            line: line,
+            test: { input in
+                defer {
+                    virtualTime.update { $0 += advancement }
+                }
+                try await test(input)
+            }
+        )
+    })
+}

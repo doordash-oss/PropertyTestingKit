@@ -4,20 +4,20 @@ import Dependencies
 import FunctionSpy
 @testable import PropertyTestingKit
 
-@Suite("Custom Fuzzable Types")
-struct CustomFuzzableTests {
+@Suite("Custom MutatorProviding Types")
+struct CustomMutatorProvidingTests {
 
-    @Test("Custom struct generates fuzz values")
-    func testCustomFuzzable() async {
-        let values = TestConfig.fuzz
+    @Test("Custom struct generates seed values")
+    func testCustomMutatorProviding() async {
+        let values = TestConfig.defaultMutator.seeds
         #expect(!values.isEmpty)
-        print("TestConfig.fuzz generated \(values.count) values")
+        print("TestConfig.defaultMutator.seeds generated \(values.count) values")
     }
 
     @Test("Custom struct mutations work")
     func testCustomMutation() async {
         let original = TestConfig(timeout: 10, retries: 3)
-        let mutations = original.mutate()
+        let mutations = TestConfig.defaultMutator.mutate(original)
 
         #expect(!mutations.isEmpty)
         #expect(mutations.allSatisfy { $0 != original })
@@ -34,15 +34,7 @@ struct CustomFuzzableTests {
         let result = await withDependencies {
             $0.corpusRegistry = alwaysInterestingRegistry
         } operation: {
-            let config = FuzzEngine<TestConfig>.Config(
-                maxIterations: 30,
-                maxDuration: .seconds(5),
-                verbose: false
-            )
-
-            let engine = FuzzEngine<TestConfig>(config: config, corpusDirectory: nil)
-
-            return await engine.run { input in
+            await fuzzEngineWithMaxIterations(maxIterations: 50) { (input: TestConfig) in
                 await seenTimeouts.update { $0.insert(input.timeout) }
                 await seenRetries.update { $0.insert(input.retries) }
             }
@@ -58,34 +50,33 @@ struct CustomFuzzableTests {
 }
 
 
-// MARK: - Codable Fuzzable Types for Testing
+// MARK: - Codable MutatorProviding Types for Testing
 
-struct TestConfig: Fuzzable, Codable, Equatable, Sendable {
+struct TestConfig: MutatorProviding, Codable, Equatable, Sendable {
     let timeout: Int
     let retries: Int
 
-    static var fuzz: [TestConfig] {
+    static var defaultMutator: AnyMutator<TestConfig> {
         // Generate a small set of test configurations
-        let timeouts = Array(Int.fuzz.prefix(3))
+        let timeouts = Array(Int.defaultMutator.seeds.prefix(3))
         let retries = [0, 1, 3]
 
-        var configs: [TestConfig] = []
+        var seeds: [TestConfig] = []
         for t in timeouts {
             for r in retries {
-                configs.append(TestConfig(timeout: t, retries: r))
+                seeds.append(TestConfig(timeout: t, retries: r))
             }
         }
-        return configs
-    }
 
-    func mutate() -> [TestConfig] {
-        var mutations: [TestConfig] = []
-        for t in timeout.mutate().prefix(2) {
-            mutations.append(TestConfig(timeout: t, retries: retries))
+        return AnyMutator(seeds: seeds) { value in
+            var mutations: [TestConfig] = []
+            for t in Int.defaultMutator.mutate(value.timeout).prefix(2) {
+                mutations.append(TestConfig(timeout: t, retries: value.retries))
+            }
+            for r in Int.defaultMutator.mutate(value.retries).prefix(2) {
+                mutations.append(TestConfig(timeout: value.timeout, retries: r))
+            }
+            return mutations
         }
-        for r in retries.mutate().prefix(2) {
-            mutations.append(TestConfig(timeout: timeout, retries: r))
-        }
-        return mutations
     }
 }

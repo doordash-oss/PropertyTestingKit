@@ -12,43 +12,33 @@ import Dependencies
 import FunctionSpy
 @testable import PropertyTestingKit
 
-/// Helper to create a mock CoverageCountersClient with both snapshot and snapshotCoveredArrays.
+/// Helper to create a mock CoverageCountersClient with coverage data.
 private func makeMockCoverageClient(
     countersGenerator: @escaping @Sendable () -> [UInt64]
 ) -> CoverageCountersClient {
-    // Create the snapshotCoveredArrays closure once so we can reuse it
-    let snapshotCoveredArraysClosure: @Sendable () -> SparseCoverage? = {
-        let counters = countersGenerator()
-        var indices: [UInt32] = []
-        var counts: [UInt8] = []
-        for (index, count) in counters.enumerated() where count > 0 {
-            indices.append(UInt32(index))
-            counts.append(UInt8(min(count, UInt64(UInt8.max))))
-        }
-        return SparseCoverage(indices: indices, counts: counts)
-    }
-
     return CoverageCountersClient(
-        snapshot: {
-            let counters = countersGenerator()
-            return SanCovCounters(counters: counters)
-        },
-        snapshotCoveredArrays: snapshotCoveredArraysClosure,
         isAvailable: { true },
         beginMeasurement: { SanCovCounters.MeasurementContext.testInstance() },
         endMeasurement: { _ in },
-        snapshotCoveredArraysWithContext: { _ in snapshotCoveredArraysClosure() }
+        snapshotCoveredArraysWithContext: { _ in
+            let counters = countersGenerator()
+            var indices: [UInt32] = []
+            for (index, count) in counters.enumerated() where count > 0 {
+                indices.append(UInt32(index))
+            }
+            return SparseCoverage(indices: indices)
+        }
     )
 }
 
-/// A minimal Fuzzable type with a single seed for predictable test behavior.
-private struct SingleSeedInt: Fuzzable, Codable, Sendable, Equatable {
+/// A minimal MutatorProviding type with a single seed for predictable test behavior.
+private struct SingleSeedInt: MutatorProviding, Codable, Sendable, Equatable {
     let value: Int
 
-    static var fuzz: [SingleSeedInt] { [SingleSeedInt(value: 0)] }
-
-    func mutate() -> [SingleSeedInt] {
-        [SingleSeedInt(value: value + 1)]
+    static var defaultMutator: AnyMutator<SingleSeedInt> {
+        AnyMutator(seeds: [SingleSeedInt(value: 0)]) { current in
+            [SingleSeedInt(value: current.value + 1)]
+        }
     }
 }
 
@@ -75,22 +65,21 @@ struct DeterministicTimingTests {
                 }
             } operation: {
                 let config = FuzzEngine<SingleSeedInt>.Config(
-                    maxIterations: 1000,
                     maxDuration: .seconds(10),
-                    verbose: false,
-                    mutationBatchSize: 1  // Use batch size 1 for precise time limit testing
+                    verbose: false
                 )
 
-                let engine = FuzzEngine<SingleSeedInt>(config: config, corpusDirectory: nil)
+                let engine = FuzzEngine<SingleSeedInt>(mutators: SingleSeedInt.defaultMutator, config: config, corpusDirectory: nil)
                 return await engine.run { _ in
                     // Advance time by 11 seconds each test (exceeds 10s limit after first test)
                     currentTime.update { $0 = $0.addingTimeInterval(11) }
                 }
             }
 
-            // With 11s per test and 10s limit, should stop after very few tests
+            // With 11s per test and 10s limit, should stop early due to time limit
+            // Note: With worker pool parallelism, multiple workers may process inputs
+            // before the time check runs, so we can't strictly bound iteration count
             #expect(result.stats.stopReason == FuzzStats.StopReason.timeLimit)
-            #expect(result.stats.totalInputs <= 10, "Should stop early due to time limit")
             #expect(result.stats.duration >= 10, "Duration should exceed time limit")
         }
 
@@ -109,12 +98,11 @@ struct DeterministicTimingTests {
                 }
             } operation: {
                 let config = FuzzEngine<SingleSeedInt>.Config(
-                    maxIterations: 5,
                     maxDuration: .seconds(100),
                     verbose: false
                 )
 
-                let engine = FuzzEngine<SingleSeedInt>(config: config, corpusDirectory: nil)
+                let engine = FuzzEngine<SingleSeedInt>(mutators: SingleSeedInt.defaultMutator, config: config, corpusDirectory: nil)
                 return await engine.run { _ in
                     // Advance time by exactly 2.5 seconds each test
                     testCount.update { $0 += 1 }
@@ -127,36 +115,6 @@ struct DeterministicTimingTests {
             #expect(result.stats.duration == expectedDuration, "Duration should match total inputs * time per test")
         }
 
-        @Test("FuzzEngine prefers iteration limit over time limit when iterations complete first")
-        func testIterationLimitBeforeTimeLimit() async {
-            let currentTime = SyncBox(Date(timeIntervalSince1970: 0))
-
-            let result = await withDependencies {
-                $0.dateClient = DateClient(now: { currentTime.value })
-                $0.coverageCounters = makeMockCoverageClient {
-                    var counters = [UInt64](repeating: 0, count: 100)
-                    let timeIndex = Int(currentTime.value.timeIntervalSince1970) % 100
-                    counters[timeIndex] = UInt64(timeIndex + 1)
-                    return counters
-                }
-            } operation: {
-                let config = FuzzEngine<SingleSeedInt>.Config(
-                    maxIterations: 5,
-                    maxDuration: .seconds(1000),  // Very long time limit
-                    verbose: false
-                )
-
-                let engine = FuzzEngine<SingleSeedInt>(config: config, corpusDirectory: nil)
-                return await engine.run { _ in
-                    // Only advance 1 second per test
-                    currentTime.update { $0 = $0.addingTimeInterval(1) }
-                }
-            }
-
-            #expect(result.stats.stopReason == FuzzStats.StopReason.iterationLimit)
-            // Duration = totalInputs * 1 second
-            #expect(result.stats.duration == Double(result.stats.totalInputs))
-        }
     }
 
     // MARK: - TestCaseShrinker Timeout Tests
@@ -569,134 +527,6 @@ struct DeterministicTimingTests {
             } catch {
                 Issue.record("Unexpected error type: \(error)")
             }
-        }
-    }
-
-    // MARK: - FuzzEngine Per-Input Timeout Tests
-
-    @Suite("FuzzEngine Per-Input Timeout")
-    struct FuzzEnginePerInputTimeoutTests {
-
-        @Test("cancels slow inputs")
-        func testFuzzEnginePerInputTimeout() async {
-            let testClock = TestClock()
-            let inputsTested = SyncBox<[Int]>([])
-            let inputsCompleted = SyncBox<[Int]>([])
-
-            async let result = withDependencies {
-                $0.coverageCounters = makeMockCoverageClient {
-                    [UInt64](repeating: 1, count: 100)
-                }
-                $0.continuousClockClient = testClock
-            } operation: {
-                let config = FuzzEngine<Int>.Config(
-                    maxIterations: 3,
-                    maxDuration: .seconds(300),
-                    verbose: false,
-                    perInputTimeout: .seconds(1)
-                )
-
-                let engine = FuzzEngine<Int>(config: config, corpusDirectory: nil)
-                return await engine.run { input in
-                    inputsTested.update { $0.append(input) }
-                    // All inputs try to sleep longer than timeout
-                    try await Task.sleep(for: .seconds(100))
-                    inputsCompleted.update { $0.append(input) }
-                }
-            }
-
-            // Wait for first input to be tested
-            while inputsTested.value.isEmpty {
-                await Task.yield()
-            }
-
-            // Advance clock past the per-input timeout multiple times
-            // to allow the fuzzer to process multiple inputs
-            for _ in 0..<10 {
-                await testClock.advance(by: .seconds(2))
-                await Task.yield()
-            }
-
-            let finalResult = await result
-
-            #expect(finalResult.stats.totalInputs > 0, "Should have tested inputs")
-            #expect(!inputsTested.value.isEmpty, "Should have started testing inputs")
-            // All inputs should timeout since they sleep for 100s but timeout is 1s
-            #expect(inputsCompleted.value.isEmpty, "All inputs should timeout")
-        }
-
-        @Test("allows all inputs to complete without perInputTimeout")
-        func testNoTimeoutAllowsAllInputs() async {
-            let completedInputs = SyncBox(0)
-
-            let result = await withDependencies {
-                $0.coverageCounters = makeMockCoverageClient {
-                    var counters = [UInt64](repeating: 0, count: 100)
-                    counters[completedInputs.value % 100] = 1
-                    return counters
-                }
-                // No clock override needed - perInputTimeout is nil so clock isn't used
-            } operation: {
-                let config = FuzzEngine<Int>.Config(
-                    maxIterations: 3,
-                    maxDuration: .seconds(30),
-                    verbose: false,
-                    perInputTimeout: nil  // No timeout
-                )
-
-                let engine = FuzzEngine<Int>(config: config, corpusDirectory: nil)
-                return await engine.run { _ in
-                    completedInputs.update { $0 += 1 }
-                }
-            }
-
-            #expect(completedInputs.value > 0, "All tests should complete without timeout")
-            #expect(result.stats.totalInputs > 0)
-        }
-
-        @Test("only affects slow inputs")
-        func testTimeoutOnlyAffectsSlowInputs() async {
-            let testClock = TestClock()
-            let fastCompleted = SyncBox(0)
-            let slowStarted = SyncBox(0)
-
-            async let result = withDependencies {
-                $0.coverageCounters = makeMockCoverageClient {
-                    [UInt64](repeating: 1, count: 100)
-                }
-                $0.continuousClockClient = testClock
-            } operation: {
-                let config = FuzzEngine<Int>.Config(
-                    maxIterations: 5,
-                    maxDuration: .seconds(300),
-                    verbose: false,
-                    perInputTimeout: .seconds(1)
-                )
-
-                let engine = FuzzEngine<Int>(config: config, corpusDirectory: nil)
-                return await engine.run { input in
-                    if input == 0 {
-                        // Fast input - completes immediately
-                        fastCompleted.update { $0 += 1 }
-                    } else {
-                        // Slow inputs - will timeout
-                        slowStarted.update { $0 += 1 }
-                        try await Task.sleep(for: .seconds(100))
-                    }
-                }
-            }
-
-            // Advance clock to trigger timeouts for slow inputs
-            for _ in 0..<10 {
-                await testClock.advance(by: .seconds(2))
-                await Task.yield()
-            }
-
-            let finalResult = await result
-
-            #expect(finalResult.stats.totalInputs > 0, "Should have tested inputs")
-            // Input 0 should complete since it's fast (doesn't await the clock)
-            #expect(fastCompleted.value >= 1, "Fast input (0) should complete")
         }
     }
 }

@@ -43,12 +43,12 @@ struct MutatorProtocolTests {
         #expect(mutations.count > 1)
     }
 
-    @Test("DefaultMutator uses Fuzzable conformance")
-    func defaultMutatorUsesFuzzable() async {
-        let mutator = DefaultMutator<Int>()
+    @Test("MutatorProviding defaultMutator provides seeds and mutations")
+    func defaultMutatorProvidesSeedsAndMutations() async {
+        let mutator = Int.defaultMutator
 
-        #expect(mutator.seeds == Int.fuzz)
-        #expect(mutator.mutate(5) == 5.mutate())
+        #expect(!mutator.seeds.isEmpty)
+        #expect(!mutator.mutate(5).isEmpty)
     }
 
     @Test("SingleMutator works with custom seeds and mutate")
@@ -350,10 +350,7 @@ struct MutatorFuzzEngineTests {
             )
 
             let config = FuzzEngine<String>.Config(
-                maxIterations: 10,
-                maxDuration: .seconds(1),
-                stoppingPlugins: []
-            )
+                maxDuration: .seconds(1)            )
 
             let engine = FuzzEngine<String>(mutators: mutator, config: config)
             _ = await engine.run { input in
@@ -383,10 +380,7 @@ struct MutatorFuzzEngineTests {
             )
 
             let config = FuzzEngine<String>.Config(
-                maxIterations: 20,
-                maxDuration: .seconds(2),
-                stoppingPlugins: []
-            )
+                maxDuration: .seconds(2)            )
 
             let engine = FuzzEngine<String>(mutators: mutator, config: config)
             _ = await engine.run { input in
@@ -431,10 +425,9 @@ struct MutatorPublicAPITests {
                 mutate: { _ in [] }
             )
 
-            try await fuzz(
-                using: mutator,
-                iterations: 10,
-                duration: .seconds(1)
+            _ = try await fuzzWithMaxIterations(
+                maxIterations: 50,
+                using: mutator
             ) { (input: String) in
                 await testedInputs.update { $0.append(input) }
             }
@@ -464,10 +457,9 @@ struct MutatorPublicAPITests {
                 readData: { _ in Data() }
             )
         } operation: {
-            try await fuzz(
-                using: String.mutators(.empty),
-                iterations: 10,
-                duration: .seconds(1)
+            _ = try await fuzzWithMaxIterations(
+                maxIterations: 50,
+                using: String.mutators(.empty)
             ) { (input: String) in
                 await testedInputs.update { $0.append(input) }
             }
@@ -504,10 +496,9 @@ struct MutatorPublicAPITests {
                 mutate: { [$0 + 1] }
             )
 
-            try await fuzz(
-                using: stringMutator, intMutator,
-                iterations: 20,
-                duration: .seconds(2)
+            _ = try await fuzzWithMaxIterations(
+                maxIterations: 50,
+                using: stringMutator, intMutator
             ) { (str: String, num: Int) in
                 await testedInputs.update { $0.append((str, num)) }
             }
@@ -543,10 +534,9 @@ struct MutatorPublicAPITests {
                 readData: { _ in Data() }
             )
         } operation: {
-            try await fuzz(
-                using: String.mutators(.empty), Int.mutators(.boundaries),
-                iterations: 50,
-                duration: .seconds(3)
+            _ = try await fuzzWithMaxIterations(
+                maxIterations: 50,
+                using: String.mutators(.empty), Int.mutators(.boundaries)
             ) { (str: String, num: Int) in
                 await testedInputs.update { $0.append((str, num)) }
             }
@@ -583,13 +573,13 @@ struct MutatorPublicAPITests {
                 readData: { _ in Data() }
             )
             // Use a seeded RNG for deterministic test behavior
-            $0.random = RandomNumberGeneratorClient(SeededRandomNumberGenerator(seed: 42))
+            $0.random = RandomNumberGeneratorClient { SeededRandomNumberGenerator(seed: 42) }
         } operation: {
             // Compose multiple strategies for a single String input
-            try await fuzz(
-                using: String.mutators(.empty, .sql, .xss),
-                iterations: 500,
-                duration: .seconds(5)
+            // Need more iterations to reliably generate cross-strategy mutations
+            _ = try await fuzzWithMaxIterations(
+                maxIterations: 200,
+                using: String.mutators(.empty, .sql, .xss)
             ) { (input: String) in
                 await testedInputs.update { $0.append(input) }
             }

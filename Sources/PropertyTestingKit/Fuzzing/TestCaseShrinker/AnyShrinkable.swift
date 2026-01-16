@@ -49,9 +49,9 @@ extension String: AnyShrinkable {}
 // Make Data conform to AnyShrinkable
 extension Data: AnyShrinkable {}
 
-// MARK: - Fuzzable Extension for Shrinking
+// MARK: - Shrinkable Extension
 
-extension Fuzzable where Self: Shrinkable & Sendable {
+extension Shrinkable where Self: Sendable {
     /// Shrink this value while preserving a failure condition.
     ///
     /// - Parameters:

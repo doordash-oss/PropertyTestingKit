@@ -25,21 +25,13 @@ import IssueReporting
 /// )
 /// ```
 public struct CoverageCountersClient: Sendable {
-    /// Get a snapshot of current coverage counters for this task.
-    public var snapshot: @Sendable () -> SanCovCounters?
-
-    /// Get only the covered (non-zero) edges as parallel arrays.
-    /// This is the fastest way to get sparse coverage data.
-    /// Note: This is synchronous since the underlying SanCov implementation uses task-local data.
-    public var snapshotCoveredArrays: @Sendable () -> SparseCoverage?
-
     /// Check if coverage instrumentation is available.
     public var isAvailable: @Sendable () -> Bool
 
     /// Begin a measurement context for the current task.
     /// This creates an isolated coverage map and pre-warms caches for optimal performance.
     /// Must be paired with endMeasurement.
-    public var beginMeasurement: @Sendable () -> SanCovCounters.MeasurementContext?
+    public var beginMeasurement: @Sendable () -> SanCovCounters.MeasurementContext
 
     /// End a measurement context and clean up resources.
     /// This frees the coverage map slot for reuse by other tasks.
@@ -47,35 +39,25 @@ public struct CoverageCountersClient: Sendable {
 
     /// Get covered indices using a specific measurement context.
     /// This bypasses TLS lookup, providing O(1) performance even after task hops.
-    public var snapshotCoveredArraysWithContext: @Sendable (SanCovCounters.MeasurementContext) -> SparseCoverage?
+    public var snapshotCoveredArraysWithContext: @Sendable (SanCovCounters.MeasurementContext) throws -> SparseCoverage
 
     public init(
-        snapshot: @escaping @Sendable () -> SanCovCounters? = unimplemented(
-            "snapshot",
-            placeholder: nil
-        ),
-        snapshotCoveredArrays: @escaping @Sendable () -> SparseCoverage? = unimplemented(
-            "snapshotCoveredArrays",
-            placeholder: nil
-        ),
         isAvailable: @escaping @Sendable () -> Bool = unimplemented(
             "isAvailable",
             placeholder: false
         ),
-        beginMeasurement: @escaping @Sendable () -> SanCovCounters.MeasurementContext? = unimplemented(
+        beginMeasurement: @escaping @Sendable () -> SanCovCounters.MeasurementContext = unimplemented(
             "beginMeasurement",
-            placeholder: nil
+            placeholder: .testInstance()
         ),
         endMeasurement: @escaping @Sendable (SanCovCounters.MeasurementContext) -> Void = unimplemented(
             "endMeasurement"
         ),
-        snapshotCoveredArraysWithContext: @escaping @Sendable (SanCovCounters.MeasurementContext) -> SparseCoverage? = unimplemented(
+        snapshotCoveredArraysWithContext: @escaping @Sendable (SanCovCounters.MeasurementContext) throws -> SparseCoverage = unimplemented(
             "snapshotCoveredArraysWithContext",
-            placeholder: nil
+            placeholder: SparseCoverage()
         )
     ) {
-        self.snapshot = snapshot
-        self.snapshotCoveredArrays = snapshotCoveredArrays
         self.isAvailable = isAvailable
         self.beginMeasurement = beginMeasurement
         self.endMeasurement = endMeasurement
@@ -87,12 +69,10 @@ public struct CoverageCountersClient: Sendable {
 
 extension CoverageCountersClient: DependencyKey {
     public static let liveValue = CoverageCountersClient(
-        snapshot: { SanCovCounters.snapshot() },
-        snapshotCoveredArrays: { SanCovCounters.snapshotCoveredArrays() },
         isAvailable: { SanCovCounters.isAvailable },
         beginMeasurement: { SanCovCounters.beginMeasurement() },
         endMeasurement: { SanCovCounters.endMeasurement($0) },
-        snapshotCoveredArraysWithContext: { SanCovCounters.snapshotCoveredArrays(with: $0) }
+        snapshotCoveredArraysWithContext: { try SanCovCounters.snapshotCoveredArrays(with: $0) }
     )
 
     /// Test value uses live coverage counters since they're read-only and safe.

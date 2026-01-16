@@ -7,7 +7,9 @@
 
 import Foundation
 
-/// Stopping condition plugin using saturation-based metrics (Green Fuzzing, ISSTA 2023).
+// MARK: - Saturation Plugin
+
+/// Stopping condition plugin using saturation-based metrics.
 ///
 /// Models coverage growth as an asymptotic process and stops when saturation
 /// approaches the estimated maximum coverage.
@@ -15,7 +17,7 @@ import Foundation
 /// ## Usage
 ///
 /// ```swift
-/// try fuzz(stoppingPlugins: [.saturationDetector()]) { input in ... }
+/// try fuzz(plugins: [.saturationDetector()]) { input in ... }
 /// ```
 ///
 /// ## Reference
@@ -23,52 +25,31 @@ import Foundation
 /// Böhme, M. et al. (2023). "Green Fuzzing: A Saturation-Based Stopping Criterion
 /// using a Probabilistic Model to Predict Fuzzing Progress"
 /// ISSTA 2023.
-///
-/// For simpler approaches, see ``PlateauDetectorPlugin``.
-/// For Good-Turing estimator, see ``STADSPlateauDetectorPlugin``.
-public struct SaturationPlateauDetectorPlugin: StoppingConditionPlugin, @unchecked Sendable {
-    public let id: String = "saturationDetector"
-    public let priority: Int
+public actor SaturationPlugin: FuzzPlugin {
+    public let id: String = "saturation_detector"
 
     private var detector: SaturationPlateauDetector
 
     /// Create a saturation plateau detector plugin.
     ///
-    /// - Parameters:
-    ///   - config: Configuration for saturation detection.
-    ///   - priority: Plugin priority (higher runs first). Default is 100.
-    public init(
-        config: SaturationPlateauDetector.Config = .init(),
-        priority: Int = 100
-    ) {
+    /// - Parameter config: Configuration for saturation detection.
+    public init(config: SaturationPlateauDetector.Config = .init()) {
         self.detector = SaturationPlateauDetector(config: config)
-        self.priority = priority
     }
 
-    public mutating func recordIteration(discoveredNewCoverage: Bool) {
-        detector.record(discoveredNewCoverage: discoveredNewCoverage)
-    }
+    public func handle<each T: Sendable>(event: PluginEvent<repeat each T>) async throws -> [FuzzPluginAction<repeat each T>] {
+        switch event {
+        case let .iteration(context):
+            detector.record(discoveredNewCoverage: context.discoveredNewCoverage)
 
-    public func shouldStop(context: FuzzPluginContext.StoppingContext) -> StoppingDecision {
-        if detector.hasPlateaued {
-            return .stop(reason: "saturation_plateau")
+            if detector.hasPlateaued {
+                return [.stop(FuzzPluginAction<repeat each T>.StopAction(reason: .custom("saturation_plateau")))]
+            }
+
+            return []
+        default:
+            return []
         }
-        return .continue
-    }
-
-    public func stats() -> StoppingConditionStats {
-        let satStats = detector.stats()
-        return StoppingConditionStats(
-            pluginId: id,
-            hasTriggered: detector.hasPlateaued,
-            details: [
-                "saturationLevel": String(format: "%.4f", satStats.saturationLevel),
-                "growthRate": String(format: "%.6f", satStats.growthRate),
-                "cumulativeCoverage": String(satStats.cumulativeCoverage),
-                "estimatedMaxCoverage": String(format: "%.0f", satStats.estimatedMaxCoverage),
-                "lowGrowthWindowCount": String(satStats.lowGrowthWindowCount)
-            ]
-        )
     }
 
     /// Get the underlying saturation detection statistics.
@@ -79,7 +60,7 @@ public struct SaturationPlateauDetectorPlugin: StoppingConditionPlugin, @uncheck
 
 // MARK: - Convenience Constructor
 
-extension StoppingConditionPlugin where Self == SaturationPlateauDetectorPlugin {
+extension FuzzPlugin where Self == SaturationPlugin {
     /// Create a saturation plateau detector stopping condition plugin.
     ///
     /// Uses saturation-based metrics to model coverage growth and
@@ -96,8 +77,8 @@ extension StoppingConditionPlugin where Self == SaturationPlateauDetectorPlugin 
         minGrowthRate: Double = 0.0001,
         windowSize: Int = 500,
         confirmationWindows: Int = 3
-    ) -> SaturationPlateauDetectorPlugin {
-        SaturationPlateauDetectorPlugin(
+    ) -> SaturationPlugin {
+        SaturationPlugin(
             config: .init(
                 minSaturation: minSaturation,
                 minGrowthRate: minGrowthRate,
@@ -113,7 +94,7 @@ extension StoppingConditionPlugin where Self == SaturationPlateauDetectorPlugin 
     /// - Returns: A configured saturation plateau detector plugin.
     public static func saturationDetector(
         config: SaturationPlateauDetector.Config
-    ) -> SaturationPlateauDetectorPlugin {
-        SaturationPlateauDetectorPlugin(config: config)
+    ) -> SaturationPlugin {
+        SaturationPlugin(config: config)
     }
 }

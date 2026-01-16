@@ -2,124 +2,122 @@
 //  ShrinkingPlugin.swift
 //  PropertyTestingKit
 //
-//  Plugin protocol for shrinking failing inputs to minimal reproducing cases.
+//  Shrinking plugin for minimizing failing inputs.
 //
 
 import Foundation
+import Testing
 
-// MARK: - Shrinking Plugin Protocol
+// MARK: - Shrinking Plugin
 
-/// Plugin protocol for shrinking failing inputs to minimal reproducing cases.
+/// Shrinking plugin that minimizes failing inputs using delta debugging.
 ///
-/// Shrinking uses delta debugging to systematically reduce failing inputs
-/// while preserving the failure condition. This makes debugging much easier
-/// by providing minimal reproduction cases.
+/// When a test failure is found, this plugin attempts to find a smaller
+/// input that still reproduces the failure, making debugging easier.
 ///
 /// ## Usage
 ///
 /// ```swift
-/// // Enable shrinking with default settings
-/// try fuzz(shrinkingPlugin: .default()) { (input: String) in
-///     // test code
+/// try fuzz(plugins: [.shrinking()]) { input in
+///     // Your test here
 /// }
-///
-/// // Custom shrinking configuration
-/// try fuzz(shrinkingPlugin: .default(config: ShrinkConfig(
-///     maxExecutions: 500,
-///     timeout: 15,
-///     verbose: true
-/// ))) { (input: String) in
-///     // test code
-/// }
-///
-/// // Disable shrinking
-/// try fuzz(shrinkingPlugin: nil) { ... }
 /// ```
-public protocol ShrinkingPlugin: FuzzPlugin {
-    /// Configuration for shrinking behavior.
-    var config: ShrinkConfig { get }
+public struct ShrinkingPlugin: FuzzPlugin {
+    public let id: String = "shrinking"
 
-    /// Whether shrinking is enabled.
-    var isEnabled: Bool { get }
+    public let config: ShrinkConfig
 
-    /// Called before shrinking begins.
+    /// Whether to print verbose progress during shrinking.
+    public let verbose: Bool
+
+    /// Create a shrinking plugin.
     ///
     /// - Parameters:
-    ///   - originalSize: The size of the original failing input.
-    ///   - error: The error that was thrown.
-    func onShrinkingStart(originalSize: Int, error: Error) async
+    ///   - config: Shrinking configuration.
+    ///   - verbose: Whether to print verbose progress. Defaults to false.
+    public init(
+        config: ShrinkConfig = ShrinkConfig(),
+        verbose: Bool = false
+    ) {
+        self.config = config
+        self.verbose = verbose
+    }
 
-    /// Called periodically during shrinking with progress updates.
-    ///
-    /// - Parameters:
-    ///   - candidatesTested: Number of candidates tested so far.
-    ///   - currentSize: Current minimized size.
-    ///   - originalSize: Original input size.
-    func onShrinkingProgress(candidatesTested: Int, currentSize: Int, originalSize: Int) async
+    public func handle<each T: Sendable>(event: PluginEvent<repeat each T>) async throws -> [FuzzPluginAction<repeat each T>] {
+        switch event {
+        case let .failureFound(context):
+            let shrinker = MultiComponentShrinker(config: config)
+            let (minimized, stats) = await shrinker.shrink(input: context.input, test: context.test)
 
-    /// Called when shrinking completes.
-    ///
-    /// - Parameter stats: Statistics about the shrinking run.
-    func onShrinkingComplete(stats: ShrinkStats) async
-}
+            // Format minimized input for display
+            let minimizedDescription = formatMinimizedInput(minimized)
 
-// MARK: - Default Implementations
+            // Build shrink result message
+            var message = "[Shrink] Minimized failing input"
+            message += "\n  Original size: \(stats.originalSize) elements"
+            message += "\n  Minimized size: \(stats.minimizedSize) elements"
+            message += "\n  Candidates tested: \(stats.candidatesTested)"
 
-extension ShrinkingPlugin {
-    public var isEnabled: Bool { true }
+            if stats.minimizedSize < stats.originalSize {
+                let reduction = Double(stats.originalSize - stats.minimizedSize) / Double(stats.originalSize) * 100
+                message += "\n  Reduction: \(String(format: "%.1f", reduction))%"
+            }
 
-    public func onShrinkingStart(originalSize: Int, error: Error) async {}
+            message += "\n  Minimized input: \(minimizedDescription)"
 
-    public func onShrinkingProgress(candidatesTested: Int, currentSize: Int, originalSize: Int) async {}
+            if verbose {
+                print(message)
+            }
 
-    public func onShrinkingComplete(stats: ShrinkStats) async {}
-}
-
-// MARK: - Shrinking Context
-
-extension FuzzPluginContext {
-    /// Context provided when a failure is being shrunk.
-    public struct ShrinkingContext: Sendable {
-        /// Size of the original failing input.
-        public let originalSize: Int
-        /// The error that triggered shrinking.
-        public let error: any Error
-        /// Configuration being used for shrinking.
-        public let config: ShrinkConfig
-
-        public init(originalSize: Int, error: any Error, config: ShrinkConfig) {
-            self.originalSize = originalSize
-            self.error = error
-            self.config = config
+            // Return actions: select for mutation, add to corpus, and record issue
+            return [
+                .selectForMutation(.init(input: minimized)),
+                // TODO: Add failure information
+                .submitToCorpus(.init(
+                    input: minimized,
+                    coverageSignature: context.coverageSignature,
+                    entryType: .failure
+                )),
+                .recordIssue(.init(
+                    comment: Comment(rawValue: message),
+                    sourceLocation: context.sourceLocation
+                ))
+            ]
+        default:
+            return []
         }
+    }
+
+    /// Format minimized input for display.
+    private func formatMinimizedInput<each T>(_ input: (repeat each T)) -> String {
+        // Use Mirror to get a readable representation
+        let mirror = Mirror(reflecting: input)
+        if mirror.children.isEmpty {
+            return String(describing: input)
+        }
+
+        // For tuples, format each element
+        var elements: [String] = []
+        for child in mirror.children {
+            elements.append(String(describing: child.value))
+        }
+        return "(\(elements.joined(separator: ", ")))"
     }
 }
 
-// MARK: - Shrunk Failure
+// MARK: - Convenience Factory
 
-/// A failure that has been minimized through shrinking.
-public struct ShrunkFailure<Input: Sendable>: Sendable {
-    /// The minimized input that still triggers the failure.
-    public let minimizedInput: Input
-
-    /// The original (unminimized) input.
-    public let originalInput: Input
-
-    /// The error thrown by the test.
-    public let error: any Error
-
-    /// Statistics about the shrinking process.
-    public let shrinkStats: ShrinkStats
-
-    public init(
-        minimizedInput: Input,
-        originalInput: Input,
-        error: any Error,
-        shrinkStats: ShrinkStats
-    ) {
-        self.minimizedInput = minimizedInput
-        self.originalInput = originalInput
-        self.error = error
-        self.shrinkStats = shrinkStats
+extension FuzzPlugin where Self == ShrinkingPlugin {
+    /// Create a shrinking plugin that minimizes failing inputs.
+    ///
+    /// - Parameters:
+    ///   - config: Shrinking configuration.
+    ///   - verbose: Whether to print verbose progress.
+    /// - Returns: A configured shrinking plugin.
+    public static func shrinking(
+        config: ShrinkConfig = ShrinkConfig(),
+        verbose: Bool = false
+    ) -> ShrinkingPlugin {
+        ShrinkingPlugin(config: config, verbose: verbose)
     }
 }

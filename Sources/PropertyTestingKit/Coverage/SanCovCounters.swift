@@ -13,13 +13,33 @@ import Foundation
 import SanCovHooks
 import MachO
 
-/// Global instance for DWARF symbolization.
-private let dwarfSymbolizerHelper = DWARFSymbolizerHelper()
+/// Global instance for DWARF symbolization (lazy to avoid initialization race).
+private nonisolated(unsafe) var _dwarfSymbolizerHelper: DWARFSymbolizerHelper?
+private let symbolizerInitLock = NSLock()
 
-/// Global actor instance for function size lookup.
-private let functionSizeLookup = FunctionSizeLookupHelper()
+private func getDWARFSymbolizerHelper() -> DWARFSymbolizerHelper {
+    symbolizerInitLock.lock()
+    defer { symbolizerInitLock.unlock() }
+    if _dwarfSymbolizerHelper == nil {
+        _dwarfSymbolizerHelper = DWARFSymbolizerHelper()
+    }
+    return _dwarfSymbolizerHelper!
+}
 
-/// A snapshot of coverage counters with task-level isolation.
+/// Global actor instance for function size lookup (lazy to avoid initialization race).
+private nonisolated(unsafe) var _functionSizeLookup: FunctionSizeLookupHelper?
+private let functionSizeInitLock = NSLock()
+
+private func getFunctionSizeLookup() -> FunctionSizeLookupHelper {
+    functionSizeInitLock.lock()
+    defer { functionSizeInitLock.unlock() }
+    if _functionSizeLookup == nil {
+        _functionSizeLookup = FunctionSizeLookupHelper()
+    }
+    return _functionSizeLookup!
+}
+
+/// Namespace for SanitizerCoverage APIs with task-level isolation.
 ///
 /// `SanCovCounters` uses SanitizerCoverage's trace_pc_guard callbacks with
 /// task-keyed maps. This provides true per-task isolation even when
@@ -36,15 +56,15 @@ private let functionSizeLookup = FunctionSizeLookupHelper()
 ///
 /// ```swift
 /// // Begin isolated measurement
-/// guard let context = SanCovCounters.beginMeasurement() else { return }
+/// let context = SanCovCounters.beginMeasurement()
 /// defer { SanCovCounters.endMeasurement(context) }
 ///
 /// // Run code under test
 /// myFunction()
 ///
 /// // Get coverage for this context
-/// let coverage = SanCovCounters.snapshotCoveredArrays(with: context)
-/// print("Covered \(coverage?.indices.count ?? 0) edges")
+/// let coverage = try SanCovCounters.snapshotCoveredArrays(with: context)
+/// print("Covered \(coverage.indices.count) edges")
 /// ```
 ///
 /// ## Build Requirements
@@ -60,46 +80,23 @@ private let functionSizeLookup = FunctionSizeLookupHelper()
 ///     ]
 /// )
 /// ```
-public struct SanCovCounters: Sendable {
-    /// The raw counter values (0 = not executed, 1 = executed).
-    public let counters: [UInt8]
-
-    /// Number of instrumented edges.
-    public var count: Int { counters.count }
-
-    /// Number of edges that were executed (non-zero counters).
-    public var coveredCount: Int {
-        counters.filter { $0 > 0 }.count
-    }
-
-    /// The set of edge indices that were executed.
-    public var coveredIndices: Set<Int> {
-        var indices = Set<Int>()
-        for (index, value) in counters.enumerated() where value > 0 {
-            indices.insert(index)
-        }
-        return indices
-    }
-
-    /// Create from raw counter array.
-    public init(counters: [UInt8]) {
-        self.counters = counters
-    }
-
-    /// Create from UInt64 counters (for test compatibility).
-    /// Values are clamped to UInt8.max.
-    public init(counters: [UInt64]) {
-        self.counters = counters.map { UInt8(min($0, UInt64(UInt8.max))) }
-    }
-
-    // MARK: - Static API
-
+public enum SanCovCounters {
     /// Check if SanitizerCoverage counters are available.
     ///
     /// Returns `true` if the binary was compiled with sanitizer coverage flags
     /// and the counters have been initialized.
     public static var isAvailable: Bool {
         sancov_counters_available()
+    }
+
+    static func checkAvailabilty() throws {
+        if !isAvailable {
+            throw Errors.coverageNotAvailable
+        }
+    }
+
+    public enum Errors: Error {
+        case coverageNotAvailable
     }
 
     /// Get the total number of instrumented edges.
@@ -114,68 +111,6 @@ public struct SanCovCounters: Sendable {
     static var currentCoveredCount: Int {
         sancov_get_covered_count()
     }
-
-    /// Capture a snapshot of the current task's coverage.
-    ///
-    /// Returns `nil` if SanitizerCoverage is not available.
-    ///
-    /// - Note: The snapshot is isolated to the current Swift task.
-    public static func snapshot() -> SanCovCounters? {
-        guard isAvailable else { return nil }
-
-        let count = sancov_get_counter_count()
-        guard count > 0 else { return nil }
-
-        // Allocate buffer and copy counters
-        var buffer = [UInt8](repeating: 0, count: count)
-        let copied = sancov_snapshot_counters(&buffer, count)
-        guard copied == count else { return nil }
-
-        return SanCovCounters(counters: buffer)
-    }
-
-    /// Get only the covered (non-zero) edge indices with their hit counts.
-    ///
-    /// Returns parallel arrays for efficiency - avoids Dictionary hashing overhead.
-    /// This is the fastest way to get sparse coverage data.
-    ///
-    /// - Returns: SparseCoverage with parallel indices/counts arrays, or nil if unavailable.
-    public static func snapshotCoveredArrays() -> SparseCoverage? {
-        guard isAvailable else { return nil }
-
-        // Optimization: Use a single pass with a reasonable max buffer.
-        // Coverage is typically sparse (<1% of edges hit), so 8K entries is usually enough.
-        // If we need more, we fall back to the two-pass approach.
-        let maxEntries = 8192
-
-        // Single-pass: allocate buffer and fill in one call
-        var indices = [UInt32](repeating: 0, count: maxEntries)
-        var counts = [UInt8](repeating: 0, count: maxEntries)
-        let filled = sancov_snapshot_covered_indices(&indices, &counts, maxEntries)
-
-        // If buffer was too small, fall back to two-pass
-        if filled == maxEntries {
-            let actualCount = sancov_snapshot_covered_indices(nil, nil, 0)
-            if actualCount > maxEntries {
-                var largeIndices = [UInt32](repeating: 0, count: actualCount)
-                var largeCounts = [UInt8](repeating: 0, count: actualCount)
-                let actualFilled = sancov_snapshot_covered_indices(&largeIndices, &largeCounts, actualCount)
-
-                // Trim to actual size
-                largeIndices.removeLast(actualCount - actualFilled)
-                largeCounts.removeLast(actualCount - actualFilled)
-                return SparseCoverage(indices: largeIndices, counts: largeCounts)
-            }
-        }
-
-        guard filled > 0 else { return SparseCoverage() }
-
-        // Trim arrays to actual size
-        indices.removeLast(maxEntries - filled)
-        counts.removeLast(maxEntries - filled)
-        return SparseCoverage(indices: indices, counts: counts)
-    }
-
 }
 
 // MARK: - Source Location Mapping
@@ -383,12 +318,12 @@ extension SanCovCounters {
     /// Get the size of a function given its start address.
     /// Uses the Mach-O symbol table for accurate sizes.
     public static func getFunctionSize(at address: UInt) async -> UInt? {
-        await functionSizeLookup.getSize(forFunctionAt: address)
+        await getFunctionSizeLookup().getSize(forFunctionAt: address)
     }
 
     /// Get sizes for multiple function addresses at once.
     public static func getFunctionSizes(at addresses: [UInt]) async -> [UInt: UInt] {
-        await functionSizeLookup.getSizes(forFunctionsAt: addresses)
+        await getFunctionSizeLookup().getSizes(forFunctionsAt: addresses)
     }
 }
 
@@ -410,17 +345,19 @@ extension SanCovCounters {
     ///   `endMeasurement(_:)` from the same task that called `beginMeasurement()`.
     ///   The context is intentionally non-Sendable to enforce this requirement.
     public struct MeasurementContext {
-        fileprivate let rawContext: UnsafeMutableRawPointer
+        fileprivate let rawContext: UnsafeMutablePointer<SanCovMeasurementContext>
 
-        fileprivate init(_ raw: UnsafeMutableRawPointer) {
+        fileprivate init(_ raw: UnsafeMutablePointer<SanCovMeasurementContext>) {
             self.rawContext = raw
         }
 
         /// Creates a dummy context for testing purposes.
         /// This context should only be used with mock CoverageCountersClients.
         public static func testInstance() -> MeasurementContext {
-            // Allocate a small buffer that will be "freed" by the mock endMeasurement
-            let dummyPtr = UnsafeMutableRawPointer.allocate(byteCount: 1, alignment: 1)
+            // Use C function to properly initialize all fields including atomic refcount
+            guard let dummyPtr = sancov_create_dummy_context() else {
+                fatalError("Failed to create dummy measurement context")
+            }
             return MeasurementContext(dummyPtr)
         }
     }
@@ -432,9 +369,8 @@ extension SanCovCounters {
     ///
     /// - Important: You must call `endMeasurement(_:)` when done.
     /// - Returns: A context that must be passed to `endMeasurement(_:)`.
-    public static func beginMeasurement() -> MeasurementContext? {
-        guard let raw = sancov_begin_measurement() else { return nil }
-        return MeasurementContext(raw)
+    public static func beginMeasurement() -> MeasurementContext {
+        return MeasurementContext(sancov_begin_measurement())
     }
 
     /// End a measurement context and clean up its resources.
@@ -448,65 +384,34 @@ extension SanCovCounters {
     // These methods operate directly on a measurement context, bypassing TLS lookup.
     // This is critical for Swift concurrency where tasks can hop between threads.
 
+    /// Get the number of covered edges for a measurement context (O(1)).
+    ///
+    /// - Parameter context: The measurement context to query.
+    /// - Returns: Number of covered edges.
+    static func getCoveredCount(with context: MeasurementContext) -> Int {
+        sancov_get_covered_count_with_context(context.rawContext)
+    }
+
     /// Get covered indices for a specific measurement context.
     ///
     /// This method uses the context directly, avoiding TLS lookup overhead.
     /// Much faster than `snapshotCoveredArrays()` when the context is known.
     ///
     /// - Parameter context: The measurement context to snapshot.
-    /// - Returns: SparseCoverage with parallel indices/counts arrays, or nil if unavailable.
-    static func snapshotCoveredArrays(with context: MeasurementContext) -> SparseCoverage? {
-        guard isAvailable else { return nil }
+    /// - Returns: SparseCoverage with indices array, or nil if unavailable.
+    static func snapshotCoveredArrays(with context: MeasurementContext) throws -> SparseCoverage {
+        try checkAvailabilty()
 
-        let maxEntries = 8192
+        let count = getCoveredCount(with: context)
+        guard count > 0 else { return SparseCoverage() }
 
-        // Allocate uninitialized buffers to avoid zeroing 40KB per call.
-        // The C function fills only the entries it needs.
-        let indicesPtr = UnsafeMutablePointer<UInt32>.allocate(capacity: maxEntries)
-        let countsPtr = UnsafeMutablePointer<UInt8>.allocate(capacity: maxEntries)
-        defer {
-            indicesPtr.deallocate()
-            countsPtr.deallocate()
+        guard let ptr = sancov_snapshot_covered_indices_with_context(context.rawContext) else {
+            return SparseCoverage()
         }
+        defer { free(ptr) }
 
-        let filled = sancov_snapshot_covered_indices_with_context(
-            context.rawContext,
-            indicesPtr,
-            countsPtr,
-            maxEntries
-        )
-
-        guard filled > 0 else { return SparseCoverage() }
-
-        // If buffer was too small, fall back to two-pass with larger buffers
-        if filled == maxEntries {
-            let actualCount = sancov_snapshot_covered_indices_with_context(context.rawContext, nil, nil, 0)
-            if actualCount > maxEntries {
-                let largeIndicesPtr = UnsafeMutablePointer<UInt32>.allocate(capacity: actualCount)
-                let largeCountsPtr = UnsafeMutablePointer<UInt8>.allocate(capacity: actualCount)
-                defer {
-                    largeIndicesPtr.deallocate()
-                    largeCountsPtr.deallocate()
-                }
-
-                let actualFilled = sancov_snapshot_covered_indices_with_context(
-                    context.rawContext,
-                    largeIndicesPtr,
-                    largeCountsPtr,
-                    actualCount
-                )
-
-                // Copy to Swift arrays (only the filled portion)
-                let largeIndices = Array(UnsafeBufferPointer(start: largeIndicesPtr, count: actualFilled))
-                let largeCounts = Array(UnsafeBufferPointer(start: largeCountsPtr, count: actualFilled))
-                return SparseCoverage(indices: largeIndices, counts: largeCounts)
-            }
-        }
-
-        // Copy to Swift arrays (only the filled portion)
-        let indices = Array(UnsafeBufferPointer(start: indicesPtr, count: filled))
-        let counts = Array(UnsafeBufferPointer(start: countsPtr, count: filled))
-        return SparseCoverage(indices: indices, counts: counts)
+        let indices = Array(UnsafeBufferPointer(start: ptr, count: count))
+        return SparseCoverage(indices: indices)
     }
 
     /// Get the program counter for a given edge index.
@@ -533,7 +438,7 @@ extension SanCovCounters {
         }
 
         // Try to get DWARF line info (expensive - skip if not needed)
-        let dwarfLocation = includeDWARF ? await dwarfSymbolizerHelper.lookup(pc: UInt(cLocation.pc)) : nil
+        let dwarfLocation = includeDWARF ? await getDWARFSymbolizerHelper().lookup(pc: UInt(cLocation.pc)) : nil
         return SanCovSourceLocation(from: cLocation, dwarfLocation: dwarfLocation)
     }
 
@@ -576,7 +481,7 @@ extension SanCovCounters {
     /// - Parameter pcs: Array of program counter addresses to look up.
     /// - Returns: Dictionary mapping PCs to their DWARF source locations.
     static func getDWARFLocations(for pcs: [UInt]) async -> [UInt: DWARFSourceLocation] {
-        await dwarfSymbolizerHelper.lookupBatch(pcs: pcs)
+        await getDWARFSymbolizerHelper().lookupBatch(pcs: pcs)
     }
 
     /// Get source locations for all covered edges in the current task.
@@ -601,7 +506,7 @@ extension SanCovCounters {
         var results: [SanCovSourceLocation] = []
         results.reserveCapacity(filled)
         for cLoc in cLocations.prefix(filled) {
-            let dwarfLocation = await dwarfSymbolizerHelper.lookup(pc: UInt(cLoc.pc))
+            let dwarfLocation = await getDWARFSymbolizerHelper().lookup(pc: UInt(cLoc.pc))
             let location = SanCovSourceLocation(from: cLoc, dwarfLocation: dwarfLocation)
 
             // Filter out stdlib if requested
@@ -619,6 +524,6 @@ extension SanCovCounters {
     /// When `true`, `getSourceLocation` and `getCoveredLocations` will include
     /// line and column numbers. When `false`, only function-level info is available.
     static func lineNumbersAvailable() async -> Bool {
-        await dwarfSymbolizerHelper.isAvailable
+        await getDWARFSymbolizerHelper().isAvailable
     }
 }

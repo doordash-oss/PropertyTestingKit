@@ -255,7 +255,6 @@ struct CoverageGapDetectorTests {
         let emptySnapshot = await emptyCorpus.snapshot()
         let stats = FuzzStats(
             totalInputs: 0,
-            newPaths: 0,
             mutations: 0,
             generations: 0,
             duration: 0
@@ -269,19 +268,20 @@ struct CoverageGapDetectorTests {
             coverageChanges: []
         )
 
-        // coverageGapReport is now a computed property from analysisReports
-        #expect(result.coverageGapReport == nil)
+        // Coverage gap reports are now handled via recordIssue actions from plugins
+        // No direct access to coverage gap report in FuzzResult
+        #expect(result.failures.isEmpty)
     }
 
-    @Test("FuzzEngine.Config has analysisPlugins for gap detection")
-    func configHasAnalysisPlugins() {
+    @Test("FuzzEngine.Config has plugins for gap detection")
+    func configHasPlugins() {
         // With plugins, gap detection is enabled by adding CoverageGapPlugin
-        let config = FuzzEngine<Int>.Config(analysisPlugins: [.coverageGaps()])
-        #expect(config.analysisPlugins.count == 1)
-        #expect(config.analysisPlugins.contains { $0 is CoverageGapPlugin })
+        let config = FuzzEngine<Int>.Config(plugins: [CoverageGapPlugin()])
+        #expect(config.plugins.count == 1)
+        #expect(config.plugins.contains { $0 is CoverageGapPlugin })
 
         let defaultConfig = FuzzEngine<Int>.Config()
-        #expect(defaultConfig.analysisPlugins.isEmpty)
+        #expect(defaultConfig.plugins.isEmpty)
     }
 
     @Test("Realistic coverage gap test")
@@ -303,14 +303,25 @@ struct CoverageGapDetectorTests {
 
         // This test intentionally creates a coverage gap to verify detection works
         await withKnownIssue("Expected coverage gap in partiallyCoveredFunction") {
-            try await fuzz(
-                iterations: 100,
+            _ = try await fuzz(
+                duration: .seconds(0.1),
                 corpusMode: .refuzzReplace,
-                stoppingPlugins: [],
-                analysisPlugins: [.coverageGaps()]
+                plugins: [CoverageGapPlugin()]
             ) { (input: Int) in
                 partiallyCoveredFunction(input: input)
             }
+        }
+    }
+
+    func parseAndValidate(_ input: Int) throws {
+        if input == Int.min {
+            // Edge case handling
+        } else if input < 0 {
+            let _ = abs(input)
+        } else if input > 1000 {
+            let _ = input / 2
+        } else {
+            let _ = input * 2
         }
     }
 }

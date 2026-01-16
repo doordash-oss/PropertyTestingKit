@@ -32,6 +32,17 @@
 #include <stdio.h>
 #include <stdatomic.h>
 
+// Wrapper that aborts on allocation failure - keeps callsites clean
+static void* xmalloc(size_t size) {
+    void* ptr = malloc(size);
+    if (ptr == NULL) {
+        fprintf(stderr, "FATAL: malloc(%zu) failed\n", size);
+        fflush(stderr);
+        abort();
+    }
+    return ptr;
+}
+
 // Forward declare Swift runtime function
 // Returns the current Swift Task pointer, or NULL if not in an async context
 extern void* swift_task_getCurrent(void) __attribute__((weak_import));
@@ -53,7 +64,7 @@ static size_t g_guard_count = 0;
 #include <pthread.h>
 
 // Memory allocator for ck_ht
-static void* ck_malloc_wrapper(size_t size) { return malloc(size); }
+static void* ck_malloc_wrapper(size_t size) { return xmalloc(size); }
 static void ck_free_wrapper(void* ptr, size_t size, bool defer) {
     (void)size; (void)defer;
     free(ptr);
@@ -75,7 +86,6 @@ static pthread_once_t g_coverage_ht_once = PTHREAD_ONCE_INIT;
 
 // Thread-local fallback for non-async contexts
 static _Thread_local uint8_t *tls_coverage_map = NULL;
-static _Thread_local size_t tls_coverage_map_size = 0;
 
 // Measurement registry: task_id -> measurement_context
 static ck_ht_t g_measurement_ht;
@@ -84,18 +94,23 @@ static pthread_once_t g_measurement_ht_once = PTHREAD_ONCE_INIT;
 // Thread-local pseudo-task ID for synchronous code outside async contexts
 static _Thread_local void* tls_sync_pseudo_task = NULL;
 
+// Global generation counter - incremented when any measurement context ends.
+// Used to invalidate stale TLS caches across all threads.
+static _Atomic uint64_t g_measurement_generation = 0;
+
 // Thread-local cache for coverage map lookup (avoids rwlock acquisition in hot path)
 // The cache is invalidated when task changes or measurement context ends
 static _Thread_local void* tls_cached_task = NULL;
 static _Thread_local uint8_t* tls_cached_task_map = NULL;
-static _Thread_local void* tls_cached_measurement_context = NULL;
+static _Thread_local SanCovMeasurementContext* tls_cached_measurement_context = NULL;
 static _Thread_local uint8_t* tls_cached_coverage_map = NULL;
+static _Thread_local uint64_t tls_cached_generation = 0;
 
 // Get or create a pseudo-task ID for synchronous code
 static void* get_sync_pseudo_task(void) {
     if (tls_sync_pseudo_task == NULL) {
         // Use a unique heap address as pseudo-task ID
-        tls_sync_pseudo_task = malloc(1);
+        tls_sync_pseudo_task = xmalloc(1);
     }
     return tls_sync_pseudo_task;
 }
@@ -107,7 +122,7 @@ static void* get_current_task_for_measurement(void) {
         if (task != NULL) {
             return task;
         }
-    }
+    }       
     return get_sync_pseudo_task();
 }
 
@@ -121,24 +136,12 @@ static void* get_current_task_for_measurement(void) {
 // Start small and grow as needed.
 #define CK_HT_INITIAL_CAPACITY 256
 
-// Debug logging control - set to 1 to enable
-#define CK_HT_DEBUG_LOGGING 0
-
-// One-time initialization functions for pthread_once
 static void init_measurement_ht(void) {
     ck_ht_init(&g_measurement_ht, CK_HT_MODE_DIRECT, NULL, &ck_allocator, CK_HT_INITIAL_CAPACITY, 0);
-#if CK_HT_DEBUG_LOGGING
-    fprintf(stderr, "[CK_HT DEBUG] INIT measurement_ht: capacity=%d (requested)\n",
-            CK_HT_INITIAL_CAPACITY);
-#endif
 }
 
 static void init_coverage_ht(void) {
     ck_ht_init(&g_coverage_ht, CK_HT_MODE_DIRECT, NULL, &ck_allocator, CK_HT_INITIAL_CAPACITY, 0);
-#if CK_HT_DEBUG_LOGGING
-    fprintf(stderr, "[CK_HT DEBUG] INIT coverage_ht: capacity=%d (requested)\n",
-            CK_HT_INITIAL_CAPACITY);
-#endif
 }
 
 // Lazy initialization using pthread_once (lock-free after first call)
@@ -154,8 +157,6 @@ static inline void ensure_coverage_ht(void) {
 
 // Get measurement context for a task (lock-free lookup)
 static void* get_measurement_context_for_task(void* task_id) {
-    if (task_id == NULL) return NULL;
-
     ensure_measurement_ht();
 
     ck_ht_entry_t entry;
@@ -170,67 +171,8 @@ static void* get_measurement_context_for_task(void* task_id) {
     return NULL;
 }
 
-// Debug counter for tracking registry exhaustion (kept for API compatibility)
-static _Atomic(size_t) g_measurement_registry_failures = 0;
-
-size_t sancov_get_measurement_registry_failures(void) {
-    return atomic_load(&g_measurement_registry_failures);
-}
-
-// Check if hash table is near resize threshold (40% of capacity)
-// ck_ht resizes at 50%, so 40% gives us headroom
-static inline bool ck_ht_near_resize(ck_ht_t *ht) {
-    // Use public API to get entry count
-    // Capacity is known to be CK_HT_INITIAL_CAPACITY (we never resize)
-    size_t entries = ck_ht_count(ht);
-    return (entries * 5) > (CK_HT_INITIAL_CAPACITY * 2);  // > 40%
-}
-
-#if CK_HT_DEBUG_LOGGING
-// Track peak entries for each hash table
-static _Atomic size_t g_measurement_peak_entries = 0;
-static _Atomic size_t g_coverage_peak_entries = 0;
-
-// Get actual capacity from the map (requires access to internal struct)
-extern size_t ck_ht_capacity(ck_ht_t *ht);
-
-static inline void log_ht_stats(const char* operation, ck_ht_t *ht, const char* ht_name) {
-    size_t entries = ck_ht_count(ht);
-    size_t capacity = ck_ht_capacity(ht);  // Get actual capacity
-    double load = (double)entries / (double)capacity * 100.0;
-
-    // Track peak entries
-    _Atomic size_t *peak = (ht == &g_measurement_ht) ? &g_measurement_peak_entries : &g_coverage_peak_entries;
-    size_t current_peak = atomic_load(peak);
-    while (entries > current_peak) {
-        if (atomic_compare_exchange_weak(peak, &current_peak, entries)) {
-            // New peak! Always log this
-            fprintf(stderr, "[CK_HT DEBUG] NEW PEAK %s: entries=%zu capacity=%zu load=%.1f%%\n",
-                    ht_name, entries, capacity, load);
-            break;
-        }
-    }
-
-    // Only log periodically to avoid flooding
-    static _Atomic size_t log_counter = 0;
-    size_t count = atomic_fetch_add(&log_counter, 1);
-
-    // Log every 1000 operations or if near resize threshold
-    bool near_resize = (entries * 2) > capacity;  // >50% = resize territory
-    if (count % 1000 == 0 || near_resize) {
-        fprintf(stderr, "[CK_HT DEBUG] %s %s: entries=%zu peak=%zu capacity=%zu load=%.1f%% %s\n",
-                operation, ht_name, entries, atomic_load(peak), capacity, load,
-                near_resize ? "⚠️ NEAR RESIZE!" : "");
-    }
-}
-#else
-#define log_ht_stats(op, ht, name) ((void)0)
-#endif
-
 // Set measurement context for a task (lock-free write)
 static bool set_measurement_context_for_task(void* task_id, void* context) {
-    if (task_id == NULL) return false;
-
     ensure_measurement_ht();
 
     ck_ht_entry_t entry;
@@ -239,25 +181,11 @@ static bool set_measurement_context_for_task(void* task_id, void* context) {
     ck_ht_hash_direct(&h, &g_measurement_ht, (uintptr_t)task_id);
     ck_ht_entry_set_direct(&entry, h, (uintptr_t)task_id, (uintptr_t)context);
 
-#if CK_HT_DEBUG_LOGGING
-    fprintf(stderr, "[CK_HT DEBUG] measurement_ht SET key=0x%lx (task) value=0x%lx (ctx) hash=0x%lx\n",
-            (unsigned long)task_id, (unsigned long)context, (unsigned long)h.value);
-#endif
-    log_ht_stats("SET_BEFORE", &g_measurement_ht, "measurement");
-    bool success = ck_ht_set_spmc(&g_measurement_ht, h, &entry);
-    log_ht_stats("SET_AFTER", &g_measurement_ht, "measurement");
-
-    if (!success) {
-        atomic_fetch_add(&g_measurement_registry_failures, 1);
-        return false;
-    }
-    return true;
+    return ck_ht_set_spmc(&g_measurement_ht, h, &entry);
 }
 
 // Remove measurement context for a task (lock-free write)
 static void remove_measurement_context_for_task(void* task_id) {
-    if (task_id == NULL) return;
-
     ensure_measurement_ht();
 
     ck_ht_entry_t entry;
@@ -295,17 +223,9 @@ static uint8_t* find_or_create_task_map(void* task_id) {
         return NULL;
     }
 
-    log_ht_stats("COVERAGE_INSERT_BEFORE", &g_coverage_ht, "coverage");
-
-#if CK_HT_DEBUG_LOGGING
-    fprintf(stderr, "[CK_HT DEBUG] coverage_ht PUT key=0x%lx (ctx) value=0x%lx (map) hash=0x%lx\n",
-            (unsigned long)task_id, (unsigned long)new_map, (unsigned long)h.value);
-#endif
     // Try to insert using put (fails if key already exists)
     ck_ht_entry_set_direct(&entry, h, (uintptr_t)task_id, (uintptr_t)new_map);
     bool inserted = ck_ht_put_spmc(&g_coverage_ht, h, &entry);
-
-    log_ht_stats("COVERAGE_INSERT_AFTER", &g_coverage_ht, "coverage");
 
     if (!inserted) {
         // Another thread beat us - free our map and return existing one
@@ -322,8 +242,6 @@ static uint8_t* find_or_create_task_map(void* task_id) {
 
 // Remove a task's coverage map entry (lock-free write)
 static void cleanup_task_map(void* task_id) {
-    if (task_id == NULL) return;
-
     ensure_coverage_ht();
 
     ck_ht_entry_t entry;
@@ -344,29 +262,47 @@ static void cleanup_task_map(void* task_id) {
 }
 
 // MARK: - Measurement Context API
-// These functions provide isolation for measurements.
-// Measurement contexts are now tracked per-task to avoid TLS interference
-// when multiple Swift tasks run on the same thread.
 
-// Measurement context structure - caches coverage map pointer for fast access
-typedef struct {
-    uint8_t* coverage_map;  // Direct pointer to coverage map (cached for speed)
-} MeasurementContextData;
+// Retain a measurement context (increment refcount)
+static void ctx_retain(SanCovMeasurementContext* ctx) {
+    if (ctx) {
+        atomic_fetch_add(&ctx->refcount, 1);
+    }
+}
 
-void* sancov_begin_measurement(void) {
-    // Allocate the context structure
-    MeasurementContextData* ctx = (MeasurementContextData*)malloc(sizeof(MeasurementContextData));
-    if (ctx == NULL) return NULL;
+// Release a measurement context (decrement refcount, free if zero)
+static void ctx_release(SanCovMeasurementContext* ctx) {
+    if (ctx) {
+        int old_count = atomic_fetch_sub(&ctx->refcount, 1);
+        if (old_count == 1) {
+            // Refcount dropped to zero, free the context
+            cleanup_task_map(ctx);
+            free(ctx);
+        }
+    }
+}
 
+// Helper to update TLS cached measurement context with proper refcounting
+static void set_tls_measurement_context(SanCovMeasurementContext* new_ctx) {
+    SanCovMeasurementContext* old_ctx = tls_cached_measurement_context;
+    if (old_ctx != new_ctx) {
+        ctx_retain(new_ctx);  // Retain new (NULL is safe)
+        tls_cached_measurement_context = new_ctx;
+        ctx_release(old_ctx); // Release old (NULL is safe)
+    }
+}
+
+SanCovMeasurementContext* sancov_begin_measurement(void) {
+    SanCovMeasurementContext* ctx = (SanCovMeasurementContext*)xmalloc(sizeof(SanCovMeasurementContext));
     ctx->coverage_map = NULL;
+    ctx->covered_count = 0;
+    atomic_init(&ctx->refcount, 1);  // Start with refcount of 1 (owner reference)
 
     // Associate this measurement context with the current task
-    // This is critical for coverage isolation - if it fails, we can't guarantee isolation
     void* task = get_current_task_for_measurement();
     if (!set_measurement_context_for_task(task, ctx)) {
-        // Registration failed - clean up and return NULL
-        free(ctx);
-        return NULL;
+        fprintf(stderr, "FATAL: failed to register measurement context for task %p\n", task);
+        abort();
     }
 
     // Pre-warm the cache by creating the coverage map now
@@ -376,7 +312,7 @@ void* sancov_begin_measurement(void) {
             ctx->coverage_map = map;
 
             // Populate TLS caches for the current thread (may help if no hop occurs)
-            tls_cached_measurement_context = ctx;
+            set_tls_measurement_context(ctx);
             tls_cached_coverage_map = map;
             tls_cached_task = task;
             tls_cached_task_map = map;
@@ -386,148 +322,131 @@ void* sancov_begin_measurement(void) {
     return ctx;
 }
 
-void sancov_end_measurement(void* context) {
-    if (context == NULL) return;
+SanCovMeasurementContext* sancov_create_dummy_context(void) {
+    SanCovMeasurementContext* ctx = (SanCovMeasurementContext*)xmalloc(sizeof(SanCovMeasurementContext));
+    ctx->coverage_map = NULL;
+    ctx->covered_count = 0;
+    atomic_init(&ctx->refcount, 1);
+    return ctx;
+}
 
-    MeasurementContextData* ctx = (MeasurementContextData*)context;
+/// Cleanup caches, etc
+void sancov_end_measurement(SanCovMeasurementContext* ctx) {
+    if (ctx == NULL) return;
 
     // Remove the measurement context from the current task
     void* task = get_current_task_for_measurement();
     remove_measurement_context_for_task(task);
 
-    // Invalidate ALL caches since measurement is ending
-    // This ensures the next lookup will get the correct map
-    if (tls_cached_measurement_context == context) {
-        tls_cached_measurement_context = NULL;
+    // Invalidate this thread's TLS cache if it matches
+    // Note: Other threads may still hold TLS references - that's OK because
+    // the refcount will keep the context alive until they release it.
+    if (tls_cached_measurement_context == ctx) {
+        set_tls_measurement_context(NULL);  // Releases our TLS reference
         tls_cached_coverage_map = NULL;
     }
-    // Also invalidate task cache since it may have pointed to measurement map
     tls_cached_task = NULL;
     tls_cached_task_map = NULL;
 
-    // Clean up the task registry entry for this context
-    cleanup_task_map(context);
-    free(ctx);
+    // Release the owner reference (context allocated with refcount=1)
+    // The context will be freed when all TLS references are also released
+    ctx_release(ctx);
 }
 
-// MARK: - Context-Aware API
-// These functions operate directly on a measurement context, bypassing TLS lookup.
-// This is critical for Swift concurrency where tasks can hop between threads.
+static const uint8_t* get_counters_with_context(SanCovMeasurementContext* ctx) {
+    if (ctx == NULL || g_guard_count == 0) return NULL;
 
-void sancov_reset_counters_with_context(void* context) {
-    if (context == NULL || g_guard_count == 0) return;
-
-    MeasurementContextData* ctx = (MeasurementContextData*)context;
-
-    // FAST PATH: Use cached coverage map directly
-    if (ctx->coverage_map != NULL) {
-        memset(ctx->coverage_map, 0, g_guard_count);
-        return;
-    }
-
-    // SLOW PATH: Look up the map (should rarely happen)
-    uint8_t* map = find_or_create_task_map(context);
-    if (map != NULL) {
-        ctx->coverage_map = map;
-        memset(map, 0, g_guard_count);
-    }
-}
-
-const uint8_t* sancov_get_counters_with_context(void* context) {
-    if (context == NULL || g_guard_count == 0) return NULL;
-
-    MeasurementContextData* ctx = (MeasurementContextData*)context;
-
-    // FAST PATH: Use cached coverage map directly
     if (ctx->coverage_map != NULL) {
         return ctx->coverage_map;
     }
 
-    // SLOW PATH: Look up the map
-    uint8_t* map = find_or_create_task_map(context);
+    uint8_t* map = find_or_create_task_map(ctx);
     if (map != NULL) {
         ctx->coverage_map = map;
     }
     return map;
 }
 
-size_t sancov_snapshot_covered_indices_with_context(void* context, uint32_t* indices, uint8_t* counts, size_t max_entries) {
-    const uint8_t* counters = sancov_get_counters_with_context(context);
+// Get covered count for a measurement context (O(1)).
+size_t sancov_get_covered_count_with_context(SanCovMeasurementContext* ctx) {
+    if (!ctx) return 0;
+    return ctx->covered_count;
+}
+
+// Allocate and fill an array of covered edge indices.
+//
+// Scans the coverage map and returns indices of edges that were hit (counter != 0).
+// The caller is responsible for freeing the returned array.
+// Use sancov_get_covered_count_with_context() to get the array size.
+//
+// Returns:
+//   Newly allocated array of covered indices, or NULL if none covered.
+//   Caller must free() the returned pointer.
+//
+// The SIMD path processes 16 counters at a time, skipping zero chunks entirely.
+uint32_t* sancov_snapshot_covered_indices_with_context(SanCovMeasurementContext* ctx) {
+    if (!ctx) return NULL;
+
+    size_t count = ctx->covered_count;
+    if (count == 0) return NULL;
+
+    const uint8_t* counters = get_counters_with_context(ctx);
     size_t counter_count = sancov_get_counter_count();
-    if (!counters || counter_count == 0) return 0;
+    if (!counters || counter_count == 0) return NULL;
+
+    uint32_t* indices = (uint32_t*)xmalloc(count * sizeof(uint32_t));
 
 #if USE_NEON_SIMD
-    // SIMD-optimized version using ARM NEON
-    if (indices == NULL) {
-        size_t covered = 0;
-        size_t i = 0;
-        uint8x16_t zero = vdupq_n_u8(0);
-        for (; i + 16 <= counter_count; i += 16) {
-            uint8x16_t chunk = vld1q_u8(counters + i);
-            uint8x16_t cmp = vcgtq_u8(chunk, zero);
-            uint8x8_t sum8 = vadd_u8(vget_low_u8(cmp), vget_high_u8(cmp));
-            uint64_t mask = vget_lane_u64(vreinterpret_u64_u8(sum8), 0);
-            covered += __builtin_popcountll(mask) / 8;
-        }
-        for (; i < counter_count; i++) {
-            if (counters[i] > 0) covered++;
-        }
-        return covered;
-    }
 
+    // Fill mode: extract indices of non-zero counters
     size_t filled = 0;
     size_t i = 0;
     uint8x16_t zero = vdupq_n_u8(0);
-    for (; i + 16 <= counter_count && filled < max_entries; i += 16) {
+
+    for (; i + 16 <= counter_count && filled < count; i += 16) {
         uint8x16_t chunk = vld1q_u8(counters + i);
         uint8x16_t cmp = vcgtq_u8(chunk, zero);
         uint64x2_t cmp64 = vreinterpretq_u64_u8(cmp);
+
+        // Skip entirely zero chunks (common case - coverage is sparse)
         if (vgetq_lane_u64(cmp64, 0) == 0 && vgetq_lane_u64(cmp64, 1) == 0) {
             continue;
         }
-        for (size_t j = 0; j < 16 && filled < max_entries; j++) {
-            if (counters[i + j] > 0) {
+
+        // Extract individual non-zero indices from this chunk
+        for (size_t j = 0; j < 16 && filled < count; j++) {
+            if (counters[i + j] != 0) {
                 indices[filled] = (uint32_t)(i + j);
-                if (counts) counts[filled] = counters[i + j];
                 filled++;
             }
         }
     }
-    for (; i < counter_count && filled < max_entries; i++) {
-        if (counters[i] > 0) {
+
+    // Handle remaining bytes
+    for (; i < counter_count && filled < count; i++) {
+        if (counters[i] != 0) {
             indices[filled] = (uint32_t)i;
-            if (counts) counts[filled] = counters[i];
             filled++;
         }
-    }
-    return filled;
-#else
-    // Scalar fallback
-    if (indices == NULL) {
-        size_t covered = 0;
-        for (size_t i = 0; i < counter_count; i++) {
-            if (counters[i] > 0) covered++;
-        }
-        return covered;
     }
 
-    size_t filled = 0;
-    for (size_t i = 0; i < counter_count && filled < max_entries; i++) {
-        if (counters[i] > 0) {
+#else
+    // Scalar fallback for non-ARM platforms
+    for (size_t i = 0, filled = 0; i < counter_count && filled < count; i++) {
+        if (counters[i] != 0) {
             indices[filled] = (uint32_t)i;
-            if (counts) counts[filled] = counters[i];
             filled++;
         }
     }
-    return filled;
 #endif
+
+    return indices;
 }
 
 // Ensure thread-local fallback map is allocated
 static void ensure_tls_coverage_map(void) {
     if (tls_coverage_map == NULL && g_guard_count > 0) {
-        tls_coverage_map_size = g_guard_count;
-        tls_coverage_map = (uint8_t*)calloc(tls_coverage_map_size, 1);
+        tls_coverage_map = (uint8_t*)calloc(g_guard_count, 1);
     }
 }
 
@@ -542,24 +461,33 @@ static void ensure_tls_coverage_map(void) {
 // 2. If task changed, check for measurement context
 // 3. Lookup/create map and update cache
 //
-// The cache is safe because:
-// - Within consecutive trace_pc_guard calls on the same thread, the task is stable
-// - When tasks hop threads, the new thread has a different cache
-// - Measurement end explicitly invalidates the cache
+// WARNING: The TLS cache can become stale in the worker pool model where the same
+// task runs multiple measurement iterations. When a task hops threads between
+// iterations, threads it previously visited retain stale cache entries pointing
+// to freed coverage maps.
+//
+// Define SANCOV_DISABLE_TLS_CACHE=1 to disable the fast path for debugging.
+#ifndef SANCOV_DISABLE_TLS_CACHE
+#define SANCOV_DISABLE_TLS_CACHE 0
+#endif
+
 static uint8_t* get_current_coverage_map(void) {
     // Get the current task (Swift task or sync pseudo-task)
     void* task = get_current_task_for_measurement();
 
+#if !SANCOV_DISABLE_TLS_CACHE
     // FAST PATH: Check if we have a cached map for this exact task
     // This avoids the O(512) scans in the common case where the task hasn't changed
     if (task == tls_cached_task && tls_cached_task_map != NULL) {
         return tls_cached_task_map;
     }
+#endif
 
     // Task changed - need to do full lookup
     // First check for measurement context for this task (highest priority)
-    void* measurement_ctx = get_measurement_context_for_task(task);
+    SanCovMeasurementContext* measurement_ctx = (SanCovMeasurementContext*)get_measurement_context_for_task(task);
     if (measurement_ctx != NULL) {
+#if !SANCOV_DISABLE_TLS_CACHE
         // Check measurement context cache
         if (measurement_ctx == tls_cached_measurement_context && tls_cached_coverage_map != NULL) {
             // Update task cache to point to measurement map
@@ -567,10 +495,11 @@ static uint8_t* get_current_coverage_map(void) {
             tls_cached_task_map = tls_cached_coverage_map;
             return tls_cached_coverage_map;
         }
+#endif
         // Slow path: lookup or create, then cache
         uint8_t* map = find_or_create_task_map(measurement_ctx);
         if (map != NULL) {
-            tls_cached_measurement_context = measurement_ctx;
+            set_tls_measurement_context(measurement_ctx);  // Properly retain/release
             tls_cached_coverage_map = map;
             tls_cached_task = task;
             tls_cached_task_map = map;
@@ -623,21 +552,12 @@ void __sanitizer_cov_trace_pc_guard_init(uint32_t *start, uint32_t *stop) {
 void __sanitizer_cov_trace_pc_guard(uint32_t *guard) {
     uint8_t* map = get_current_coverage_map();
     if (map && *guard < g_guard_count) {
-        map[*guard] = 1;
-    }
-}
-
-// MARK: - Inline 8-bit Counters (alternative instrumentation)
-// These are called by LLVM when -sanitize-coverage=inline-8bit-counters is enabled.
-// Swift doesn't support this mode directly, but Clang does.
-
-static uint8_t *g_8bit_counters_start = NULL;
-static uint8_t *g_8bit_counters_end = NULL;
-
-void __sanitizer_cov_8bit_counters_init(uint8_t *start, uint8_t *end) {
-    if (g_8bit_counters_start == NULL) {
-        g_8bit_counters_start = start;
-        g_8bit_counters_end = end;
+        if (map[*guard] == 0) {
+            map[*guard] = 1;
+            if (tls_cached_measurement_context) {
+                tls_cached_measurement_context->covered_count++;
+            }
+        }
     }
 }
 
@@ -656,76 +576,31 @@ void __sanitizer_cov_pcs_init(const uintptr_t *pcs_beg, const uintptr_t *pcs_end
     }
 }
 
-// MARK: - Unified Public API
-// These functions work with whichever instrumentation mode is active:
-// - trace_pc_guard (Swift): Uses task-keyed or thread-local coverage maps
-// - inline-8bit-counters (Clang): Uses global counters (no isolation)
+// MARK: - Public API
 
 bool sancov_counters_available(void) {
-    // Either mode provides coverage
-    return g_guard_count > 0 ||
-           (g_8bit_counters_start != NULL && g_8bit_counters_end != NULL);
-}
-
-void sancov_reset_counters(void) {
-    // Reset the current context's coverage map (task-keyed or thread-local)
-    if (g_guard_count > 0) {
-        uint8_t* map = get_current_coverage_map();
-        if (map) {
-            memset(map, 0, g_guard_count);
-        }
-        return;
-    }
-
-    // Fallback: Reset global counters (inline-8bit-counters mode)
-    if (g_8bit_counters_start && g_8bit_counters_end) {
-        memset(g_8bit_counters_start, 0, g_8bit_counters_end - g_8bit_counters_start);
-    }
+    return g_guard_count > 0;
 }
 
 size_t sancov_get_counter_count(void) {
-    // Prefer trace_pc_guard (has task/thread isolation)
-    if (g_guard_count > 0) {
-        return g_guard_count;
-    }
-    // Fallback to inline-8bit-counters
-    if (g_8bit_counters_start && g_8bit_counters_end) {
-        return (size_t)(g_8bit_counters_end - g_8bit_counters_start);
-    }
-    return 0;
+    return g_guard_count;
 }
 
 size_t sancov_get_covered_count(void) {
+    if (g_guard_count == 0) return 0;
+
+    uint8_t* map = get_current_coverage_map();
+    if (!map) return 0;
+
     size_t count = 0;
-
-    // Check task-keyed or thread-local map (trace_pc_guard mode)
-    if (g_guard_count > 0) {
-        uint8_t* map = get_current_coverage_map();
-        if (map) {
-            for (size_t i = 0; i < g_guard_count; i++) {
-                if (map[i]) count++;
-            }
-        }
-        return count;
+    for (size_t i = 0; i < g_guard_count; i++) {
+        if (map[i]) count++;
     }
-
-    // Fallback to global counters (inline-8bit-counters mode)
-    if (g_8bit_counters_start && g_8bit_counters_end) {
-        for (uint8_t *p = g_8bit_counters_start; p < g_8bit_counters_end; p++) {
-            if (*p != 0) count++;
-        }
-    }
-
     return count;
 }
 
 const uint8_t* sancov_get_counters(void) {
-    // Return task-keyed or thread-local map if available
-    if (g_guard_count > 0) {
-        return get_current_coverage_map();
-    }
-    // Fallback to global counters
-    return g_8bit_counters_start;
+    return get_current_coverage_map();
 }
 
 size_t sancov_snapshot_counters(uint8_t* buffer, size_t buffer_size) {
@@ -744,7 +619,7 @@ size_t sancov_snapshot_counters(uint8_t* buffer, size_t buffer_size) {
     return copy_size;
 }
 
-size_t sancov_snapshot_covered_indices(uint32_t* indices, uint8_t* counts, size_t max_entries) {
+size_t sancov_snapshot_covered_indices(uint32_t* indices, size_t max_entries) {
     const uint8_t* counters = sancov_get_counters();
     size_t counter_count = sancov_get_counter_count();
     if (!counters || counter_count == 0) return 0;
@@ -776,7 +651,7 @@ size_t sancov_snapshot_covered_indices(uint32_t* indices, uint8_t* counts, size_
 
         // Handle remaining bytes
         for (; i < counter_count; i++) {
-            if (counters[i] > 0) covered++;
+            if (counters[i] != 0) covered++;
         }
         return covered;
     }
@@ -798,9 +673,8 @@ size_t sancov_snapshot_covered_indices(uint32_t* indices, uint8_t* counts, size_
 
         // Extract non-zero indices from this chunk
         for (size_t j = 0; j < 16 && filled < max_entries; j++) {
-            if (counters[i + j] > 0) {
+            if (counters[i + j] != 0) {
                 indices[filled] = (uint32_t)(i + j);
-                if (counts) counts[filled] = counters[i + j];
                 filled++;
             }
         }
@@ -808,9 +682,8 @@ size_t sancov_snapshot_covered_indices(uint32_t* indices, uint8_t* counts, size_
 
     // Handle remaining bytes
     for (; i < counter_count && filled < max_entries; i++) {
-        if (counters[i] > 0) {
+        if (counters[i] != 0) {
             indices[filled] = (uint32_t)i;
-            if (counts) counts[filled] = counters[i];
             filled++;
         }
     }
@@ -821,16 +694,15 @@ size_t sancov_snapshot_covered_indices(uint32_t* indices, uint8_t* counts, size_
     if (indices == NULL) {
         size_t covered = 0;
         for (size_t i = 0; i < counter_count; i++) {
-            if (counters[i] > 0) covered++;
+            if (counters[i] != 0) covered++;
         }
         return covered;
     }
 
     size_t filled = 0;
     for (size_t i = 0; i < counter_count && filled < max_entries; i++) {
-        if (counters[i] > 0) {
+        if (counters[i] != 0) {
             indices[filled] = (uint32_t)i;
-            if (counts) counts[filled] = counters[i];
             filled++;
         }
     }
@@ -852,17 +724,6 @@ uintptr_t sancov_get_pc(size_t edge_index) {
     return g_pcs_start[edge_index * 2];
 }
 
-// Counter for dladdr calls (for profiling)
-static _Atomic size_t g_dladdr_call_count = 0;
-
-size_t sancov_get_dladdr_call_count(void) {
-    return atomic_load(&g_dladdr_call_count);
-}
-
-void sancov_reset_dladdr_call_count(void) {
-    atomic_store(&g_dladdr_call_count, 0);
-}
-
 bool sancov_get_source_location(size_t edge_index, SanCovSourceLocation* location) {
     if (!location) return false;
 
@@ -875,9 +736,7 @@ bool sancov_get_source_location(size_t edge_index, SanCovSourceLocation* locatio
     location->function_name = NULL;
     location->function_start = 0;
 
-    // Use dladdr to get symbol info
     Dl_info info;
-    atomic_fetch_add(&g_dladdr_call_count, 1);
     if (dladdr((void*)pc, &info)) {
         location->filename = info.dli_fname;
         location->function_name = info.dli_sname;
@@ -885,18 +744,6 @@ bool sancov_get_source_location(size_t edge_index, SanCovSourceLocation* locatio
     }
 
     return true;
-}
-
-size_t sancov_get_source_locations_batch(const size_t* edge_indices, SanCovSourceLocation* locations, size_t count) {
-    if (!edge_indices || !locations || count == 0) return 0;
-
-    size_t filled = 0;
-    for (size_t i = 0; i < count; i++) {
-        if (sancov_get_source_location(edge_indices[i], &locations[i])) {
-            filled++;
-        }
-    }
-    return filled;
 }
 
 size_t sancov_get_covered_locations(SanCovSourceLocation* locations, size_t max_locations) {
@@ -909,7 +756,7 @@ size_t sancov_get_covered_locations(SanCovSourceLocation* locations, size_t max_
 
     // First pass: count covered edges (or fill array)
     for (size_t i = 0; i < counter_count; i++) {
-        if (counters[i] > 0) {
+        if (counters[i] != 0) {
             if (locations != NULL && covered_count < max_locations) {
                 sancov_get_source_location(i, &locations[covered_count]);
             }

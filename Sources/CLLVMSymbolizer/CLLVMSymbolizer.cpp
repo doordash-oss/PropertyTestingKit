@@ -23,6 +23,10 @@ using namespace llvm::object;
 // Thread-local error message storage
 static thread_local std::string g_last_error;
 
+// Global mutex to serialize all LLVM symbolizer operations
+// LLVM's LLVMSymbolizer may have internal state that isn't fully thread-safe
+static std::mutex g_global_symbolizer_mutex;
+
 struct LLVMSymbolizerContext {
     std::unique_ptr<LLVMSymbolizer> symbolizer;
     std::string module_path;
@@ -45,6 +49,9 @@ LLVMSymbolizerRef llvm_symbolizer_create(const char* module_path) {
         return nullptr;
     }
 
+    // Serialize symbolizer creation
+    std::lock_guard<std::mutex> global_lock(g_global_symbolizer_mutex);
+
     auto ctx = new (std::nothrow) LLVMSymbolizerContext(module_path);
     if (!ctx) {
         g_last_error = "Failed to allocate symbolizer context";
@@ -55,6 +62,8 @@ LLVMSymbolizerRef llvm_symbolizer_create(const char* module_path) {
 
 void llvm_symbolizer_destroy(LLVMSymbolizerRef symbolizer) {
     if (symbolizer) {
+        // Serialize symbolizer destruction
+        std::lock_guard<std::mutex> global_lock(g_global_symbolizer_mutex);
         delete symbolizer;
     }
 }
@@ -68,6 +77,9 @@ LLVMSymbolizeResult llvm_symbolizer_lookup(LLVMSymbolizerRef symbolizer, uint64_
         return result;
     }
 
+    // Use global mutex to serialize all LLVM operations
+    // LLVM's internal state may not be fully thread-safe
+    std::lock_guard<std::mutex> global_lock(g_global_symbolizer_mutex);
     std::lock_guard<std::mutex> lock(symbolizer->mutex);
 
     // Create sectioned address (section index 0 for .text-like sections)

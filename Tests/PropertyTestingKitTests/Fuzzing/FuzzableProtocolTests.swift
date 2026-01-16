@@ -1,48 +1,51 @@
 //
-//  FuzzableProtocolTests.swift
+//  MutatorProvidingTests.swift
 //  Copyright © 2025 DoorDash. All rights reserved.
 //
 import Testing
 import Foundation
 import PropertyTestingKit
 
-/// Test enum that uses the default mutate implementation
-enum TestDirection: Fuzzable, Equatable {
+/// Test enum that uses MutatorProviding
+enum TestDirection: MutatorProviding, Equatable, Sendable {
     case north, south, east, west
 
-    static var fuzz: [TestDirection] {
-        [.north, .south, .east, .west]
+    private static let _seeds: [TestDirection] = [.north, .south, .east, .west]
+
+    static var defaultMutator: AnyMutator<TestDirection> {
+        AnyMutator(seeds: _seeds) { value in
+            _seeds.filter { $0 != value }
+        }
     }
-    // Note: No mutate implementation - uses default extension
 }
 
-@Suite("Fuzzable Protocol")
-struct FuzzableProtocolTests {
+@Suite("MutatorProviding Protocol")
+struct MutatorProvidingTests {
 
-    @Test("Bool fuzz values")
-    func testBoolFuzz() {
-        #expect(Bool.fuzz == [true, false])
+    @Test("Bool seeds")
+    func testBoolSeeds() {
+        #expect(Bool.defaultMutator.seeds == [true, false])
     }
 
     @Test("Bool mutation flips value")
     func testBoolMutation() {
-        #expect(true.mutate() == [false])
-        #expect(false.mutate() == [true])
+        #expect(Bool.defaultMutator.mutate(true) == [false])
+        #expect(Bool.defaultMutator.mutate(false) == [true])
     }
 
-    @Test("Int fuzz includes boundary values")
-    func testIntFuzz() {
-        let fuzz = Int.fuzz
-        #expect(fuzz.contains(0))
-        #expect(fuzz.contains(1))
-        #expect(fuzz.contains(-1))
-        #expect(fuzz.contains(Int.max))
-        #expect(fuzz.contains(Int.min))
+    @Test("Int seeds include boundary values")
+    func testIntSeeds() {
+        let seeds = Int.defaultMutator.seeds
+        #expect(seeds.contains(0))
+        #expect(seeds.contains(1))
+        #expect(seeds.contains(-1))
+        #expect(seeds.contains(Int.max))
+        #expect(seeds.contains(Int.min))
     }
 
     @Test("Int mutation produces nearby values")
     func testIntMutation() {
-        let mutations = 10.mutate()
+        let mutations = Int.defaultMutator.mutate(10)
         #expect(mutations.contains(11))  // +1
         #expect(mutations.contains(9))   // -1
         #expect(mutations.contains(-10)) // negate
@@ -50,52 +53,52 @@ struct FuzzableProtocolTests {
         #expect(mutations.contains(20))  // *2
     }
 
-    @Test("String fuzz includes edge cases")
-    func testStringFuzz() {
-        let fuzz = String.fuzz
-        #expect(fuzz.contains(""))           // Empty
-        #expect(fuzz.contains { $0.count == 1 })  // Single char
-        #expect(fuzz.contains { $0.count >= 100 }) // Long
+    @Test("String seeds include edge cases")
+    func testStringSeeds() {
+        let seeds = String.defaultMutator.seeds
+        #expect(seeds.contains(""))           // Empty
+        #expect(seeds.contains { $0.count == 1 })  // Single char
+        #expect(seeds.contains { $0.count >= 100 }) // Long
     }
 
     @Test("String mutation produces variations")
     func testStringMutation() {
-        let mutations = "hello".mutate()
+        let mutations = String.defaultMutator.mutate("hello")
         #expect(mutations.contains("hell"))    // Drop last
         #expect(mutations.contains("ello"))    // Drop first
         #expect(mutations.contains("hellox"))  // Append
         #expect(mutations.contains("HELLO"))   // Uppercase
     }
 
-    @Test("Optional fuzz includes nil")
-    func testOptionalFuzz() {
-        let fuzz: [Int?] = Optional<Int>.fuzz
-        #expect(fuzz.contains(nil))
-        #expect(fuzz.contains(0))
-        #expect(fuzz.contains(1))
+    @Test("Optional seeds include nil")
+    func testOptionalSeeds() {
+        let seeds: [Int?] = Optional<Int>.defaultMutator.seeds
+        #expect(seeds.contains(nil))
+        #expect(seeds.contains(0))
+        #expect(seeds.contains(1))
     }
 
-    @Test("Array fuzz includes empty and non-empty")
-    func testArrayFuzz() {
-        let fuzz: [[Int]] = Array<Int>.fuzz
-        #expect(fuzz.contains([]))
-        #expect(fuzz.contains { !$0.isEmpty })
+    @Test("Array seeds include empty and non-empty")
+    func testArraySeeds() {
+        let seeds: [[Int]] = Array<Int>.defaultMutator.seeds
+        #expect(seeds.contains([]))
+        #expect(seeds.contains { !$0.isEmpty })
     }
 
-    @Test("Double fuzz includes boundary values")
-    func testDoubleFuzz() {
-        let fuzz = Double.fuzz
-        #expect(fuzz.contains(0.0))
-        #expect(fuzz.contains(1.0))
-        #expect(fuzz.contains(-1.0))
-        #expect(fuzz.contains(Double.greatestFiniteMagnitude))
-        #expect(fuzz.contains(Double.infinity))
-        #expect(fuzz.contains { $0.isNaN })
+    @Test("Double seeds include boundary values")
+    func testDoubleSeeds() {
+        let seeds = Double.defaultMutator.seeds
+        #expect(seeds.contains(0.0))
+        #expect(seeds.contains(1.0))
+        #expect(seeds.contains(-1.0))
+        #expect(seeds.contains(Double.greatestFiniteMagnitude))
+        #expect(seeds.contains(Double.infinity))
+        #expect(seeds.contains { $0.isNaN })
     }
 
     @Test("Double mutation handles finite values")
     func testDoubleMutationFinite() {
-        let mutations = 10.0.mutate()
+        let mutations = Double.defaultMutator.mutate(10.0)
         #expect(mutations.contains(11.0))   // +1
         #expect(mutations.contains(9.0))    // -1
         #expect(mutations.contains(-10.0))  // negate
@@ -107,7 +110,7 @@ struct FuzzableProtocolTests {
 
     @Test("Double mutation handles zero")
     func testDoubleMutationZero() {
-        let mutations = 0.0.mutate()
+        let mutations = Double.defaultMutator.mutate(0.0)
         #expect(mutations.contains(1.0))    // +1
         #expect(mutations.contains(-1.0))   // -1
         #expect(mutations.contains(0.0))    // *2 (0*2=0)
@@ -116,28 +119,28 @@ struct FuzzableProtocolTests {
         // Should NOT contain /2 since value is 0
     }
 
-    @Test("UInt fuzz includes boundary values")
-    func testUIntFuzz() {
-        let fuzz = UInt.fuzz
-        #expect(fuzz.contains(0))
-        #expect(fuzz.contains(1))
-        #expect(fuzz.contains(UInt.max))
+    @Test("UInt seeds include boundary values")
+    func testUIntSeeds() {
+        let seeds = UInt.defaultMutator.seeds
+        #expect(seeds.contains(0))
+        #expect(seeds.contains(1))
+        #expect(seeds.contains(UInt.max))
     }
 
     @Test("UInt mutation produces doubled value for small numbers")
     func testUIntMutationDouble() {
         // Test with a value that's small enough to double without overflow
-        let mutations = (42 as UInt).mutate()
+        let mutations = UInt.defaultMutator.mutate(42)
         #expect(mutations.contains(43))   // +1
         #expect(mutations.contains(41))   // -1
         #expect(mutations.contains(21))   // /2
         #expect(mutations.contains(84))   // *2 (only for values <= UInt.max/2)
     }
 
-    @Test("Default mutate for Equatable types")
-    func testDefaultMutateForEquatable() {
-        // TestDirection uses the default mutate implementation (no custom mutate)
-        let mutations = TestDirection.north.mutate()
+    @Test("Custom MutatorProviding type")
+    func testCustomMutatorProviding() {
+        // TestDirection uses a custom MutatorProviding implementation
+        let mutations = TestDirection.defaultMutator.mutate(.north)
         #expect(!mutations.contains(.north))  // Excludes current value
         #expect(mutations.contains(.south))
         #expect(mutations.contains(.east))

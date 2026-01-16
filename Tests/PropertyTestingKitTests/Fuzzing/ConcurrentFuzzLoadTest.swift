@@ -8,13 +8,11 @@ import Foundation
 //    @Test("20 concurrent fuzzers - hash table load test")
 //    func twentyConcurrentFuzzers() async throws {
 //        let concurrentEngines = 20
-//        let iterationsPerEngine = 100
 //
 //        await withTaskGroup(of: Void.self) { group in
 //            for _ in 0..<concurrentEngines {
 //                group.addTask {
 //                    let config = FuzzEngine<Int>.Config(
-//                        maxIterations: iterationsPerEngine,
 //                        mutationBatchSize: 1  // Sequential within each engine to maximize concurrent measurements
 //                    )
 //                    let engine = FuzzEngine<Int>(config: config)
@@ -38,13 +36,11 @@ import Foundation
 //    @Test("40 concurrent fuzzers - higher load test")
 //    func fortyConcurrentFuzzers() async throws {
 //        let concurrentEngines = 40
-//        let iterationsPerEngine = 50
 //
 //        await withTaskGroup(of: Void.self) { group in
 //            for _ in 0..<concurrentEngines {
 //                group.addTask {
 //                    let config = FuzzEngine<Int>.Config(
-//                        maxIterations: iterationsPerEngine,
 //                        mutationBatchSize: 1
 //                    )
 //                    let engine = FuzzEngine<Int>(config: config)
