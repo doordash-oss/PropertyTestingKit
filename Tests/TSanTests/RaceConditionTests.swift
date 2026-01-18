@@ -34,40 +34,6 @@ struct SanCovCountersRaceTests {
         }
     }
 
-    @Test("Concurrent getCoveredLocations calls")
-    func concurrentGetCoveredLocations() async {
-        // Generate some coverage using a measurement context
-        let context = SanCovCounters.beginMeasurement()
-        var x = 0
-        for i in 0..<100 { x += i }
-        _ = x
-        SanCovCounters.endMeasurement(context)
-
-        // Then concurrently get covered locations
-        await withTaskGroup(of: [SanCovSourceLocation].self) { group in
-            for _ in 0..<10 {
-                group.addTask {
-                    await SanCovCounters.getCoveredLocations()
-                }
-            }
-
-            for await _ in group {}
-        }
-    }
-
-    @Test("Concurrent lineNumbersAvailable checks")
-    func concurrentLineNumbersAvailable() async {
-        await withTaskGroup(of: Bool.self) { group in
-            for _ in 0..<20 {
-                group.addTask {
-                    await SanCovCounters.lineNumbersAvailable()
-                }
-            }
-
-            for await _ in group {}
-        }
-    }
-
     @Test("Concurrent measurement contexts")
     func concurrentMeasurementContexts() async {
         await withTaskGroup(of: Void.self) { group in

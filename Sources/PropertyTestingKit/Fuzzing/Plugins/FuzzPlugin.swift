@@ -92,7 +92,7 @@ public enum PluginEvent<each T: Sendable>: Sendable {
         public let coverageSignature: CoverageSignature
 
         public init(
-            input: (repeat each T),
+            input: consuming (repeat each T),
             test: @Sendable @escaping ((repeat each T)) async throws -> Void,
             sourceLocation: SourceLocation,
             coverageSignature: CoverageSignature
@@ -113,7 +113,7 @@ public enum PluginEvent<each T: Sendable>: Sendable {
 
         public init(
             discoveredNewCoverage: Bool,
-            input: (repeat each T)
+            input: consuming (repeat each T)
         ) {
             self.discoveredNewCoverage = discoveredNewCoverage
             self.input = input
@@ -164,7 +164,7 @@ public enum FuzzPluginAction<each T: Sendable>: Sendable {
         /// Encoded inputs to add to the mutation queue.
         public let inputs: [(repeat each T)]
 
-        public init(inputs: [(repeat each T)]) {
+        public init(inputs: consuming [(repeat each T)]) {
             self.inputs = inputs
         }
     }
@@ -174,7 +174,7 @@ public enum FuzzPluginAction<each T: Sendable>: Sendable {
         /// The input to select for mutation.
         public let input: (repeat each T)
 
-        public init(input: (repeat each T)) {
+        public init(input: consuming (repeat each T)) {
             self.input = input
         }
     }
@@ -188,7 +188,7 @@ public enum FuzzPluginAction<each T: Sendable>: Sendable {
         public let failureInfo: FailureInfo?
 
         public init(
-            input: (repeat each T),
+            input: consuming (repeat each T),
             coverageSignature: CoverageSignature,
             entryType: CorpusEntryType,
             failureInfo: FailureInfo? = nil

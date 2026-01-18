@@ -4,7 +4,6 @@
 //
 
 import Foundation
-import DequeModule
 import Dependencies
 import Testing
 
@@ -14,12 +13,14 @@ import Testing
 // user selected plugins.
 
 actor FuzzStateMachine<each Input: Codable & Sendable> {
-    private let inputQueue: TestInputQueue<repeat each Input>
     private var workerPool: WorkerPool<repeat each Input>?
-    private var pluginDispatcher: PluginDispatcher
+    private let plugins: [any FuzzPlugin]
+    private var pluginCoordinator: PluginCoordinator<repeat each Input>?
     private let config: FuzzEngine<repeat each Input>.Config
     private let corpus: CorpusClient<repeat each Input>
     private let mutationGenerator: @Sendable ((repeat each Input)) -> [(repeat each Input)]
+    private let randomInputGenerator: @Sendable () -> (repeat each Input)
+    private let seeds: [(repeat each Input)]
     private let startTime: Date
     private let dateClient: DateClient
     private var failures: [(input: (repeat each Input), error: Error)] = []
@@ -29,25 +30,22 @@ actor FuzzStateMachine<each Input: Codable & Sendable> {
 
     init(
         seeds: [(repeat each Input)],
-        pluginDispatcher: PluginDispatcher,
+        plugins: [any FuzzPlugin],
         config: FuzzEngine<repeat each Input>.Config,
         startTime: Date,
         randomInputGenerator: @escaping @Sendable () -> (repeat each Input),
         mutationGenerator: @escaping @Sendable ((repeat each Input)) -> [(repeat each Input)],
         test: @escaping @Sendable ((repeat each Input)) async throws -> Void,
     ) {
-        let inputQueue = TestInputQueue(
-            initialValues: seeds,
-            randomInputGenerator: randomInputGenerator
-        )
         let corpus = Self.fetchCorpus()
 
         // Caching the dateclient
         @Dependency(\.dateClient) var dateClient: DateClient
         self.dateClient = dateClient
         self.startTime = startTime
-        self.inputQueue = inputQueue
-        self.pluginDispatcher = pluginDispatcher
+        self.seeds = seeds
+        self.randomInputGenerator = randomInputGenerator
+        self.plugins = plugins
         self.config = config
         self.corpus = corpus
         self.mutationGenerator = mutationGenerator
@@ -64,17 +62,19 @@ actor FuzzStateMachine<each Input: Codable & Sendable> {
         let failures: [(input: (repeat each Input), error: Error)]
     }
 
-    private func setupWorkerPool() {
+    private func setupWorkerPool(coordinator: PluginCoordinator<repeat each Input>) {
         let coverageCountersClient = Self.fetchCoverageCounters()
         let testWithIssueCapture = Self.captureIssues(
             sourceLocation: config.sourceLocation,
             test: test
         )
+        let sourceLocation = config.sourceLocation
 
         // TODO: Avoid reference cycle
         self.workerPool = WorkerPool(
             verbose: config.verbose,
-            inputQueue: inputQueue,
+            seeds: seeds,
+            randomInputGenerator: randomInputGenerator,
             test: { testInput in
                 // Check for halting conditions
                 await self.haltIfAtLimit(startTime: self.startTime)
@@ -93,9 +93,13 @@ actor FuzzStateMachine<each Input: Codable & Sendable> {
                     }
                     let didAdd = await self.corpus.addIfInteresting(testInput, coverageSignature)
 
-                    try! await self.submitPluginEvent(.iteration(
+                    // Fire-and-forget: submit event without blocking (no actor hop)
+                    coordinator.send(event: .iteration(
                         .init(discoveredNewCoverage: didAdd, input: testInput)
                     ))
+                } catch is CancellationError {
+                    // Re-throw cancellation to allow worker to exit cleanly
+                    throw CancellationError()
                 } catch {
                     // On failure, try to get coverage but use empty signature if unavailable
                     let coverageSignature: CoverageSignature
@@ -105,11 +109,12 @@ actor FuzzStateMachine<each Input: Codable & Sendable> {
                         coverageSignature = CoverageSignature(edges: Set())
                     }
                     await self.addNewFailure((testInput, error))
-                    try? await self.submitPluginEvent(.failureFound(
+                    // Fire-and-forget: submit event without blocking (no actor hop)
+                    coordinator.send(event: .failureFound(
                         .init(
                             input: testInput,
                             test: testWithIssueCapture,
-                            sourceLocation: self.config.sourceLocation,
+                            sourceLocation: sourceLocation,
                             coverageSignature: coverageSignature
                         )
                     ))
@@ -123,8 +128,32 @@ actor FuzzStateMachine<each Input: Codable & Sendable> {
         if config.verbose {
             print("[FUZZ] FuzzStateMachine.start() called, maxDuration=\(config.maxDuration)")
         }
-        setupWorkerPool()
-        try await submitPluginEvent(.start(
+
+        // Create and start the plugin coordinator with bidirectional messaging
+        let coordinator = PluginCoordinator<repeat each Input>(
+            plugins: plugins
+        )
+        pluginCoordinator = coordinator
+        await coordinator.start()
+
+        // Start a task to consume actions from the coordinator
+        let actionConsumerTask = Task { [self] in
+            // Use tryRecv with yield to avoid blocking the cooperative pool
+            while !coordinator.actions.isClosed {
+                if let action = coordinator.actions.tryRecv() {
+                    await self.executeAction(action)
+                } else {
+                    await Task.yield()
+                }
+            }
+            // Drain any remaining actions
+            while let action = coordinator.actions.tryRecv() {
+                await self.executeAction(action)
+            }
+        }
+
+        setupWorkerPool(coordinator: coordinator)
+        coordinator.send(event: .start(
             .init(
                 maxDuration: config.maxDuration,
                 corpusMode: config.corpusMode
@@ -137,18 +166,24 @@ actor FuzzStateMachine<each Input: Codable & Sendable> {
 
         let result = try await workerPool.work()
 
-        try await submitPluginEvent(.end(
+        let totalCoveredIndices = await corpus.totalCoverage().executedIndices
+        coordinator.send(event: .end(
             .init(
-                totalCoveredIndices: corpus.totalCoverage().executedIndices,
+                totalCoveredIndices: totalCoveredIndices,
                 projectPath: config.projectPath,
                 sourceLocation: config.sourceLocation
             )
         ))
 
-        let stats = await FuzzStats(
+        // Wait for all plugin events to be processed and actions to be produced
+        await coordinator.closeAndAwaitCompletion()
+        // Wait for all actions to be executed
+        await actionConsumerTask.value
+
+        let stats = FuzzStats(
             totalInputs: result.iterationCount,
             mutations: mutationsCount,
-            generations: inputQueue.generatedCount,
+            generations: result.generatedCount,
             duration: startTime.distance(to: dateClient.now()),
             stopReason: result.stopReason,
             failures: failures.count
@@ -170,7 +205,7 @@ actor FuzzStateMachine<each Input: Codable & Sendable> {
             if config.verbose {
                 print("[FUZZ] haltIfAtLimit: elapsed=\(elapsed), maxDuration=\(config.maxDuration) -> HALTING")
             }
-            await workerPool!.halt(reason: .timeLimit)
+            workerPool?.halt(reason: .timeLimit)
         }
     }
 
@@ -229,43 +264,35 @@ actor FuzzStateMachine<each Input: Codable & Sendable> {
         return coverageCounters
     }
 
-    /// Dispatches events to plugins and executes returned actions
-    private func submitPluginEvent(_ event: PluginEvent<repeat each Input>) async throws {
-        try await execute(pluginDispatcher.dispatch(event: event))
-    }
+    /// Executes a single plugin action.
+    private func executeAction(_ action: FuzzPluginAction<repeat each Input>) async {
+        switch action {
+        case .stop(let stopAction):
+            workerPool?.halt(reason: stopAction.reason)
 
-    private func execute(
-        _ actions: [FuzzPluginAction<repeat each Input>]
-    ) async {
-        for action in actions {
-            switch action {
-            case .stop(let stopAction):
-                await workerPool!.halt(reason: stopAction.reason)
+        case .recordIssue(let issueAction):
+            Issue.record(issueAction.comment, sourceLocation: issueAction.sourceLocation)
 
-            case .recordIssue(let issueAction):
-                Issue.record(issueAction.comment, sourceLocation: issueAction.sourceLocation)
+        case .queueInputs(let queueAction):
+            appendToInputs(queueAction.inputs)
 
-            case .queueInputs(let queueAction):
-                await appendToInputs(queueAction.inputs)
+        case .selectForMutation(let mutationAction):
+            let mutations = mutationGenerator(mutationAction.input)
+            appendToInputs(mutations)
+            mutationsCount += 1
 
-            case .selectForMutation(let mutationAction):
-                let mutations = mutationGenerator(mutationAction.input)
-                await appendToInputs(mutations)
-                mutationsCount += 1
-
-            case .submitToCorpus(let corpusAction):
-                await addToCorpus(
-                    corpusAction.input,
-                    signature: corpusAction.coverageSignature,
-                    type: corpusAction.entryType,
-                    failureInfo: corpusAction.failureInfo
-                )
-            }
+        case .submitToCorpus(let corpusAction):
+            await addToCorpus(
+                corpusAction.input,
+                signature: corpusAction.coverageSignature,
+                type: corpusAction.entryType,
+                failureInfo: corpusAction.failureInfo
+            )
         }
     }
 
-    private func appendToInputs(_ inputs: [(repeat each Input)]) async {
-        await inputQueue.push(contentsOf: inputs)
+    private func appendToInputs(_ inputs: [(repeat each Input)]) {
+        workerPool?.pushInputs(inputs)
     }
 
     private func addToCorpus(_ input: (repeat each Input), signature: CoverageSignature, type: CorpusEntryType, failureInfo: FailureInfo?) async {
@@ -279,79 +306,92 @@ extension FuzzStateMachine {
     }
 }
 
-actor TestInputQueue<each Input: Sendable> {
-    var queue: Deque<(repeat each Input)>
-    let randomInputGenerator: () -> (repeat each Input)
-    fileprivate var generatedCount: Int = 0
+import Atomics
 
-    init(initialValues: [(repeat each Input)] = [], randomInputGenerator: @escaping () -> (repeat each Input)) {
-        self.queue = Deque(initialValues)
-        self.randomInputGenerator = randomInputGenerator
-    }
-
-    func pull() -> sending (repeat each Input) {
-        if let next = queue.popFirst() {
-            return next
-        } else {
-            generatedCount += 1
-            return randomInputGenerator()
-        }
-    }
-
-    func push(_ element: repeat each Input) {
-        queue.append((repeat each element))
-    }
-
-    func push(contentsOf collection: [(repeat each Input)]) {
-        queue.append(contentsOf: collection)
-    }
-}
-
-/// Pool that uses a pull system to request tasks on completion
-actor WorkerPool<each Input: Sendable> {
+/// Pool that distributes work to workers via per-worker channels.
+///
+/// Each worker has its own SPSC channel for receiving inputs. Workers pull
+/// from their channel first; if empty, they generate random inputs locally.
+/// This eliminates actor contention on the shared input queue.
+final class WorkerPool<each Input: Sendable>: @unchecked Sendable {
     let size: Int
     let verbose: Bool
-    let inputQueue: TestInputQueue<repeat each Input>
+    let dispatcher: InputDispatcher<repeat each Input>
+    let randomInputGenerator: @Sendable () -> (repeat each Input)
     let test: @Sendable ((repeat each Input)) async throws -> Void
     private var poolTask: Task<Void, any Error>?
-    private var stopReason: FuzzStats.StopReason?
 
-    private var processCount = 0
+    // Atomic counters for lock-free updates from workers
+    private let _processCount: ManagedAtomic<Int>
+    private let _generatedCount: ManagedAtomic<Int>
+    private let _stopReason: ManagedAtomic<Int>  // 0 = none, 1 = timeLimit, 2+ = custom
+    private let _halted: ManagedAtomic<Bool>
+
+    var processCount: Int {
+        _processCount.load(ordering: .relaxed)
+    }
+
+    var generatedCount: Int {
+        _generatedCount.load(ordering: .relaxed)
+    }
 
     init(
         size: Int = ProcessInfo.processInfo.processorCount,
         verbose: Bool = false,
-        inputQueue: TestInputQueue<repeat each Input>,
-        test: @escaping @Sendable ((repeat each Input)) async throws -> Void,
+        seeds: [(repeat each Input)] = [],
+        randomInputGenerator: @escaping @Sendable () -> (repeat each Input),
+        test: @escaping @Sendable ((repeat each Input)) async throws -> Void
     ) {
         // Workers at least 1
         let size = max(1, size)
         self.size = size
         self.verbose = verbose
-        self.inputQueue = inputQueue
+        self.dispatcher = InputDispatcher(workerCount: size)
+        self.randomInputGenerator = randomInputGenerator
         self.test = test
+        self._processCount = ManagedAtomic(0)
+        self._generatedCount = ManagedAtomic(0)
+        self._stopReason = ManagedAtomic(0)
+        self._halted = ManagedAtomic(false)
+
+        // Distribute seeds round-robin to workers
+        dispatcher.push(contentsOf: seeds)
     }
 
-    deinit {
-        stopReason = .custom("worker_pool_deinit")
-        poolTask?.cancel()
+    /// Pushes inputs to be distributed to workers round-robin.
+    func pushInputs(_ inputs: [(repeat each Input)]) {
+        dispatcher.push(contentsOf: inputs)
     }
 
-    // TODO: Avoid reference cycle
     func work() async throws -> WorkerPoolResult {
         if verbose {
             print("[FUZZ] WorkerPool.work() starting with size=\(size)")
         }
         let verboseCapture = verbose
+        let randomInputGenerator = self.randomInputGenerator
+        let test = self.test
+        let processCountAtomic = _processCount
+        let generatedCountAtomic = _generatedCount
+        let haltedFlag = self._halted
+
         poolTask = Task {
             try await withThrowingTaskGroup { group in
                 for workerIndex in 0..<self.size {
+                    // Each worker gets their own channel - they don't see other workers' channels
+                    let channel = self.dispatcher.channel(for: workerIndex)
                     group.addTask {
                         var iterationCount = 0
-                        while !Task.isCancelled {
-                            let input = await self.inputQueue.pull()
-                            try await self.test(input)
-                            await self.incrementProcessCount()
+                        while !Task.isCancelled && !haltedFlag.load(ordering: .relaxed) {
+                            // Try to pull from this worker's channel, generate random if empty
+                            let input: (repeat each Input)
+                            if let queued = channel.tryRecv() {
+                                input = queued
+                            } else {
+                                input = randomInputGenerator()
+                                generatedCountAtomic.wrappingIncrement(ordering: .relaxed)
+                            }
+                            try await test(input)
+                            processCountAtomic.wrappingIncrement(ordering: .relaxed)
                             iterationCount += 1
                         }
                         if verboseCapture {
@@ -365,32 +405,51 @@ actor WorkerPool<each Input: Sendable> {
         }
 
         _ = await poolTask?.result
+        let finalProcessCount = _processCount.load(ordering: .relaxed)
         if verbose {
-            print("[FUZZ] WorkerPool.work() finished, processCount=\(processCount), stopReason=\(String(describing: stopReason))")
+            print("[FUZZ] WorkerPool.work() finished, processCount=\(finalProcessCount), stopReason=\(_stopReason.load(ordering: .relaxed))")
         }
+
+        let stopReason: FuzzStats.StopReason
+        switch _stopReason.load(ordering: .relaxed) {
+        case 1:
+            stopReason = .timeLimit
+        case 2:
+            stopReason = .custom("worker_pool_deinit")
+        default:
+            stopReason = .timeLimit
+        }
+
         return WorkerPoolResult(
-            iterationCount: processCount,
-            stopReason: stopReason ?? FuzzStats.StopReason.timeLimit
+            iterationCount: finalProcessCount,
+            generatedCount: _generatedCount.load(ordering: .relaxed),
+            stopReason: stopReason
         )
     }
 
     func halt(reason: FuzzStats.StopReason) {
+        // Set halted flag first so workers see it immediately
+        _halted.store(true, ordering: .relaxed)
+
         if verbose {
             print("[FUZZ] WorkerPool.halt called with reason: \(reason), poolTask=\(poolTask != nil ? "present" : "nil")")
         }
-        stopReason = reason
+        switch reason {
+        case .timeLimit:
+            _stopReason.store(1, ordering: .relaxed)
+        default:
+            _stopReason.store(2, ordering: .relaxed)
+        }
         poolTask?.cancel()
+        dispatcher.closeAll()
         if verbose {
             print("[FUZZ] WorkerPool.halt: cancel() called")
         }
     }
 
-    func incrementProcessCount() {
-        processCount += 1
-    }
-
     struct WorkerPoolResult {
         let iterationCount: Int
+        let generatedCount: Int
         let stopReason: FuzzStats.StopReason
     }
 }
