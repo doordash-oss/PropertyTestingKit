@@ -31,7 +31,7 @@ import ConcurrentQueues
 /// }
 /// ```
 final class InputDispatcher<each Input: Sendable>: @unchecked Sendable {
-    private let channels: [RCQSQueue<(repeat each Input)>]
+    private let channels: [KFIFOQueue<(repeat each Input)>]
     private let nextWorker: ManagedAtomic<Int>
 
     /// Creates a dispatcher with the specified number of worker channels.
@@ -39,13 +39,14 @@ final class InputDispatcher<each Input: Sendable>: @unchecked Sendable {
     /// - Parameters:
     ///   - workerCount: Number of workers (and channels) to create.
     ///   - channelCapacity: Capacity for each worker's channel. Default 256.
+    ///     Higher k reduces CAS contention under heavy load but increases scan time on sparse queues.
     init(workerCount: Int, channelCapacity: Int = 256) {
         precondition(workerCount > 0, "Must have at least one worker")
 
-        var channels: [RCQSQueue<(repeat each Input)>] = []
+        var channels: [KFIFOQueue<(repeat each Input)>] = []
         channels.reserveCapacity(workerCount)
         for _ in 0..<workerCount {
-            channels.append(RCQSQueue(capacity: channelCapacity))
+            channels.append(KFIFOQueue(k: channelCapacity))
         }
         self.channels = channels
         self.nextWorker = ManagedAtomic(0)
@@ -58,21 +59,21 @@ final class InputDispatcher<each Input: Sendable>: @unchecked Sendable {
 
     /// Returns the channel for the specified worker.
     /// Workers should only access their own channel.
-    func channel(for workerIndex: Int) -> RCQSQueue<(repeat each Input)> {
+    func channel(for workerIndex: Int) -> KFIFOQueue<(repeat each Input)> {
         channels[workerIndex]
     }
 
     /// Pushes a single input, distributing to the next worker round-robin.
     func push(_ input: repeat each Input) {
         let workerIndex = nextWorkerIndex()
-        channels[workerIndex].send((repeat each input))
+        channels[workerIndex].enqueue((repeat each input))
     }
 
     /// Pushes multiple inputs, distributing them round-robin across workers.
     func push(contentsOf inputs: [(repeat each Input)]) {
         for input in inputs {
             let workerIndex = nextWorkerIndex()
-            channels[workerIndex].send(input)
+            channels[workerIndex].enqueue(input)
         }
     }
 

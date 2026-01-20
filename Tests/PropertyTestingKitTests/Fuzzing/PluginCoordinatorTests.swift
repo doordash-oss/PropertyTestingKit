@@ -86,14 +86,14 @@ struct PluginCoordinatorTests {
         let actionCount = SyncBox(0)
         let actionConsumerTask = Task {
             while !coordinator.actions.isClosed {
-                if coordinator.actions.tryRecv() != nil {
+                if coordinator.actions.dequeue() != nil {
                     actionCount.update { $0 += 1 }
                 } else {
                     await Task.yield()
                 }
             }
             // Drain remaining
-            while coordinator.actions.tryRecv() != nil {
+            while coordinator.actions.dequeue() != nil {
                 actionCount.update { $0 += 1 }
             }
         }
@@ -125,7 +125,7 @@ struct PluginCoordinatorTests {
         let executedInputs = SyncBox<[Int]>([])
         let actionConsumerTask = Task {
             while !coordinator.actions.isClosed {
-                if let action = coordinator.actions.tryRecv() {
+                if let action = coordinator.actions.dequeue() {
                     if case .selectForMutation(let mutation) = action {
                         executedInputs.update { $0.append(mutation.input) }
                     }
@@ -134,7 +134,7 @@ struct PluginCoordinatorTests {
                 }
             }
             // Drain remaining
-            while let action = coordinator.actions.tryRecv() {
+            while let action = coordinator.actions.dequeue() {
                 if case .selectForMutation(let mutation) = action {
                     executedInputs.update { $0.append(mutation.input) }
                 }
@@ -172,14 +172,14 @@ struct PluginCoordinatorTests {
         let actionCount = SyncBox(0)
         let actionConsumerTask = Task {
             while !coordinator.actions.isClosed {
-                if coordinator.actions.tryRecv() != nil {
+                if coordinator.actions.dequeue() != nil {
                     actionCount.update { $0 += 1 }
                 } else {
                     await Task.yield()
                 }
             }
             // Drain remaining
-            while coordinator.actions.tryRecv() != nil {
+            while coordinator.actions.dequeue() != nil {
                 actionCount.update { $0 += 1 }
             }
         }
@@ -210,14 +210,14 @@ struct PluginCoordinatorTests {
         // Start action consumer task (will complete immediately when channel closes)
         let actionConsumerTask = Task {
             while !coordinator.actions.isClosed {
-                if coordinator.actions.tryRecv() != nil {
+                if coordinator.actions.dequeue() != nil {
                     // ignore
                 } else {
                     await Task.yield()
                 }
             }
             // Drain remaining
-            while coordinator.actions.tryRecv() != nil { }
+            while coordinator.actions.dequeue() != nil { }
         }
 
         // Should complete immediately with no events
@@ -235,14 +235,14 @@ struct PluginCoordinatorTests {
         // Start action consumer task
         let actionConsumerTask = Task {
             while !coordinator.actions.isClosed {
-                if coordinator.actions.tryRecv() != nil {
+                if coordinator.actions.dequeue() != nil {
                     // ignore
                 } else {
                     await Task.yield()
                 }
             }
             // Drain remaining
-            while coordinator.actions.tryRecv() != nil { }
+            while coordinator.actions.dequeue() != nil { }
         }
 
         // Submit different event types
@@ -272,34 +272,4 @@ struct PluginCoordinatorTests {
         #expect(await plugin.endCount == 1)
     }
 
-    @Test("Stats track dropped events and actions")
-    func testDroppedStats() async throws {
-        // Use very small capacity to force drops
-        let plugin = CountingPlugin(returnActionOnNewCoverage: true)
-
-        let coordinator = PluginCoordinator<Int>(
-            plugins: [plugin],
-            eventChannelCapacity: 4,
-            actionChannelCapacity: 4
-        )
-        await coordinator.start()
-
-        // Don't start consumer - let actions pile up and drop
-        // Submit many events rapidly
-        for i in 0..<100 {
-            coordinator.send(event: .iteration(.init(
-                discoveredNewCoverage: true,
-                input: i
-            )))
-        }
-
-        // Give some time for processing
-        try await Task.sleep(for: .milliseconds(50))
-
-        await coordinator.closeAndAwaitCompletion()
-
-        // Should have dropped some events and/or actions
-        let totalDropped = coordinator.droppedEventCount + coordinator.droppedActionCount
-        #expect(totalDropped > 0, "Expected some drops with small buffers and no consumer")
-    }
 }

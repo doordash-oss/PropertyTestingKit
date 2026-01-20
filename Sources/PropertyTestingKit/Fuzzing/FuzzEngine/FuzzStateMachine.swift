@@ -133,16 +133,16 @@ actor FuzzStateMachine<each Input: Codable & Sendable> {
 
         // Start a task to consume actions from the coordinator
         let actionConsumerTask = Task { [self] in
-            // Use tryRecv with yield to avoid blocking the cooperative pool
-            while !coordinator.actions.isClosed {
-                if let action = coordinator.actions.tryRecv() {
+            // Use dequeue with yield to avoid blocking the cooperative pool
+            while !coordinator.actionChannel.isClosed {
+                if let action = coordinator.actionChannel.dequeue() {
                     await self.executeAction(action)
                 } else {
                     await Task.yield()
                 }
             }
             // Drain any remaining actions
-            while let action = coordinator.actions.tryRecv() {
+            while let action = coordinator.actionChannel.dequeue() {
                 await self.executeAction(action)
             }
         }
@@ -353,6 +353,7 @@ final class WorkerPool<each Input: Sendable>: @unchecked Sendable {
         dispatcher.push(contentsOf: seeds)
     }
 
+    // TODO: Should the worker pool be in charge of inputs?
     /// Pushes inputs to be distributed to workers round-robin.
     func pushInputs(_ inputs: [(repeat each Input)]) {
         dispatcher.push(contentsOf: inputs)
@@ -379,7 +380,7 @@ final class WorkerPool<each Input: Sendable>: @unchecked Sendable {
                         while !Task.isCancelled && !haltedFlag.load(ordering: .relaxed) {
                             // Try to pull from this worker's channel, generate random if empty
                             let input: (repeat each Input)
-                            if let queued = channel.tryRecv() {
+                            if let queued = channel.dequeue() {
                                 input = queued
                             } else {
                                 input = randomInputGenerator()

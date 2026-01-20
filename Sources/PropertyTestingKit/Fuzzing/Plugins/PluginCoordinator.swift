@@ -17,29 +17,24 @@ import Foundation
 ///
 /// This design fully decouples the hot fuzzing loop from plugin overhead.
 public final class PluginCoordinator<each Input: Sendable>: Sendable {
-    private let eventChannel: RCQSQueue<PluginEvent<repeat each Input>>
-    private let actionChannel: RCQSQueue<FuzzPluginAction<repeat each Input>>
+    private let eventChannel: KFIFOQueue<PluginEvent<repeat each Input>>
+    let actionChannel: KFIFOQueue<FuzzPluginAction<repeat each Input>>
 
     private let processor: PluginProcessor<repeat each Input>
-
-    /// Channel of actions for the FuzzStateMachine to consume.
-    public var actions: RCQSQueue<FuzzPluginAction<repeat each Input>> {
-        actionChannel
-    }
 
     /// Create a coordinator with the given plugins.
     ///
     /// - Parameters:
     ///   - plugins: The plugins to dispatch events to.
-    ///   - eventChannelCapacity: Capacity for the event channel. Default 1024.
-    ///   - actionChannelCapacity: Capacity for the action channel. Default 1024.
+    ///   - eventChannelCapacity: Capacity for the event channel. Default 45.
+    ///   - actionChannelCapacity: Capacity for the action channel. Default 45.
     public init(
         plugins: [any FuzzPlugin],
-        eventChannelCapacity: Int = 1024,
-        actionChannelCapacity: Int = 1024
+        eventChannelCapacity: Int = 45,
+        actionChannelCapacity: Int = 45
     ) {
-        self.eventChannel = RCQSQueue(capacity: eventChannelCapacity)
-        self.actionChannel = RCQSQueue(capacity: actionChannelCapacity)
+        self.eventChannel = KFIFOQueue(k: eventChannelCapacity)
+        self.actionChannel = KFIFOQueue(k: actionChannelCapacity)
 
         self.processor = PluginProcessor(
             eventChannel: eventChannel,
@@ -62,7 +57,7 @@ public final class PluginCoordinator<each Input: Sendable>: Sendable {
     ///
     /// - Parameter event: The plugin event to dispatch.
     public func send(event: PluginEvent<repeat each Input>) {
-        eventChannel.send(event)
+        eventChannel.enqueue(event)
     }
 
     /// Close the event channel and wait for all events to be processed.
@@ -93,15 +88,15 @@ public final class PluginCoordinator<each Input: Sendable>: Sendable {
 /// Actor that processes events from the event channel and produces actions
 /// to the action channel.
 actor PluginProcessor<each Input: Sendable> {
-    private let eventChannel: RCQSQueue<PluginEvent<repeat each Input>>
-    private let actionChannel: RCQSQueue<FuzzPluginAction<repeat each Input>>
+    private let eventChannel: KFIFOQueue<PluginEvent<repeat each Input>>
+    private let actionChannel: KFIFOQueue<FuzzPluginAction<repeat each Input>>
     private let plugins: [any FuzzPlugin]
 
     private var processorTask: Task<Void, Never>?
 
     init(
-        eventChannel: RCQSQueue<PluginEvent<repeat each Input>>,
-        actionChannel: RCQSQueue<FuzzPluginAction<repeat each Input>>,
+        eventChannel: KFIFOQueue<PluginEvent<repeat each Input>>,
+        actionChannel: KFIFOQueue<FuzzPluginAction<repeat each Input>>,
         plugins: [any FuzzPlugin]
     ) {
         self.eventChannel = eventChannel
@@ -111,15 +106,15 @@ actor PluginProcessor<each Input: Sendable> {
 
     func start() {
         processorTask = Task { [self] in
-            // Use tryRecv with yield to avoid blocking the cooperative pool
+            // Use dequeue with yield to avoid blocking the cooperative pool
             while !eventChannel.isClosed {
-                if let event = eventChannel.tryRecv() {
+                if let event = eventChannel.dequeue() {
                     // Dispatch to each plugin and send actions immediately
                     for plugin in plugins {
                         do {
                             let actions = try await plugin.handle(event: event)
                             for action in actions {
-                                actionChannel.send(action)
+                                actionChannel.enqueue(action)
                             }
                         } catch {
                             // TODO: We shouldn't ignore cancellation
@@ -131,12 +126,12 @@ actor PluginProcessor<each Input: Sendable> {
                 }
             }
             // Drain any remaining events
-            while let event = eventChannel.tryRecv() {
+            while let event = eventChannel.dequeue() {
                 for plugin in plugins {
                     do {
                         let actions = try await plugin.handle(event: event)
                         for action in actions {
-                            actionChannel.send(action)
+                            actionChannel.enqueue(action)
                         }
                     } catch {
                         // Plugin errors logged but don't stop processing

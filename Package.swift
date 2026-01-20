@@ -199,11 +199,16 @@ package.targets += [
         name: "ProfiledBenchmark",
         dependencies: [
             .product(name: "Benchmark", package: "package-benchmark"),
+            "PropertyTestingKit",
             "ConcurrentQueues",
         ],
         path: "Benchmarks/ProfiledBenchmark",
         swiftSettings: [
-            .unsafeFlags(["-O"])
+            .unsafeFlags([
+                "-O",
+                "-sanitize=undefined",
+                "-sanitize-coverage=edge,pc-table"
+            ])
         ],
         linkerSettings: [
             // Add rpath for Testing.framework from Xcode (needed for local toolchain)
