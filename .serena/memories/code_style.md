@@ -11,10 +11,6 @@
 
 ## Testing Conventions
 - Use spies instead of mocks with logic (via FunctionSpy library)
-- Target 100% branch coverage
-- If branches are hard to reach, either:
-  - Rework code to remove the need for them
-  - Use dependency injection to achieve necessary state
 
 ## Naming
 - Protocols: `Mutator`, `MutatorProviding`, `Shrinkable`

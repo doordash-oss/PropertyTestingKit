@@ -10,6 +10,7 @@
 
 import Benchmark
 import Foundation
+import ConcurrentQueues
 import PropertyTestingKit
 
 ///// A simple function to fuzz - parses an integer and checks bounds.
@@ -26,55 +27,31 @@ import PropertyTestingKit
 //}
 
 let benchmarks: @Sendable () -> Void = {
-//    Benchmark(
-//        "fuzz(Int, String, Bool, Double, UInt8) - 1000 iterations, with gap detection",
-//        configuration: .init(
-//            metrics: [.wallClock],
-//            warmupIterations: 0,
-//            scalingFactor: .one,
-//            maxDuration: .seconds(60),
-//            maxIterations: 1000
-//        )
-//    ) { benchmark in
-//        for _ in benchmark.scaledIterations {
-//            cartesianProduct(
-//                Int.defaultMutator.seeds,
-//                String.defaultMutator.seeds,
-//                Bool.defaultMutator.seeds,
-//                Double.defaultMutator.seeds,
-//                UInt8.defaultMutator.seeds
-//            )
-//        }
-//    }
-
     Benchmark(
-        "ProfiledBenchmark",
+        "fuzz(Int) - iterations/sec, refuzzReplace",
         configuration: .init(
             metrics: [.custom("Iterations/sec (K)", polarity: .prefersLarger, useScalingFactor: false)],
             warmupIterations: 0,
             scalingFactor: .one,
-            maxDuration: .seconds(120),
+            maxDuration: .seconds(0.5),
             maxIterations: 100
         )
     ) { benchmark in
+//        let config = FuzzEngine<Int>.Config(
+//            maxDuration: .seconds(0.1),
+//            corpusMode: .refuzzReplace
+//        )
+//        let engine = FuzzEngine<Int>(mutators: Int.defaultMutator, config: config)
         for _ in benchmark.scaledIterations {
-            let result = try? await fuzz(
-                duration: .seconds(0.1),
-                corpusMode: .refuzzReplace,
-                plugins: [CoverageGapPlugin()]
-            ) { (i: Int, s: String) in
-                if i < 0 {
-                    blackHole(i.magnitude)
-                }
-                if s.isEmpty {
-                    blackHole("empty")
-                } else if s.count > 10 {
-                    blackHole(s.prefix(10))
-                }
-            }
-            if let result {
-                benchmark.measurement(.custom("Iterations/sec (K)", polarity: .prefersLarger, useScalingFactor: false), result.stats.totalInputs / 100)
-            }
+//            let result = await engine.run { input in
+//                try parseAndValidate(input)
+//            }
+            var count = 0
+            while count < 1_000_000_000 {}
+
+//            // Multiply by 10 to convert 0.1s -> 1s, divide by 1000 for (K) display
+//            benchmark.measurement(.custom("Iterations/sec (K)", polarity: .prefersLarger, useScalingFactor: false), result.stats.totalInputs / 100)
         }
     }
 }
+

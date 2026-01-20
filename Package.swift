@@ -14,11 +14,16 @@ let package = Package(
             name: "PropertyTestingKit",
             targets: ["PropertyTestingKit"]
         ),
+        .library(
+            name: "ConcurrentQueues",
+            targets: ["ConcurrentQueues"]
+        ),
     ],
     dependencies: [
         .package(url: "https://github.com/pointfreeco/swift-dependencies.git", from: "1.6.0"),
         .package(url: "https://github.com/twof/FunctionSpy.git", from: "1.2.0"),
         .package(url: "https://github.com/apple/swift-collections.git", from: "1.1.0"),
+        .package(url: "https://github.com/apple/swift-atomics.git", from: "1.2.0"),
         .package(path: "../../../Documents/OpenSource/package-benchmark"),
     ],
     targets: [
@@ -56,13 +61,24 @@ let package = Package(
             ]
         ),
 
+        // Concurrent queue implementations
+        .target(
+            name: "ConcurrentQueues",
+            dependencies: [
+                .product(name: "Atomics", package: "swift-atomics"),
+            ],
+            path: "Sources/ConcurrentQueues"
+        ),
+
         .target(
             name: "PropertyTestingKit",
             dependencies: [
                 "SanCovHooks",
                 "CLLVMSymbolizer",
+                "ConcurrentQueues",
                 .product(name: "Dependencies", package: "swift-dependencies"),
                 .product(name: "DequeModule", package: "swift-collections"),
+                .product(name: "Atomics", package: "swift-atomics"),
             ],
             swiftSettings: [
                 .unsafeFlags(["-O"])  // Optimize even in debug builds
@@ -139,6 +155,13 @@ let package = Package(
                 "PropertyTestingKit",
             ]
         ),
+        .testTarget(
+            name: "ConcurrentQueuesTests",
+            dependencies: [
+                "ConcurrentQueues",
+            ],
+            path: "Tests/ConcurrentQueuesTests"
+        ),
     ]
 )
 
@@ -177,15 +200,37 @@ package.targets += [
         dependencies: [
             .product(name: "Benchmark", package: "package-benchmark"),
             "PropertyTestingKit",
+            "ConcurrentQueues",
         ],
         path: "Benchmarks/ProfiledBenchmark",
         swiftSettings: [
-            // Enable sanitizer coverage so we have realistic counter counts
-            // Note: sanitize-coverage requires a sanitizer to be enabled
             .unsafeFlags([
                 "-O",
                 "-sanitize=undefined",
                 "-sanitize-coverage=edge,pc-table"
+            ])
+        ],
+        linkerSettings: [
+            // Add rpath for Testing.framework from Xcode (needed for local toolchain)
+            .unsafeFlags([
+                "-Xlinker", "-rpath",
+                "-Xlinker", "/Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks"
+            ])
+        ],
+        plugins: [
+            .plugin(name: "BenchmarkPlugin", package: "package-benchmark")
+        ]
+    ),
+    .executableTarget(
+        name: "ChannelBenchmarks",
+        dependencies: [
+            .product(name: "Benchmark", package: "package-benchmark"),
+            "ConcurrentQueues",
+        ],
+        path: "Benchmarks/ChannelBenchmarks",
+        swiftSettings: [
+            .unsafeFlags([
+                "-O"
             ])
         ],
         linkerSettings: [

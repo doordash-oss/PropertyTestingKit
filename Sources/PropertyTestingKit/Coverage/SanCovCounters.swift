@@ -315,12 +315,6 @@ private actor SourceLocationCache {
 }
 
 extension SanCovCounters {
-    /// Get the size of a function given its start address.
-    /// Uses the Mach-O symbol table for accurate sizes.
-    public static func getFunctionSize(at address: UInt) async -> UInt? {
-        await getFunctionSizeLookup().getSize(forFunctionAt: address)
-    }
-
     /// Get sizes for multiple function addresses at once.
     public static func getFunctionSizes(at addresses: [UInt]) async -> [UInt: UInt] {
         await getFunctionSizeLookup().getSizes(forFunctionsAt: addresses)
@@ -422,26 +416,6 @@ extension SanCovCounters {
         UInt(sancov_get_pc(edgeIndex))
     }
 
-    /// Get source location info for a given edge index.
-    ///
-    /// When DWARF debug info is available, includes line and column numbers.
-    /// Otherwise falls back to function-level info from dladdr.
-    ///
-    /// - Parameters:
-    ///   - edgeIndex: The edge index to look up.
-    ///   - includeDWARF: Whether to include DWARF debug info (slower but has line numbers).
-    /// - Returns: Source location info, or nil if unavailable.
-    func getSourceLocation(for edgeIndex: Int, includeDWARF: Bool = true) async -> SanCovSourceLocation? {
-        var cLocation = SanCovSourceLocation_C()
-        guard sancov_get_source_location(edgeIndex, &cLocation) else {
-            return nil
-        }
-
-        // Try to get DWARF line info (expensive - skip if not needed)
-        let dwarfLocation = includeDWARF ? await getDWARFSymbolizerHelper().lookup(pc: UInt(cLocation.pc)) : nil
-        return SanCovSourceLocation(from: cLocation, dwarfLocation: dwarfLocation)
-    }
-
     /// Get source location info with caching (no DWARF).
     ///
     /// Uses a shared cache to avoid repeated dladdr calls. When pre-warming
@@ -464,15 +438,6 @@ extension SanCovCounters {
         await SourceLocationCache.shared.startPreWarming()
     }
 
-    /// Wait for source location pre-warming to complete.
-    ///
-    /// - Parameter timeout: Maximum time to wait (default 100ms).
-    static func awaitSourceLocationPreWarming(
-        timeout: Duration = .milliseconds(100)
-    ) async {
-        await SourceLocationCache.shared.awaitPreWarming(timeout: timeout)
-    }
-
     /// Batch look up DWARF source locations for multiple PC addresses.
     ///
     /// Much faster than individual `getSourceLocation` calls when you need line numbers
@@ -482,48 +447,5 @@ extension SanCovCounters {
     /// - Returns: Dictionary mapping PCs to their DWARF source locations.
     static func getDWARFLocations(for pcs: [UInt]) async -> [UInt: DWARFSourceLocation] {
         await getDWARFSymbolizerHelper().lookupBatch(pcs: pcs)
-    }
-
-    /// Get source locations for all covered edges in the current task.
-    ///
-    /// This provides task-isolated coverage with source mapping.
-    /// When DWARF debug info is available, each location includes line numbers.
-    /// Otherwise falls back to function-level info.
-    ///
-    /// - Parameter includeStdlib: If `false` (default), filters out Swift stdlib functions.
-    ///   Some toolchains instrument specialized stdlib code which pollutes coverage data.
-    /// - Returns: Array of source locations for covered edges.
-    static func getCoveredLocations(includeStdlib: Bool = false) async -> [SanCovSourceLocation] {
-        // First, get the count
-        let count = sancov_get_covered_locations(nil, 0)
-        guard count > 0 else { return [] }
-
-        // Allocate buffer and get locations
-        var cLocations = [SanCovSourceLocation_C](repeating: SanCovSourceLocation_C(), count: count)
-        let filled = sancov_get_covered_locations(&cLocations, count)
-
-        // Convert to Swift types with DWARF line info when available
-        var results: [SanCovSourceLocation] = []
-        results.reserveCapacity(filled)
-        for cLoc in cLocations.prefix(filled) {
-            let dwarfLocation = await getDWARFSymbolizerHelper().lookup(pc: UInt(cLoc.pc))
-            let location = SanCovSourceLocation(from: cLoc, dwarfLocation: dwarfLocation)
-
-            // Filter out stdlib if requested
-            if !includeStdlib && location.isStdlib {
-                continue
-            }
-
-            results.append(location)
-        }
-        return results
-    }
-
-    /// Check if DWARF line-level symbolication is available.
-    ///
-    /// When `true`, `getSourceLocation` and `getCoveredLocations` will include
-    /// line and column numbers. When `false`, only function-level info is available.
-    static func lineNumbersAvailable() async -> Bool {
-        await getDWARFSymbolizerHelper().isAvailable
     }
 }

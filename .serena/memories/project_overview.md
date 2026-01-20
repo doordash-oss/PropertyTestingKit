@@ -6,21 +6,11 @@ Coverage-guided fuzz testing library for Swift. Brings AFL-style fuzzing to Swif
 ## Key Features
 - Coverage-guided fuzzing with automatic input generation
 - Corpus persistence and regression detection
-- High throughput (~168,000 iter/sec)
 - Plugin system for customization
-- Test case shrinking
 
 ## Tech Stack
 - **Language**: Swift 6.2+ (requires patched toolchain for parameter packs)
 - **Platforms**: macOS 26+, iOS 26+
-- **Dependencies**:
-  - swift-dependencies (dependency injection)
-  - FunctionSpy (test spies)
-  - swift-collections (DequeModule)
-  - package-benchmark (benchmarking)
-- **C/C++ Components**:
-  - SanCovHooks: SanitizerCoverage hooks using ConcurrencyKit's lock-free hash table
-  - CLLVMSymbolizer: LLVM-based DWARF symbolizer
 
 ## Architecture
 - `FuzzEngine`: Main actor-based fuzzing engine with state machine

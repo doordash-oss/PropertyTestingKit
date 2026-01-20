@@ -20,17 +20,6 @@ This project requires a patched Swift toolchain. Always use the build scripts.
 # Run specific test target
 ./scripts/build-local-toolchain.sh test --filter "SanCovTests"
 
-# Find flaky tests (runs N times until failure)
-./scripts/test-until-failure.sh PropertyTestingKitTests 100
-# Output goes to /tmp/test-failure-run{N}.log
-
-# Run ThreadSanitizer tests
-./scripts/run-tsan-tests.sh
-
-# Run Xcode tests
-./scripts/run-xctest.sh
-```
-
 ## Benchmarking
 ```bash
 # Run benchmarks
@@ -41,7 +30,6 @@ This project requires a patched Swift toolchain. Always use the build scripts.
 
 # Analyze call tree output
 ./scripts/parse-call-tree.py
-# Call tree output is in ~/Downloads/call_tree.txt
 ```
 
 ## Debugging

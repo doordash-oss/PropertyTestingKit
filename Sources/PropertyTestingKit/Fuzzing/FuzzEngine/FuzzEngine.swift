@@ -277,9 +277,6 @@ public actor FuzzEngine<each Input: Codable & Sendable> {
     ) async -> FuzzResult<repeat each Input> {
         let startTime = dateClient.now()
 
-        // Initialize plugin dispatcher with baseline + user plugins
-        let dispatcher = PluginDispatcher(plugins: config.allPlugins)
-
         let allSeeds = additionalSeeds + mutatorSeeds()
 
         // Early exit if no seeds and no way to generate inputs
@@ -292,7 +289,7 @@ public actor FuzzEngine<each Input: Codable & Sendable> {
 
         let stateMachine = FuzzStateMachine(
             seeds: allSeeds,
-            pluginDispatcher: dispatcher,
+            plugins: config.allPlugins,
             config: config,
             startTime: startTime,
             randomInputGenerator: mutatorGenerate,
@@ -407,26 +404,6 @@ public actor FuzzEngine<each Input: Codable & Sendable> {
             duration: duration,
             stopReason: .regression,
         )
-
-        // Dispatch end event to plugins for analysis
-        if !config.plugins.isEmpty {
-            var dispatcher = PluginDispatcher(plugins: config.plugins)
-            let totalCoveredIndices = snapshot.totalCoverage.executedIndices
-
-            if config.verbose {
-                print("[Regression] Running analysis: corpus covered \(totalCoveredIndices.count) edges, total edges: \(SanCovCounters.totalEdgeCount)")
-            }
-
-            let endContext = PluginEvent<repeat each Input>.EndContext(
-                totalCoveredIndices: totalCoveredIndices,
-                projectPath: config.projectPath,
-                sourceLocation: config.sourceLocation
-            )
-
-//            if let actions = try? await dispatcher.dispatch(event: PluginEvent<repeat each Input>.end(endContext)) {
-//                _ = executeActions(actions)
-//            }
-        }
 
         // Return the snapshot directly for the result
         return FuzzResult(

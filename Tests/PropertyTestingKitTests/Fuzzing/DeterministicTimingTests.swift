@@ -423,44 +423,6 @@ struct DeterministicTimingTests {
         }
     }
 
-    // MARK: - awaitSourceLocationPreWarming Tests
-
-    @Suite("awaitSourceLocationPreWarming")
-    struct AwaitSourceLocationPreWarmingTests {
-
-        @Test("completes without hanging when prewarming finishes")
-        func testCompletesWhenPrewarmingFinishes() async {
-            // Start prewarming
-            await SanCovCounters.startPreWarmingSourceLocations()
-
-            // Should complete (either prewarm finishes or times out)
-            await SanCovCounters.awaitSourceLocationPreWarming(timeout: .seconds(5))
-
-            // If we get here, it completed successfully
-        }
-
-        @Test("respects timeout via injected clock")
-        func testRespectsTimeout() async {
-            let testClock = TestClock()
-
-            // Start prewarming first
-            await SanCovCounters.startPreWarmingSourceLocations()
-
-            // Start awaiting with injected clock
-            async let awaitTask: Void = withDependencies {
-                $0.continuousClockClient = testClock
-            } operation: {
-                await SanCovCounters.awaitSourceLocationPreWarming(timeout: .seconds(1))
-            }
-
-            // Advance clock past timeout
-            await testClock.advance(by: .seconds(2))
-
-            // Should complete due to timeout
-            await awaitTask
-        }
-    }
-
     // MARK: - runWithTimeout Tests
 
     @Suite("runWithTimeout")
