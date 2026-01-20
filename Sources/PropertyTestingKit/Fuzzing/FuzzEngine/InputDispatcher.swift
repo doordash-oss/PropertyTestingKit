@@ -7,6 +7,7 @@
 //
 
 import Atomics
+import ConcurrentQueues
 
 /// Distributes test inputs to workers using round-robin scheduling.
 ///
@@ -30,7 +31,7 @@ import Atomics
 /// }
 /// ```
 final class InputDispatcher<each Input: Sendable>: @unchecked Sendable {
-    private let channels: [SpinChannel<(repeat each Input)>]
+    private let channels: [RCQSQueue<(repeat each Input)>]
     private let nextWorker: ManagedAtomic<Int>
 
     /// Creates a dispatcher with the specified number of worker channels.
@@ -41,10 +42,10 @@ final class InputDispatcher<each Input: Sendable>: @unchecked Sendable {
     init(workerCount: Int, channelCapacity: Int = 256) {
         precondition(workerCount > 0, "Must have at least one worker")
 
-        var channels: [SpinChannel<(repeat each Input)>] = []
+        var channels: [RCQSQueue<(repeat each Input)>] = []
         channels.reserveCapacity(workerCount)
         for _ in 0..<workerCount {
-            channels.append(SpinChannel(capacity: channelCapacity))
+            channels.append(RCQSQueue(capacity: channelCapacity))
         }
         self.channels = channels
         self.nextWorker = ManagedAtomic(0)
@@ -57,7 +58,7 @@ final class InputDispatcher<each Input: Sendable>: @unchecked Sendable {
 
     /// Returns the channel for the specified worker.
     /// Workers should only access their own channel.
-    func channel(for workerIndex: Int) -> SpinChannel<(repeat each Input)> {
+    func channel(for workerIndex: Int) -> RCQSQueue<(repeat each Input)> {
         channels[workerIndex]
     }
 
@@ -83,8 +84,9 @@ final class InputDispatcher<each Input: Sendable>: @unchecked Sendable {
     }
 
     /// Returns the total number of dropped inputs across all channels.
+    /// Always returns 0 since channels no longer drop messages.
     var totalDroppedCount: UInt64 {
-        channels.reduce(0) { $0 + $1.droppedCount }
+        0
     }
 
     /// Gets the next worker index using atomic round-robin.

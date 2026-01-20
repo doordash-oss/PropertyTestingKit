@@ -54,14 +54,6 @@ public final class VyukovBoundedChannel<Element: Sendable>: @unchecked Sendable 
     // Closed flag
     private let _closed: ManagedAtomic<Bool>
 
-    // Stats
-    private let _droppedCount: ManagedAtomic<UInt64>
-
-    /// Number of messages dropped due to buffer overflow.
-    public var droppedCount: UInt64 {
-        _droppedCount.load(ordering: .relaxed)
-    }
-
     /// Whether the channel has been closed.
     public var isClosed: Bool {
         _closed.load(ordering: .acquiring)
@@ -84,18 +76,9 @@ public final class VyukovBoundedChannel<Element: Sendable>: @unchecked Sendable 
         self.enqueuePos = ManagedAtomic(0)
         self.dequeuePos = ManagedAtomic(0)
         self._closed = ManagedAtomic(false)
-        self._droppedCount = ManagedAtomic(0)
     }
 
     deinit {
-        // Clean up any remaining elements
-        let head = dequeuePos.load(ordering: .relaxed)
-        let tail = enqueuePos.load(ordering: .relaxed)
-        for i in head..<tail {
-            let index = Int(i & mask)
-            buffer[index].data = nil
-        }
-
         buffer.deinitialize(count: capacity)
         buffer.deallocate()
     }
@@ -116,7 +99,7 @@ public final class VyukovBoundedChannel<Element: Sendable>: @unchecked Sendable 
 
             if dif == 0 {
                 // Slot is ready for this position - try to claim it
-                let (exchanged, original) = enqueuePos.compareExchange(
+                let (exchanged, original) = enqueuePos.weakCompareExchange(
                     expected: pos,
                     desired: pos &+ 1,
                     successOrdering: .relaxed,
@@ -133,8 +116,8 @@ public final class VyukovBoundedChannel<Element: Sendable>: @unchecked Sendable 
                 pos = original
             } else if dif < 0 {
                 // Buffer is full (sequence is from previous cycle)
-                _droppedCount.wrappingIncrement(ordering: .relaxed)
-                return
+                // Spin and retry - backpressure instead of dropping
+                pos = enqueuePos.load(ordering: .relaxed)
             } else {
                 // Slot not ready yet - reload position and retry
                 pos = enqueuePos.load(ordering: .relaxed)
@@ -146,7 +129,7 @@ public final class VyukovBoundedChannel<Element: Sendable>: @unchecked Sendable 
     ///
     /// Optimized for single consumer - no CAS needed.
     @inline(__always)
-    public func tryRecv() -> Element? {
+    public func tryRecv() -> sending Element? {
         let pos = dequeuePos.load(ordering: .relaxed)
         let index = Int(pos & mask)
         let cell = buffer.advanced(by: index)
@@ -175,7 +158,7 @@ public final class VyukovBoundedChannel<Element: Sendable>: @unchecked Sendable 
 
     /// Receives a message, spinning until one is available.
     @inline(__always)
-    public func recv() -> Element? {
+    public func recv() -> sending Element? {
         while true {
             if let element = tryRecv() {
                 return element
@@ -193,7 +176,9 @@ public final class VyukovBoundedChannel<Element: Sendable>: @unchecked Sendable 
     }
 }
 
-// MARK: - Sequence Conformance
+// MARK: - Protocol Conformance
+
+extension VyukovBoundedChannel: RelaxedQueue {}
 
 extension VyukovBoundedChannel: Sequence {
     public func makeIterator() -> VyukovBoundedChannelIterator<Element> {

@@ -85,7 +85,15 @@ struct PluginCoordinatorTests {
         // Start action consumer task
         let actionCount = SyncBox(0)
         let actionConsumerTask = Task {
-            for await _ in coordinator.actions {
+            while !coordinator.actions.isClosed {
+                if coordinator.actions.tryRecv() != nil {
+                    actionCount.update { $0 += 1 }
+                } else {
+                    await Task.yield()
+                }
+            }
+            // Drain remaining
+            while coordinator.actions.tryRecv() != nil {
                 actionCount.update { $0 += 1 }
             }
         }
@@ -116,7 +124,17 @@ struct PluginCoordinatorTests {
         // Start action consumer task
         let executedInputs = SyncBox<[Int]>([])
         let actionConsumerTask = Task {
-            for await action in coordinator.actions {
+            while !coordinator.actions.isClosed {
+                if let action = coordinator.actions.tryRecv() {
+                    if case .selectForMutation(let mutation) = action {
+                        executedInputs.update { $0.append(mutation.input) }
+                    }
+                } else {
+                    await Task.yield()
+                }
+            }
+            // Drain remaining
+            while let action = coordinator.actions.tryRecv() {
                 if case .selectForMutation(let mutation) = action {
                     executedInputs.update { $0.append(mutation.input) }
                 }
@@ -153,7 +171,15 @@ struct PluginCoordinatorTests {
         // Start action consumer task
         let actionCount = SyncBox(0)
         let actionConsumerTask = Task {
-            for await _ in coordinator.actions {
+            while !coordinator.actions.isClosed {
+                if coordinator.actions.tryRecv() != nil {
+                    actionCount.update { $0 += 1 }
+                } else {
+                    await Task.yield()
+                }
+            }
+            // Drain remaining
+            while coordinator.actions.tryRecv() != nil {
                 actionCount.update { $0 += 1 }
             }
         }
@@ -183,7 +209,15 @@ struct PluginCoordinatorTests {
 
         // Start action consumer task (will complete immediately when channel closes)
         let actionConsumerTask = Task {
-            for await _ in coordinator.actions { }
+            while !coordinator.actions.isClosed {
+                if coordinator.actions.tryRecv() != nil {
+                    // ignore
+                } else {
+                    await Task.yield()
+                }
+            }
+            // Drain remaining
+            while coordinator.actions.tryRecv() != nil { }
         }
 
         // Should complete immediately with no events
@@ -200,7 +234,15 @@ struct PluginCoordinatorTests {
 
         // Start action consumer task
         let actionConsumerTask = Task {
-            for await _ in coordinator.actions { }
+            while !coordinator.actions.isClosed {
+                if coordinator.actions.tryRecv() != nil {
+                    // ignore
+                } else {
+                    await Task.yield()
+                }
+            }
+            // Drain remaining
+            while coordinator.actions.tryRecv() != nil { }
         }
 
         // Submit different event types

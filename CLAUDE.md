@@ -27,7 +27,6 @@
 ### Benchmarks
 - To benchmark, run `./scripts/run-benchmarks.sh`.
 - The filter flag for benchmarks requires that you match the entire name of the benchmark you want to run. Partial matches will not work, and may appear to hang.
-- You can find the calltree output in `~/Downloads/call_tree.txt`.
 - You can analyze calltrees using `./scripts/parse-call-tree.py`.
 
 ## Scripts

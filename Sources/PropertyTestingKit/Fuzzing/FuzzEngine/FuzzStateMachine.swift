@@ -7,11 +7,6 @@ import Foundation
 import Dependencies
 import Testing
 
-// TODO: Create a new plugin that selects failed input for mutation
-// add it to the list of plugins by default. It will simplify logic.
-// have a list of base plugins with some defaults. Separate param from
-// user selected plugins.
-
 actor FuzzStateMachine<each Input: Codable & Sendable> {
     private var workerPool: WorkerPool<repeat each Input>?
     private let plugins: [any FuzzPlugin]

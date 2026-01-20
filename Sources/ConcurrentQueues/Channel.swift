@@ -66,14 +66,6 @@ public final class Channel<Element: Sendable>: @unchecked Sendable {
     private var waiter: CheckedContinuation<Bool, Never>?
     private let hasWaiter = ManagedAtomic<Bool>(false)
 
-    // Stats for debugging
-    private let _droppedCount: ManagedAtomic<UInt64>
-
-    /// Number of messages dropped due to buffer overflow.
-    public var droppedCount: UInt64 {
-        _droppedCount.load(ordering: .relaxed)
-    }
-
     /// Whether the channel has been closed.
     public var isClosed: Bool {
         _closed.load(ordering: .acquiring)
@@ -101,7 +93,6 @@ public final class Channel<Element: Sendable>: @unchecked Sendable {
         self.head = ManagedAtomic(0)
         self.tail = ManagedAtomic(0)
         self._closed = ManagedAtomic(false)
-        self._droppedCount = ManagedAtomic(0)
     }
 
     deinit {
@@ -138,7 +129,6 @@ public final class Channel<Element: Sendable>: @unchecked Sendable {
             if count >= capacity {
                 // Buffer full - drop this message
                 // (Can't safely drop oldest in lock-free MPSC)
-                _droppedCount.wrappingIncrement(ordering: .relaxed)
                 return
             }
 
@@ -216,8 +206,8 @@ public final class Channel<Element: Sendable>: @unchecked Sendable {
                 // Slot reserved - wait for it to be written
                 let index = Int(h) & mask
                 while !written[index].load(ordering: .acquiring) {
-                    // Spin until producer finishes writing
-                    // Could add yield here for very high contention
+                    // Yield to allow other tasks to run (including the producer)
+                    await Task.yield()
                 }
 
                 // Read element and clear slot

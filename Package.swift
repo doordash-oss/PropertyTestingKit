@@ -14,6 +14,10 @@ let package = Package(
             name: "PropertyTestingKit",
             targets: ["PropertyTestingKit"]
         ),
+        .library(
+            name: "ConcurrentQueues",
+            targets: ["ConcurrentQueues"]
+        ),
     ],
     dependencies: [
         .package(url: "https://github.com/pointfreeco/swift-dependencies.git", from: "1.6.0"),
@@ -57,11 +61,21 @@ let package = Package(
             ]
         ),
 
+        // Concurrent queue implementations
+        .target(
+            name: "ConcurrentQueues",
+            dependencies: [
+                .product(name: "Atomics", package: "swift-atomics"),
+            ],
+            path: "Sources/ConcurrentQueues"
+        ),
+
         .target(
             name: "PropertyTestingKit",
             dependencies: [
                 "SanCovHooks",
                 "CLLVMSymbolizer",
+                "ConcurrentQueues",
                 .product(name: "Dependencies", package: "swift-dependencies"),
                 .product(name: "DequeModule", package: "swift-collections"),
                 .product(name: "Atomics", package: "swift-atomics"),
@@ -141,6 +155,13 @@ let package = Package(
                 "PropertyTestingKit",
             ]
         ),
+        .testTarget(
+            name: "ConcurrentQueuesTests",
+            dependencies: [
+                "ConcurrentQueues",
+            ],
+            path: "Tests/ConcurrentQueuesTests"
+        ),
     ]
 )
 
@@ -179,6 +200,7 @@ package.targets += [
         dependencies: [
             .product(name: "Benchmark", package: "package-benchmark"),
             "PropertyTestingKit",
+            "ConcurrentQueues",
         ],
         path: "Benchmarks/ProfiledBenchmark",
         swiftSettings: [
@@ -205,7 +227,7 @@ package.targets += [
         name: "ChannelBenchmarks",
         dependencies: [
             .product(name: "Benchmark", package: "package-benchmark"),
-            "PropertyTestingKit",
+            "ConcurrentQueues",
         ],
         path: "Benchmarks/ChannelBenchmarks",
         swiftSettings: [

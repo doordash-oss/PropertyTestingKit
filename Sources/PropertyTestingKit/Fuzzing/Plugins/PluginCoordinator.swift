@@ -6,6 +6,7 @@
 //  Uses high-performance SPSC channels for minimal overhead.
 //
 
+import ConcurrentQueues
 import Foundation
 
 /// Coordinates bidirectional async messaging between fuzz engine and plugins.
@@ -16,13 +17,13 @@ import Foundation
 ///
 /// This design fully decouples the hot fuzzing loop from plugin overhead.
 public final class PluginCoordinator<each Input: Sendable>: Sendable {
-    private let eventChannel: SpinChannel<PluginEvent<repeat each Input>>
-    private let actionChannel: SpinChannel<FuzzPluginAction<repeat each Input>>
+    private let eventChannel: RCQSQueue<PluginEvent<repeat each Input>>
+    private let actionChannel: RCQSQueue<FuzzPluginAction<repeat each Input>>
 
     private let processor: PluginProcessor<repeat each Input>
 
     /// Channel of actions for the FuzzStateMachine to consume.
-    public var actions: SpinChannel<FuzzPluginAction<repeat each Input>> {
+    public var actions: RCQSQueue<FuzzPluginAction<repeat each Input>> {
         actionChannel
     }
 
@@ -37,8 +38,8 @@ public final class PluginCoordinator<each Input: Sendable>: Sendable {
         eventChannelCapacity: Int = 1024,
         actionChannelCapacity: Int = 1024
     ) {
-        self.eventChannel = SpinChannel(capacity: eventChannelCapacity)
-        self.actionChannel = SpinChannel(capacity: actionChannelCapacity)
+        self.eventChannel = RCQSQueue(capacity: eventChannelCapacity)
+        self.actionChannel = RCQSQueue(capacity: actionChannelCapacity)
 
         self.processor = PluginProcessor(
             eventChannel: eventChannel,
@@ -77,28 +78,30 @@ public final class PluginCoordinator<each Input: Sendable>: Sendable {
     // MARK: - Stats (for testing/debugging)
 
     /// Number of events dropped due to channel overflow.
+    /// Always returns 0 since channels no longer drop messages.
     public var droppedEventCount: UInt64 {
-        eventChannel.droppedCount
+        0
     }
 
     /// Number of actions dropped due to channel overflow.
+    /// Always returns 0 since channels no longer drop messages.
     public var droppedActionCount: UInt64 {
-        actionChannel.droppedCount
+        0
     }
 }
 
 /// Actor that processes events from the event channel and produces actions
 /// to the action channel.
 actor PluginProcessor<each Input: Sendable> {
-    private let eventChannel: SpinChannel<PluginEvent<repeat each Input>>
-    private let actionChannel: SpinChannel<FuzzPluginAction<repeat each Input>>
+    private let eventChannel: RCQSQueue<PluginEvent<repeat each Input>>
+    private let actionChannel: RCQSQueue<FuzzPluginAction<repeat each Input>>
     private let plugins: [any FuzzPlugin]
 
     private var processorTask: Task<Void, Never>?
 
     init(
-        eventChannel: SpinChannel<PluginEvent<repeat each Input>>,
-        actionChannel: SpinChannel<FuzzPluginAction<repeat each Input>>,
+        eventChannel: RCQSQueue<PluginEvent<repeat each Input>>,
+        actionChannel: RCQSQueue<FuzzPluginAction<repeat each Input>>,
         plugins: [any FuzzPlugin]
     ) {
         self.eventChannel = eventChannel

@@ -2,12 +2,7 @@
 
 ## After Making Code Changes
 
-### 1. Build
-```bash
-./scripts/build-local-toolchain.sh
-```
-
-### 2. Run Tests
+### 1. Run Tests
 ```bash
 # Run main test suite
 ./scripts/build-local-toolchain.sh test --filter "PropertyTestingKitTests"
@@ -16,20 +11,9 @@
 ./scripts/build-local-toolchain.sh test --filter "SanCovTests"
 ```
 
-### 3. Check for Flaky Tests (if relevant)
-```bash
-./scripts/test-until-failure.sh PropertyTestingKitTests 10
-```
-
-### 4. Run Benchmarks (if performance-sensitive changes)
-```bash
-./scripts/run-benchmarks.sh
-```
-
 ## Code Quality Checks
 - Ensure no `nonisolated(unsafe)` usage
 - Ensure no force unwrapping (`!`)
-- Verify branch coverage for new code
 - Use dependency injection for testability
 
 ## Important Notes

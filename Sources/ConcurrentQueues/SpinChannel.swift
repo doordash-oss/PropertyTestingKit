@@ -33,14 +33,6 @@ public final class SpinChannel<Element: Sendable>: @unchecked Sendable {
     // Closed flag
     private let _closed: ManagedAtomic<Bool>
 
-    // Stats
-    private let _droppedCount: ManagedAtomic<UInt64>
-
-    /// Number of messages dropped due to buffer overflow.
-    public var droppedCount: UInt64 {
-        _droppedCount.load(ordering: .relaxed)
-    }
-
     /// Whether the channel has been closed.
     public var isClosed: Bool {
         _closed.load(ordering: .acquiring)
@@ -62,7 +54,6 @@ public final class SpinChannel<Element: Sendable>: @unchecked Sendable {
         self.head = ManagedAtomic(0)
         self.tail = ManagedAtomic(0)
         self._closed = ManagedAtomic(false)
-        self._droppedCount = ManagedAtomic(0)
     }
 
     deinit {
@@ -91,7 +82,6 @@ public final class SpinChannel<Element: Sendable>: @unchecked Sendable {
             let capacity = UInt64(mask + 1)
 
             if count >= capacity {
-                _droppedCount.wrappingIncrement(ordering: .relaxed)
                 return
             }
 
