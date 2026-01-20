@@ -118,7 +118,7 @@ let _rawSegmentSlotsOffset: Int = 32
 struct RawSegment {
     @usableFromInline let ptr: UnsafeMutableRawPointer
 
-    @usableFromInline
+    @inlinable
     init(ptr: UnsafeMutableRawPointer) {
         self.ptr = ptr
     }
@@ -233,6 +233,7 @@ public final class KFIFOQueue<T>: @unchecked Sendable {
     }
 
     @discardableResult
+    @inlinable
     public func enqueue(_ item: T) -> Bool {
         // Check if closed before attempting to enqueue
         if isClosed { return false }
@@ -269,6 +270,7 @@ public final class KFIFOQueue<T>: @unchecked Sendable {
         }
     }
 
+    @inlinable
     public func dequeue() -> T? {
         while true {
             let headOld = head.load(ordering: .acquiring)
@@ -295,10 +297,12 @@ public final class KFIFOQueue<T>: @unchecked Sendable {
         }
     }
 
+    @inlinable
     public func close() {
         closed.store(true, ordering: .releasing)
     }
 
+    @inlinable
     public var isClosed: Bool {
         closed.load(ordering: .acquiring)
     }
@@ -313,7 +317,9 @@ public final class KFIFOQueue<T>: @unchecked Sendable {
     // MARK: - Private Helpers
 
     @inline(__always)
-    private func findEmptySlot(in segment: RawSegment) -> (DoubleWord, Int) {
+    @usableFromInline
+    @inlinable
+    func findEmptySlot(in segment: RawSegment) -> (DoubleWord, Int) {
         let startIndex = ThreadLocalRNG.random(upperBound: k)
         for i in 0..<k {
             let index = (startIndex + i) % k
@@ -327,7 +333,9 @@ public final class KFIFOQueue<T>: @unchecked Sendable {
     }
 
     @inline(__always)
-    private func findItem(in segment: RawSegment) -> (DoubleWord, Int) {
+    @usableFromInline
+    @inlinable
+    func findItem(in segment: RawSegment) -> (DoubleWord, Int) {
         let startIndex = ThreadLocalRNG.random(upperBound: k)
         for i in 0..<k {
             let index = (startIndex + i) % k
@@ -340,7 +348,9 @@ public final class KFIFOQueue<T>: @unchecked Sendable {
         return (segment.slot(at: lastIndex).load(ordering: .acquiring), lastIndex)
     }
 
-    private func committed(tailOld: DoubleWord, itemNew: DoubleWord, index: Int) -> Bool {
+    @usableFromInline
+    @inlinable
+    func committed(tailOld: DoubleWord, itemNew: DoubleWord, index: Int) -> Bool {
         let tailSegment = RawSegment.from(tailOld.first)
 
         if tailSegment.slot(at: index).load(ordering: .acquiring) != itemNew {
@@ -374,7 +384,9 @@ public final class KFIFOQueue<T>: @unchecked Sendable {
         return false
     }
 
-    private func isReachable(target: UInt, from start: UInt) -> Bool {
+    @usableFromInline
+    @inlinable
+    func isReachable(target: UInt, from start: UInt) -> Bool {
         var current = start
         while current != 0 {
             if current == target { return true }
@@ -383,7 +395,9 @@ public final class KFIFOQueue<T>: @unchecked Sendable {
         return false
     }
 
-    private func advanceTail(_ tailOld: DoubleWord) {
+    @usableFromInline
+    @inlinable
+    func advanceTail(_ tailOld: DoubleWord) {
         let tailSegment = RawSegment.from(tailOld.first)
         var next = tailSegment.next.load(ordering: .acquiring)
 
@@ -409,7 +423,9 @@ public final class KFIFOQueue<T>: @unchecked Sendable {
         }
     }
 
-    private func advanceHead(_ headOld: DoubleWord) {
+    @usableFromInline
+    @inlinable
+    func advanceHead(_ headOld: DoubleWord) {
         let next = RawSegment.from(headOld.first).next.load(ordering: .acquiring)
         if next.first != 0 {
             let newHead = DoubleWord(first: next.first, second: headOld.second &+ 1)
@@ -418,7 +434,9 @@ public final class KFIFOQueue<T>: @unchecked Sendable {
     }
 
     @inline(__always)
-    private func decodeItem(_ encoded: UInt) -> T {
+    @usableFromInline
+    @inlinable
+    func decodeItem(_ encoded: UInt) -> T {
         useDirectStorage ? _decodeDirectValue(encoded) : RawBox<T>.takeValue(encoded)
     }
 }

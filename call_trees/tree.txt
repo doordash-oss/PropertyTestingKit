@@ -1,924 +1,828 @@
 Weight	Self Weight	Symbol Names
-8.68 s  55.3%	0 s	  completeTaskWithClosure(swift::AsyncContext*, swift::SwiftError*)
-6.99 s   0.0%	0 s	   partial apply for specialized thunk for @escaping @isolated(any) @callee_guaranteed @async () -> (@out A)
-6.99 s   0.0%	0 s	    specialized thunk for @escaping @isolated(any) @callee_guaranteed @async () -> (@out A)
-6.99 s   0.0%	0 s	     partial apply for closure #2 in closure #1 in closure #1 in closure #1 in variable initialization expression of benchmarks
-6.96 s   0.0%	0 s	      closure #2 in closure #1 in closure #1 in closure #1 in variable initialization expression of benchmarks
-6.79 s   0.0%	0 s	       KFIFOQueue.enqueue(_:)
-2.82 s   0.0%	0 s	        KFIFOQueue.committed(tailOld:itemNew:index:)
-2.39 s   0.0%	0 s	         KFIFOQueue.inQueueAfterHead(tailOld:tailCurrent:headCurrent:)
-2.35 s   0.0%	0 s	          KFIFOQueue.isReachable(target:from:)
-1.13 s   0.0%	1.05 s	           KFIFOQueue.isReachable(target:from:)
-82.70 ms   0.0%	0 s	            0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-82.70 ms   0.0%	0 s	             0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-82.70 ms   0.0%	0 s	              0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-82.70 ms   0.0%	82.70 ms	               0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8829) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-840.13 ms   0.0%	0 s	           KFIFOQueue.segmentFrom(_:)
-467.19 ms   0.0%	0 s	            static RawSegment.from(_:)
-467.19 ms   0.0%	413.07 ms	             static RawSegment.from(_:)
-54.12 ms   0.0%	0 s	              0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-54.12 ms   0.0%	0 s	               0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-54.12 ms   0.0%	0 s	                0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-54.12 ms   0.0%	54.12 ms	                 0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8829) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-211.40 ms   0.0%	0 s	            RawSegment.init(ptr:)
-211.40 ms   0.0%	0 s	             completeTaskWithClosure(swift::AsyncContext*, swift::SwiftError*)
-211.40 ms   0.0%	205.00 ms	              RawSegment.init(ptr:)
-6.40 ms   0.0%	0 s	               0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-6.40 ms   0.0%	0 s	                0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-6.40 ms   0.0%	0 s	                 0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-6.40 ms   0.0%	6.40 ms	                  0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8829) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-161.53 ms   0.0%	135.00 ms	            KFIFOQueue.segmentFrom(_:)
-26.53 ms   0.0%	0 s	             0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-26.53 ms   0.0%	0 s	              0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-26.53 ms   0.0%	0 s	               0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-26.53 ms   0.0%	26.53 ms	                0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8829) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-292.55 ms   0.0%	0 s	           RawSegment.next.getter
-190.87 ms   0.0%	170.00 ms	            RawSegment.next.getter
-20.87 ms   0.0%	0 s	             0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-20.87 ms   0.0%	0 s	              0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-20.87 ms   0.0%	0 s	               0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-20.87 ms   0.0%	20.87 ms	                0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8829) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-91.67 ms   0.0%	0 s	            _rawSegmentNextOffset.unsafeMutableAddressor
-91.67 ms   0.0%	85.00 ms	             _rawSegmentNextOffset.unsafeMutableAddressor
-6.67 ms   0.0%	0 s	              0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-6.67 ms   0.0%	0 s	               0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-6.67 ms   0.0%	0 s	                0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-6.67 ms   0.0%	6.67 ms	                 0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8829) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-10.00 ms   0.0%	0 s	            dispatch_once_f
-10.00 ms   0.0%	0 s	             completeTaskWithClosure(swift::AsyncContext*, swift::SwiftError*)
-10.00 ms   0.0%	10.00 ms	              dispatch_once_f
-48.23 ms   0.0%	0 s	           static RawSegment.from(_:)
-48.23 ms   0.0%	0 s	            completeTaskWithClosure(swift::AsyncContext*, swift::SwiftError*)
-48.23 ms   0.0%	40.00 ms	             static RawSegment.from(_:)
-8.23 ms   0.0%	0 s	              0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-8.23 ms   0.0%	0 s	               0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-8.23 ms   0.0%	0 s	                0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-8.23 ms   0.0%	8.23 ms	                 0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8829) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-35.00 ms   0.0%	0 s	           _rawSegmentNextOffset.unsafeMutableAddressor
-35.00 ms   0.0%	0 s	            completeTaskWithClosure(swift::AsyncContext*, swift::SwiftError*)
-35.00 ms   0.0%	35.00 ms	             _rawSegmentNextOffset.unsafeMutableAddressor
-40.50 ms   0.0%	35.00 ms	          KFIFOQueue.inQueueAfterHead(tailOld:tailCurrent:headCurrent:)
-5.50 ms   0.0%	0 s	           0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-5.50 ms   0.0%	0 s	            0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-5.50 ms   0.0%	0 s	             0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-5.50 ms   0.0%	5.50 ms	              0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8829) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-5.00 ms   0.0%	0 s	          KFIFOQueue.segmentFrom(_:)
-5.00 ms   0.0%	5.00 ms	           KFIFOQueue.segmentFrom(_:)
-154.16 ms   0.0%	152.78 ms	         KFIFOQueue.committed(tailOld:itemNew:index:)
-1.38 ms   0.0%	0 s	          0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-1.38 ms   0.0%	0 s	           0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-1.38 ms   0.0%	0 s	            0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-1.38 ms   0.0%	1.38 ms	             0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8829) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-102.64 ms   0.0%	0 s	         KFIFOQueue.getTail()
-102.64 ms   0.0%	100.00 ms	          KFIFOQueue.getTail()
-2.64 ms   0.0%	0 s	           0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-2.64 ms   0.0%	0 s	            0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-2.64 ms   0.0%	0 s	             0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-2.64 ms   0.0%	2.64 ms	              0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8829) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-48.85 ms   0.0%	0 s	         RawSegment.slot(at:)
-30.44 ms   0.0%	29.74 ms	          RawSegment.slot(at:)
-707.83 µs   0.0%	0 s	           0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-707.83 µs   0.0%	0 s	            0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-707.83 µs   0.0%	0 s	             0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-707.83 µs   0.0%	707.83 µs	              0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8829) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-18.40 ms   0.0%	0 s	          _rawSegmentSlotsOffset.unsafeMutableAddressor
-18.40 ms   0.0%	18.40 ms	           _rawSegmentSlotsOffset.unsafeMutableAddressor
-45.98 ms   0.0%	0 s	         KFIFOQueue.getHead()
-45.98 ms   0.0%	40.00 ms	          KFIFOQueue.getHead()
-5.98 ms   0.0%	0 s	           0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-5.98 ms   0.0%	0 s	            0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-5.98 ms   0.0%	0 s	             0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-5.98 ms   0.0%	5.98 ms	              0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8829) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-45.69 ms   0.0%	0 s	         KFIFOQueue.segmentFrom(_:)
-20.14 ms   0.0%	0 s	          static RawSegment.from(_:)
-20.14 ms   0.0%	20.00 ms	           static RawSegment.from(_:)
-143.21 µs   0.0%	0 s	            0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-143.21 µs   0.0%	0 s	             0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-143.21 µs   0.0%	0 s	              0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-143.21 µs   0.0%	143.21 µs	               0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8829) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-18.29 ms   0.0%	18.29 ms	          KFIFOQueue.segmentFrom(_:)
-7.26 ms   0.0%	0 s	          RawSegment.init(ptr:)
-7.26 ms   0.0%	0 s	           completeTaskWithClosure(swift::AsyncContext*, swift::SwiftError*)
-7.26 ms   0.0%	7.26 ms	            RawSegment.init(ptr:)
-16.25 ms   0.0%	0 s	         KFIFOQueue.head.getter
-16.25 ms   0.0%	0 s	          completeTaskWithClosure(swift::AsyncContext*, swift::SwiftError*)
-16.25 ms   0.0%	16.25 ms	           KFIFOQueue.head.getter
-5.00 ms   0.0%	0 s	         static RawSegment.from(_:)
-5.00 ms   0.0%	0 s	          completeTaskWithClosure(swift::AsyncContext*, swift::SwiftError*)
-5.00 ms   0.0%	5.00 ms	           static RawSegment.from(_:)
-3.77 ms   0.0%	0 s	         KFIFOQueue.tail.getter
-3.77 ms   0.0%	0 s	          completeTaskWithClosure(swift::AsyncContext*, swift::SwiftError*)
-3.77 ms   0.0%	0 s	           KFIFOQueue.tail.getter
-3.77 ms   0.0%	0 s	            0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-3.77 ms   0.0%	0 s	             0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-3.77 ms   0.0%	0 s	              0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-3.77 ms   0.0%	3.77 ms	               0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8829) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-1.42 s   0.0%	0 s	        KFIFOQueue.findEmptySlot(in:)
-763.85 ms   0.0%	700.00 ms	         KFIFOQueue.findEmptySlot(in:)
-63.85 ms   0.0%	0 s	          0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-63.85 ms   0.0%	0 s	           0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-63.85 ms   0.0%	0 s	            0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-63.85 ms   0.0%	63.85 ms	             0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8829) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-232.01 ms   0.0%	0 s	         RawSegment.slot(at:)
-127.30 ms   0.0%	110.00 ms	          RawSegment.slot(at:)
-17.30 ms   0.0%	0 s	           0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-17.30 ms   0.0%	0 s	            0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-17.30 ms   0.0%	0 s	             0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-17.30 ms   0.0%	17.30 ms	              0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8829) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-104.71 ms   0.0%	0 s	          _rawSegmentSlotsOffset.unsafeMutableAddressor
-104.71 ms   0.0%	95.00 ms	           _rawSegmentSlotsOffset.unsafeMutableAddressor
-9.71 ms   0.0%	0 s	            0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-9.71 ms   0.0%	0 s	             0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-9.71 ms   0.0%	0 s	              0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-9.71 ms   0.0%	9.71 ms	               0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8829) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-179.01 ms   0.0%	0 s	         specialized IndexingIterator.next()
-179.01 ms   0.0%	160.00 ms	          specialized IndexingIterator.next()
-19.01 ms   0.0%	0 s	           0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-19.01 ms   0.0%	0 s	            0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-19.01 ms   0.0%	0 s	             0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-19.01 ms   0.0%	19.01 ms	              0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8829) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-130.65 ms   0.0%	0 s	         static ThreadLocalRNG.random(upperBound:)
-100.00 ms   0.0%	100.00 ms	          static ThreadLocalRNG.random(upperBound:)
-29.47 ms   0.0%	0 s	          ThreadLocalRNG._key.unsafeMutableAddressor
-29.47 ms   0.0%	25.00 ms	           ThreadLocalRNG._key.unsafeMutableAddressor
-4.47 ms   0.0%	0 s	            0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-4.47 ms   0.0%	0 s	             0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-4.47 ms   0.0%	0 s	              0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-4.47 ms   0.0%	4.47 ms	               0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8829) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-1.17 ms   0.0%	0 s	          DYLD-STUB$$swift_once
-1.17 ms   0.0%	0 s	           completeTaskWithClosure(swift::AsyncContext*, swift::SwiftError*)
-1.17 ms   0.0%	0 s	            DYLD-STUB$$swift_once
-1.17 ms   0.0%	0 s	             0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-1.17 ms   0.0%	0 s	              0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-1.17 ms   0.0%	0 s	               0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-1.17 ms   0.0%	1.17 ms	                0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8829) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-54.71 ms   0.0%	0 s	         pthread_setspecific
-54.71 ms   0.0%	0 s	          completeTaskWithClosure(swift::AsyncContext*, swift::SwiftError*)
-54.71 ms   0.0%	50.00 ms	           pthread_setspecific
-4.71 ms   0.0%	0 s	            0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-4.71 ms   0.0%	0 s	             0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-4.71 ms   0.0%	0 s	              0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-4.71 ms   0.0%	4.71 ms	               0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8829) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-37.00 ms   0.0%	0 s	         ThreadLocalRNG._key.unsafeMutableAddressor
-25.43 ms   0.0%	0 s	          completeTaskWithClosure(swift::AsyncContext*, swift::SwiftError*)
-25.43 ms   0.0%	25.00 ms	           ThreadLocalRNG._key.unsafeMutableAddressor
-434.08 µs   0.0%	0 s	            0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-434.08 µs   0.0%	0 s	             0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-434.08 µs   0.0%	0 s	              0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-434.08 µs   0.0%	434.08 µs	               0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8829) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-11.57 ms   0.0%	10.00 ms	          ThreadLocalRNG._key.unsafeMutableAddressor
-1.57 ms   0.0%	0 s	           0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-1.57 ms   0.0%	0 s	            0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-1.57 ms   0.0%	0 s	             0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-1.57 ms   0.0%	1.57 ms	              0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8829) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-10.00 ms   0.0%	0 s	         DYLD-STUB$$pthread_getspecific
-10.00 ms   0.0%	0 s	          completeTaskWithClosure(swift::AsyncContext*, swift::SwiftError*)
-10.00 ms   0.0%	10.00 ms	           DYLD-STUB$$pthread_getspecific
-8.49 ms   0.0%	0 s	         pthread_getspecific
-5.00 ms   0.0%	0 s	          completeTaskWithClosure(swift::AsyncContext*, swift::SwiftError*)
-5.00 ms   0.0%	5.00 ms	           pthread_getspecific
-3.49 ms   0.0%	0 s	          pthread_getspecific
-3.49 ms   0.0%	0 s	           0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-3.49 ms   0.0%	0 s	            0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-3.49 ms   0.0%	0 s	             0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-3.49 ms   0.0%	3.49 ms	              0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8829) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+12.90 s  61.6%	0 s	  completeTaskWithClosure(swift::AsyncContext*, swift::SwiftError*)
+10.47 s   0.0%	0 s	   partial apply for specialized thunk for @escaping @isolated(any) @callee_guaranteed @async () -> (@out A)
+10.47 s   0.0%	0 s	    specialized thunk for @escaping @isolated(any) @callee_guaranteed @async () -> (@out A)
+10.47 s   0.0%	0 s	     partial apply for closure #2 in closure #1 in closure #1 in closure #1 in variable initialization expression of benchmarks
+10.40 s   0.0%	0 s	      closure #2 in closure #1 in closure #1 in closure #1 in variable initialization expression of benchmarks
+9.76 s   0.0%	0 s	       KFIFOQueue.enqueue(_:)
+3.32 s   0.0%	0 s	        KFIFOQueue.committed(tailOld:itemNew:index:)
+2.59 s   0.0%	0 s	         KFIFOQueue.isReachable(target:from:)
+1.32 s   0.0%	1.17 s	          KFIFOQueue.isReachable(target:from:)
+149.34 ms   0.0%	0 s	           0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+149.34 ms   0.0%	5.00 ms	            0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+144.34 ms   0.0%	0 s	             0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+144.34 ms   0.0%	144.34 ms	              0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8931) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+787.42 ms   0.0%	0 s	          static RawSegment.from(_:)
+787.42 ms   0.0%	714.08 ms	           static RawSegment.from(_:)
+73.34 ms   0.0%	0 s	            0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+73.34 ms   0.0%	0 s	             0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+73.34 ms   0.0%	0 s	              0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+73.34 ms   0.0%	73.34 ms	               0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8931) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+486.55 ms   0.0%	0 s	          RawSegment.init(ptr:)
+486.55 ms   0.0%	0 s	           completeTaskWithClosure(swift::AsyncContext*, swift::SwiftError*)
+486.55 ms   0.0%	430.00 ms	            RawSegment.init(ptr:)
+56.55 ms   0.0%	0 s	             0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+56.55 ms   0.0%	0 s	              0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+56.55 ms   0.0%	0 s	               0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+56.55 ms   0.0%	56.55 ms	                0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8931) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+461.91 ms   0.0%	399.10 ms	         KFIFOQueue.committed(tailOld:itemNew:index:)
+62.80 ms   0.0%	0 s	          0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+62.80 ms   0.0%	0 s	           0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+62.80 ms   0.0%	0 s	            0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+62.80 ms   0.0%	62.80 ms	             0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8931) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+153.48 ms   0.0%	0 s	         RawSegment.next.getter
+153.48 ms   0.0%	0 s	          completeTaskWithClosure(swift::AsyncContext*, swift::SwiftError*)
+153.48 ms   0.0%	128.24 ms	           RawSegment.next.getter
+25.25 ms   0.0%	0 s	            0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+25.25 ms   0.0%	0 s	             0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+25.25 ms   0.0%	0 s	              0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+25.25 ms   0.0%	25.25 ms	               0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8931) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+90.84 ms   0.0%	0 s	         static RawSegment.from(_:)
+90.84 ms   0.0%	88.51 ms	          static RawSegment.from(_:)
+2.33 ms   0.0%	0 s	           0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+2.33 ms   0.0%	0 s	            0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+2.33 ms   0.0%	0 s	             0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+2.33 ms   0.0%	2.33 ms	              0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8931) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+25.16 ms   0.0%	0 s	         RawSegment.init(ptr:)
+25.16 ms   0.0%	0 s	          completeTaskWithClosure(swift::AsyncContext*, swift::SwiftError*)
+25.16 ms   0.0%	23.85 ms	           RawSegment.init(ptr:)
+1.32 ms   0.0%	0 s	            0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+1.32 ms   0.0%	0 s	             0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+1.32 ms   0.0%	0 s	              0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+1.32 ms   0.0%	1.32 ms	               0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8931) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+1.83 s   0.0%	0 s	        KFIFOQueue.findEmptySlot(in:)
+1.15 s   0.0%	1.04 s	         KFIFOQueue.findEmptySlot(in:)
+104.66 ms   0.0%	0 s	          0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+104.66 ms   0.0%	0 s	           0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+104.66 ms   0.0%	0 s	            0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+104.66 ms   0.0%	104.66 ms	             0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8931) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+5.00 ms   0.0%	0 s	          0xfffffe0008a1fa10 (kernel.release.t6031 +0x1a13a15) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+5.00 ms   0.0%	5.00 ms	           0xfffffe0008a1fa10 (kernel.release.t6031 +0x1a13a15) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+482.73 ms   0.0%	0 s	         static ThreadLocalRNG.random(upperBound:)
+408.88 ms   0.0%	385.00 ms	          static ThreadLocalRNG.random(upperBound:)
+23.88 ms   0.0%	0 s	           0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+23.88 ms   0.0%	0 s	            0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+23.88 ms   0.0%	0 s	             0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+23.88 ms   0.0%	23.88 ms	              0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8931) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+73.85 ms   0.0%	0 s	          ThreadLocalRNG._key.unsafeMutableAddressor
+73.85 ms   0.0%	70.00 ms	           ThreadLocalRNG._key.unsafeMutableAddressor
+3.85 ms   0.0%	0 s	            0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+3.85 ms   0.0%	0 s	             0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+3.85 ms   0.0%	0 s	              0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+3.85 ms   0.0%	3.85 ms	               0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8931) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+144.95 ms   0.0%	0 s	         specialized IndexingIterator.next()
+144.95 ms   0.0%	135.00 ms	          specialized IndexingIterator.next()
+9.95 ms   0.0%	0 s	           0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+9.95 ms   0.0%	0 s	            0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+9.95 ms   0.0%	0 s	             0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+9.95 ms   0.0%	9.95 ms	              0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8931) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+30.00 ms   0.0%	0 s	         DYLD-STUB$$pthread_getspecific
+30.00 ms   0.0%	0 s	          completeTaskWithClosure(swift::AsyncContext*, swift::SwiftError*)
+30.00 ms   0.0%	30.00 ms	           DYLD-STUB$$pthread_getspecific
+15.00 ms   0.0%	0 s	         pthread_setspecific
+15.00 ms   0.0%	0 s	          completeTaskWithClosure(swift::AsyncContext*, swift::SwiftError*)
+15.00 ms   0.0%	15.00 ms	           pthread_setspecific
 5.00 ms   0.0%	0 s	         DYLD-STUB$$pthread_setspecific
 5.00 ms   0.0%	0 s	          completeTaskWithClosure(swift::AsyncContext*, swift::SwiftError*)
 5.00 ms   0.0%	5.00 ms	           DYLD-STUB$$pthread_setspecific
-778.40 ms   0.0%	0 s	        KFIFOQueue.advanceTail(_:)
-328.55 ms   0.0%	0 s	         static RawSegment.create(k:)
-92.46 ms   0.0%	0 s	          specialized IndexingIterator.next()
-92.46 ms   0.0%	89.41 ms	           specialized IndexingIterator.next()
-3.04 ms   0.0%	0 s	            0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-3.04 ms   0.0%	0 s	             0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-3.04 ms   0.0%	0 s	              0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-3.04 ms   0.0%	3.04 ms	               0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8829) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-68.53 ms   0.0%	68.02 ms	          static RawSegment.create(k:)
-510.38 µs   0.0%	0 s	           0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-510.38 µs   0.0%	0 s	            0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-510.38 µs   0.0%	0 s	             0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-510.38 µs   0.0%	510.38 µs	              0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8829) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-55.04 ms   0.0%	0 s	          swift_slowAlloc
-44.62 ms   0.0%	0 s	           _malloc_type_posix_memalign_outlined
-44.62 ms   0.0%	0 s	            _posix_memalign
-44.62 ms   0.0%	0 s	             _malloc_zone_memalign
-30.00 ms   0.0%	30.00 ms	              _malloc_zone_memalign
-14.62 ms   0.0%	0 s	              zone_memalign
-14.62 ms   0.0%	0 s	               posix_memalign
-9.62 ms   0.0%	0 s	                je_arena_palloc
-9.62 ms   0.0%	0 s	                 je_tcache_alloc_small_hard
-9.62 ms   0.0%	0 s	                  je_arena_cache_bin_fill_small
-9.62 ms   0.0%	0 s	                   arena_slab_alloc
-9.62 ms   0.0%	0 s	                    je_pa_alloc
-7.63 ms   0.0%	0 s	                     pac_alloc_impl
-7.63 ms   0.0%	0 s	                      pac_alloc_real
-7.63 ms   0.0%	0 s	                       je_ecache_alloc_grow
-7.63 ms   0.0%	0 s	                        je_extent_alloc_wrapper
-6.80 ms   0.0%	0 s	                         je_extent_alloc_mmap
-6.80 ms   0.0%	0 s	                          je_pages_map
-6.80 ms   0.0%	0 s	                           os_pages_map
-6.80 ms   0.0%	0 s	                            __mmap
-6.80 ms   0.0%	0 s	                             completeTaskWithClosure(swift::AsyncContext*, swift::SwiftError*)
-6.80 ms   0.0%	2.09 ms	                              __mmap
-4.70 ms   0.0%	0 s	                               0xfffffe000885b8d0 (kernel.release.t6031 +0x184f917) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-4.70 ms   0.0%	0 s	                                0xfffffe0008a1fa64 (kernel.release.t6031 +0x1a13d2f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-4.70 ms   0.0%	0 s	                                 0xfffffe0008fb274c (kernel.release.t6031 +0x1fa6a4f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-4.70 ms   0.0%	0 s	                                  0xfffffe0008e33efc (kernel.release.t6031 +0x1e28937) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-4.70 ms   0.0%	0 s	                                   0xfffffe000898110c (kernel.release.t6031 +0x197542f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-4.70 ms   0.0%	0 s	                                    0xfffffe000897d648 (kernel.release.t6031 +0x1971a3f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-4.70 ms   0.0%	0 s	                                     IORWLockWrite (kernel.release.t6031 +0x18b9203) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-4.70 ms   0.0%	0 s	                                      0xfffffe00088c4738 (kernel.release.t6031 +0x18b8bec) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-4.70 ms   0.0%	0 s	                                       0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-4.70 ms   0.0%	4.70 ms	                                        0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8829) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-829.96 µs   0.0%	0 s	                         je_edata_cache_get
-829.96 µs   0.0%	829.96 µs	                          je_edata_cache_get
-1.99 ms   0.0%	0 s	                     je_emap_remap
-1.99 ms   0.0%	1.99 ms	                      je_emap_remap
-5.00 ms   0.0%	5.00 ms	                posix_memalign
-5.34 ms   0.0%	5.00 ms	           swift_slowAlloc
-336.75 µs   0.0%	0 s	            0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-336.75 µs   0.0%	0 s	             0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-336.75 µs   0.0%	0 s	              0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-336.75 µs   0.0%	336.75 µs	               0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8829) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+3.94 ms   0.0%	0 s	         pthread_getspecific
+3.94 ms   0.0%	0 s	          pthread_getspecific
+3.94 ms   0.0%	0 s	           0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+3.94 ms   0.0%	0 s	            0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+3.94 ms   0.0%	0 s	             0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+3.94 ms   0.0%	3.94 ms	              0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8931) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+1.24 s   0.0%	0 s	        swift_retain
+1.15 s   0.0%	0 s	         completeTaskWithClosure(swift::AsyncContext*, swift::SwiftError*)
+1.15 s   0.0%	1.11 s	          swift_retain
+48.45 ms   0.0%	0 s	           0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+48.45 ms   0.0%	0 s	            0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+48.45 ms   0.0%	0 s	             0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+48.45 ms   0.0%	48.45 ms	              0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8931) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+83.72 ms   0.0%	0 s	         swift_retain
+83.72 ms   0.0%	0 s	          0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+83.72 ms   0.0%	0 s	           0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+83.72 ms   0.0%	0 s	            0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+83.72 ms   0.0%	83.72 ms	             0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8931) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+1.05 s   0.0%	0 s	        swift_release
+987.41 ms   0.0%	0 s	         completeTaskWithClosure(swift::AsyncContext*, swift::SwiftError*)
+987.41 ms   0.0%	927.45 ms	          swift_release
+59.94 ms   0.0%	0 s	           0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+59.94 ms   0.0%	0 s	            0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+59.94 ms   0.0%	0 s	             0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+59.94 ms   0.0%	59.94 ms	              0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8931) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+12.58 µs   0.0%	0 s	           0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+12.58 µs   0.0%	12.58 µs	            0xfffffe000889ff84 (kernel.release.t6031 +0x1893f85) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+66.45 ms   0.0%	0 s	         swift_release
+66.45 ms   0.0%	0 s	          0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+66.45 ms   0.0%	0 s	           0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+66.45 ms   0.0%	0 s	            0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+66.45 ms   0.0%	66.45 ms	             0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8931) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+836.86 ms   0.0%	0 s	        KFIFOQueue.advanceTail(_:)
+408.39 ms   0.0%	0 s	         static RawSegment.create(k:)
+110.86 ms   0.0%	0 s	          swift_slowAlloc
+105.86 ms   0.0%	0 s	           _malloc_type_posix_memalign_outlined
+100.86 ms   0.0%	0 s	            _posix_memalign
+100.86 ms   0.0%	0 s	             _malloc_zone_memalign
+66.62 ms   0.0%	0 s	              zone_memalign
+61.62 ms   0.0%	0 s	               posix_memalign
+48.55 ms   0.0%	0 s	                je_arena_palloc
+35.88 ms   0.0%	0 s	                 je_tcache_alloc_small_hard
+18.34 ms   0.0%	0 s	                  arena_slab_reg_alloc_batch
+18.34 ms   0.0%	0 s	                   completeTaskWithClosure(swift::AsyncContext*, swift::SwiftError*)
+18.34 ms   0.0%	18.34 ms	                    arena_slab_reg_alloc_batch
+17.54 ms   0.0%	0 s	                  je_arena_cache_bin_fill_small
+17.54 ms   0.0%	0 s	                   arena_slab_alloc
+17.54 ms   0.0%	0 s	                    je_pa_alloc
+17.54 ms   0.0%	0 s	                     pac_alloc_impl
+17.54 ms   0.0%	0 s	                      pac_alloc_real
+16.53 ms   0.0%	0 s	                       je_ecache_alloc_grow
+12.81 ms   0.0%	0 s	                        je_extent_alloc_wrapper
+11.44 ms   0.0%	0 s	                         je_extent_alloc_mmap
+11.44 ms   0.0%	0 s	                          je_pages_map
+11.44 ms   0.0%	0 s	                           os_pages_map
+11.44 ms   0.0%	0 s	                            __mmap
+9.69 ms   0.0%	0 s	                             completeTaskWithClosure(swift::AsyncContext*, swift::SwiftError*)
+9.69 ms   0.0%	1.71 ms	                              __mmap
+7.98 ms   0.0%	0 s	                               0xfffffe000885b8d0 (kernel.release.t6031 +0x184f917) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+7.98 ms   0.0%	5.00 ms	                                0xfffffe0008a1fa64 (kernel.release.t6031 +0x1a13d2f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+2.98 ms   0.0%	0 s	                                 0xfffffe0008fb274c (kernel.release.t6031 +0x1fa6a4f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+2.98 ms   0.0%	0 s	                                  0xfffffe0008e33efc (kernel.release.t6031 +0x1e28937) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+2.98 ms   0.0%	0 s	                                   0xfffffe000898110c (kernel.release.t6031 +0x197542f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+2.98 ms   0.0%	0 s	                                    0xfffffe000897d648 (kernel.release.t6031 +0x1971a3f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+2.98 ms   0.0%	0 s	                                     IORWLockWrite (kernel.release.t6031 +0x18b9203) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+2.98 ms   0.0%	0 s	                                      0xfffffe00088c4738 (kernel.release.t6031 +0x18b8bec) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+2.98 ms   0.0%	0 s	                                       0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+2.98 ms   0.0%	2.98 ms	                                        0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8931) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+1.75 ms   0.0%	0 s	                             __mmap
+1.75 ms   0.0%	0 s	                              0xfffffe000885b8d0 (kernel.release.t6031 +0x184f917) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+1.75 ms   0.0%	0 s	                               0xfffffe0008a1fa64 (kernel.release.t6031 +0x1a13d2f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+1.75 ms   0.0%	0 s	                                0xfffffe0008fb274c (kernel.release.t6031 +0x1fa6a4f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+1.75 ms   0.0%	0 s	                                 0xfffffe0008e33efc (kernel.release.t6031 +0x1e28937) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+1.75 ms   0.0%	0 s	                                  0xfffffe000898110c (kernel.release.t6031 +0x197542f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+1.75 ms   0.0%	0 s	                                   0xfffffe000897d648 (kernel.release.t6031 +0x1971a3f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+1.75 ms   0.0%	0 s	                                    IORWLockWrite (kernel.release.t6031 +0x18b9203) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+1.75 ms   0.0%	0 s	                                     0xfffffe00088c4738 (kernel.release.t6031 +0x18b8bec) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+1.75 ms   0.0%	0 s	                                      0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+1.75 ms   0.0%	1.75 ms	                                       0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8931) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+1.37 ms   0.0%	1.37 ms	                         je_extent_alloc_wrapper
+3.71 ms   0.0%	3.71 ms	                        je_ecache_alloc_grow
+1.01 ms   0.0%	0 s	                       je_ecache_alloc
+1.01 ms   0.0%	0 s	                        extent_recycle
+1.01 ms   0.0%	0 s	                         je_eset_fit
+1.01 ms   0.0%	1.01 ms	                          je_eset_fit
+12.66 ms   0.0%	11.62 ms	                 je_arena_palloc
+1.04 ms   0.0%	0 s	                  0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+1.04 ms   0.0%	0 s	                   0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+1.04 ms   0.0%	0 s	                    0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+1.04 ms   0.0%	1.04 ms	                     0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8931) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+13.08 ms   0.0%	10.00 ms	                posix_memalign
+3.08 ms   0.0%	0 s	                 0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+3.08 ms   0.0%	0 s	                  0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+3.08 ms   0.0%	0 s	                   0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+3.08 ms   0.0%	3.08 ms	                    0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8931) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+5.00 ms   0.0%	0 s	               je_arena_palloc
+5.00 ms   0.0%	0 s	                completeTaskWithClosure(swift::AsyncContext*, swift::SwiftError*)
+5.00 ms   0.0%	5.00 ms	                 je_arena_palloc
+32.42 ms   0.0%	32.42 ms	              _malloc_zone_memalign
+1.82 ms   0.0%	0 s	              posix_memalign
+1.82 ms   0.0%	0 s	               posix_memalign
+1.82 ms   0.0%	0 s	                0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+1.82 ms   0.0%	0 s	                 0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+1.82 ms   0.0%	0 s	                  0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+1.82 ms   0.0%	1.82 ms	                   0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8931) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+5.00 ms   0.0%	5.00 ms	            _malloc_type_posix_memalign_outlined
 5.00 ms   0.0%	0 s	           malloc_type_posix_memalign
 5.00 ms   0.0%	5.00 ms	            malloc_type_posix_memalign
-86.92 µs   0.0%	0 s	           _posix_memalign
-86.92 µs   0.0%	0 s	            _posix_memalign
-86.92 µs   0.0%	0 s	             0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-86.92 µs   0.0%	0 s	              0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-86.92 µs   0.0%	0 s	               0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-86.92 µs   0.0%	86.92 µs	                0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8829) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-49.19 ms   0.0%	0 s	          UnsafeMutablePointer<>.initialize(to:)
-49.19 ms   0.0%	47.51 ms	           UnsafeMutablePointer<>.initialize(to:)
-1.68 ms   0.0%	0 s	            0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-1.68 ms   0.0%	0 s	             0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-1.68 ms   0.0%	0 s	              0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-1.68 ms   0.0%	1.68 ms	               0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8829) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-37.41 ms   0.0%	0 s	          swift::metadataimpl::ValueWitnesses<swift::metadataimpl::NativeBox<(anonymous namespace)::int128_like, 16ul, 16ul, 16ul>>::initializeWithTake(swift::OpaqueValue*, swift::OpaqueValue*, swift::TargetMetadata<swift::InProcess> const*)
-37.41 ms   0.0%	0 s	           completeTaskWithClosure(swift::AsyncContext*, swift::SwiftError*)
-37.41 ms   0.0%	25.26 ms	            swift::metadataimpl::ValueWitnesses<swift::metadataimpl::NativeBox<(anonymous namespace)::int128_like, 16ul, 16ul, 16ul>>::initializeWithTake(swift::OpaqueValue*, swift::OpaqueValue*, swift::TargetMetadata<swift::InProcess> const*)
-10.00 ms   0.0%	0 s	             0xfffffe000885b8d0 (kernel.release.t6031 +0x184f917) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-10.00 ms   0.0%	0 s	              0xfffffe0008a1fa64 (kernel.release.t6031 +0x1a13d2f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-10.00 ms   0.0%	0 s	               0xfffffe0008a207cc (kernel.release.t6031 +0x1a14943) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-10.00 ms   0.0%	0 s	                0xfffffe000896782c (kernel.release.t6031 +0x195d8a7) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-5.00 ms   0.0%	5.00 ms	                 0xfffffe0008a1e7d8 (kernel.release.t6031 +0x1a12b41) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-5.00 ms   0.0%	5.00 ms	                 0xfffffe00089c01d9 (kernel.release.t6031 +0x19b41d9) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-2.14 ms   0.0%	0 s	             0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-2.14 ms   0.0%	0 s	              0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-2.14 ms   0.0%	0 s	               0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-2.14 ms   0.0%	2.14 ms	                0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8829) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-10.00 ms   0.0%	0 s	          _platform_memmove
-10.00 ms   0.0%	0 s	           completeTaskWithClosure(swift::AsyncContext*, swift::SwiftError*)
-10.00 ms   0.0%	5.00 ms	            _platform_memmove
-5.00 ms   0.0%	0 s	             0xfffffe000885b8d0 (kernel.release.t6031 +0x184f917) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-5.00 ms   0.0%	0 s	              0xfffffe0008a1fa64 (kernel.release.t6031 +0x1a13d2f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-5.00 ms   0.0%	0 s	               0xfffffe0008a207cc (kernel.release.t6031 +0x1a14943) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-5.00 ms   0.0%	0 s	                0xfffffe000896782c (kernel.release.t6031 +0x195d8a7) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-5.00 ms   0.0%	0 s	                 0xfffffe000896bbcb (kernel.release.t6031 +0x195fbcb) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-5.00 ms   0.0%	5.00 ms	                  0xfffffe000896b361 (kernel.release.t6031 +0x195f361) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-10.00 ms   0.0%	0 s	          _rawSegmentSlotsOffset.unsafeMutableAddressor
-10.00 ms   0.0%	10.00 ms	           _rawSegmentSlotsOffset.unsafeMutableAddressor
-3.60 ms   0.0%	0 s	          DYLD-STUB$$memcpy
-3.60 ms   0.0%	0 s	           completeTaskWithClosure(swift::AsyncContext*, swift::SwiftError*)
-3.60 ms   0.0%	3.60 ms	            DYLD-STUB$$memcpy
-2.33 ms   0.0%	0 s	          _rawSegmentNextOffset.unsafeMutableAddressor
-2.33 ms   0.0%	0 s	           _rawSegmentNextOffset.unsafeMutableAddressor
-2.33 ms   0.0%	0 s	            0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-2.33 ms   0.0%	0 s	             0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-2.33 ms   0.0%	0 s	              0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-2.33 ms   0.0%	2.33 ms	               0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8829) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-267.18 ms   0.0%	243.16 ms	         KFIFOQueue.advanceTail(_:)
-24.02 ms   0.0%	0 s	          0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-24.02 ms   0.0%	0 s	           0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-24.02 ms   0.0%	0 s	            0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-24.02 ms   0.0%	24.02 ms	             0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8829) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-55.08 ms   0.0%	0 s	         DYLD-STUB$$specialized IndexingIterator.next()
-55.08 ms   0.0%	0 s	          completeTaskWithClosure(swift::AsyncContext*, swift::SwiftError*)
-55.08 ms   0.0%	51.56 ms	           DYLD-STUB$$specialized IndexingIterator.next()
-3.52 ms   0.0%	0 s	            0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-3.52 ms   0.0%	0 s	             0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-3.52 ms   0.0%	0 s	              0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-3.52 ms   0.0%	3.52 ms	               0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8829) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-31.00 ms   0.0%	0 s	         RawSegment.next.getter
-18.08 ms   0.0%	18.08 ms	          RawSegment.next.getter
-12.92 ms   0.0%	0 s	          _rawSegmentNextOffset.unsafeMutableAddressor
-12.92 ms   0.0%	10.06 ms	           _rawSegmentNextOffset.unsafeMutableAddressor
-2.86 ms   0.0%	0 s	            0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-2.86 ms   0.0%	0 s	             0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-2.86 ms   0.0%	0 s	              0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-2.86 ms   0.0%	2.86 ms	               0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8829) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-29.61 ms   0.0%	0 s	         RawSegment.destroy()
-24.61 ms   0.0%	0 s	          find_zone_and_free
-14.61 ms   0.0%	14.61 ms	           find_zone_and_free
-10.00 ms   0.0%	0 s	           zone_size
-10.00 ms   0.0%	10.00 ms	            zone_size
-5.00 ms   0.0%	0 s	          zone_free_definite_size
-5.00 ms   0.0%	5.00 ms	           zone_free_definite_size
-19.33 ms   0.0%	0 s	         DoubleWord.init(first:second:)
-19.33 ms   0.0%	0 s	          completeTaskWithClosure(swift::AsyncContext*, swift::SwiftError*)
-19.33 ms   0.0%	19.33 ms	           DoubleWord.init(first:second:)
-16.62 ms   0.0%	0 s	         UnsafeMutablePointer<>.initialize(to:)
-16.62 ms   0.0%	0 s	          completeTaskWithClosure(swift::AsyncContext*, swift::SwiftError*)
-16.62 ms   0.0%	16.62 ms	           UnsafeMutablePointer<>.initialize(to:)
-15.00 ms   0.0%	0 s	         KFIFOQueue.segmentFrom(_:)
-15.00 ms   0.0%	0 s	          static RawSegment.from(_:)
-15.00 ms   0.0%	15.00 ms	           static RawSegment.from(_:)
-7.96 ms   0.0%	0 s	         DYLD-STUB$$free
-7.96 ms   0.0%	0 s	          completeTaskWithClosure(swift::AsyncContext*, swift::SwiftError*)
-7.96 ms   0.0%	7.96 ms	           DYLD-STUB$$free
-5.00 ms   0.0%	0 s	         default argument 1 of UnsafeMutableRawPointer.storeBytes<A>(of:toByteOffset:as:)
+92.94 ms   0.0%	0 s	          specialized IndexingIterator.next()
+92.94 ms   0.0%	92.94 ms	           specialized IndexingIterator.next()
+74.50 ms   0.0%	0 s	          UnsafeMutablePointer<>.initialize(to:)
+74.50 ms   0.0%	74.50 ms	           UnsafeMutablePointer<>.initialize(to:)
+72.12 ms   0.0%	61.45 ms	          static RawSegment.create(k:)
+10.67 ms   0.0%	0 s	           0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+10.67 ms   0.0%	0 s	            0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+10.67 ms   0.0%	0 s	             0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+10.67 ms   0.0%	10.67 ms	              0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8931) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+51.60 ms   0.0%	0 s	          swift::metadataimpl::ValueWitnesses<swift::metadataimpl::NativeBox<(anonymous namespace)::int128_like, 16ul, 16ul, 16ul>>::initializeWithTake(swift::OpaqueValue*, swift::OpaqueValue*, swift::TargetMetadata<swift::InProcess> const*)
+46.62 ms   0.0%	0 s	           completeTaskWithClosure(swift::AsyncContext*, swift::SwiftError*)
+46.62 ms   0.0%	30.85 ms	            swift::metadataimpl::ValueWitnesses<swift::metadataimpl::NativeBox<(anonymous namespace)::int128_like, 16ul, 16ul, 16ul>>::initializeWithTake(swift::OpaqueValue*, swift::OpaqueValue*, swift::TargetMetadata<swift::InProcess> const*)
+15.00 ms   0.0%	0 s	             0xfffffe000885b8d0 (kernel.release.t6031 +0x184f917) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+15.00 ms   0.0%	0 s	              0xfffffe0008a1fa64 (kernel.release.t6031 +0x1a13d2f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+15.00 ms   0.0%	0 s	               0xfffffe0008a207cc (kernel.release.t6031 +0x1a14943) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+15.00 ms   0.0%	0 s	                0xfffffe000896782c (kernel.release.t6031 +0x195bad1) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+5.00 ms   0.0%	0 s	                 0xfffffe000896cc54 (kernel.release.t6031 +0x1960d57) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+5.00 ms   0.0%	0 s	                  0xfffffe0008a00e94 (kernel.release.t6031 +0x19f519f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+5.00 ms   0.0%	0 s	                   0xfffffe0008a02bb7 (kernel.release.t6031 +0x19f6bb7) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+5.00 ms   0.0%	0 s	                    0xfffffff0270982a3
+5.00 ms   0.0%	0 s	                     0xfffffff02709844b
+5.00 ms   0.0%	5.00 ms	                      0xfffffff0270df9e9
+5.00 ms   0.0%	0 s	                 0xfffffe000898008c (kernel.release.t6031 +0x197419f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+5.00 ms   0.0%	5.00 ms	                  0xfffffe0008993479 (kernel.release.t6031 +0x1987479) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+5.00 ms   0.0%	5.00 ms	                 0xfffffe00089c01a5 (kernel.release.t6031 +0x19b41a5) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+764.62 µs   0.0%	0 s	             0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+764.62 µs   0.0%	0 s	              0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+764.62 µs   0.0%	0 s	               0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+764.62 µs   0.0%	764.62 µs	                0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8931) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+4.99 ms   0.0%	0 s	           swift::metadataimpl::ValueWitnesses<swift::metadataimpl::NativeBox<(anonymous namespace)::int128_like, 16ul, 16ul, 16ul>>::initializeWithTake(swift::OpaqueValue*, swift::OpaqueValue*, swift::TargetMetadata<swift::InProcess> const*)
+4.99 ms   0.0%	0 s	            0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+4.99 ms   0.0%	0 s	             0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+4.99 ms   0.0%	0 s	              0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+4.99 ms   0.0%	4.99 ms	               0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8931) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+5.00 ms   0.0%	0 s	          malloc_type_posix_memalign
+5.00 ms   0.0%	5.00 ms	           malloc_type_posix_memalign
+1.37 ms   0.0%	0 s	          _malloc_type_posix_memalign_outlined
+1.37 ms   0.0%	1.37 ms	           _malloc_type_posix_memalign_outlined
+237.22 ms   0.0%	200.19 ms	         KFIFOQueue.advanceTail(_:)
+37.03 ms   0.0%	0 s	          0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+37.03 ms   0.0%	0 s	           0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+37.03 ms   0.0%	0 s	            0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+37.03 ms   0.0%	37.03 ms	             0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8931) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+65.03 ms   0.0%	0 s	         DYLD-STUB$$specialized IndexingIterator.next()
+65.03 ms   0.0%	0 s	          completeTaskWithClosure(swift::AsyncContext*, swift::SwiftError*)
+65.03 ms   0.0%	62.09 ms	           DYLD-STUB$$specialized IndexingIterator.next()
+2.94 ms   0.0%	0 s	            0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+2.94 ms   0.0%	0 s	             0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+2.94 ms   0.0%	0 s	              0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+2.94 ms   0.0%	2.94 ms	               0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8931) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+60.59 ms   0.0%	0 s	         DoubleWord.init(first:second:)
+60.59 ms   0.0%	0 s	          completeTaskWithClosure(swift::AsyncContext*, swift::SwiftError*)
+60.59 ms   0.0%	60.01 ms	           DoubleWord.init(first:second:)
+580.67 µs   0.0%	0 s	            0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+580.67 µs   0.0%	0 s	             0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+580.67 µs   0.0%	0 s	              0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+580.67 µs   0.0%	580.67 µs	               0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8931) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+24.00 ms   0.0%	0 s	         RawSegment.destroy()
+24.00 ms   0.0%	0 s	          find_zone_and_free
+22.20 ms   0.0%	22.20 ms	           find_zone_and_free
+1.81 ms   0.0%	0 s	           zone_size
+1.81 ms   0.0%	0 s	            zone_size
+1.81 ms   0.0%	0 s	             0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+1.81 ms   0.0%	0 s	              0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+1.81 ms   0.0%	0 s	               0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+1.81 ms   0.0%	1.81 ms	                0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8931) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+10.00 ms   0.0%	0 s	         static RawSegment.from(_:)
+10.00 ms   0.0%	10.00 ms	          static RawSegment.from(_:)
+8.42 ms   0.0%	0 s	         RawSegment.init(ptr:)
+8.42 ms   0.0%	0 s	          completeTaskWithClosure(swift::AsyncContext*, swift::SwiftError*)
+8.42 ms   0.0%	5.00 ms	           RawSegment.init(ptr:)
+3.42 ms   0.0%	0 s	            0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+3.42 ms   0.0%	0 s	             0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+3.42 ms   0.0%	0 s	              0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+3.42 ms   0.0%	3.42 ms	               0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8931) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+7.32 ms   0.0%	0 s	         DYLD-STUB$$specialized Collection<>.makeIterator()
+7.32 ms   0.0%	0 s	          completeTaskWithClosure(swift::AsyncContext*, swift::SwiftError*)
+7.32 ms   0.0%	5.00 ms	           DYLD-STUB$$specialized Collection<>.makeIterator()
+2.32 ms   0.0%	0 s	            0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+2.32 ms   0.0%	0 s	             0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+2.32 ms   0.0%	0 s	              0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+2.32 ms   0.0%	2.32 ms	               0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8931) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+7.27 ms   0.0%	0 s	         DYLD-STUB$$free
+7.27 ms   0.0%	0 s	          completeTaskWithClosure(swift::AsyncContext*, swift::SwiftError*)
+7.27 ms   0.0%	7.27 ms	           DYLD-STUB$$free
+5.00 ms   0.0%	0 s	         _free
 5.00 ms   0.0%	0 s	          completeTaskWithClosure(swift::AsyncContext*, swift::SwiftError*)
-5.00 ms   0.0%	5.00 ms	           default argument 1 of UnsafeMutableRawPointer.storeBytes<A>(of:toByteOffset:as:)
-2.62 ms   0.0%	0 s	         RawSegment.init(ptr:)
-2.62 ms   0.0%	0 s	          completeTaskWithClosure(swift::AsyncContext*, swift::SwiftError*)
-2.62 ms   0.0%	2.62 ms	           RawSegment.init(ptr:)
-460.33 µs   0.0%	0 s	         swift_slowDealloc
-460.33 µs   0.0%	0 s	          completeTaskWithClosure(swift::AsyncContext*, swift::SwiftError*)
-460.33 µs   0.0%	460.33 µs	           swift_slowDealloc
-615.51 ms   0.0%	550.72 ms	        KFIFOQueue.enqueue(_:)
-64.79 ms   0.0%	0 s	         0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-64.79 ms   0.0%	0 s	          0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-64.79 ms   0.0%	0 s	           0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-64.79 ms   0.0%	64.79 ms	            0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8829) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-347.61 ms   0.0%	0 s	        static RawBox.allocate(_:)
-250.78 ms   0.0%	0 s	         swift_slowAlloc
-205.78 ms   0.0%	0 s	          _malloc_type_posix_memalign_outlined
-195.78 ms   0.0%	0 s	           _posix_memalign
-195.78 ms   0.0%	0 s	            _malloc_zone_memalign
-139.61 ms   0.0%	0 s	             zone_memalign
-133.40 ms   0.0%	0 s	              posix_memalign
-98.31 ms   0.0%	0 s	               je_arena_palloc
-98.31 ms   0.0%	0 s	                je_tcache_alloc_small_hard
-81.92 ms   0.0%	0 s	                 arena_slab_reg_alloc_batch
-81.92 ms   0.0%	0 s	                  completeTaskWithClosure(swift::AsyncContext*, swift::SwiftError*)
-81.92 ms   0.0%	77.23 ms	                   arena_slab_reg_alloc_batch
-4.68 ms   0.0%	0 s	                    0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-4.68 ms   0.0%	0 s	                     0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-4.68 ms   0.0%	0 s	                      0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-4.68 ms   0.0%	4.68 ms	                       0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8829) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-11.44 ms   0.0%	0 s	                 je_arena_cache_bin_fill_small
-11.44 ms   0.0%	11.44 ms	                  je_arena_cache_bin_fill_small
-4.95 ms   0.0%	0 s	                 os_unfair_lock_unlock
-4.95 ms   0.0%	0 s	                  completeTaskWithClosure(swift::AsyncContext*, swift::SwiftError*)
-4.95 ms   0.0%	4.95 ms	                   os_unfair_lock_unlock
-35.09 ms   0.0%	33.09 ms	               posix_memalign
-2.00 ms   0.0%	0 s	                0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-2.00 ms   0.0%	0 s	                 0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-2.00 ms   0.0%	0 s	                  0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-2.00 ms   0.0%	2.00 ms	                   0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8829) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-5.00 ms   0.0%	0 s	              je_arena_palloc
+5.00 ms   0.0%	5.00 ms	           _free
+2.98 ms   0.0%	0 s	         swift_slowDealloc
+2.98 ms   0.0%	0 s	          completeTaskWithClosure(swift::AsyncContext*, swift::SwiftError*)
+2.98 ms   0.0%	2.98 ms	           swift_slowDealloc
+632.67 µs   0.0%	0 s	         DYLD-STUB$$UnsafeMutableRawPointer.deallocate()
+632.67 µs   0.0%	0 s	          completeTaskWithClosure(swift::AsyncContext*, swift::SwiftError*)
+632.67 µs   0.0%	632.67 µs	           DYLD-STUB$$UnsafeMutableRawPointer.deallocate()
+713.86 ms   0.0%	618.42 ms	        KFIFOQueue.enqueue(_:)
+95.44 ms   0.0%	0 s	         0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+95.44 ms   0.0%	0 s	          0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+95.44 ms   0.0%	0 s	           0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+95.44 ms   0.0%	95.44 ms	            0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8931) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+222.99 ms   0.0%	0 s	        static RawBox.allocate(_:)
+167.37 ms   0.0%	0 s	         swift_slowAlloc
+152.37 ms   0.0%	0 s	          _malloc_type_posix_memalign_outlined
+140.85 ms   0.0%	0 s	           _posix_memalign
+140.85 ms   0.0%	0 s	            _malloc_zone_memalign
+103.02 ms   0.0%	0 s	             zone_memalign
+73.02 ms   0.0%	0 s	              posix_memalign
+71.22 ms   0.0%	0 s	               je_arena_palloc
+55.05 ms   0.0%	0 s	                je_tcache_alloc_small_hard
+53.55 ms   0.0%	0 s	                 arena_slab_reg_alloc_batch
+53.55 ms   0.0%	0 s	                  completeTaskWithClosure(swift::AsyncContext*, swift::SwiftError*)
+53.55 ms   0.0%	50.68 ms	                   arena_slab_reg_alloc_batch
+2.87 ms   0.0%	0 s	                    0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+2.87 ms   0.0%	0 s	                     0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+2.87 ms   0.0%	0 s	                      0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+2.87 ms   0.0%	2.87 ms	                       0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8931) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+1.50 ms   0.0%	0 s	                 je_arena_cache_bin_fill_small
+1.50 ms   0.0%	1.50 ms	                  je_arena_cache_bin_fill_small
+16.16 ms   0.0%	15.00 ms	                je_arena_palloc
+1.16 ms   0.0%	0 s	                 0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+1.16 ms   0.0%	0 s	                  0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+1.16 ms   0.0%	0 s	                   0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+1.16 ms   0.0%	1.16 ms	                    0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8931) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+1.80 ms   0.0%	0 s	               posix_memalign
+1.80 ms   0.0%	0 s	                0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+1.80 ms   0.0%	0 s	                 0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+1.80 ms   0.0%	0 s	                  0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+1.80 ms   0.0%	1.80 ms	                   0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8931) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+15.00 ms   0.0%	0 s	              je_arena_palloc
+10.00 ms   0.0%	0 s	               completeTaskWithClosure(swift::AsyncContext*, swift::SwiftError*)
+10.00 ms   0.0%	10.00 ms	                je_arena_palloc
 5.00 ms   0.0%	5.00 ms	               je_arena_palloc
-1.20 ms   0.0%	0 s	              zone_memalign
-1.20 ms   0.0%	0 s	               0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-1.20 ms   0.0%	0 s	                0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-1.20 ms   0.0%	0 s	                 0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-1.20 ms   0.0%	1.20 ms	                  0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8829) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-44.15 ms   0.0%	40.21 ms	             _malloc_zone_memalign
-3.94 ms   0.0%	0 s	              0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-3.94 ms   0.0%	0 s	               0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-3.94 ms   0.0%	0 s	                0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-3.94 ms   0.0%	3.94 ms	                 0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8829) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-12.03 ms   0.0%	0 s	             posix_memalign
-7.03 ms   0.0%	5.00 ms	              posix_memalign
-2.03 ms   0.0%	0 s	               0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-2.03 ms   0.0%	0 s	                0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-2.03 ms   0.0%	0 s	                 0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-2.03 ms   0.0%	2.03 ms	                  0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8829) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-5.00 ms   0.0%	0 s	              completeTaskWithClosure(swift::AsyncContext*, swift::SwiftError*)
-5.00 ms   0.0%	5.00 ms	               posix_memalign
-10.00 ms   0.0%	0 s	           _malloc_zone_memalign
+10.00 ms   0.0%	0 s	              pthread_getspecific
+10.00 ms   0.0%	0 s	               completeTaskWithClosure(swift::AsyncContext*, swift::SwiftError*)
+10.00 ms   0.0%	10.00 ms	                pthread_getspecific
+5.00 ms   0.0%	5.00 ms	              zone_memalign
+32.83 ms   0.0%	30.00 ms	             _malloc_zone_memalign
+2.83 ms   0.0%	0 s	              0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+2.83 ms   0.0%	0 s	               0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+2.83 ms   0.0%	0 s	                0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+2.83 ms   0.0%	2.83 ms	                 0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8931) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+5.00 ms   0.0%	0 s	             posix_memalign
+5.00 ms   0.0%	5.00 ms	              posix_memalign
+6.32 ms   0.0%	0 s	           _malloc_zone_memalign
 5.00 ms   0.0%	5.00 ms	            _malloc_zone_memalign
-5.00 ms   0.0%	0 s	            completeTaskWithClosure(swift::AsyncContext*, swift::SwiftError*)
-5.00 ms   0.0%	5.00 ms	             _malloc_zone_memalign
-25.00 ms   0.0%	0 s	          malloc_type_posix_memalign
-25.00 ms   0.0%	25.00 ms	           malloc_type_posix_memalign
-10.00 ms   0.0%	10.00 ms	          swift_slowAlloc
-10.00 ms   0.0%	0 s	          _posix_memalign
-10.00 ms   0.0%	10.00 ms	           _posix_memalign
-20.00 ms   0.0%	20.00 ms	         static RawBox.allocate(_:)
-18.90 ms   0.0%	0 s	         _malloc_type_posix_memalign_outlined
-13.90 ms   0.0%	10.00 ms	          _malloc_type_posix_memalign_outlined
-3.90 ms   0.0%	0 s	           0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-3.90 ms   0.0%	0 s	            0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-3.90 ms   0.0%	0 s	             0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-3.90 ms   0.0%	3.90 ms	              0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8829) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-5.00 ms   0.0%	0 s	          completeTaskWithClosure(swift::AsyncContext*, swift::SwiftError*)
-5.00 ms   0.0%	5.00 ms	           _malloc_type_posix_memalign_outlined
-15.00 ms   0.0%	0 s	         static RawBox.nextOffset.getter
-15.00 ms   0.0%	0 s	          completeTaskWithClosure(swift::AsyncContext*, swift::SwiftError*)
-15.00 ms   0.0%	15.00 ms	           static RawBox.nextOffset.getter
-7.94 ms   0.0%	0 s	         _platform_memmove
-7.94 ms   0.0%	0 s	          completeTaskWithClosure(swift::AsyncContext*, swift::SwiftError*)
-7.94 ms   0.0%	5.39 ms	           _platform_memmove
-2.55 ms   0.0%	0 s	            0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-2.55 ms   0.0%	0 s	             0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-2.55 ms   0.0%	0 s	              0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-2.55 ms   0.0%	2.55 ms	               0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8829) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-5.00 ms   0.0%	0 s	         DYLD-STUB$$memcpy
-5.00 ms   0.0%	0 s	          completeTaskWithClosure(swift::AsyncContext*, swift::SwiftError*)
-5.00 ms   0.0%	5.00 ms	           DYLD-STUB$$memcpy
-5.00 ms   0.0%	0 s	         0x1a2f8f338 (libswiftCore.dylib +0x235345) <D07A076A-D1D5-315C-8A31-90E34A236AFB>
-5.00 ms   0.0%	0 s	          completeTaskWithClosure(swift::AsyncContext*, swift::SwiftError*)
-5.00 ms   0.0%	5.00 ms	           0x1a2f8f338 (libswiftCore.dylib +0x235345) <D07A076A-D1D5-315C-8A31-90E34A236AFB>
-5.00 ms   0.0%	0 s	         max<A>(_:_:)
-5.00 ms   0.0%	5.00 ms	          max<A>(_:_:)
-5.00 ms   0.0%	0 s	         static RawBox.totalSize.getter
-5.00 ms   0.0%	5.00 ms	          static RawBox.totalSize.getter
-5.00 ms   0.0%	0 s	         DYLD-STUB$$malloc_type_posix_memalign
-5.00 ms   0.0%	0 s	          completeTaskWithClosure(swift::AsyncContext*, swift::SwiftError*)
-5.00 ms   0.0%	5.00 ms	           DYLD-STUB$$malloc_type_posix_memalign
-5.00 ms   0.0%	0 s	         malloc_type_posix_memalign
-5.00 ms   0.0%	5.00 ms	          malloc_type_posix_memalign
-5.00 ms   0.0%	0 s	         UnsafeMutableRawPointer.initializeMemory<A>(as:repeating:count:)
-5.00 ms   0.0%	5.00 ms	          UnsafeMutableRawPointer.initializeMemory<A>(as:repeating:count:)
-227.35 ms   0.0%	0 s	        KFIFOQueue.getTail()
-227.35 ms   0.0%	218.51 ms	         KFIFOQueue.getTail()
-8.84 ms   0.0%	0 s	          0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-8.84 ms   0.0%	0 s	           0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-8.84 ms   0.0%	0 s	            0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-8.84 ms   0.0%	8.84 ms	             0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8829) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-176.83 ms   0.0%	0 s	        DoubleWord.init(first:second:)
-176.83 ms   0.0%	0 s	         completeTaskWithClosure(swift::AsyncContext*, swift::SwiftError*)
-176.83 ms   0.0%	160.98 ms	          DoubleWord.init(first:second:)
-15.84 ms   0.0%	0 s	           0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-15.84 ms   0.0%	0 s	            0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-15.84 ms   0.0%	0 s	             0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-15.84 ms   0.0%	15.84 ms	              0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8829) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-106.53 ms   0.0%	0 s	        KFIFOQueue.tail.getter
-106.53 ms   0.0%	0 s	         completeTaskWithClosure(swift::AsyncContext*, swift::SwiftError*)
-106.53 ms   0.0%	95.00 ms	          KFIFOQueue.tail.getter
-11.53 ms   0.0%	0 s	           0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-11.53 ms   0.0%	0 s	            0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-11.53 ms   0.0%	0 s	             0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-11.53 ms   0.0%	11.53 ms	              0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8829) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-45.30 ms   0.0%	0 s	        KFIFOQueue.getHead()
-45.30 ms   0.0%	43.05 ms	         KFIFOQueue.getHead()
-2.25 ms   0.0%	0 s	          0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-2.25 ms   0.0%	0 s	           0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-2.25 ms   0.0%	0 s	            0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-2.25 ms   0.0%	2.25 ms	             0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8829) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-40.38 ms   0.0%	0 s	        KFIFOQueue.segmentFrom(_:)
-16.28 ms   0.0%	0 s	         static RawSegment.from(_:)
-16.28 ms   0.0%	15.00 ms	          static RawSegment.from(_:)
-1.28 ms   0.0%	0 s	           0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-1.28 ms   0.0%	0 s	            0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-1.28 ms   0.0%	0 s	             0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-1.28 ms   0.0%	1.28 ms	              0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8829) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-12.73 ms   0.0%	0 s	         RawSegment.init(ptr:)
-12.73 ms   0.0%	0 s	          completeTaskWithClosure(swift::AsyncContext*, swift::SwiftError*)
-12.73 ms   0.0%	12.73 ms	           RawSegment.init(ptr:)
-11.37 ms   0.0%	10.00 ms	         KFIFOQueue.segmentFrom(_:)
-1.37 ms   0.0%	0 s	          0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-1.37 ms   0.0%	0 s	           0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-1.37 ms   0.0%	0 s	            0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-1.37 ms   0.0%	1.37 ms	             0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8829) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-36.57 ms   0.0%	0 s	        RawSegment.slot(at:)
-16.57 ms   0.0%	0 s	         completeTaskWithClosure(swift::AsyncContext*, swift::SwiftError*)
-16.57 ms   0.0%	15.00 ms	          RawSegment.slot(at:)
-1.57 ms   0.0%	0 s	           0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-1.57 ms   0.0%	0 s	            0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-1.57 ms   0.0%	0 s	             0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-1.57 ms   0.0%	1.57 ms	              0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8829) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-15.00 ms   0.0%	0 s	         _rawSegmentSlotsOffset.unsafeMutableAddressor
-15.00 ms   0.0%	15.00 ms	          _rawSegmentSlotsOffset.unsafeMutableAddressor
-5.00 ms   0.0%	5.00 ms	         RawSegment.slot(at:)
-36.01 ms   0.0%	0 s	        DYLD-STUB$$specialized IndexingIterator.next()
-36.01 ms   0.0%	0 s	         completeTaskWithClosure(swift::AsyncContext*, swift::SwiftError*)
-36.01 ms   0.0%	30.00 ms	          DYLD-STUB$$specialized IndexingIterator.next()
-6.01 ms   0.0%	0 s	           0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-6.01 ms   0.0%	0 s	            0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-6.01 ms   0.0%	0 s	             0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-6.01 ms   0.0%	6.01 ms	              0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8829) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-29.07 ms   0.0%	0 s	        static DoubleWord.== infix(_:_:)
-29.07 ms   0.0%	0 s	         completeTaskWithClosure(swift::AsyncContext*, swift::SwiftError*)
-29.07 ms   0.0%	25.39 ms	          static DoubleWord.== infix(_:_:)
-3.68 ms   0.0%	0 s	           0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-3.68 ms   0.0%	0 s	            0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-3.68 ms   0.0%	0 s	             0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-3.68 ms   0.0%	3.68 ms	              0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8829) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-21.27 ms   0.0%	0 s	        DYLD-STUB$$specialized Collection<>.makeIterator()
-21.27 ms   0.0%	0 s	         completeTaskWithClosure(swift::AsyncContext*, swift::SwiftError*)
-21.27 ms   0.0%	20.00 ms	          DYLD-STUB$$specialized Collection<>.makeIterator()
-1.27 ms   0.0%	0 s	           0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-1.27 ms   0.0%	0 s	            0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-1.27 ms   0.0%	0 s	             0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-1.27 ms   0.0%	1.27 ms	              0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8829) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-15.00 ms   0.0%	0 s	        static ThreadLocalRNG.random(upperBound:)
-10.00 ms   0.0%	10.00 ms	         static ThreadLocalRNG.random(upperBound:)
-5.00 ms   0.0%	0 s	         completeTaskWithClosure(swift::AsyncContext*, swift::SwiftError*)
-5.00 ms   0.0%	5.00 ms	          static ThreadLocalRNG.random(upperBound:)
-11.56 ms   0.0%	0 s	        static RawBox.nextOffset.getter
-11.56 ms   0.0%	0 s	         completeTaskWithClosure(swift::AsyncContext*, swift::SwiftError*)
-11.56 ms   0.0%	10.00 ms	          static RawBox.nextOffset.getter
-1.56 ms   0.0%	0 s	           0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-1.56 ms   0.0%	0 s	            0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-1.56 ms   0.0%	0 s	             0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-1.56 ms   0.0%	1.56 ms	              0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8829) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-10.00 ms   0.0%	0 s	        KFIFOQueue.head.getter
+1.32 ms   0.0%	0 s	            completeTaskWithClosure(swift::AsyncContext*, swift::SwiftError*)
+1.32 ms   0.0%	0 s	             _malloc_zone_memalign
+1.32 ms   0.0%	0 s	              0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+1.32 ms   0.0%	0 s	               0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+1.32 ms   0.0%	0 s	                0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+1.32 ms   0.0%	1.32 ms	                 0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8931) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+5.20 ms   0.0%	5.00 ms	           _malloc_type_posix_memalign_outlined
+195.38 µs   0.0%	0 s	            0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+195.38 µs   0.0%	0 s	             0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+195.38 µs   0.0%	0 s	              0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+195.38 µs   0.0%	195.38 µs	               0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8931) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+10.00 ms   0.0%	0 s	          malloc_type_posix_memalign
+10.00 ms   0.0%	10.00 ms	           malloc_type_posix_memalign
+5.00 ms   0.0%	0 s	          _posix_memalign
+5.00 ms   0.0%	5.00 ms	           _posix_memalign
+35.09 ms   0.0%	30.00 ms	         static RawBox.allocate(_:)
+5.09 ms   0.0%	0 s	          0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+5.09 ms   0.0%	0 s	           0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+5.09 ms   0.0%	0 s	            0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+5.09 ms   0.0%	5.09 ms	             0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8931) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+13.06 ms   0.0%	0 s	         swift::metadataimpl::ValueWitnesses<swift::metadataimpl::NativeBox<unsigned long long, 8ul, 8ul, 8ul>>::initializeWithTake(swift::OpaqueValue*, swift::OpaqueValue*, swift::TargetMetadata<swift::InProcess> const*)
+10.00 ms   0.0%	0 s	          completeTaskWithClosure(swift::AsyncContext*, swift::SwiftError*)
+10.00 ms   0.0%	10.00 ms	           swift::metadataimpl::ValueWitnesses<swift::metadataimpl::NativeBox<unsigned long long, 8ul, 8ul, 8ul>>::initializeWithTake(swift::OpaqueValue*, swift::OpaqueValue*, swift::TargetMetadata<swift::InProcess> const*)
+3.06 ms   0.0%	0 s	          swift::metadataimpl::ValueWitnesses<swift::metadataimpl::NativeBox<unsigned long long, 8ul, 8ul, 8ul>>::initializeWithTake(swift::OpaqueValue*, swift::OpaqueValue*, swift::TargetMetadata<swift::InProcess> const*)
+3.06 ms   0.0%	0 s	           0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+3.06 ms   0.0%	0 s	            0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+3.06 ms   0.0%	0 s	             0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+3.06 ms   0.0%	3.06 ms	              0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8931) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+5.00 ms   0.0%	0 s	         _malloc_type_posix_memalign_outlined
+5.00 ms   0.0%	5.00 ms	          _malloc_type_posix_memalign_outlined
+2.47 ms   0.0%	0 s	         malloc_type_posix_memalign
+2.47 ms   0.0%	0 s	          malloc_type_posix_memalign
+2.47 ms   0.0%	0 s	           0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+2.47 ms   0.0%	0 s	            0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+2.47 ms   0.0%	0 s	             0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+2.47 ms   0.0%	2.47 ms	              0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8931) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+167.79 ms   0.0%	0 s	        RawSegment.slot(at:)
+167.79 ms   0.0%	0 s	         completeTaskWithClosure(swift::AsyncContext*, swift::SwiftError*)
+167.79 ms   0.0%	155.55 ms	          RawSegment.slot(at:)
+12.24 ms   0.0%	0 s	           0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+12.24 ms   0.0%	0 s	            0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+12.24 ms   0.0%	0 s	             0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+12.24 ms   0.0%	12.24 ms	              0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8931) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+74.98 ms   0.0%	0 s	        KFIFOQueue.tail.getter
+74.98 ms   0.0%	0 s	         completeTaskWithClosure(swift::AsyncContext*, swift::SwiftError*)
+74.98 ms   0.0%	55.10 ms	          KFIFOQueue.tail.getter
+19.87 ms   0.0%	0 s	           0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+19.87 ms   0.0%	0 s	            0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+19.87 ms   0.0%	0 s	             0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+19.87 ms   0.0%	19.87 ms	              0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8931) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+51.19 ms   0.0%	0 s	        DYLD-STUB$$specialized IndexingIterator.next()
+51.19 ms   0.0%	0 s	         completeTaskWithClosure(swift::AsyncContext*, swift::SwiftError*)
+51.19 ms   0.0%	40.00 ms	          DYLD-STUB$$specialized IndexingIterator.next()
+11.19 ms   0.0%	0 s	           0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+11.19 ms   0.0%	0 s	            0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+11.19 ms   0.0%	0 s	             0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+11.19 ms   0.0%	11.19 ms	              0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8931) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+31.61 ms   0.0%	0 s	        KFIFOQueue.head.getter
+31.61 ms   0.0%	0 s	         completeTaskWithClosure(swift::AsyncContext*, swift::SwiftError*)
+31.61 ms   0.0%	24.86 ms	          KFIFOQueue.head.getter
+6.74 ms   0.0%	0 s	           0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+6.74 ms   0.0%	0 s	            0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+6.74 ms   0.0%	0 s	             0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+6.74 ms   0.0%	6.74 ms	              0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8931) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+30.00 ms   0.0%	0 s	        static ThreadLocalRNG.random(upperBound:)
+15.00 ms   0.0%	15.00 ms	         static ThreadLocalRNG.random(upperBound:)
+15.00 ms   0.0%	0 s	         completeTaskWithClosure(swift::AsyncContext*, swift::SwiftError*)
+15.00 ms   0.0%	15.00 ms	          static ThreadLocalRNG.random(upperBound:)
+28.00 ms   0.0%	0 s	        KFIFOQueue.isClosed.getter
+28.00 ms   0.0%	25.00 ms	         KFIFOQueue.isClosed.getter
+3.00 ms   0.0%	0 s	          0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+3.00 ms   0.0%	0 s	           0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+3.00 ms   0.0%	0 s	            0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+3.00 ms   0.0%	3.00 ms	             0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8931) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+26.51 ms   0.0%	0 s	        static RawSegment.from(_:)
+26.51 ms   0.0%	25.11 ms	         static RawSegment.from(_:)
+1.40 ms   0.0%	0 s	          0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+1.40 ms   0.0%	0 s	           0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+1.40 ms   0.0%	0 s	            0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+1.40 ms   0.0%	1.40 ms	             0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8931) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+21.84 ms   0.0%	0 s	        RawSegment.init(ptr:)
+21.84 ms   0.0%	0 s	         completeTaskWithClosure(swift::AsyncContext*, swift::SwiftError*)
+21.84 ms   0.0%	21.84 ms	          RawSegment.init(ptr:)
+20.00 ms   0.0%	0 s	        KFIFOQueue.closed.getter
+20.00 ms   0.0%	0 s	         completeTaskWithClosure(swift::AsyncContext*, swift::SwiftError*)
+20.00 ms   0.0%	20.00 ms	          KFIFOQueue.closed.getter
+18.12 ms   0.0%	0 s	        RawSegment.asUInt.getter
+18.12 ms   0.0%	0 s	         completeTaskWithClosure(swift::AsyncContext*, swift::SwiftError*)
+18.12 ms   0.0%	18.12 ms	          RawSegment.asUInt.getter
+13.48 ms   0.0%	0 s	        DoubleWord.init(first:second:)
+13.48 ms   0.0%	0 s	         completeTaskWithClosure(swift::AsyncContext*, swift::SwiftError*)
+13.48 ms   0.0%	13.48 ms	          DoubleWord.init(first:second:)
+10.00 ms   0.0%	0 s	        swift::metadataimpl::ValueWitnesses<swift::metadataimpl::NativeBox<unsigned long long, 8ul, 8ul, 8ul>>::initializeWithCopy(swift::OpaqueValue*, swift::OpaqueValue*, swift::TargetMetadata<swift::InProcess> const*)
 10.00 ms   0.0%	0 s	         completeTaskWithClosure(swift::AsyncContext*, swift::SwiftError*)
-10.00 ms   0.0%	10.00 ms	          KFIFOQueue.head.getter
-10.00 ms   0.0%	0 s	        swift_slowAlloc
+10.00 ms   0.0%	10.00 ms	          swift::metadataimpl::ValueWitnesses<swift::metadataimpl::NativeBox<unsigned long long, 8ul, 8ul, 8ul>>::initializeWithCopy(swift::OpaqueValue*, swift::OpaqueValue*, swift::TargetMetadata<swift::InProcess> const*)
+10.00 ms   0.0%	0 s	        specialized Collection<>.makeIterator()
+10.00 ms   0.0%	10.00 ms	         specialized Collection<>.makeIterator()
+7.76 ms   0.0%	0 s	        static DoubleWord.== infix(_:_:)
+7.76 ms   0.0%	0 s	         completeTaskWithClosure(swift::AsyncContext*, swift::SwiftError*)
+7.76 ms   0.0%	7.76 ms	          static DoubleWord.== infix(_:_:)
+5.00 ms   0.0%	0 s	        specialized IndexingIterator.next()
+5.00 ms   0.0%	5.00 ms	         specialized IndexingIterator.next()
+5.00 ms   0.0%	0 s	        DYLD-STUB$$swift_retain
 5.00 ms   0.0%	0 s	         completeTaskWithClosure(swift::AsyncContext*, swift::SwiftError*)
-5.00 ms   0.0%	5.00 ms	          swift_slowAlloc
-5.00 ms   0.0%	5.00 ms	         swift_slowAlloc
-10.00 ms   0.0%	0 s	        _rawSegmentSlotsOffset.unsafeMutableAddressor
+5.00 ms   0.0%	5.00 ms	          DYLD-STUB$$swift_retain
+5.00 ms   0.0%	0 s	        DYLD-STUB$$swift_release
+5.00 ms   0.0%	0 s	         completeTaskWithClosure(swift::AsyncContext*, swift::SwiftError*)
+5.00 ms   0.0%	5.00 ms	          DYLD-STUB$$swift_release
+5.00 ms   0.0%	0 s	        DYLD-STUB$$static UnsafeMutablePointer.allocate(capacity:)
+5.00 ms   0.0%	0 s	         completeTaskWithClosure(swift::AsyncContext*, swift::SwiftError*)
+5.00 ms   0.0%	5.00 ms	          DYLD-STUB$$static UnsafeMutablePointer.allocate(capacity:)
+5.00 ms   0.0%	0 s	        RawSegment.next.getter
+5.00 ms   0.0%	0 s	         completeTaskWithClosure(swift::AsyncContext*, swift::SwiftError*)
+5.00 ms   0.0%	5.00 ms	          RawSegment.next.getter
+2.22 ms   0.0%	0 s	        static RawSegment.create(k:)
+2.22 ms   0.0%	0 s	         static RawSegment.create(k:)
+2.22 ms   0.0%	0 s	          0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+2.22 ms   0.0%	0 s	           0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+2.22 ms   0.0%	0 s	            0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+2.22 ms   0.0%	2.22 ms	             0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8931) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+319.39 ms   0.0%	0 s	       specialized IndexingIterator.next()
+299.39 ms   0.0%	0 s	        __sanitizer_cov_trace_pc_guard
+218.98 ms   0.0%	218.98 ms	         __sanitizer_cov_trace_pc_guard
+60.78 ms   0.0%	0 s	         get_current_coverage_map
+50.92 ms   0.0%	50.48 ms	          get_current_coverage_map
+442.67 µs   0.0%	0 s	           0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+442.67 µs   0.0%	0 s	            0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+442.67 µs   0.0%	0 s	             0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+442.67 µs   0.0%	442.67 µs	              0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8931) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+9.86 ms   0.0%	0 s	          get_current_task_for_measurement
+9.86 ms   0.0%	0 s	           get_current_coverage_map
+9.86 ms   0.0%	9.86 ms	            get_current_task_for_measurement
+19.64 ms   0.0%	0 s	         _tlv_get_addr
+19.64 ms   0.0%	0 s	          completeTaskWithClosure(swift::AsyncContext*, swift::SwiftError*)
+19.64 ms   0.0%	19.64 ms	           _tlv_get_addr
+15.00 ms   0.0%	0 s	        get_current_coverage_map
 10.00 ms   0.0%	0 s	         completeTaskWithClosure(swift::AsyncContext*, swift::SwiftError*)
-10.00 ms   0.0%	10.00 ms	          _rawSegmentSlotsOffset.unsafeMutableAddressor
-7.61 ms   0.0%	0 s	        static RawSegment.create(k:)
-7.61 ms   0.0%	7.61 ms	         static RawSegment.create(k:)
-5.00 ms   0.0%	0 s	        specialized Collection<>.makeIterator()
-5.00 ms   0.0%	5.00 ms	         specialized Collection<>.makeIterator()
-5.00 ms   0.0%	0 s	        DYLD-STUB$$UnsafeMutableRawPointer.initializeMemory<A>(as:repeating:count:)
-5.00 ms   0.0%	0 s	         completeTaskWithClosure(swift::AsyncContext*, swift::SwiftError*)
-5.00 ms   0.0%	5.00 ms	          DYLD-STUB$$UnsafeMutableRawPointer.initializeMemory<A>(as:repeating:count:)
-5.00 ms   0.0%	0 s	        UnsafeMutableRawPointer.initializeMemory<A>(as:repeating:count:)
-5.00 ms   0.0%	5.00 ms	         UnsafeMutableRawPointer.initializeMemory<A>(as:repeating:count:)
-4.70 ms   0.0%	0 s	        max<A>(_:_:)
-4.70 ms   0.0%	3.43 ms	         max<A>(_:_:)
-1.28 ms   0.0%	0 s	          0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-1.28 ms   0.0%	0 s	           0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-1.28 ms   0.0%	0 s	            0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-1.28 ms   0.0%	1.28 ms	             0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8829) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-3.54 ms   0.0%	0 s	        DYLD-STUB$$max<A>(_:_:)
-3.54 ms   0.0%	0 s	         completeTaskWithClosure(swift::AsyncContext*, swift::SwiftError*)
-3.54 ms   0.0%	0 s	          DYLD-STUB$$max<A>(_:_:)
-3.54 ms   0.0%	0 s	           0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-3.54 ms   0.0%	0 s	            0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-3.54 ms   0.0%	0 s	             0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-3.54 ms   0.0%	3.54 ms	              0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8829) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-1.87 ms   0.0%	0 s	        RawSegment.asUInt.getter
-1.87 ms   0.0%	0 s	         completeTaskWithClosure(swift::AsyncContext*, swift::SwiftError*)
-1.87 ms   0.0%	1.87 ms	          RawSegment.asUInt.getter
-386.29 µs   0.0%	0 s	        DYLD-STUB$$static UnsafeMutableRawPointer.allocate(byteCount:alignment:)
-386.29 µs   0.0%	0 s	         completeTaskWithClosure(swift::AsyncContext*, swift::SwiftError*)
-386.29 µs   0.0%	0 s	          DYLD-STUB$$static UnsafeMutableRawPointer.allocate(byteCount:alignment:)
-386.29 µs   0.0%	0 s	           0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-386.29 µs   0.0%	0 s	            0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-386.29 µs   0.0%	0 s	             0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-386.29 µs   0.0%	386.29 µs	              0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8829) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-66.38 ms   0.0%	0 s	       specialized IndexingIterator.next()
-46.38 ms   0.0%	0 s	        __sanitizer_cov_trace_pc_guard
-34.77 ms   0.0%	0 s	         get_current_coverage_map
-22.56 ms   0.0%	0 s	          get_current_task_for_measurement
-22.56 ms   0.0%	0 s	           get_current_coverage_map
-22.56 ms   0.0%	20.00 ms	            get_current_task_for_measurement
-2.56 ms   0.0%	0 s	             0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-2.56 ms   0.0%	0 s	              0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-2.56 ms   0.0%	0 s	               0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-2.56 ms   0.0%	2.56 ms	                0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8829) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-12.21 ms   0.0%	10.00 ms	          get_current_coverage_map
-2.21 ms   0.0%	0 s	           0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-2.21 ms   0.0%	0 s	            0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-2.21 ms   0.0%	0 s	             0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-2.21 ms   0.0%	2.21 ms	              0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8829) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-6.61 ms   0.0%	0 s	         swift_task_getCurrent
-6.61 ms   0.0%	0 s	          completeTaskWithClosure(swift::AsyncContext*, swift::SwiftError*)
-6.61 ms   0.0%	5.00 ms	           swift_task_getCurrent
-1.61 ms   0.0%	0 s	            0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-1.61 ms   0.0%	0 s	             0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-1.61 ms   0.0%	0 s	              0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-1.61 ms   0.0%	1.61 ms	               0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8829) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-5.00 ms   0.0%	5.00 ms	         __sanitizer_cov_trace_pc_guard
-10.00 ms   0.0%	0 s	        closure #2 in closure #1 in closure #1 in closure #1 in variable initialization expression of benchmarks
-10.00 ms   0.0%	10.00 ms	         specialized IndexingIterator.next()
-10.00 ms   0.0%	0 s	        get_current_coverage_map
-5.00 ms   0.0%	0 s	         completeTaskWithClosure(swift::AsyncContext*, swift::SwiftError*)
-5.00 ms   0.0%	5.00 ms	          get_current_coverage_map
+10.00 ms   0.0%	10.00 ms	          get_current_coverage_map
 5.00 ms   0.0%	5.00 ms	         get_current_coverage_map
-50.25 ms   0.0%	0 s	       static DoubleWord.== infix(_:_:)
-50.25 ms   0.0%	0 s	        completeTaskWithClosure(swift::AsyncContext*, swift::SwiftError*)
-50.25 ms   0.0%	45.00 ms	         static DoubleWord.== infix(_:_:)
-5.25 ms   0.0%	0 s	          0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-5.25 ms   0.0%	0 s	           0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-5.25 ms   0.0%	0 s	            0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-5.25 ms   0.0%	5.25 ms	             0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8829) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-18.06 ms   0.0%	0 s	       DoubleWord.init(first:second:)
-18.06 ms   0.0%	0 s	        completeTaskWithClosure(swift::AsyncContext*, swift::SwiftError*)
-18.06 ms   0.0%	18.06 ms	         DoubleWord.init(first:second:)
-12.05 ms   0.0%	0 s	       KFIFOQueue.committed(tailOld:itemNew:index:)
-7.08 ms   0.0%	0 s	        KFIFOQueue.committed(tailOld:itemNew:index:)
-7.08 ms   0.0%	0 s	         0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-7.08 ms   0.0%	0 s	          0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-7.08 ms   0.0%	0 s	           0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-7.08 ms   0.0%	7.08 ms	            0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8829) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-4.97 ms   0.0%	0 s	        completeTaskWithClosure(swift::AsyncContext*, swift::SwiftError*)
-4.97 ms   0.0%	4.97 ms	         KFIFOQueue.committed(tailOld:itemNew:index:)
-8.35 ms   0.0%	0 s	       KFIFOQueue.getTail()
-8.35 ms   0.0%	0 s	        completeTaskWithClosure(swift::AsyncContext*, swift::SwiftError*)
-8.35 ms   0.0%	5.00 ms	         KFIFOQueue.getTail()
-3.35 ms   0.0%	0 s	          0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-3.35 ms   0.0%	0 s	           0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-3.35 ms   0.0%	0 s	            0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-3.35 ms   0.0%	3.35 ms	             0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8829) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-5.88 ms   0.0%	0 s	       KFIFOQueue.findEmptySlot(in:)
-5.88 ms   0.0%	5.00 ms	        KFIFOQueue.findEmptySlot(in:)
-879.21 µs   0.0%	0 s	         0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-879.21 µs   0.0%	0 s	          0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-879.21 µs   0.0%	0 s	           0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-879.21 µs   0.0%	879.21 µs	            0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8829) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-5.00 ms   0.0%	0 s	       KFIFOQueue.segmentFrom(_:)
-5.00 ms   0.0%	5.00 ms	        KFIFOQueue.segmentFrom(_:)
-5.00 ms   0.0%	0 s	       RawSegment.slot(at:)
-5.00 ms   0.0%	5.00 ms	        RawSegment.slot(at:)
-5.00 ms   0.0%	0 s	       KFIFOQueue.advanceTail(_:)
-5.00 ms   0.0%	5.00 ms	        KFIFOQueue.advanceTail(_:)
-15.00 ms   0.0%	0 s	      KFIFOQueue.enqueue(_:)
-15.00 ms   0.0%	15.00 ms	       KFIFOQueue.enqueue(_:)
-10.00 ms   0.0%	0 s	      __sanitizer_cov_trace_pc_guard
-10.00 ms   0.0%	10.00 ms	       __sanitizer_cov_trace_pc_guard
-1.68 s   0.0%	0 s	   partial apply for specialized thunk for @escaping @isolated(any) @callee_guaranteed @async () -> (@out A)
-1.68 s   0.0%	0 s	    specialized thunk for @escaping @isolated(any) @callee_guaranteed @async () -> (@out A)
-1.68 s   0.0%	0 s	     partial apply for closure #1 in closure #1 in closure #1 in closure #1 in variable initialization expression of benchmarks
-1.68 s   0.0%	0 s	      closure #1 in closure #1 in closure #1 in closure #1 in variable initialization expression of benchmarks
-1.45 s   0.0%	0 s	       KFIFOQueue.dequeue()
-591.07 ms   0.0%	0 s	        KFIFOQueue.findItem(in:)
-355.09 ms   0.0%	320.00 ms	         KFIFOQueue.findItem(in:)
-35.09 ms   0.0%	0 s	          0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-35.09 ms   0.0%	0 s	           0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-35.09 ms   0.0%	0 s	            0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-35.09 ms   0.0%	35.09 ms	             0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8829) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-98.73 ms   0.0%	0 s	         RawSegment.slot(at:)
-50.39 ms   0.0%	0 s	          _rawSegmentSlotsOffset.unsafeMutableAddressor
-50.39 ms   0.0%	45.00 ms	           _rawSegmentSlotsOffset.unsafeMutableAddressor
-5.39 ms   0.0%	0 s	            0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-5.39 ms   0.0%	0 s	             0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-5.39 ms   0.0%	0 s	              0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-5.39 ms   0.0%	5.39 ms	               0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8829) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-43.34 ms   0.0%	40.00 ms	          RawSegment.slot(at:)
-3.34 ms   0.0%	0 s	           0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-3.34 ms   0.0%	0 s	            0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-3.34 ms   0.0%	0 s	             0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-3.34 ms   0.0%	3.34 ms	              0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8829) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-5.00 ms   0.0%	0 s	          dispatch_once_f
-5.00 ms   0.0%	0 s	           completeTaskWithClosure(swift::AsyncContext*, swift::SwiftError*)
-5.00 ms   0.0%	5.00 ms	            dispatch_once_f
-47.49 ms   0.0%	0 s	         specialized IndexingIterator.next()
-47.49 ms   0.0%	45.00 ms	          specialized IndexingIterator.next()
-2.49 ms   0.0%	0 s	           0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-2.49 ms   0.0%	0 s	            0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-2.49 ms   0.0%	0 s	             0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-2.49 ms   0.0%	2.49 ms	              0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8829) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-44.76 ms   0.0%	0 s	         static ThreadLocalRNG.random(upperBound:)
-34.76 ms   0.0%	30.00 ms	          static ThreadLocalRNG.random(upperBound:)
-4.76 ms   0.0%	0 s	           0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-4.76 ms   0.0%	0 s	            0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-4.76 ms   0.0%	0 s	             0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-4.76 ms   0.0%	4.76 ms	              0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8829) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-10.00 ms   0.0%	0 s	          ThreadLocalRNG._key.unsafeMutableAddressor
-10.00 ms   0.0%	10.00 ms	           ThreadLocalRNG._key.unsafeMutableAddressor
-15.00 ms   0.0%	0 s	         ThreadLocalRNG._key.unsafeMutableAddressor
-15.00 ms   0.0%	0 s	          completeTaskWithClosure(swift::AsyncContext*, swift::SwiftError*)
-15.00 ms   0.0%	15.00 ms	           ThreadLocalRNG._key.unsafeMutableAddressor
-10.00 ms   0.0%	0 s	         pthread_setspecific
+5.00 ms   0.0%	0 s	        closure #2 in closure #1 in closure #1 in closure #1 in variable initialization expression of benchmarks
+5.00 ms   0.0%	5.00 ms	         specialized IndexingIterator.next()
+177.50 ms   0.0%	0 s	       KFIFOQueue.tail.getter
+177.50 ms   0.0%	0 s	        completeTaskWithClosure(swift::AsyncContext*, swift::SwiftError*)
+177.50 ms   0.0%	144.22 ms	         KFIFOQueue.tail.getter
+33.28 ms   0.0%	0 s	          0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+33.28 ms   0.0%	0 s	           0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+33.28 ms   0.0%	0 s	            0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+33.28 ms   0.0%	33.28 ms	             0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8931) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+66.13 ms   0.0%	0 s	       static DoubleWord.== infix(_:_:)
+66.13 ms   0.0%	0 s	        completeTaskWithClosure(swift::AsyncContext*, swift::SwiftError*)
+66.13 ms   0.0%	60.00 ms	         static DoubleWord.== infix(_:_:)
+6.13 ms   0.0%	0 s	          0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+6.13 ms   0.0%	0 s	           0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+6.13 ms   0.0%	0 s	            0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+6.13 ms   0.0%	6.13 ms	             0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8931) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+37.00 ms   0.0%	0 s	       KFIFOQueue.head.getter
+37.00 ms   0.0%	0 s	        completeTaskWithClosure(swift::AsyncContext*, swift::SwiftError*)
+37.00 ms   0.0%	35.00 ms	         KFIFOQueue.head.getter
+2.00 ms   0.0%	0 s	          0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+2.00 ms   0.0%	0 s	           0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+2.00 ms   0.0%	0 s	            0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+2.00 ms   0.0%	2.00 ms	             0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8931) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+15.00 ms   0.0%	0 s	       KFIFOQueue.isClosed.getter
+15.00 ms   0.0%	0 s	        completeTaskWithClosure(swift::AsyncContext*, swift::SwiftError*)
+15.00 ms   0.0%	15.00 ms	         KFIFOQueue.isClosed.getter
+8.75 ms   0.0%	0 s	       KFIFOQueue.findEmptySlot(in:)
+8.75 ms   0.0%	5.00 ms	        KFIFOQueue.findEmptySlot(in:)
+3.75 ms   0.0%	0 s	         0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+3.75 ms   0.0%	0 s	          0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+3.75 ms   0.0%	0 s	           0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+3.75 ms   0.0%	3.75 ms	            0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8931) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+8.64 ms   0.0%	0 s	       RawSegment.slot(at:)
+8.64 ms   0.0%	0 s	        completeTaskWithClosure(swift::AsyncContext*, swift::SwiftError*)
+8.64 ms   0.0%	5.00 ms	         RawSegment.slot(at:)
+3.64 ms   0.0%	0 s	          0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+3.64 ms   0.0%	0 s	           0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+3.64 ms   0.0%	0 s	            0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+3.64 ms   0.0%	3.64 ms	             0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8931) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+5.11 ms   0.0%	0 s	       KFIFOQueue.committed(tailOld:itemNew:index:)
+5.11 ms   0.0%	5.00 ms	        KFIFOQueue.committed(tailOld:itemNew:index:)
+110.04 µs   0.0%	0 s	         0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+110.04 µs   0.0%	0 s	          0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+110.04 µs   0.0%	0 s	           0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+110.04 µs   0.0%	110.04 µs	            0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8931) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+5.00 ms   0.0%	0 s	       static RawSegment.from(_:)
+5.00 ms   0.0%	0 s	        completeTaskWithClosure(swift::AsyncContext*, swift::SwiftError*)
+5.00 ms   0.0%	5.00 ms	         static RawSegment.from(_:)
+265.25 µs   0.0%	0 s	       DoubleWord.init(first:second:)
+265.25 µs   0.0%	0 s	        completeTaskWithClosure(swift::AsyncContext*, swift::SwiftError*)
+265.25 µs   0.0%	73.88 µs	         DoubleWord.init(first:second:)
+191.38 µs   0.0%	0 s	          0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+191.38 µs   0.0%	0 s	           0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+191.38 µs   0.0%	0 s	            0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+191.38 µs   0.0%	191.38 µs	             0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8931) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+64.67 ms   0.0%	0 s	      __sanitizer_cov_trace_pc_guard
+64.67 ms   0.0%	64.67 ms	       __sanitizer_cov_trace_pc_guard
+5.00 ms   0.0%	0 s	      KFIFOQueue.enqueue(_:)
+5.00 ms   0.0%	5.00 ms	       KFIFOQueue.enqueue(_:)
+2.42 s   0.0%	0 s	   partial apply for specialized thunk for @escaping @isolated(any) @callee_guaranteed @async () -> (@out A)
+2.42 s   0.0%	0 s	    specialized thunk for @escaping @isolated(any) @callee_guaranteed @async () -> (@out A)
+2.42 s   0.0%	0 s	     partial apply for closure #1 in closure #1 in closure #1 in closure #1 in variable initialization expression of benchmarks
+2.41 s   0.0%	0 s	      closure #1 in closure #1 in closure #1 in closure #1 in variable initialization expression of benchmarks
+1.98 s   0.0%	0 s	       KFIFOQueue.dequeue()
+921.26 ms   0.0%	0 s	        KFIFOQueue.findItem(in:)
+693.46 ms   0.0%	600.47 ms	         KFIFOQueue.findItem(in:)
+92.99 ms   0.0%	0 s	          0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+92.99 ms   0.0%	0 s	           0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+92.99 ms   0.0%	0 s	            0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+92.99 ms   0.0%	92.99 ms	             0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8931) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+109.98 ms   0.0%	0 s	         static ThreadLocalRNG.random(upperBound:)
+97.11 ms   0.0%	90.00 ms	          static ThreadLocalRNG.random(upperBound:)
+7.11 ms   0.0%	0 s	           0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+7.11 ms   0.0%	0 s	            0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+7.11 ms   0.0%	0 s	             0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+7.11 ms   0.0%	7.11 ms	              0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8931) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+12.87 ms   0.0%	0 s	          ThreadLocalRNG._key.unsafeMutableAddressor
+12.87 ms   0.0%	10.00 ms	           ThreadLocalRNG._key.unsafeMutableAddressor
+2.87 ms   0.0%	0 s	            0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+2.87 ms   0.0%	0 s	             0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+2.87 ms   0.0%	0 s	              0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+2.87 ms   0.0%	2.87 ms	               0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8931) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+58.82 ms   0.0%	0 s	         specialized IndexingIterator.next()
+58.82 ms   0.0%	55.00 ms	          specialized IndexingIterator.next()
+3.82 ms   0.0%	0 s	           0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+3.82 ms   0.0%	0 s	            0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+3.82 ms   0.0%	0 s	             0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+3.82 ms   0.0%	3.82 ms	              0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8931) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+38.99 ms   0.0%	0 s	         pthread_setspecific
+37.21 ms   0.0%	0 s	          completeTaskWithClosure(swift::AsyncContext*, swift::SwiftError*)
+37.21 ms   0.0%	35.00 ms	           pthread_setspecific
+2.21 ms   0.0%	0 s	            0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+2.21 ms   0.0%	0 s	             0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+2.21 ms   0.0%	0 s	              0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+2.21 ms   0.0%	2.21 ms	               0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8931) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+1.78 ms   0.0%	0 s	          pthread_setspecific
+1.78 ms   0.0%	0 s	           0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+1.78 ms   0.0%	0 s	            0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+1.78 ms   0.0%	0 s	             0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+1.78 ms   0.0%	1.78 ms	              0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8931) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+10.00 ms   0.0%	0 s	         pthread_getspecific
 10.00 ms   0.0%	0 s	          completeTaskWithClosure(swift::AsyncContext*, swift::SwiftError*)
-10.00 ms   0.0%	10.00 ms	           pthread_setspecific
-10.00 ms   0.0%	0 s	         DYLD-STUB$$pthread_setspecific
-10.00 ms   0.0%	0 s	          completeTaskWithClosure(swift::AsyncContext*, swift::SwiftError*)
-10.00 ms   0.0%	10.00 ms	           DYLD-STUB$$pthread_setspecific
+10.00 ms   0.0%	10.00 ms	           pthread_getspecific
 5.00 ms   0.0%	0 s	         DYLD-STUB$$pthread_getspecific
 5.00 ms   0.0%	0 s	          completeTaskWithClosure(swift::AsyncContext*, swift::SwiftError*)
 5.00 ms   0.0%	5.00 ms	           DYLD-STUB$$pthread_getspecific
-5.00 ms   0.0%	0 s	         pthread_getspecific
+5.00 ms   0.0%	0 s	         DYLD-STUB$$pthread_setspecific
 5.00 ms   0.0%	0 s	          completeTaskWithClosure(swift::AsyncContext*, swift::SwiftError*)
-5.00 ms   0.0%	5.00 ms	           pthread_getspecific
-442.96 ms   0.0%	0 s	        KFIFOQueue.decodeItem(_:)
-296.86 ms   0.0%	0 s	         static RawBox.deallocateRaw(_:)
-222.15 ms   0.0%	0 s	          zone_free_definite_size
-203.76 ms   0.0%	0 s	           je_free_default
-187.66 ms   0.0%	0 s	            je_tcache_bin_flush_small
-147.02 ms   0.0%	138.66 ms	             je_tcache_bin_flush_small
-8.36 ms   0.0%	0 s	              0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-8.36 ms   0.0%	0 s	               0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-8.36 ms   0.0%	0 s	                0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-8.36 ms   0.0%	8.36 ms	                 0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8829) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-34.37 ms   0.0%	0 s	             tcache_bin_flush_edatas_lookup
-34.37 ms   0.0%	30.00 ms	              tcache_bin_flush_edatas_lookup
-4.37 ms   0.0%	0 s	               0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-4.37 ms   0.0%	0 s	                0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-4.37 ms   0.0%	0 s	                 0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-4.37 ms   0.0%	4.37 ms	                  0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8829) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-3.49 ms   0.0%	0 s	             je_malloc_mutex_lock_slow
-2.94 ms   0.0%	2.94 ms	              je_malloc_mutex_lock_slow
-547.58 µs   0.0%	0 s	              __ulock_wait2
-547.58 µs   0.0%	0 s	               __ulock_wait2
-547.58 µs   0.0%	0 s	                0xfffffe000885b8d0 (kernel.release.t6031 +0x184f917) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-547.58 µs   0.0%	0 s	                 0xfffffe0008a1fa64 (kernel.release.t6031 +0x1a13d2f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-547.58 µs   0.0%	0 s	                  0xfffffe0008fb274c (kernel.release.t6031 +0x1fa6a4f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-547.58 µs   0.0%	0 s	                   0xfffffe0008e88ba8 (kernel.release.t6031 +0x1e7cba8) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-547.58 µs   0.0%	0 s	                    0xfffffe00088f765c (kernel.release.t6031 +0x18eb670) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-547.58 µs   0.0%	0 s	                     0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-547.58 µs   0.0%	547.58 µs	                      0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8829) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-2.78 ms   0.0%	0 s	             je_arena_decay
-2.78 ms   0.0%	0 s	              arena_decay_impl
-2.78 ms   0.0%	0 s	               je_pac_maybe_decay_purge
-2.78 ms   0.0%	0 s	                mach_absolute_time
-2.78 ms   0.0%	0 s	                 completeTaskWithClosure(swift::AsyncContext*, swift::SwiftError*)
-2.78 ms   0.0%	2.78 ms	                  mach_absolute_time
-16.11 ms   0.0%	0 s	            _platform_memmove
-16.11 ms   0.0%	0 s	             completeTaskWithClosure(swift::AsyncContext*, swift::SwiftError*)
-16.11 ms   0.0%	16.11 ms	              _platform_memmove
-12.68 ms   0.0%	0 s	           pthread_getspecific
-12.68 ms   0.0%	0 s	            completeTaskWithClosure(swift::AsyncContext*, swift::SwiftError*)
-12.68 ms   0.0%	10.00 ms	             pthread_getspecific
-2.68 ms   0.0%	0 s	              0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-2.68 ms   0.0%	0 s	               0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-2.68 ms   0.0%	0 s	                0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-2.68 ms   0.0%	2.68 ms	                 0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8829) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-5.00 ms   0.0%	0 s	           free.cold.1
-5.00 ms   0.0%	0 s	            completeTaskWithClosure(swift::AsyncContext*, swift::SwiftError*)
-5.00 ms   0.0%	5.00 ms	             free.cold.1
-708.96 µs   0.0%	0 s	           zone_free_definite_size
-708.96 µs   0.0%	0 s	            0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-708.96 µs   0.0%	0 s	             0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-708.96 µs   0.0%	0 s	              0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-708.96 µs   0.0%	708.96 µs	               0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8829) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-30.00 ms   0.0%	0 s	          find_zone_and_free
-25.00 ms   0.0%	25.00 ms	           find_zone_and_free
-5.00 ms   0.0%	0 s	           zone_size
-5.00 ms   0.0%	5.00 ms	            zone_size
-22.55 ms   0.0%	20.00 ms	          static RawBox.deallocateRaw(_:)
-2.55 ms   0.0%	0 s	           0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-2.55 ms   0.0%	0 s	            0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-2.55 ms   0.0%	0 s	             0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-2.55 ms   0.0%	2.55 ms	              0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8829) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-10.00 ms   0.0%	0 s	          zone_size
-10.00 ms   0.0%	10.00 ms	           zone_size
-5.00 ms   0.0%	0 s	          pthread_getspecific
-5.00 ms   0.0%	0 s	           completeTaskWithClosure(swift::AsyncContext*, swift::SwiftError*)
-5.00 ms   0.0%	5.00 ms	            pthread_getspecific
-5.00 ms   0.0%	0 s	          DYLD-STUB$$pthread_getspecific
-5.00 ms   0.0%	0 s	           completeTaskWithClosure(swift::AsyncContext*, swift::SwiftError*)
-5.00 ms   0.0%	5.00 ms	            DYLD-STUB$$pthread_getspecific
-2.16 ms   0.0%	0 s	          free
-2.16 ms   0.0%	0 s	           free
-2.16 ms   0.0%	0 s	            0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-2.16 ms   0.0%	0 s	             0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-2.16 ms   0.0%	0 s	              0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-2.16 ms   0.0%	2.16 ms	               0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8829) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-61.68 ms   0.0%	55.00 ms	         KFIFOQueue.decodeItem(_:)
-6.68 ms   0.0%	0 s	          0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-6.68 ms   0.0%	0 s	           0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-6.68 ms   0.0%	0 s	            0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-6.68 ms   0.0%	6.68 ms	             0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8829) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-35.60 ms   0.0%	0 s	         static RawBox.takeValue(_:)
-30.60 ms   0.0%	0 s	          static RawBox.valuePtr(_:)
-30.60 ms   0.0%	30.00 ms	           static RawBox.valuePtr(_:)
-597.21 µs   0.0%	0 s	            0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-597.21 µs   0.0%	0 s	             0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-597.21 µs   0.0%	0 s	              0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-597.21 µs   0.0%	597.21 µs	               0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8829) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-5.00 ms   0.0%	5.00 ms	          static RawBox.takeValue(_:)
-13.83 ms   0.0%	0 s	         _free
-13.83 ms   0.0%	0 s	          completeTaskWithClosure(swift::AsyncContext*, swift::SwiftError*)
-13.83 ms   0.0%	5.00 ms	           _free
-8.83 ms   0.0%	0 s	            0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-8.83 ms   0.0%	0 s	             0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-8.83 ms   0.0%	0 s	              0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-8.83 ms   0.0%	8.83 ms	               0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8829) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-10.00 ms   0.0%	0 s	         default_zone_free_definite_size
+5.00 ms   0.0%	5.00 ms	           DYLD-STUB$$pthread_setspecific
+704.13 ms   0.0%	0 s	        KFIFOQueue.decodeItem(_:)
+358.23 ms   0.0%	294.78 ms	         KFIFOQueue.decodeItem(_:)
+63.45 ms   0.0%	0 s	          0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+63.45 ms   0.0%	0 s	           0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+63.45 ms   0.0%	0 s	            0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+63.45 ms   0.0%	63.45 ms	             0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8931) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+292.81 ms   0.0%	0 s	         static RawBox.takeValue(_:)
+162.01 ms   0.0%	0 s	          zone_free_definite_size
+130.68 ms   0.0%	0 s	           je_free_default
+129.86 ms   0.0%	0 s	            je_tcache_bin_flush_small
+104.86 ms   0.0%	93.61 ms	             je_tcache_bin_flush_small
+11.25 ms   0.0%	0 s	              0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+11.25 ms   0.0%	0 s	               0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+11.25 ms   0.0%	0 s	                0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+11.25 ms   0.0%	11.25 ms	                 0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8931) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+20.00 ms   0.0%	0 s	             tcache_bin_flush_edatas_lookup
+20.00 ms   0.0%	20.00 ms	              tcache_bin_flush_edatas_lookup
+5.00 ms   0.0%	0 s	             je_arena_decay
+5.00 ms   0.0%	0 s	              arena_decay_impl
+5.00 ms   0.0%	0 s	               je_pac_maybe_decay_purge
+5.00 ms   0.0%	0 s	                mach_absolute_time
+5.00 ms   0.0%	0 s	                 completeTaskWithClosure(swift::AsyncContext*, swift::SwiftError*)
+5.00 ms   0.0%	5.00 ms	                  mach_absolute_time
+821.12 µs   0.0%	0 s	            _platform_memmove
+821.12 µs   0.0%	0 s	             completeTaskWithClosure(swift::AsyncContext*, swift::SwiftError*)
+821.12 µs   0.0%	821.12 µs	              _platform_memmove
+23.73 ms   0.0%	0 s	           free.cold.1
+23.73 ms   0.0%	0 s	            completeTaskWithClosure(swift::AsyncContext*, swift::SwiftError*)
+23.73 ms   0.0%	20.00 ms	             free.cold.1
+3.73 ms   0.0%	0 s	              0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+3.73 ms   0.0%	0 s	               0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+3.73 ms   0.0%	0 s	                0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+3.73 ms   0.0%	3.73 ms	                 0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8931) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+5.00 ms   0.0%	0 s	           free
+5.00 ms   0.0%	5.00 ms	            free
+2.61 ms   0.0%	0 s	           DYLD-STUB$$pthread_getspecific
+2.61 ms   0.0%	0 s	            completeTaskWithClosure(swift::AsyncContext*, swift::SwiftError*)
+2.61 ms   0.0%	0 s	             DYLD-STUB$$pthread_getspecific
+2.61 ms   0.0%	0 s	              0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+2.61 ms   0.0%	0 s	               0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+2.61 ms   0.0%	0 s	                0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+2.61 ms   0.0%	2.61 ms	                 0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8931) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+64.36 ms   0.0%	56.74 ms	          static RawBox.takeValue(_:)
+7.62 ms   0.0%	0 s	           0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+7.62 ms   0.0%	0 s	            0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+7.62 ms   0.0%	0 s	             0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+7.62 ms   0.0%	7.62 ms	              0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8931) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+39.45 ms   0.0%	0 s	          find_zone_and_free
+33.12 ms   0.0%	25.00 ms	           find_zone_and_free
+8.12 ms   0.0%	0 s	            0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+8.12 ms   0.0%	0 s	             0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+8.12 ms   0.0%	0 s	              0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+8.12 ms   0.0%	8.12 ms	               0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8931) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+6.14 ms   0.0%	0 s	           DYLD-STUB$$pthread_getspecific
+6.14 ms   0.0%	0 s	            completeTaskWithClosure(swift::AsyncContext*, swift::SwiftError*)
+6.14 ms   0.0%	5.00 ms	             DYLD-STUB$$pthread_getspecific
+1.14 ms   0.0%	0 s	              0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+1.14 ms   0.0%	0 s	               0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+1.14 ms   0.0%	0 s	                0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+1.14 ms   0.0%	1.14 ms	                 0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8931) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+198.54 µs   0.0%	0 s	           zone_size
+198.54 µs   0.0%	0 s	            zone_size
+198.54 µs   0.0%	0 s	             0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+198.54 µs   0.0%	0 s	              0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+198.54 µs   0.0%	0 s	               0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+198.54 µs   0.0%	198.54 µs	                0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8931) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+17.75 ms   0.0%	0 s	          zone_size
+17.75 ms   0.0%	15.00 ms	           zone_size
+2.75 ms   0.0%	0 s	            0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+2.75 ms   0.0%	0 s	             0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+2.75 ms   0.0%	0 s	              0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+2.75 ms   0.0%	2.75 ms	               0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8931) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+9.24 ms   0.0%	0 s	          free
+9.24 ms   0.0%	9.24 ms	           free
+15.00 ms   0.0%	0 s	         default_zone_free_definite_size
+15.00 ms   0.0%	0 s	          completeTaskWithClosure(swift::AsyncContext*, swift::SwiftError*)
+15.00 ms   0.0%	15.00 ms	           default_zone_free_definite_size
+10.00 ms   0.0%	0 s	         _free
 10.00 ms   0.0%	0 s	          completeTaskWithClosure(swift::AsyncContext*, swift::SwiftError*)
-10.00 ms   0.0%	10.00 ms	           default_zone_free_definite_size
-10.00 ms   0.0%	0 s	         UnsafeMutablePointer.move()
+10.00 ms   0.0%	10.00 ms	           _free
+10.00 ms   0.0%	0 s	         DYLD-STUB$$free
 10.00 ms   0.0%	0 s	          completeTaskWithClosure(swift::AsyncContext*, swift::SwiftError*)
-10.00 ms   0.0%	10.00 ms	           UnsafeMutablePointer.move()
-5.00 ms   0.0%	0 s	         zone_free_definite_size
-5.00 ms   0.0%	5.00 ms	          zone_free_definite_size
-5.00 ms   0.0%	0 s	         swift::metadataimpl::ValueWitnesses<swift::metadataimpl::NativeBox<unsigned long long, 8ul, 8ul, 8ul>>::initializeWithTake(swift::OpaqueValue*, swift::OpaqueValue*, swift::TargetMetadata<swift::InProcess> const*)
+10.00 ms   0.0%	10.00 ms	           DYLD-STUB$$free
+7.72 ms   0.0%	0 s	         DYLD-STUB$$UnsafeMutablePointer.deallocate()
+7.72 ms   0.0%	0 s	          completeTaskWithClosure(swift::AsyncContext*, swift::SwiftError*)
+7.72 ms   0.0%	5.00 ms	           DYLD-STUB$$UnsafeMutablePointer.deallocate()
+2.72 ms   0.0%	0 s	            0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+2.72 ms   0.0%	0 s	             0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+2.72 ms   0.0%	0 s	              0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+2.72 ms   0.0%	2.72 ms	               0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8931) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+5.37 ms   0.0%	0 s	         find_zone_and_free
 5.00 ms   0.0%	0 s	          completeTaskWithClosure(swift::AsyncContext*, swift::SwiftError*)
-5.00 ms   0.0%	5.00 ms	           swift::metadataimpl::ValueWitnesses<swift::metadataimpl::NativeBox<unsigned long long, 8ul, 8ul, 8ul>>::initializeWithTake(swift::OpaqueValue*, swift::OpaqueValue*, swift::TargetMetadata<swift::InProcess> const*)
-5.00 ms   0.0%	0 s	         DYLD-STUB$$free
+5.00 ms   0.0%	5.00 ms	           find_zone_and_free
+373.33 µs   0.0%	0 s	          find_zone_and_free
+373.33 µs   0.0%	0 s	           0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+373.33 µs   0.0%	0 s	            0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+373.33 µs   0.0%	0 s	             0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+373.33 µs   0.0%	373.33 µs	              0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8931) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+5.00 ms   0.0%	0 s	         swift::metadataimpl::ValueWitnesses<swift::metadataimpl::NativeBox<unsigned long long, 8ul, 8ul, 8ul>>::destroy(swift::OpaqueValue*, swift::TargetMetadata<swift::InProcess> const*)
 5.00 ms   0.0%	0 s	          completeTaskWithClosure(swift::AsyncContext*, swift::SwiftError*)
-5.00 ms   0.0%	5.00 ms	           DYLD-STUB$$free
-121.71 ms   0.0%	0 s	        KFIFOQueue.segmentFrom(_:)
-89.36 ms   0.0%	0 s	         RawSegment.init(ptr:)
-89.36 ms   0.0%	0 s	          completeTaskWithClosure(swift::AsyncContext*, swift::SwiftError*)
-89.36 ms   0.0%	75.00 ms	           RawSegment.init(ptr:)
-14.36 ms   0.0%	0 s	            0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-14.36 ms   0.0%	0 s	             0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-14.36 ms   0.0%	0 s	              0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-14.36 ms   0.0%	14.36 ms	               0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8829) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-25.00 ms   0.0%	0 s	         static RawSegment.from(_:)
-25.00 ms   0.0%	25.00 ms	          static RawSegment.from(_:)
-7.34 ms   0.0%	5.00 ms	         KFIFOQueue.segmentFrom(_:)
-2.34 ms   0.0%	0 s	          0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-2.34 ms   0.0%	0 s	           0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-2.34 ms   0.0%	0 s	            0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-2.34 ms   0.0%	2.34 ms	             0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8829) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-43.21 ms   0.0%	0 s	        DYLD-STUB$$specialized IndexingIterator.next()
-43.21 ms   0.0%	0 s	         completeTaskWithClosure(swift::AsyncContext*, swift::SwiftError*)
-43.21 ms   0.0%	35.00 ms	          DYLD-STUB$$specialized IndexingIterator.next()
-8.21 ms   0.0%	0 s	           0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-8.21 ms   0.0%	0 s	            0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-8.21 ms   0.0%	0 s	             0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-8.21 ms   0.0%	8.21 ms	              0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8829) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-41.18 ms   0.0%	0 s	        DYLD-STUB$$specialized Collection<>.makeIterator()
-41.18 ms   0.0%	0 s	         completeTaskWithClosure(swift::AsyncContext*, swift::SwiftError*)
-41.18 ms   0.0%	35.00 ms	          DYLD-STUB$$specialized Collection<>.makeIterator()
-6.18 ms   0.0%	0 s	           0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-6.18 ms   0.0%	0 s	            0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-6.18 ms   0.0%	0 s	             0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-6.18 ms   0.0%	6.18 ms	              0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8829) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-35.70 ms   0.0%	0 s	        KFIFOQueue.getHead()
-35.70 ms   0.0%	35.00 ms	         KFIFOQueue.getHead()
-702.29 µs   0.0%	0 s	          0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-702.29 µs   0.0%	0 s	           0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-702.29 µs   0.0%	0 s	            0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-702.29 µs   0.0%	702.29 µs	             0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8829) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-34.29 ms   0.0%	34.29 ms	        KFIFOQueue.dequeue()
-31.07 ms   0.0%	0 s	        KFIFOQueue.advanceHead(_:)
-31.07 ms   0.0%	26.53 ms	         KFIFOQueue.advanceHead(_:)
-4.54 ms   0.0%	0 s	          0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-4.54 ms   0.0%	0 s	           0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-4.54 ms   0.0%	0 s	            0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-4.54 ms   0.0%	4.54 ms	             0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8829) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-26.98 ms   0.0%	0 s	        RawSegment.slot(at:)
-15.00 ms   0.0%	0 s	         _rawSegmentSlotsOffset.unsafeMutableAddressor
-15.00 ms   0.0%	15.00 ms	          _rawSegmentSlotsOffset.unsafeMutableAddressor
-11.98 ms   0.0%	10.00 ms	         RawSegment.slot(at:)
-1.98 ms   0.0%	0 s	          0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-1.98 ms   0.0%	0 s	           0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-1.98 ms   0.0%	0 s	            0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-1.98 ms   0.0%	1.98 ms	             0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8829) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-20.00 ms   0.0%	0 s	        KFIFOQueue.head.getter
-20.00 ms   0.0%	0 s	         completeTaskWithClosure(swift::AsyncContext*, swift::SwiftError*)
-20.00 ms   0.0%	20.00 ms	          KFIFOQueue.head.getter
-15.09 ms   0.0%	0 s	        KFIFOQueue.tail.getter
-15.09 ms   0.0%	0 s	         completeTaskWithClosure(swift::AsyncContext*, swift::SwiftError*)
-15.09 ms   0.0%	10.00 ms	          KFIFOQueue.tail.getter
-5.09 ms   0.0%	0 s	           0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-5.09 ms   0.0%	0 s	            0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-5.09 ms   0.0%	0 s	             0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-5.09 ms   0.0%	5.09 ms	              0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8829) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-15.00 ms   0.0%	0 s	        _rawSegmentSlotsOffset.unsafeMutableAddressor
-15.00 ms   0.0%	0 s	         completeTaskWithClosure(swift::AsyncContext*, swift::SwiftError*)
-15.00 ms   0.0%	15.00 ms	          _rawSegmentSlotsOffset.unsafeMutableAddressor
-15.00 ms   0.0%	0 s	        static ThreadLocalRNG.random(upperBound:)
-15.00 ms   0.0%	15.00 ms	         static ThreadLocalRNG.random(upperBound:)
-10.87 ms   0.0%	0 s	        KFIFOQueue.getTail()
-10.87 ms   0.0%	10.00 ms	         KFIFOQueue.getTail()
-873.58 µs   0.0%	0 s	          0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-873.58 µs   0.0%	0 s	           0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-873.58 µs   0.0%	0 s	            0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-873.58 µs   0.0%	873.58 µs	             0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8829) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-5.00 ms   0.0%	0 s	        swift::metadataimpl::ValueWitnesses<swift::metadataimpl::NativeBox<unsigned long long, 8ul, 8ul, 8ul>>::initializeWithCopy(swift::OpaqueValue*, swift::OpaqueValue*, swift::TargetMetadata<swift::InProcess> const*)
+5.00 ms   0.0%	5.00 ms	           swift::metadataimpl::ValueWitnesses<swift::metadataimpl::NativeBox<unsigned long long, 8ul, 8ul, 8ul>>::destroy(swift::OpaqueValue*, swift::TargetMetadata<swift::InProcess> const*)
+111.67 ms   0.0%	0 s	        static RawSegment.from(_:)
+111.67 ms   0.0%	95.00 ms	         static RawSegment.from(_:)
+16.67 ms   0.0%	0 s	          0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+16.67 ms   0.0%	0 s	           0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+16.67 ms   0.0%	0 s	            0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+16.67 ms   0.0%	16.67 ms	             0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8931) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+78.70 ms   0.0%	0 s	        RawSegment.slot(at:)
+78.70 ms   0.0%	0 s	         completeTaskWithClosure(swift::AsyncContext*, swift::SwiftError*)
+78.70 ms   0.0%	55.00 ms	          RawSegment.slot(at:)
+23.70 ms   0.0%	0 s	           0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+23.70 ms   0.0%	0 s	            0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+23.70 ms   0.0%	0 s	             0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+23.70 ms   0.0%	23.70 ms	              0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8931) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+68.68 ms   0.0%	64.86 ms	        KFIFOQueue.dequeue()
+3.82 ms   0.0%	0 s	         0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+3.82 ms   0.0%	0 s	          0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+3.82 ms   0.0%	0 s	           0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+3.82 ms   0.0%	3.82 ms	            0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8931) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+30.00 ms   0.0%	0 s	        DYLD-STUB$$specialized IndexingIterator.next()
+30.00 ms   0.0%	0 s	         completeTaskWithClosure(swift::AsyncContext*, swift::SwiftError*)
+30.00 ms   0.0%	30.00 ms	          DYLD-STUB$$specialized IndexingIterator.next()
+28.28 ms   0.0%	0 s	        KFIFOQueue.advanceHead(_:)
+18.28 ms   0.0%	15.00 ms	         KFIFOQueue.advanceHead(_:)
+3.28 ms   0.0%	0 s	          0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+3.28 ms   0.0%	0 s	           0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+3.28 ms   0.0%	0 s	            0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+3.28 ms   0.0%	3.28 ms	             0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8931) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+10.00 ms   0.0%	0 s	         static RawSegment.from(_:)
+10.00 ms   0.0%	10.00 ms	          static RawSegment.from(_:)
+20.49 ms   0.0%	0 s	        DYLD-STUB$$specialized Collection<>.makeIterator()
+20.49 ms   0.0%	0 s	         completeTaskWithClosure(swift::AsyncContext*, swift::SwiftError*)
+20.49 ms   0.0%	20.00 ms	          DYLD-STUB$$specialized Collection<>.makeIterator()
+494.54 µs   0.0%	0 s	           0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+494.54 µs   0.0%	0 s	            0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+494.54 µs   0.0%	0 s	             0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+494.54 µs   0.0%	494.54 µs	              0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8931) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+8.33 ms   0.0%	0 s	        RawSegment.init(ptr:)
+8.33 ms   0.0%	0 s	         completeTaskWithClosure(swift::AsyncContext*, swift::SwiftError*)
+8.33 ms   0.0%	5.00 ms	          RawSegment.init(ptr:)
+3.33 ms   0.0%	0 s	           0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+3.33 ms   0.0%	0 s	            0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+3.33 ms   0.0%	0 s	             0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+3.33 ms   0.0%	3.33 ms	              0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8931) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+5.00 ms   0.0%	0 s	        specialized IndexingIterator.next()
+5.00 ms   0.0%	5.00 ms	         specialized IndexingIterator.next()
+5.00 ms   0.0%	0 s	        KFIFOQueue.head.getter
 5.00 ms   0.0%	0 s	         completeTaskWithClosure(swift::AsyncContext*, swift::SwiftError*)
-5.00 ms   0.0%	5.00 ms	          swift::metadataimpl::ValueWitnesses<swift::metadataimpl::NativeBox<unsigned long long, 8ul, 8ul, 8ul>>::initializeWithCopy(swift::OpaqueValue*, swift::OpaqueValue*, swift::TargetMetadata<swift::InProcess> const*)
-5.00 ms   0.0%	0 s	        specialized Collection<>.makeIterator()
-5.00 ms   0.0%	5.00 ms	         specialized Collection<>.makeIterator()
-187.04 ms   0.0%	0 s	       __sanitizer_cov_trace_pc_guard
-151.93 ms   0.0%	140.87 ms	        __sanitizer_cov_trace_pc_guard
-11.06 ms   0.0%	0 s	         0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-11.06 ms   0.0%	0 s	          0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-11.06 ms   0.0%	0 s	           0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-11.06 ms   0.0%	11.06 ms	            0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8829) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-23.30 ms   0.0%	0 s	        get_current_coverage_map
-17.07 ms   0.0%	0 s	         get_current_task_for_measurement
-17.07 ms   0.0%	0 s	          get_current_coverage_map
-17.07 ms   0.0%	17.07 ms	           get_current_task_for_measurement
-6.23 ms   0.0%	6.23 ms	         get_current_coverage_map
-6.81 ms   0.0%	0 s	        swift_task_getCurrent
-6.81 ms   0.0%	0 s	         completeTaskWithClosure(swift::AsyncContext*, swift::SwiftError*)
-6.81 ms   0.0%	6.81 ms	          swift_task_getCurrent
-5.00 ms   0.0%	0 s	        _tlv_get_addr
+5.00 ms   0.0%	5.00 ms	          KFIFOQueue.head.getter
+286.18 ms   0.0%	0 s	       KFIFOQueue.head.getter
+286.18 ms   0.0%	0 s	        completeTaskWithClosure(swift::AsyncContext*, swift::SwiftError*)
+286.18 ms   0.0%	253.98 ms	         KFIFOQueue.head.getter
+32.20 ms   0.0%	0 s	          0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+32.20 ms   0.0%	0 s	           0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+32.20 ms   0.0%	0 s	            0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+32.20 ms   0.0%	32.20 ms	             0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8931) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+42.15 ms   0.0%	0 s	       __sanitizer_cov_trace_pc_guard
+17.87 ms   0.0%	0 s	        get_current_coverage_map
+12.87 ms   0.0%	10.00 ms	         get_current_coverage_map
+2.87 ms   0.0%	0 s	          0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+2.87 ms   0.0%	0 s	           0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+2.87 ms   0.0%	0 s	            0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+2.87 ms   0.0%	2.87 ms	             0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8931) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+5.00 ms   0.0%	0 s	         get_current_task_for_measurement
+5.00 ms   0.0%	0 s	          get_current_coverage_map
+5.00 ms   0.0%	5.00 ms	           get_current_task_for_measurement
+10.00 ms   0.0%	0 s	        DYLD-STUB$$swift_task_getCurrent
+10.00 ms   0.0%	0 s	         completeTaskWithClosure(swift::AsyncContext*, swift::SwiftError*)
+10.00 ms   0.0%	10.00 ms	          DYLD-STUB$$swift_task_getCurrent
+9.28 ms   0.0%	5.00 ms	        __sanitizer_cov_trace_pc_guard
+4.28 ms   0.0%	0 s	         0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+4.28 ms   0.0%	0 s	          0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+4.28 ms   0.0%	0 s	           0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+4.28 ms   0.0%	4.28 ms	            0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8931) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+5.00 ms   0.0%	0 s	        swift_task_getCurrent
 5.00 ms   0.0%	0 s	         completeTaskWithClosure(swift::AsyncContext*, swift::SwiftError*)
-5.00 ms   0.0%	5.00 ms	          _tlv_get_addr
-15.53 ms   0.0%	0 s	       KFIFOQueue.findItem(in:)
-15.53 ms   0.0%	15.00 ms	        KFIFOQueue.findItem(in:)
-532.71 µs   0.0%	0 s	         0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-532.71 µs   0.0%	0 s	          0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-532.71 µs   0.0%	0 s	           0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-532.71 µs   0.0%	532.71 µs	            0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8829) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+5.00 ms   0.0%	5.00 ms	          swift_task_getCurrent
+32.93 ms   0.0%	0 s	       RawSegment.slot(at:)
+32.93 ms   0.0%	0 s	        completeTaskWithClosure(swift::AsyncContext*, swift::SwiftError*)
+32.93 ms   0.0%	30.00 ms	         RawSegment.slot(at:)
+2.93 ms   0.0%	0 s	          0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+2.93 ms   0.0%	0 s	           0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+2.93 ms   0.0%	0 s	            0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+2.93 ms   0.0%	2.93 ms	             0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8931) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+19.16 ms   0.0%	0 s	       static DoubleWord.== infix(_:_:)
+19.16 ms   0.0%	0 s	        completeTaskWithClosure(swift::AsyncContext*, swift::SwiftError*)
+19.16 ms   0.0%	15.00 ms	         static DoubleWord.== infix(_:_:)
+4.16 ms   0.0%	0 s	          0xfffffe000885befc (kernel.release.t6031 +0x184ff07) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+4.16 ms   0.0%	0 s	           0xfffffe000889fc60 (kernel.release.t6031 +0x1893d7f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+4.16 ms   0.0%	0 s	            0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+4.16 ms   0.0%	4.16 ms	             0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8931) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+15.00 ms   0.0%	0 s	       KFIFOQueue.findItem(in:)
+15.00 ms   0.0%	15.00 ms	        KFIFOQueue.findItem(in:)
+15.00 ms   0.0%	15.00 ms	       closure #1 in closure #1 in closure #1 in closure #1 in variable initialization expression of benchmarks
+8.58 ms   0.0%	0 s	       get_current_coverage_map
+8.58 ms   0.0%	8.58 ms	        get_current_coverage_map
 5.00 ms   0.0%	0 s	       DoubleWord.init(first:second:)
 5.00 ms   0.0%	0 s	        completeTaskWithClosure(swift::AsyncContext*, swift::SwiftError*)
 5.00 ms   0.0%	5.00 ms	         DoubleWord.init(first:second:)
-5.00 ms   0.0%	0 s	       KFIFOQueue.getTail()
-5.00 ms   0.0%	0 s	        completeTaskWithClosure(swift::AsyncContext*, swift::SwiftError*)
-5.00 ms   0.0%	5.00 ms	         KFIFOQueue.getTail()
-5.00 ms   0.0%	0 s	       swift_retain
-5.00 ms   0.0%	0 s	        completeTaskWithClosure(swift::AsyncContext*, swift::SwiftError*)
-5.00 ms   0.0%	5.00 ms	         swift_retain
-5.00 ms   0.0%	0 s	       static DoubleWord.== infix(_:_:)
-5.00 ms   0.0%	0 s	        completeTaskWithClosure(swift::AsyncContext*, swift::SwiftError*)
-5.00 ms   0.0%	5.00 ms	         static DoubleWord.== infix(_:_:)
-5.00 ms   0.0%	0 s	      __sanitizer_cov_trace_pc_guard
-5.00 ms   0.0%	5.00 ms	       __sanitizer_cov_trace_pc_guard
-11.58 ms   0.0%	0 s	   partial apply for thunk for @escaping @isolated(any) @callee_guaranteed @async () -> (@out A)
-11.58 ms   0.0%	0 s	    thunk for @escaping @isolated(any) @callee_guaranteed @async () -> (@out A)
-11.58 ms   0.0%	0 s	     partial apply for closure #1 in closure #1 in Benchmark.runAsync()
-11.58 ms   0.0%	0 s	      closure #1 in closure #1 in Benchmark.runAsync()
-11.58 ms   0.0%	0 s	       closure #1 in closure #1 in variable initialization expression of benchmarks
-11.58 ms   0.0%	0 s	        withTaskGroup<A, B>(of:returning:isolation:body:)
-11.58 ms   0.0%	0 s	         partial apply for closure #1 in closure #1 in closure #1 in variable initialization expression of benchmarks
-11.58 ms   0.0%	0 s	          closure #1 in closure #1 in closure #1 in variable initialization expression of benchmarks
-11.58 ms   0.0%	0 s	           TaskGroup.awaitAllRemainingTasks(isolation:)
-11.58 ms   0.0%	0 s	            swift_taskGroup_wait_next_throwingImpl(swift::OpaqueValue*, swift::AsyncContext*, swift::TaskGroup*, void (swift::AsyncContext* swift_async_context, void* swift_context) swiftasynccall*, swift::AsyncContext*)
-11.58 ms   0.0%	0 s	             __ulock_wait2
-11.58 ms   0.0%	0 s	              completeTaskWithClosure(swift::AsyncContext*, swift::SwiftError*)
-11.58 ms   0.0%	0 s	               __ulock_wait2
-11.58 ms   0.0%	0 s	                0xfffffe000885b8d0 (kernel.release.t6031 +0x184f917) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-11.58 ms   0.0%	0 s	                 0xfffffe0008a1fa64 (kernel.release.t6031 +0x1a13d2f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-11.58 ms   0.0%	0 s	                  0xfffffe0008fb274c (kernel.release.t6031 +0x1fa6a4f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-11.58 ms   0.0%	0 s	                   0xfffffe0008e88ba8 (kernel.release.t6031 +0x1e7cba8) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-11.58 ms   0.0%	0 s	                    0xfffffe00088f765c (kernel.release.t6031 +0x18eb670) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-11.58 ms   0.0%	0 s	                     0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
-11.58 ms   0.0%	11.58 ms	                      0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8829) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+10.00 ms   0.0%	0 s	      KFIFOQueue.dequeue()
+10.00 ms   0.0%	10.00 ms	       KFIFOQueue.dequeue()
+12.75 ms   0.0%	0 s	   partial apply for thunk for @escaping @isolated(any) @callee_guaranteed @async () -> (@out A)
+12.75 ms   0.0%	0 s	    thunk for @escaping @isolated(any) @callee_guaranteed @async () -> (@out A)
+12.75 ms   0.0%	0 s	     partial apply for closure #1 in closure #1 in Benchmark.runAsync()
+12.75 ms   0.0%	0 s	      closure #1 in closure #1 in Benchmark.runAsync()
+12.75 ms   0.0%	0 s	       closure #1 in closure #1 in variable initialization expression of benchmarks
+12.75 ms   0.0%	0 s	        withTaskGroup<A, B>(of:returning:isolation:body:)
+12.75 ms   0.0%	0 s	         partial apply for closure #1 in closure #1 in closure #1 in variable initialization expression of benchmarks
+12.75 ms   0.0%	0 s	          closure #1 in closure #1 in closure #1 in variable initialization expression of benchmarks
+12.75 ms   0.0%	0 s	           TaskGroup.awaitAllRemainingTasks(isolation:)
+12.75 ms   0.0%	0 s	            swift_taskGroup_wait_next_throwingImpl(swift::OpaqueValue*, swift::AsyncContext*, swift::TaskGroup*, void (swift::AsyncContext* swift_async_context, void* swift_context) swiftasynccall*, swift::AsyncContext*)
+12.75 ms   0.0%	0 s	             __ulock_wait2
+10.80 ms   0.0%	0 s	              completeTaskWithClosure(swift::AsyncContext*, swift::SwiftError*)
+10.80 ms   0.0%	0 s	               __ulock_wait2
+10.80 ms   0.0%	0 s	                0xfffffe000885b8d0 (kernel.release.t6031 +0x184f917) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+10.80 ms   0.0%	0 s	                 0xfffffe0008a1fa64 (kernel.release.t6031 +0x1a13d2f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+10.80 ms   0.0%	0 s	                  0xfffffe0008fb274c (kernel.release.t6031 +0x1fa6a4f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+10.80 ms   0.0%	0 s	                   0xfffffe0008e88ba8 (kernel.release.t6031 +0x1e7cba8) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+10.80 ms   0.0%	0 s	                    0xfffffe00088f765c (kernel.release.t6031 +0x18eb670) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+10.80 ms   0.0%	0 s	                     0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+10.80 ms   0.0%	10.80 ms	                      0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8931) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+1.95 ms   0.0%	0 s	              __ulock_wait2
+1.95 ms   0.0%	0 s	               0xfffffe000885b8d0 (kernel.release.t6031 +0x184f917) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+1.95 ms   0.0%	0 s	                0xfffffe0008a1fa64 (kernel.release.t6031 +0x1a13d2f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+1.95 ms   0.0%	0 s	                 0xfffffe0008fb274c (kernel.release.t6031 +0x1fa6a4f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+1.95 ms   0.0%	0 s	                  0xfffffe0008e88ba8 (kernel.release.t6031 +0x1e7cba8) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+1.95 ms   0.0%	0 s	                   0xfffffe00088f765c (kernel.release.t6031 +0x18eb670) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+1.95 ms   0.0%	0 s	                    0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+1.95 ms   0.0%	1.95 ms	                     0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8931) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+1.11 ms   0.0%	0 s	   completeTaskWithClosure(swift::AsyncContext*, swift::SwiftError*)
+1.11 ms   0.0%	0 s	    swift::AsyncTask::completeFuture(swift::AsyncContext*)
+1.11 ms   0.0%	0 s	     (anonymous namespace)::AccumulatingTaskGroup::offer(swift::AsyncTask*, swift::AsyncContext*)
+1.11 ms   0.0%	0 s	      __ulock_wait2
+1.11 ms   0.0%	0 s	       __ulock_wait2
+1.11 ms   0.0%	0 s	        0xfffffe000885b8d0 (kernel.release.t6031 +0x184f917) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+1.11 ms   0.0%	0 s	         0xfffffe0008a1fa64 (kernel.release.t6031 +0x1a13d2f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+1.11 ms   0.0%	0 s	          0xfffffe0008fb274c (kernel.release.t6031 +0x1fa6a4f) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+1.11 ms   0.0%	0 s	           0xfffffe0008e88ba8 (kernel.release.t6031 +0x1e7cba8) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+1.11 ms   0.0%	0 s	            0xfffffe00088f765c (kernel.release.t6031 +0x18eb670) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+1.11 ms   0.0%	0 s	             0xfffffe00088e3228 (kernel.release.t6031 +0x18d7319) <4884B2A4-D648-3989-A74C-9F242960BE5B>
+1.11 ms   0.0%	1.11 ms	              0xfffffe00088e42a0 (kernel.release.t6031 +0x18d8931) <4884B2A4-D648-3989-A74C-9F242960BE5B>
