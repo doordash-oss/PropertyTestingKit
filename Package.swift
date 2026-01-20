@@ -199,18 +199,11 @@ package.targets += [
         name: "ProfiledBenchmark",
         dependencies: [
             .product(name: "Benchmark", package: "package-benchmark"),
-            "PropertyTestingKit",
             "ConcurrentQueues",
         ],
         path: "Benchmarks/ProfiledBenchmark",
         swiftSettings: [
-            // Enable sanitizer coverage so we have realistic counter counts
-            // Note: sanitize-coverage requires a sanitizer to be enabled
-            .unsafeFlags([
-                "-O",
-                "-sanitize=undefined",
-                "-sanitize-coverage=edge,pc-table"
-            ])
+            .unsafeFlags(["-O"])
         ],
         linkerSettings: [
             // Add rpath for Testing.framework from Xcode (needed for local toolchain)

@@ -10,7 +10,6 @@
 
 import Benchmark
 import Foundation
-import PropertyTestingKit
 import ConcurrentQueues
 
 ///// A simple function to fuzz - parses an integer and checks bounds.
@@ -59,7 +58,7 @@ let benchmarks: @Sendable () -> Void = {
         )
     ) { benchmark in
         let producerCount = 4
-        let messageCount = 1_000_000
+        let messageCount = 10_000_000
         let messagesPerProducer = messageCount / producerCount
 
         for _ in benchmark.scaledIterations {

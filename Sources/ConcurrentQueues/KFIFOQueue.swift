@@ -24,7 +24,7 @@ struct XorShift64 {
     }
 }
 
-/// Thread-local RNG using pthread TLS directly
+/// Thread-local RNG using pthread TLS
 @usableFromInline
 enum ThreadLocalRNG {
     @usableFromInline
@@ -317,34 +317,36 @@ public final class KFIFOQueue<T>: @unchecked Sendable {
     // MARK: - Private Helpers
 
     @inline(__always)
-    @usableFromInline
     @inlinable
     func findEmptySlot(in segment: RawSegment) -> (DoubleWord, Int) {
         let startIndex = ThreadLocalRNG.random(upperBound: k)
-        for i in 0..<k {
-            let index = (startIndex + i) % k
+        var i = 0
+        while i < k {
+            let index = (startIndex &+ i) % k
             let slotValue = segment.slot(at: index).load(ordering: .acquiring)
             if slotValue.first == 0 {
                 return (slotValue, index)
             }
+            i &+= 1
         }
-        let lastIndex = (startIndex + k - 1) % k
+        let lastIndex = (startIndex &+ k &- 1) % k
         return (segment.slot(at: lastIndex).load(ordering: .acquiring), lastIndex)
     }
 
     @inline(__always)
-    @usableFromInline
     @inlinable
     func findItem(in segment: RawSegment) -> (DoubleWord, Int) {
         let startIndex = ThreadLocalRNG.random(upperBound: k)
-        for i in 0..<k {
-            let index = (startIndex + i) % k
+        var i = 0
+        while i < k {
+            let index = (startIndex &+ i) % k
             let slotValue = segment.slot(at: index).load(ordering: .acquiring)
             if slotValue.first != 0 {
                 return (slotValue, index)
             }
+            i &+= 1
         }
-        let lastIndex = (startIndex + k - 1) % k
+        let lastIndex = (startIndex &+ k &- 1) % k
         return (segment.slot(at: lastIndex).load(ordering: .acquiring), lastIndex)
     }
 
@@ -353,34 +355,60 @@ public final class KFIFOQueue<T>: @unchecked Sendable {
     func committed(tailOld: DoubleWord, itemNew: DoubleWord, index: Int) -> Bool {
         let tailSegment = RawSegment.from(tailOld.first)
 
+        // Line 22-23: Check if item was already consumed
         if tailSegment.slot(at: index).load(ordering: .acquiring) != itemNew {
             return true
         }
 
-        let tailCurrent = tail.load(ordering: .acquiring)
+        // Line 24-25: Get current head and tail
         let headCurrent = head.load(ordering: .acquiring)
 
-        if tailOld.first != headCurrent.first && isReachable(target: tailOld.first, from: headCurrent.first) {
-            return true
-        }
-
-        if !isReachable(target: tailOld.first, from: headCurrent.first) {
-            return true
-        }
-
-        if tailOld.first == headCurrent.first && tailOld.first == tailCurrent.first {
-            return true
-        }
-
+        // Line 26: Prepare empty item for potential rollback
         let itemEmpty = DoubleWord(first: 0, second: itemNew.second &+ 1)
-        if tailSegment.slot(at: index).compareExchange(
-            expected: itemNew, desired: itemEmpty, ordering: .acquiringAndReleasing
-        ).exchanged {
-            if !useDirectStorage && itemNew.first != 0 {
+
+        // Compute reachability ONCE
+        let reachable = isReachable(target: tailOld.first, from: headCurrent.first)
+
+        // Line 27-28: in_queue_after_head - segment is in queue past the head
+        if tailOld.first != headCurrent.first && reachable {
+            return true
+        }
+
+        // Line 29-31: not_in_queue - segment has been removed from queue
+        if !reachable {
+            // Try to rollback our enqueue
+            if !tailSegment.slot(at: index).compareExchange(
+                expected: itemNew, desired: itemEmpty, ordering: .acquiringAndReleasing
+            ).exchanged {
+                // CAS failed - someone consumed our item, so it's committed
+                return true
+            }
+            // CAS succeeded - we rolled back, deallocate if needed
+            if !useDirectStorage {
                 RawBox<T>.deallocate(itemNew.first)
             }
+            return false
         }
 
+        // Line 32-37: in_queue_at_head - segment is at the head position
+        // Try to bump head version to confirm our position
+        let headNew = DoubleWord(first: headCurrent.first, second: headCurrent.second &+ 1)
+        if head.compareExchange(expected: headCurrent, desired: headNew, ordering: .acquiringAndReleasing).exchanged {
+            return true
+        }
+
+        // Head changed, try to rollback
+        if !tailSegment.slot(at: index).compareExchange(
+            expected: itemNew, desired: itemEmpty, ordering: .acquiringAndReleasing
+        ).exchanged {
+            // CAS failed - someone consumed our item
+            return true
+        }
+
+        // CAS succeeded - we rolled back
+        if !useDirectStorage {
+            RawBox<T>.deallocate(itemNew.first)
+        }
         return false
     }
 
