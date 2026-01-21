@@ -85,15 +85,15 @@ struct PluginCoordinatorTests {
         // Start action consumer task
         let actionCount = SyncBox(0)
         let actionConsumerTask = Task {
-            while !coordinator.actions.isClosed {
-                if coordinator.actions.dequeue() != nil {
+            while !coordinator.actionChannel.isClosed {
+                if coordinator.actionChannel.dequeue() != nil {
                     actionCount.update { $0 += 1 }
                 } else {
                     await Task.yield()
                 }
             }
             // Drain remaining
-            while coordinator.actions.dequeue() != nil {
+            while coordinator.actionChannel.dequeue() != nil {
                 actionCount.update { $0 += 1 }
             }
         }
@@ -124,8 +124,8 @@ struct PluginCoordinatorTests {
         // Start action consumer task
         let executedInputs = SyncBox<[Int]>([])
         let actionConsumerTask = Task {
-            while !coordinator.actions.isClosed {
-                if let action = coordinator.actions.dequeue() {
+            while !coordinator.actionChannel.isClosed {
+                if let action = coordinator.actionChannel.dequeue() {
                     if case .selectForMutation(let mutation) = action {
                         executedInputs.update { $0.append(mutation.input) }
                     }
@@ -134,7 +134,7 @@ struct PluginCoordinatorTests {
                 }
             }
             // Drain remaining
-            while let action = coordinator.actions.dequeue() {
+            while let action = coordinator.actionChannel.dequeue() {
                 if case .selectForMutation(let mutation) = action {
                     executedInputs.update { $0.append(mutation.input) }
                 }
@@ -171,15 +171,15 @@ struct PluginCoordinatorTests {
         // Start action consumer task
         let actionCount = SyncBox(0)
         let actionConsumerTask = Task {
-            while !coordinator.actions.isClosed {
-                if coordinator.actions.dequeue() != nil {
+            while !coordinator.actionChannel.isClosed {
+                if coordinator.actionChannel.dequeue() != nil {
                     actionCount.update { $0 += 1 }
                 } else {
                     await Task.yield()
                 }
             }
             // Drain remaining
-            while coordinator.actions.dequeue() != nil {
+            while coordinator.actionChannel.dequeue() != nil {
                 actionCount.update { $0 += 1 }
             }
         }
@@ -209,15 +209,15 @@ struct PluginCoordinatorTests {
 
         // Start action consumer task (will complete immediately when channel closes)
         let actionConsumerTask = Task {
-            while !coordinator.actions.isClosed {
-                if coordinator.actions.dequeue() != nil {
+            while !coordinator.actionChannel.isClosed {
+                if coordinator.actionChannel.dequeue() != nil {
                     // ignore
                 } else {
                     await Task.yield()
                 }
             }
             // Drain remaining
-            while coordinator.actions.dequeue() != nil { }
+            while coordinator.actionChannel.dequeue() != nil { }
         }
 
         // Should complete immediately with no events
@@ -234,15 +234,15 @@ struct PluginCoordinatorTests {
 
         // Start action consumer task
         let actionConsumerTask = Task {
-            while !coordinator.actions.isClosed {
-                if coordinator.actions.dequeue() != nil {
+            while !coordinator.actionChannel.isClosed {
+                if coordinator.actionChannel.dequeue() != nil {
                     // ignore
                 } else {
                     await Task.yield()
                 }
             }
             // Drain remaining
-            while coordinator.actions.dequeue() != nil { }
+            while coordinator.actionChannel.dequeue() != nil { }
         }
 
         // Submit different event types
