@@ -11,8 +11,8 @@ private let _intMagicBases: [Int] = [42, 1337, 31337, 0xDEAD, 0xBEEF, 0xCAFE]
 
 extension Int: MutatorProviding {
     public static let defaultMutator: AnyMutator<Int> = {
-        @Dependency(\.random) var random
-        let cachedRandom = random  // Cache to avoid repeated TaskLocal lookups
+        @Dependency(\.fastRNG) var _fastRNG
+        let fastRNG = _fastRNG
         return AnyMutator(
             seeds: [
                 // Extremes and zero
@@ -80,48 +80,47 @@ extension Int: MutatorProviding {
                 return mutations
             },
             generate: {
-                cachedRandom { rng in
-                    // Mix of strategies for interesting random generation
-                    let strategy = Int.random(in: 0..<10, using: &rng)
-                    switch strategy {
-                    case 0:
-                        // Full range random
-                        return Int.random(in: Int.min...Int.max, using: &rng)
-                    case 1:
-                        // Small positive values (common in tests)
-                        return Int.random(in: 0...1000, using: &rng)
-                    case 2:
-                        // Small negative values
-                        return Int.random(in: -1000...0, using: &rng)
-                    case 3:
-                        // Near zero
-                        return Int.random(in: -10...10, using: &rng)
-                    case 4:
-                        // Powers of 2 (±1)
-                        let power = Int.random(in: 0..<62, using: &rng)
-                        let base = 1 << power
-                        let offset = Int.random(in: -1...1, using: &rng)
-                        let (result, overflow) = base.addingReportingOverflow(offset)
-                        return overflow ? base : result
-                    case 5:
-                        // Near boundaries
-                        let boundary = Bool.random(using: &rng) ? Int.max : Int.min
-                        let offset = Int.random(in: -100...100, using: &rng)
-                        let (result, overflow) = boundary.addingReportingOverflow(offset)
-                        return overflow ? boundary : result
-                    case 6:
-                        // Byte-aligned values
-                        return Int.random(in: 0...255, using: &rng) * (Bool.random(using: &rng) ? 1 : -1)
-                    case 7:
-                        // Common magic numbers with variations
-                        let baseIndex = Int.random(in: 0..<_intMagicBases.count, using: &rng)
-                        let base = _intMagicBases[baseIndex]
-                        let offset = Int.random(in: -10...10, using: &rng)
-                        return base + offset
-                    default:
-                        // Uniform random in a medium range
-                        return Int.random(in: -1_000_000...1_000_000, using: &rng)
-                    }
+                var rng = fastRNG
+                // Mix of strategies for interesting random generation
+                let strategy = Int.random(in: 0..<10, using: &rng)
+                switch strategy {
+                case 0:
+                    // Full range random
+                    return Int.random(in: Int.min...Int.max, using: &rng)
+                case 1:
+                    // Small positive values (common in tests)
+                    return Int.random(in: 0...1000, using: &rng)
+                case 2:
+                    // Small negative values
+                    return Int.random(in: -1000...0, using: &rng)
+                case 3:
+                    // Near zero
+                    return Int.random(in: -10...10, using: &rng)
+                case 4:
+                    // Powers of 2 (±1)
+                    let power = Int.random(in: 0..<62, using: &rng)
+                    let base = 1 << power
+                    let offset = Int.random(in: -1...1, using: &rng)
+                    let (result, overflow) = base.addingReportingOverflow(offset)
+                    return overflow ? base : result
+                case 5:
+                    // Near boundaries
+                    let boundary = Bool.random(using: &rng) ? Int.max : Int.min
+                    let offset = Int.random(in: -100...100, using: &rng)
+                    let (result, overflow) = boundary.addingReportingOverflow(offset)
+                    return overflow ? boundary : result
+                case 6:
+                    // Byte-aligned values
+                    return Int.random(in: 0...255, using: &rng) * (Bool.random(using: &rng) ? 1 : -1)
+                case 7:
+                    // Common magic numbers with variations
+                    let baseIndex = Int.random(in: 0..<_intMagicBases.count, using: &rng)
+                    let base = _intMagicBases[baseIndex]
+                    let offset = Int.random(in: -10...10, using: &rng)
+                    return base + offset
+                default:
+                    // Uniform random in a medium range
+                    return Int.random(in: -1_000_000...1_000_000, using: &rng)
                 }
             }
         )

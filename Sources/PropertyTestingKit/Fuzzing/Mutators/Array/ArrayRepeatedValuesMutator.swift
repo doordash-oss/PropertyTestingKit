@@ -7,7 +7,7 @@ import Dependencies
 
 /// Creates arrays with many repeated matching values.
 struct ArrayRepeatedValuesMutator<Element: MutatorProviding & Sendable>: Mutator, Sendable {
-    @Dependency(\.random) private var random
+    @Dependency(\.fastRNG) private var fastRNG
 
     var seeds: [[Element]] {
         var result: [[Element]] = []
@@ -69,28 +69,27 @@ struct ArrayRepeatedValuesMutator<Element: MutatorProviding & Sendable>: Mutator
     }
 
     func generate() -> [Element] {
-        random { rng in
-            // Generate arrays with repeated values
-            let elementMutator = Element.defaultMutator
+        var rng = fastRNG
+        // Generate arrays with repeated values
+        let elementMutator = Element.defaultMutator
 
-            let strategy = Int.random(in: 0..<3, using: &rng)
-            switch strategy {
-            case 0:
-                // All same element
-                let element = elementMutator.generate()
-                let count = Int.random(in: 3...6, using: &rng)
-                return Array(repeating: element, count: count)
-            case 1:
-                // Majority same element
-                let main = elementMutator.generate()
-                let other = elementMutator.generate()
-                return [main, main, main, other]
-            default:
-                // Alternating with majority
-                let a = elementMutator.generate()
-                let b = elementMutator.generate()
-                return [a, b, a, b, a]
-            }
+        let strategy = Int.random(in: 0..<3, using: &rng)
+        switch strategy {
+        case 0:
+            // All same element
+            let element = elementMutator.generate()
+            let count = Int.random(in: 3...6, using: &rng)
+            return Array(repeating: element, count: count)
+        case 1:
+            // Majority same element
+            let main = elementMutator.generate()
+            let other = elementMutator.generate()
+            return [main, main, main, other]
+        default:
+            // Alternating with majority
+            let a = elementMutator.generate()
+            let b = elementMutator.generate()
+            return [a, b, a, b, a]
         }
     }
 }

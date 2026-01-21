@@ -7,7 +7,8 @@ import Dependencies
 
 extension Array: MutatorProviding where Element: MutatorProviding {
     public static var defaultMutator: AnyMutator<[Element]> {
-        @Dependency(\.random) var random
+        @Dependency(\.fastRNG) var _fastRNG
+        let fastRNG = _fastRNG
         let elementSeeds = Array(Element.defaultMutator.seeds.prefix(3))
 
         var seeds: [[Element]] = [[]]
@@ -67,37 +68,36 @@ extension Array: MutatorProviding where Element: MutatorProviding {
                 return mutations
             },
             generate: {
-                random { rng in
-                    let elementMutator = Element.defaultMutator
+                var rng = fastRNG
+                let elementMutator = Element.defaultMutator
 
-                    // Decide length with bias toward smaller arrays
-                    let strategy = Int.random(in: 0..<10, using: &rng)
-                    let length: Int
-                    switch strategy {
-                    case 0:
-                        // Empty
-                        length = 0
-                    case 1, 2:
-                        // Single element
-                        length = 1
-                    case 3, 4, 5:
-                        // Small (2-5)
-                        length = Int.random(in: 2...5, using: &rng)
-                    case 6, 7:
-                        // Medium (6-15)
-                        length = Int.random(in: 6...15, using: &rng)
-                    case 8:
-                        // Large (16-50)
-                        length = Int.random(in: 16...50, using: &rng)
-                    default:
-                        // Very large (50-100)
-                        length = Int.random(in: 50...100, using: &rng)
-                    }
+                // Decide length with bias toward smaller arrays
+                let strategy = Int.random(in: 0..<10, using: &rng)
+                let length: Int
+                switch strategy {
+                case 0:
+                    // Empty
+                    length = 0
+                case 1, 2:
+                    // Single element
+                    length = 1
+                case 3, 4, 5:
+                    // Small (2-5)
+                    length = Int.random(in: 2...5, using: &rng)
+                case 6, 7:
+                    // Medium (6-15)
+                    length = Int.random(in: 6...15, using: &rng)
+                case 8:
+                    // Large (16-50)
+                    length = Int.random(in: 16...50, using: &rng)
+                default:
+                    // Very large (50-100)
+                    length = Int.random(in: 50...100, using: &rng)
+                }
 
-                    // Generate elements
-                    return (0..<length).map { _ in
-                        elementMutator.generate()
-                    }
+                // Generate elements
+                return (0..<length).map { _ in
+                    elementMutator.generate()
                 }
             }
         )

@@ -6,7 +6,6 @@
 //  Each worker has its own SPSC channel for receiving inputs.
 //
 
-import Atomics
 import ConcurrentQueues
 
 /// Distributes test inputs to workers using round-robin scheduling.
@@ -32,7 +31,7 @@ import ConcurrentQueues
 /// ```
 final class InputDispatcher<each Input: Sendable>: @unchecked Sendable {
     private let channels: [KFIFOQueue<(repeat each Input)>]
-    private let nextWorker: ManagedAtomic<Int>
+    private var nextWorker: Int = 0
 
     /// Creates a dispatcher with the specified number of worker channels.
     ///
@@ -49,7 +48,6 @@ final class InputDispatcher<each Input: Sendable>: @unchecked Sendable {
             channels.append(KFIFOQueue(k: channelCapacity))
         }
         self.channels = channels
-        self.nextWorker = ManagedAtomic(0)
     }
 
     /// Number of workers/channels.
@@ -90,23 +88,10 @@ final class InputDispatcher<each Input: Sendable>: @unchecked Sendable {
         0
     }
 
-    /// Gets the next worker index using atomic round-robin.
+    /// Gets the next worker index using round-robin.
     private func nextWorkerIndex() -> Int {
-        let count = channels.count
-        // Atomically increment and wrap around
-        while true {
-            let current = nextWorker.load(ordering: .relaxed)
-            let next = (current + 1) % count
-            let (exchanged, _) = nextWorker.compareExchange(
-                expected: current,
-                desired: next,
-                successOrdering: .relaxed,
-                failureOrdering: .relaxed
-            )
-            if exchanged {
-                return current
-            }
-            // CAS failed, retry
-        }
+        let index = nextWorker
+        nextWorker = (nextWorker + 1) % channels.count
+        return index
     }
 }

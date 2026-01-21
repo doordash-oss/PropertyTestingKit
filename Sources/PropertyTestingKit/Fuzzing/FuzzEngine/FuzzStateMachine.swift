@@ -71,6 +71,7 @@ actor FuzzStateMachine<each Input: Codable & Sendable> {
             seeds: seeds,
             randomInputGenerator: randomInputGenerator,
             test: { testInput in
+                // Tests run in parallel
                 // Check for halting conditions
                 await self.haltIfAtLimit(startTime: self.startTime)
 

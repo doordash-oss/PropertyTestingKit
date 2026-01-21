@@ -13,8 +13,8 @@ private let _doubleNonFiniteFallback: [Double] = [0.0, 1.0, -1.0]
 
 extension Double: MutatorProviding {
     public static let defaultMutator: AnyMutator<Double> = {
-        @Dependency(\.random) var random
-        let cachedRandom = random  // Cache to avoid repeated TaskLocal lookups
+        @Dependency(\.fastRNG) var _fastRNG
+        let fastRNG = _fastRNG
         return AnyMutator(
             seeds: [
                 0.0,
@@ -45,46 +45,45 @@ extension Double: MutatorProviding {
                 return mutations
             },
             generate: {
-                cachedRandom { rng in
-                    // Mix of strategies for interesting random double generation
-                    let strategy = Int.random(in: 0..<10, using: &rng)
-                    switch strategy {
-                    case 0:
-                        // Zero
-                        return 0.0
-                    case 1:
-                        // Small range [-1, 1]
-                        return Double.random(in: -1.0...1.0, using: &rng)
-                    case 2:
-                        // Percentage range [0, 1]
-                        return Double.random(in: 0.0...1.0, using: &rng)
-                    case 3:
-                        // Medium range [-1000, 1000]
-                        return Double.random(in: -1000.0...1000.0, using: &rng)
-                    case 4:
-                        // Large range
-                        return Double.random(in: -1_000_000.0...1_000_000.0, using: &rng)
-                    case 5:
-                        // Very small positive values
-                        return Double.random(in: Double.leastNormalMagnitude...0.001, using: &rng)
-                    case 6:
-                        // Integer-like doubles
-                        return Double(Int.random(in: -1000...1000, using: &rng))
-                    case 7:
-                        // Powers of 2 - use ldexp for efficiency
-                        let power = Int.random(in: -10...10, using: &rng)
-                        return ldexp(1.0, power)
-                    case 8:
-                        // Special values (rarely)
-                        let index = Int.random(in: 0..<_doubleSpecialValues.count, using: &rng)
-                        return _doubleSpecialValues[index]
-                    default:
-                        // Near common values with small offset
-                        let index = Int.random(in: 0..<_doubleCommonBases.count, using: &rng)
-                        let base = _doubleCommonBases[index]
-                        let offset = Double.random(in: -0.1...0.1, using: &rng)
-                        return base + offset
-                    }
+                var rng = fastRNG
+                // Mix of strategies for interesting random double generation
+                let strategy = Int.random(in: 0..<10, using: &rng)
+                switch strategy {
+                case 0:
+                    // Zero
+                    return 0.0
+                case 1:
+                    // Small range [-1, 1]
+                    return Double.random(in: -1.0...1.0, using: &rng)
+                case 2:
+                    // Percentage range [0, 1]
+                    return Double.random(in: 0.0...1.0, using: &rng)
+                case 3:
+                    // Medium range [-1000, 1000]
+                    return Double.random(in: -1000.0...1000.0, using: &rng)
+                case 4:
+                    // Large range
+                    return Double.random(in: -1_000_000.0...1_000_000.0, using: &rng)
+                case 5:
+                    // Very small positive values
+                    return Double.random(in: Double.leastNormalMagnitude...0.001, using: &rng)
+                case 6:
+                    // Integer-like doubles
+                    return Double(Int.random(in: -1000...1000, using: &rng))
+                case 7:
+                    // Powers of 2 - use ldexp for efficiency
+                    let power = Int.random(in: -10...10, using: &rng)
+                    return ldexp(1.0, power)
+                case 8:
+                    // Special values (rarely)
+                    let index = Int.random(in: 0..<_doubleSpecialValues.count, using: &rng)
+                    return _doubleSpecialValues[index]
+                default:
+                    // Near common values with small offset
+                    let index = Int.random(in: 0..<_doubleCommonBases.count, using: &rng)
+                    let base = _doubleCommonBases[index]
+                    let offset = Double.random(in: -0.1...0.1, using: &rng)
+                    return base + offset
                 }
             }
         )

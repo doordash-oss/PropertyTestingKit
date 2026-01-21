@@ -7,7 +7,7 @@ import Dependencies
 
 /// Duplicates elements within arrays to create repeated values.
 struct ArrayDuplicationMutator<Element: MutatorProviding & Sendable>: Mutator, Sendable {
-    @Dependency(\.random) private var random
+    @Dependency(\.fastRNG) private var fastRNG
 
     var seeds: [[Element]] {
         // Include arrays with duplicated elements
@@ -50,7 +50,8 @@ struct ArrayDuplicationMutator<Element: MutatorProviding & Sendable>: Mutator, S
         // Generate arrays with duplicated elements
         let elementMutator = Element.defaultMutator
         let element = elementMutator.generate()
-        let count = random { rng in Int.random(in: 2...5, using: &rng) }
+        var rng = fastRNG
+        let count = Int.random(in: 2...5, using: &rng)
         return Array(repeating: element, count: count)
     }
 }

@@ -7,7 +7,7 @@ import Dependencies
 
 /// Inserts elements at specific indices commonly used in tests.
 struct ArrayPositionAwareMutator<Element: MutatorProviding & Sendable>: Mutator, Sendable {
-    @Dependency(\.random) private var random
+    @Dependency(\.fastRNG) private var fastRNG
 
     var seeds: [[Element]] {
         var result: [[Element]] = []
@@ -58,22 +58,21 @@ struct ArrayPositionAwareMutator<Element: MutatorProviding & Sendable>: Mutator,
     }
 
     func generate() -> [Element] {
-        random { rng in
-            // Generate arrays with special values at important positions
-            let elementMutator = Element.defaultMutator
-            let lengths = [4, 8, 10, 16]
-            let length = lengths.randomElement(using: &rng) ?? 4
-            let importantIndices = [0, 3, 7, length / 2]
+        var rng = fastRNG
+        // Generate arrays with special values at important positions
+        let elementMutator = Element.defaultMutator
+        let lengths = [4, 8, 10, 16]
+        let length = lengths.randomElement(using: &rng) ?? 4
+        let importantIndices = [0, 3, 7, length / 2]
 
-            var result = (0..<length).map { _ in elementMutator.generate() }
+        var result = (0..<length).map { _ in elementMutator.generate() }
 
-            // Place a seed value at an important position
-            if let seed = elementMutator.seeds.randomElement(using: &rng),
-               let idx = importantIndices.filter({ $0 < length }).randomElement(using: &rng) {
-                result[idx] = seed
-            }
-
-            return result
+        // Place a seed value at an important position
+        if let seed = elementMutator.seeds.randomElement(using: &rng),
+           let idx = importantIndices.filter({ $0 < length }).randomElement(using: &rng) {
+            result[idx] = seed
         }
+
+        return result
     }
 }

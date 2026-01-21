@@ -24,7 +24,7 @@ struct XorShift64 {
     }
 }
 
-/// Thread-local RNG using pthread TLS
+/// Thread-local RNG using pthread TLS for queue slot randomization.
 @usableFromInline
 enum ThreadLocalRNG {
     @usableFromInline
@@ -182,10 +182,12 @@ public final class KFIFOQueue<T>: @unchecked Sendable {
     @usableFromInline let _headPtr: UnsafeMutablePointer<DoubleWord.AtomicRepresentation>
     @usableFromInline let _tailPtr: UnsafeMutablePointer<DoubleWord.AtomicRepresentation>
     @usableFromInline let _closedPtr: UnsafeMutablePointer<Bool.AtomicRepresentation>
+    @usableFromInline let _countPtr: UnsafeMutablePointer<Int.AtomicRepresentation>
 
     @inlinable var head: UnsafeAtomic<DoubleWord> { UnsafeAtomic<DoubleWord>(at: _headPtr) }
     @inlinable var tail: UnsafeAtomic<DoubleWord> { UnsafeAtomic<DoubleWord>(at: _tailPtr) }
     @inlinable var closed: UnsafeAtomic<Bool> { UnsafeAtomic(at: _closedPtr) }
+    @inlinable var count: UnsafeAtomic<Int> { UnsafeAtomic(at: _countPtr) }
 
     public init(k: Int) {
         precondition(k > 0, "k must be positive")
@@ -203,6 +205,9 @@ public final class KFIFOQueue<T>: @unchecked Sendable {
 
         self._closedPtr = .allocate(capacity: 1)
         self._closedPtr.initialize(to: Bool.AtomicRepresentation(false))
+
+        self._countPtr = .allocate(capacity: 1)
+        self._countPtr.initialize(to: Int.AtomicRepresentation(0))
     }
 
     deinit {
@@ -230,6 +235,8 @@ public final class KFIFOQueue<T>: @unchecked Sendable {
         _tailPtr.deallocate()
         _closedPtr.deinitialize(count: 1)
         _closedPtr.deallocate()
+        _countPtr.deinitialize(count: 1)
+        _countPtr.deallocate()
     }
 
     @discardableResult
@@ -259,6 +266,7 @@ public final class KFIFOQueue<T>: @unchecked Sendable {
                         expected: itemOld, desired: itemNew, ordering: .acquiringAndReleasing
                     ).exchanged {
                         if committed(tailOld: tailOld, itemNew: itemNew, index: index) {
+                            count.wrappingIncrement(ordering: .relaxed)
                             return true
                         }
                         encodedPtr = 0
@@ -272,6 +280,11 @@ public final class KFIFOQueue<T>: @unchecked Sendable {
 
     @inlinable
     public func dequeue() -> T? {
+        // Fast path: check count before scanning
+        if count.load(ordering: .relaxed) <= 0 {
+            return nil
+        }
+
         while true {
             let headOld = head.load(ordering: .acquiring)
             let headSegment = RawSegment.from(headOld.first)
@@ -284,6 +297,7 @@ public final class KFIFOQueue<T>: @unchecked Sendable {
                     if headSegment.slot(at: index).compareExchange(
                         expected: itemOld, desired: itemEmpty, ordering: .acquiringAndReleasing
                     ).exchanged {
+                        count.wrappingDecrement(ordering: .relaxed)
                         return decodeItem(itemOld.first)
                     }
                 } else {

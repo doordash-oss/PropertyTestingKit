@@ -7,7 +7,7 @@ import Dependencies
 
 /// Inserts sequences of seed values into arrays.
 struct ArraySequenceInsertionMutator<Element: MutatorProviding & Sendable>: Mutator, Sendable {
-    @Dependency(\.random) private var random
+    @Dependency(\.fastRNG) private var fastRNG
 
     var seeds: [[Element]] {
         var result: [[Element]] = []
@@ -59,25 +59,24 @@ struct ArraySequenceInsertionMutator<Element: MutatorProviding & Sendable>: Muta
     }
 
     func generate() -> [Element] {
-        random { rng in
-            // Generate arrays containing seed sequences
-            let elementMutator = Element.defaultMutator
-            let seedElements = Array(elementMutator.seeds.prefix(5))
+        var rng = fastRNG
+        // Generate arrays containing seed sequences
+        let elementMutator = Element.defaultMutator
+        let seedElements = Array(elementMutator.seeds.prefix(5))
 
-            // Either return a pure seed sequence or generate with some seeds mixed in
-            if Bool.random(using: &rng) && !seedElements.isEmpty {
-                // Return a seed sequence
-                let sequenceLength = Int.random(in: 2...min(5, seedElements.count), using: &rng)
-                return Array(seedElements.prefix(sequenceLength))
-            } else {
-                // Generate array with some seeds
-                let length = Int.random(in: 3...8, using: &rng)
-                return (0..<length).map { _ in
-                    if Bool.random(using: &rng), let seed = seedElements.randomElement(using: &rng) {
-                        return seed
-                    } else {
-                        return elementMutator.generate()
-                    }
+        // Either return a pure seed sequence or generate with some seeds mixed in
+        if Bool.random(using: &rng) && !seedElements.isEmpty {
+            // Return a seed sequence
+            let sequenceLength = Int.random(in: 2...min(5, seedElements.count), using: &rng)
+            return Array(seedElements.prefix(sequenceLength))
+        } else {
+            // Generate array with some seeds
+            let length = Int.random(in: 3...8, using: &rng)
+            return (0..<length).map { _ in
+                if Bool.random(using: &rng), let seed = seedElements.randomElement(using: &rng) {
+                    return seed
+                } else {
+                    return elementMutator.generate()
                 }
             }
         }

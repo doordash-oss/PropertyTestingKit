@@ -83,8 +83,8 @@ extension String: MutatorProviding {
     }
 
     public static let defaultMutator: AnyMutator<String> = {
-        @Dependency(\.random) var random
-        let cachedRandom = random  // Cache to avoid repeated TaskLocal lookups
+        @Dependency(\.fastRNG) var _fastRNG
+        let fastRNG = _fastRNG
         return AnyMutator(
             seeds: _cachedSeeds,
             mutate: { value in
@@ -143,54 +143,53 @@ extension String: MutatorProviding {
                 return mutations
             },
             generate: {
-                cachedRandom { rng in
-                    // Mix of strategies for interesting random string generation
-                    let strategy = Int.random(in: 0..<10, using: &rng)
-                    switch strategy {
-                    case 0:
-                        // Empty string
-                        return ""
-                    case 1:
-                        // Single character
-                        return randomString(length: 1, from: alphanumericChars, using: &rng)
-                    case 2:
-                        // Short alphanumeric (1-10 chars)
-                        let length = Int.random(in: 1...10, using: &rng)
-                        return randomString(length: length, from: alphanumericChars, using: &rng)
-                    case 3:
-                        // Medium alphanumeric (10-50 chars)
-                        let length = Int.random(in: 10...50, using: &rng)
-                        return randomString(length: length, from: alphanumericChars, using: &rng)
-                    case 4:
-                        // ASCII printable including special chars
-                        let length = Int.random(in: 1...30, using: &rng)
-                        return randomString(length: length, from: asciiPrintableChars, using: &rng)
-                    case 5:
-                        // Whitespace-heavy
-                        let whitespace = [" ", "\t", "\n", "\r", "  ", "\t\t"]
-                        let base = randomString(length: 5, from: alphanumericChars, using: &rng)
-                        let wsIndex = Int.random(in: 0..<whitespace.count, using: &rng)
-                        let ws = whitespace[wsIndex]
-                        return Bool.random(using: &rng) ? ws + base : base + ws
-                    case 6:
-                        // Numeric string
-                        let length = Int.random(in: 1...15, using: &rng)
-                        return randomString(length: length, from: digitChars, using: &rng)
-                    case 7:
-                        // Unicode (emoji and non-ASCII)
-                        let length = Int.random(in: 1...5, using: &rng)
-                        return randomString(length: length, from: emojiChars, using: &rng)
-                    case 8:
-                        // Long string (reduced max from 500 to 100 for performance)
-                        let length = Int.random(in: 50...100, using: &rng)
-                        return randomString(length: length, from: alphanumericChars, using: &rng)
-                    default:
-                        // Common test patterns
-                        let patternIndex = Int.random(in: 0..<commonPatterns.count, using: &rng)
-                        let base = commonPatterns[patternIndex]
-                        let suffix = Int.random(in: 0...999, using: &rng)
-                        return "\(base)\(suffix)"
-                    }
+                var rng = fastRNG
+                // Mix of strategies for interesting random string generation
+                let strategy = Int.random(in: 0..<10, using: &rng)
+                switch strategy {
+                case 0:
+                    // Empty string
+                    return ""
+                case 1:
+                    // Single character
+                    return randomString(length: 1, from: alphanumericChars, using: &rng)
+                case 2:
+                    // Short alphanumeric (1-10 chars)
+                    let length = Int.random(in: 1...10, using: &rng)
+                    return randomString(length: length, from: alphanumericChars, using: &rng)
+                case 3:
+                    // Medium alphanumeric (10-50 chars)
+                    let length = Int.random(in: 10...50, using: &rng)
+                    return randomString(length: length, from: alphanumericChars, using: &rng)
+                case 4:
+                    // ASCII printable including special chars
+                    let length = Int.random(in: 1...30, using: &rng)
+                    return randomString(length: length, from: asciiPrintableChars, using: &rng)
+                case 5:
+                    // Whitespace-heavy
+                    let whitespace = [" ", "\t", "\n", "\r", "  ", "\t\t"]
+                    let base = randomString(length: 5, from: alphanumericChars, using: &rng)
+                    let wsIndex = Int.random(in: 0..<whitespace.count, using: &rng)
+                    let ws = whitespace[wsIndex]
+                    return Bool.random(using: &rng) ? ws + base : base + ws
+                case 6:
+                    // Numeric string
+                    let length = Int.random(in: 1...15, using: &rng)
+                    return randomString(length: length, from: digitChars, using: &rng)
+                case 7:
+                    // Unicode (emoji and non-ASCII)
+                    let length = Int.random(in: 1...5, using: &rng)
+                    return randomString(length: length, from: emojiChars, using: &rng)
+                case 8:
+                    // Long string (reduced max from 500 to 100 for performance)
+                    let length = Int.random(in: 50...100, using: &rng)
+                    return randomString(length: length, from: alphanumericChars, using: &rng)
+                default:
+                    // Common test patterns
+                    let patternIndex = Int.random(in: 0..<commonPatterns.count, using: &rng)
+                    let base = commonPatterns[patternIndex]
+                    let suffix = Int.random(in: 0...999, using: &rng)
+                    return "\(base)\(suffix)"
                 }
             }
         )

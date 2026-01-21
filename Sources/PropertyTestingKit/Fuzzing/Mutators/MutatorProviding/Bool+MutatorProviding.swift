@@ -7,12 +7,15 @@ import Dependencies
 
 extension Bool: MutatorProviding {
     public static let defaultMutator: AnyMutator<Bool> = {
-        @Dependency(\.random) var random
-        let cachedRandom = random  // Cache to avoid repeated TaskLocal lookups
+        @Dependency(\.fastRNG) var _fastRNG
+        let fastRNG = _fastRNG
         return AnyMutator(
             seeds: [true, false],
             mutate: { value in [!value] },
-            generate: { cachedRandom { rng in Bool.random(using: &rng) } }
+            generate: {
+                var rng = fastRNG
+                return Bool.random(using: &rng)
+            }
         )
     }()
 }

@@ -7,7 +7,7 @@ import Dependencies
 
 /// Extends arrays to reach specific target lengths.
 struct ArrayLengthTargetedMutator<Element: MutatorProviding & Sendable>: Mutator, Sendable {
-    @Dependency(\.random) private var random
+    @Dependency(\.fastRNG) private var fastRNG
 
     var seeds: [[Element]] {
         var result: [[Element]] = []
@@ -49,12 +49,11 @@ struct ArrayLengthTargetedMutator<Element: MutatorProviding & Sendable>: Mutator
     }
 
     func generate() -> [Element] {
-        random { rng in
-            // Generate arrays at target lengths
-            let elementMutator = Element.defaultMutator
-            let targetLengths = [4, 8, 10, 16, 32]
-            let length = targetLengths.randomElement(using: &rng) ?? 8
-            return (0..<length).map { _ in elementMutator.generate() }
-        }
+        var rng = fastRNG
+        // Generate arrays at target lengths
+        let elementMutator = Element.defaultMutator
+        let targetLengths = [4, 8, 10, 16, 32]
+        let length = targetLengths.randomElement(using: &rng) ?? 8
+        return (0..<length).map { _ in elementMutator.generate() }
     }
 }
