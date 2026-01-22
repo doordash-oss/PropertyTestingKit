@@ -251,7 +251,7 @@ struct CoverageGapDetectorTests {
     @Test("Coverage gap detection in fuzz result")
     func fuzzResultIncludesGapReport() async throws {
         // Verify that FuzzResult has the coverageGapReport computed property
-        let emptyCorpus = Corpus<Int>(schemaVersion: "1.0.0")
+        let emptyCorpus = Corpus<Int>()
         let emptySnapshot = await emptyCorpus.snapshot()
         let stats = FuzzStats(
             totalInputs: 0,

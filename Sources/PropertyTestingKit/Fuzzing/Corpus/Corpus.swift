@@ -20,9 +20,6 @@ public actor Corpus<each Input: Codable & Sendable>: Sendable {
     /// All entries in the corpus.
     public private(set) var entries: [CorpusEntry<repeat each Input>]
 
-    /// Schema version to detect when code changes invalidate the corpus.
-    public let schemaVersion: String
-
     /// When this corpus was created.
     public let createdAt: Date
 
@@ -32,19 +29,17 @@ public actor Corpus<each Input: Codable & Sendable>: Sendable {
     /// The union of all coverage signatures.
     public private(set) var totalCoverage: CoverageSignature
 
-    init(entries: [CorpusEntry<repeat each Input>], schemaVersion: String, createdAt: Date, updatedAt: Date, totalCoverage: CoverageSignature) {
+    init(entries: [CorpusEntry<repeat each Input>], createdAt: Date, updatedAt: Date, totalCoverage: CoverageSignature) {
         self.entries = entries
-        self.schemaVersion = schemaVersion
         self.createdAt = createdAt
         self.updatedAt = updatedAt
         self.totalCoverage = totalCoverage
     }
 
-    public init(schemaVersion: String) {
+    public init() {
         @Dependency(\.dateClient) var dateClient
         let now = dateClient.now()
         self.entries = []
-        self.schemaVersion = schemaVersion
         self.createdAt = now
         self.updatedAt = now
         self.totalCoverage = CoverageSignature(edges: [])
@@ -58,7 +53,6 @@ public actor Corpus<each Input: Codable & Sendable>: Sendable {
     public func snapshot() -> CorpusSnapshot<repeat each Input> {
         CorpusSnapshot(
             entries: entries,
-            schemaVersion: schemaVersion,
             createdAt: createdAt,
             updatedAt: updatedAt,
             totalCoverage: totalCoverage
@@ -301,7 +295,6 @@ public actor Corpus<each Input: Codable & Sendable>: Sendable {
         @Dependency(\.dateClient) var dateClient
         return CorpusSnapshot(
             entries: minimizedEntries,
-            schemaVersion: schemaVersion,
             createdAt: createdAt,
             updatedAt: dateClient.now(),
             totalCoverage: minimizedCoverage
@@ -314,7 +307,6 @@ public actor Corpus<each Input: Codable & Sendable>: Sendable {
 /// Note: Must be declared outside the generic struct due to parameter pack limitations.
 private enum CorpusCodingKeys: String, CodingKey {
     case entries
-    case schemaVersion
     case createdAt
     case updatedAt
     case totalCoverage
@@ -328,20 +320,17 @@ private enum CorpusCodingKeys: String, CodingKey {
 /// synchronous way. This struct captures the corpus state for serialization.
 public struct CorpusSnapshot<each Input: Codable & Sendable>: Sendable, Codable {
     public let entries: [CorpusEntry<repeat each Input>]
-    public let schemaVersion: String
     public let createdAt: Date
     public let updatedAt: Date
     public let totalCoverage: CoverageSignature
 
     public init(
         entries: [CorpusEntry<repeat each Input>],
-        schemaVersion: String,
         createdAt: Date,
         updatedAt: Date,
         totalCoverage: CoverageSignature
     ) {
         self.entries = entries
-        self.schemaVersion = schemaVersion
         self.createdAt = createdAt
         self.updatedAt = updatedAt
         self.totalCoverage = totalCoverage
@@ -363,7 +352,6 @@ public struct CorpusSnapshot<each Input: Codable & Sendable>: Sendable, Codable 
     public func encode(to encoder: any Encoder) throws {
         var container = encoder.container(keyedBy: CorpusCodingKeys.self)
         try container.encode(entries, forKey: .entries)
-        try container.encode(schemaVersion, forKey: .schemaVersion)
         try container.encode(createdAt, forKey: .createdAt)
         try container.encode(updatedAt, forKey: .updatedAt)
         try container.encode(totalCoverage, forKey: .totalCoverage)
@@ -372,7 +360,6 @@ public struct CorpusSnapshot<each Input: Codable & Sendable>: Sendable, Codable 
     public init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CorpusCodingKeys.self)
         self.entries = try container.decode([CorpusEntry<repeat each Input>].self, forKey: .entries)
-        self.schemaVersion = try container.decode(String.self, forKey: .schemaVersion)
         self.createdAt = try container.decode(Date.self, forKey: .createdAt)
         self.updatedAt = try container.decode(Date.self, forKey: .updatedAt)
         self.totalCoverage = try container.decode(CoverageSignature.self, forKey: .totalCoverage)
@@ -384,7 +371,6 @@ extension Corpus {
     public init(from snapshot: CorpusSnapshot<repeat each Input>) {
         self.init(
             entries: snapshot.entries,
-            schemaVersion: snapshot.schemaVersion,
             createdAt: snapshot.createdAt,
             updatedAt: snapshot.updatedAt,
             totalCoverage: snapshot.totalCoverage

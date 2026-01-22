@@ -285,7 +285,7 @@ struct FuzzAPITests {
         let alwaysInterestingRegistry = AlwaysInterestingCorpusRegistry()
 
         // Create a mock corpus with known entries
-        let existingCorpus = Corpus<String>(schemaVersion: await CorpusSchema.currentVersion())
+        let existingCorpus = Corpus<String>()
         await existingCorpus.add(
             input: "from_corpus",
             signature: CoverageSignature(edges: Set<UInt32>([1]))
@@ -437,8 +437,8 @@ let numberParserSeeds: [String] = [
 /// A corpus registry that always returns "always interesting" corpus clients.
 /// This is useful for tests that want to verify corpus saving without depending on coverage data.
 struct AlwaysInterestingCorpusRegistry: CorpusRegistryProtocol {
-    func get<each T: Codable & Sendable>(schemaVersion: String) -> CorpusClient<repeat each T> {
-        return CorpusClient.alwaysInteresting(schemaVersion: schemaVersion)
+    func get<each T: Codable & Sendable>() -> CorpusClient<repeat each T> {
+        return CorpusClient.alwaysInteresting()
     }
 
     func get<each T: Codable & Sendable>(corpus: Corpus<repeat each T>) -> CorpusClient<repeat each T> {

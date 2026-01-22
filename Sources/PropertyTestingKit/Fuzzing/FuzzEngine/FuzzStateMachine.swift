@@ -257,8 +257,7 @@ actor FuzzStateMachine<each Input: Codable & Sendable> {
 
     private static func fetchCorpus() -> CorpusClient<repeat each Input> {
         @Dependency(\.corpusRegistry) var corpusRegistry
-        let schemaVersion = CorpusSchema.currentVersion()
-        return corpusRegistry.get(schemaVersion: schemaVersion)
+        return corpusRegistry.get()
     }
 
     private static func fetchCoverageCounters() -> CoverageCountersClient {

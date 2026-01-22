@@ -276,7 +276,7 @@ struct CorpusPropertyTests {
 
     @Test("Corpus addIfInteresting rejects redundant coverage")
     func testAddIfInterestingRejectsRedundant() async throws {
-        let corpus = Corpus<String>(schemaVersion: "test")
+        let corpus = Corpus<String>()
 
         let sig1 = CoverageSignature(edges: Set<UInt32>([0, 1, 2]))
 
@@ -297,7 +297,7 @@ struct CorpusPropertyTests {
 
     @Test("Corpus minimization preserves total coverage")
     func testMinimizationPreservesCoverage() async throws {
-        let corpus = Corpus<String>(schemaVersion: "test")
+        let corpus = Corpus<String>()
 
         // Add entries with overlapping coverage
         await corpus.add(input: "a", signature: CoverageSignature(edges: Set<UInt32>([0, 1])))
@@ -321,14 +321,14 @@ struct CorpusPropertyTests {
 
     @Test("Corpus handles empty minimization")
     func testEmptyMinimization() async throws {
-        let corpus = Corpus<String>(schemaVersion: "test")
+        let corpus = Corpus<String>()
         let minimized = await corpus.minimized()
         #expect(minimized.isEmpty, "Minimized empty corpus should be empty")
     }
 
     @Test("Corpus isEmpty property")
     func testCorpusIsEmpty() async throws {
-        let corpus = Corpus<String>(schemaVersion: "test")
+        let corpus = Corpus<String>()
         var isEmpty = await corpus.isEmpty
         #expect(isEmpty, "New corpus should be empty")
 
@@ -339,7 +339,7 @@ struct CorpusPropertyTests {
 
     @Test("Corpus signatures property")
     func testCorpusSignatures() async throws {
-        let corpus = Corpus<String>(schemaVersion: "test")
+        let corpus = Corpus<String>()
 
         let sig1 = CoverageSignature(edges: Set<UInt32>([0]))
         let sig2 = CoverageSignature(edges: Set<UInt32>([1]))
@@ -355,7 +355,7 @@ struct CorpusPropertyTests {
 
     @Test("Corpus inputs property")
     func testCorpusInputs() async throws {
-        let corpus = Corpus<String>(schemaVersion: "test")
+        let corpus = Corpus<String>()
 
         await corpus.add(input: "hello", signature: CoverageSignature(edges: Set<UInt32>([0])))
         await corpus.add(input: "world", signature: CoverageSignature(edges: Set<UInt32>([1])))
@@ -368,7 +368,7 @@ struct CorpusPropertyTests {
 
     @Test("Corpus minimization with no new coverage")
     func testMinimizationNoNewCoverage() async throws {
-        let corpus = Corpus<String>(schemaVersion: "test")
+        let corpus = Corpus<String>()
 
         // Add one entry that covers everything
         await corpus.add(input: "all", signature: CoverageSignature(edges: Set<UInt32>([0, 1, 2])))
@@ -467,56 +467,6 @@ struct FuzzErrorTests {
     }
 }
 
-// MARK: - Regression Mode Tests
-
-@Suite("Regression Mode")
-struct RegressionModeTests {
-
-    @Test("CorpusSchema detects version changes")
-    func testSchemaVersioning() async throws {
-        // Create a mock client with known counter count
-        let mockClient = CoverageCountersClient(
-            isAvailable: { true },
-            beginMeasurement: { SanCovCounters.MeasurementContext.testInstance() },
-            endMeasurement: { _ in },
-            snapshotCoveredArraysWithContext: { _ in SparseCoverage(indices: []) }
-        )
-        let version1 = CorpusSchema.currentVersion(using: mockClient)
-
-        // Version should be in expected format (currently hardcoded as v1-0)
-        #expect(version1 == "v1-0", "Version should be 'v1-0' (current implementation)")
-
-        // Should be compatible with itself
-        let isCompatible = await withDependencies {
-            $0.coverageCounters = mockClient
-        } operation: {
-            await CorpusSchema.isCompatible(version1)
-        }
-        #expect(isCompatible, "Schema should be compatible with itself")
-
-        // Should not be compatible with different version
-        let notCompatible = await withDependencies {
-            $0.coverageCounters = mockClient
-        } operation: {
-            await CorpusSchema.isCompatible("v2-999")
-        }
-        #expect(!notCompatible, "Different schema should not be compatible")
-    }
-
-    @Test("CorpusSchema returns version even when coverage unavailable")
-    func testSchemaVersioningUnavailable() async throws {
-        // Even when coverage is unavailable, version is returned (current implementation returns "v1-0")
-        let mockClient = CoverageCountersClient(
-            isAvailable: { false },
-            beginMeasurement: { SanCovCounters.MeasurementContext.testInstance() },
-            endMeasurement: { _ in },
-            snapshotCoveredArraysWithContext: { _ in SparseCoverage(indices: []) }
-        )
-        let version = CorpusSchema.currentVersion(using: mockClient)
-        #expect(version == "v1-0", "Should return 'v1-0' (current implementation returns static version)")
-    }
-}
-
 // MARK: - Edge Case Tests
 
 @Suite("Edge Cases")
@@ -537,7 +487,7 @@ struct EdgeCaseTests {
 
     @Test("Corpus with complex input types")
     func testCorpusComplexTypes() async throws {
-        let corpus = Corpus<[String]>(schemaVersion: "test")
+        let corpus = Corpus<[String]>()
 
         await corpus.add(
             input: ["a", "b", "c"],

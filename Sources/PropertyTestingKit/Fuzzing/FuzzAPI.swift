@@ -329,7 +329,6 @@ private func mergeCorpusSnapshots<each Input: Codable & Sendable>(
     guard let first = snapshots.first else {
         return CorpusSnapshot<repeat each Input>(
             entries: [],
-            schemaVersion: CorpusSchema.currentVersion(),
             createdAt: dateClient.now(),
             updatedAt: dateClient.now(),
             totalCoverage: CoverageSignature(edges: [])
@@ -341,8 +340,7 @@ private func mergeCorpusSnapshots<each Input: Codable & Sendable>(
     }
 
     // Create a temporary corpus to deduplicate entries
-    let schemaVersion = CorpusSchema.currentVersion()
-    let mergedCorpus: CorpusClient<repeat each Input> = corpusRegistry.get(schemaVersion: schemaVersion)
+    let mergedCorpus: CorpusClient<repeat each Input> = corpusRegistry.get()
 
     // Add all entries - addIfInteresting handles deduplication by coverage
     for snapshot in snapshots {

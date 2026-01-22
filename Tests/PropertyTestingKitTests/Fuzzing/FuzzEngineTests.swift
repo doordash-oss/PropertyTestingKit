@@ -238,10 +238,8 @@ struct FuzzEngineTests {
 
         // Create corpus with matching signature
         // Note: InputContainer encodes Int 42 as base64 of "42" = "NDI="
-        // Use "v1-0" to match CorpusSchema.currentVersion()
         let corpusJSON = """
         {
-            "schemaVersion": "v1-0",
             "entries": [
                 {
                     "input": ["NDI="],
@@ -288,53 +286,6 @@ struct FuzzEngineTests {
         #expect(loadSpy.callCount == 1, "Should have loaded corpus")
         #expect(result.corpus.count > 0)
         #expect(result.wasRegression, "Should be regression mode")
-    }
-
-    @Test("FuzzEngine handles schema change")
-    func testSchemaChange() async throws {
-        let corpusDir = URL(fileURLWithPath: "/test/fuzz-schema")
-
-        let oldCorpusJSON = """
-        {
-            "schemaVersion": "v0-old-incompatible",
-            "entries": [],
-            "createdAt": "2025-01-01T00:00:00Z",
-            "updatedAt": "2025-01-01T00:00:00Z",
-            "totalCoverage": {"buckets": {}}
-        }
-        """
-        let corpusData = Data(oldCorpusJSON.utf8)
-
-        // makeCounters(1) creates counters[1]=2, so snapshotCoveredArrays returns [1] = 2
-        let snapshotCoveredArraysFn: @Sendable () -> SparseCoverage = {
-            SparseCoverage(indices: [1])
-        }
-        let (loadSpy, loadFn) = spy { (_: URL) -> Data in corpusData }
-        let (existsSpy, existsFn) = spy { (_: URL) -> Bool in true }
-
-        let result = await withDependencies {
-            $0.coverageCounters = CoverageCountersClient(
-                isAvailable: { true },
-                beginMeasurement: { SanCovCounters.MeasurementContext.testInstance() },
-                endMeasurement: { _ in },
-                snapshotCoveredArraysWithContext: { _ in snapshotCoveredArraysFn() }
-            )
-            $0.corpusPersistence = CorpusPersistenceClient(
-                save: { _, _ in },
-                load: loadFn,
-                exists: existsFn,
-                delete: { _ in }
-            )
-        } operation: {
-            await fuzzEngineWithMaxIterations(
-                maxIterations: 50,
-                corpusDirectory: corpusDir
-            ) { (_: Int) in }
-        }
-
-        #expect(existsSpy.callCount >= 1)
-        #expect(loadSpy.callCount == 1, "Should have attempted to load corpus")
-        #expect(!result.wasRegression, "Should re-fuzz due to schema incompatibility")
     }
 
     @Test("FuzzEngine handles corpus load failure")
@@ -423,14 +374,13 @@ struct FuzzEngineTests {
             SparseCoverage(indices: [])
         }
 
-        // Empty corpus with matching schema version (v1-0)
+        // Empty corpus
         let corpusJSON = """
         {
-            "schemaVersion": "v1-0",
             "entries": [],
             "createdAt": "2025-01-01T00:00:00Z",
             "updatedAt": "2025-01-01T00:00:00Z",
-            "totalCoverage": {"buckets": {}}
+            "totalCoverage": {"edges": []}
         }
         """
         let corpusData = Data(corpusJSON.utf8)
@@ -515,23 +465,21 @@ struct FuzzEngineTests {
             SparseCoverage(indices: [1])  // Different from corpus signature {5: 1}
         }
 
-        // Corpus has signature {5: 1} (bucket index 5, bucket value 1=one)
-        // Mock returns {1: 1} which is different, triggering coverage change
+        // Corpus has signature with edge 5
+        // Mock returns edge 1 which is different, triggering coverage change
         // Note: InputContainer encodes Int 42 as base64 of "42" = "NDI="
-        // Use v1-0 to enter regression mode, then detect coverage change and re-fuzz
         let corpusJSON = """
         {
-            "schemaVersion": "v1-0",
             "entries": [
                 {
                     "input": ["NDI="],
-                    "signature": {"buckets": {"5": 1}},
+                    "signature": {"edges": [5]},
                     "discoveredAt": "2025-01-01T00:00:00Z"
                 }
             ],
             "createdAt": "2025-01-01T00:00:00Z",
             "updatedAt": "2025-01-01T00:00:00Z",
-            "totalCoverage": {"buckets": {"5": 1}}
+            "totalCoverage": {"edges": [5]}
         }
         """
         let corpusData = Data(corpusJSON.utf8)
@@ -599,22 +547,20 @@ struct FuzzEngineTests {
             SparseCoverage(indices: [1])  // Always return matching coverage
         }
 
-        // Corpus with signature {1: 1}
+        // Corpus with signature containing edge 1
         // Note: InputContainer encodes Int 42 as base64 of "42" = "NDI="
-        // Use v1-0 to match CorpusSchema.currentVersion()
         let corpusJSON = """
         {
-            "schemaVersion": "v1-0",
             "entries": [
                 {
                     "input": ["NDI="],
-                    "signature": {"buckets": {"1": 1}},
+                    "signature": {"edges": [1]},
                     "discoveredAt": "2025-01-01T00:00:00Z"
                 }
             ],
             "createdAt": "2025-01-01T00:00:00Z",
             "updatedAt": "2025-01-01T00:00:00Z",
-            "totalCoverage": {"buckets": {"1": 1}}
+            "totalCoverage": {"edges": [1]}
         }
         """
         let corpusData = Data(corpusJSON.utf8)

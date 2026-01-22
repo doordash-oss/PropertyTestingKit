@@ -249,16 +249,12 @@ public actor FuzzEngine<each Input: Codable & Sendable> {
         }
 
         // Default (auto): regression if corpus exists
+        // We don't check schema version - runRegression will detect if coverage
+        // changed and trigger re-fuzzing automatically.
         if corpusExists, let directory = corpusDirectory {
             do {
                 let savedSnapshot: CorpusSnapshot<repeat each Input> = try corpusPersistenceClient.loadSnapshot(from: directory)
-                if await CorpusSchema.isCompatible(savedSnapshot.schemaVersion) {
-                    return await runRegression(snapshot: savedSnapshot, test: test)
-                } else {
-                    if config.verbose {
-                        print("[Fuzz] Schema changed, re-fuzzing...")
-                    }
-                }
+                return await runRegression(snapshot: savedSnapshot, test: test)
             } catch {
                 if config.verbose {
                     print("[Fuzz] Failed to load corpus: \(error), starting fresh")

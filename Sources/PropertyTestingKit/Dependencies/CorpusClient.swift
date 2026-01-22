@@ -21,7 +21,7 @@ import Foundation
 /// ```swift
 /// // Get client from registry
 /// @Dependency(\.corpusRegistry) var registry
-/// let client: CorpusClient<Int, String> = await registry.get(schemaVersion: "v1")
+/// let client: CorpusClient<Int, String> = registry.get()
 ///
 /// // Use client operations
 /// let wasAdded = await client.addIfInteresting((42, "test"), signature)
@@ -36,7 +36,6 @@ public struct CorpusClient<each Input: Codable & Sendable>: Sendable {
     public var inputs: @Sendable () async -> [(repeat each Input)]
     public var signatures: @Sendable () async -> [CoverageSignature]
     public var totalCoverage: @Sendable () async -> CoverageSignature
-    public var schemaVersion: @Sendable () async -> String
     public var updatedAt: @Sendable () async -> Date
     public var createdAt: @Sendable () async -> Date
     public var failureCount: @Sendable () async -> Int
@@ -73,7 +72,6 @@ public struct CorpusClient<each Input: Codable & Sendable>: Sendable {
         inputs: @escaping @Sendable () async -> [(repeat each Input)],
         signatures: @escaping @Sendable () async -> [CoverageSignature],
         totalCoverage: @escaping @Sendable () async -> CoverageSignature,
-        schemaVersion: @escaping @Sendable () async -> String,
         updatedAt: @escaping @Sendable () async -> Date,
         createdAt: @escaping @Sendable () async -> Date,
         failureCount: @escaping @Sendable () async -> Int,
@@ -93,7 +91,6 @@ public struct CorpusClient<each Input: Codable & Sendable>: Sendable {
         self.inputs = inputs
         self.signatures = signatures
         self.totalCoverage = totalCoverage
-        self.schemaVersion = schemaVersion
         self.updatedAt = updatedAt
         self.createdAt = createdAt
         self.failureCount = failureCount
@@ -109,8 +106,8 @@ public struct CorpusClient<each Input: Codable & Sendable>: Sendable {
     }
 
     /// Create a live client backed by a Corpus actor.
-    public static func live(schemaVersion: String) -> CorpusClient<repeat each Input> {
-        let corpus = Corpus<repeat each Input>(schemaVersion: schemaVersion)
+    public static func live() -> CorpusClient<repeat each Input> {
+        let corpus = Corpus<repeat each Input>()
         return CorpusClient<repeat each Input>(
             count: { await corpus.count },
             isEmpty: { await corpus.isEmpty },
@@ -118,7 +115,6 @@ public struct CorpusClient<each Input: Codable & Sendable>: Sendable {
             inputs: { await corpus.inputs },
             signatures: { await corpus.signatures },
             totalCoverage: { await corpus.totalCoverage },
-            schemaVersion: { corpus.schemaVersion },
             updatedAt: { await corpus.updatedAt },
             createdAt: { corpus.createdAt },
             failureCount: { await corpus.failureCount },
@@ -149,7 +145,6 @@ public struct CorpusClient<each Input: Codable & Sendable>: Sendable {
             inputs: { await corpus.inputs },
             signatures: { await corpus.signatures },
             totalCoverage: { await corpus.totalCoverage },
-            schemaVersion: { corpus.schemaVersion },
             updatedAt: { await corpus.updatedAt },
             createdAt: { corpus.createdAt },
             failureCount: { await corpus.failureCount },
@@ -175,8 +170,8 @@ public struct CorpusClient<each Input: Codable & Sendable>: Sendable {
     ///
     /// This is useful for tests that want to verify mutation/generation
     /// without needing to mock coverage data.
-    public static func alwaysInteresting(schemaVersion: String = "test") -> CorpusClient<repeat each Input> {
-        let corpus = Corpus<repeat each Input>(schemaVersion: schemaVersion)
+    public static func alwaysInteresting() -> CorpusClient<repeat each Input> {
+        let corpus = Corpus<repeat each Input>()
         return CorpusClient<repeat each Input>(
             count: { await corpus.count },
             isEmpty: { await corpus.isEmpty },
@@ -184,7 +179,6 @@ public struct CorpusClient<each Input: Codable & Sendable>: Sendable {
             inputs: { await corpus.inputs },
             signatures: { await corpus.signatures },
             totalCoverage: { await corpus.totalCoverage },
-            schemaVersion: { corpus.schemaVersion },
             updatedAt: { await corpus.updatedAt },
             createdAt: { corpus.createdAt },
             failureCount: { await corpus.failureCount },
@@ -229,10 +223,9 @@ public struct CorpusClient<each Input: Codable & Sendable>: Sendable {
 ///
 /// Provides a factory for creating corpus clients with the appropriate type.
 public struct CorpusRegistry: Sendable {
-    // TODO: What the hell. Why are we accessing a live value through an injected dependency.
     /// Create a corpus client for the given input types.
-    public func get<each Input: Codable & Sendable>(schemaVersion: String) -> CorpusClient<repeat each Input> {
-        return CorpusClient.live(schemaVersion: schemaVersion)
+    public func get<each Input: Codable & Sendable>() -> CorpusClient<repeat each Input> {
+        return CorpusClient.live()
     }
 
     /// Create a corpus client from an existing corpus.
@@ -244,7 +237,7 @@ public struct CorpusRegistry: Sendable {
 extension CorpusRegistry: CorpusRegistryProtocol {}
 
 public protocol CorpusRegistryProtocol: Sendable {
-    func get<each T: Codable & Sendable>(schemaVersion: String) -> CorpusClient<repeat each T>
+    func get<each T: Codable & Sendable>() -> CorpusClient<repeat each T>
     func get<each T: Codable & Sendable>(corpus: Corpus<repeat each T>) -> CorpusClient<repeat each T>
 }
 
@@ -262,7 +255,7 @@ extension DependencyValues {
     ///
     /// ```swift
     /// @Dependency(\.corpusRegistry) var registry
-    /// let client: CorpusClient<Int> = registry.get(schemaVersion: "v1")
+    /// let client: CorpusClient<Int> = registry.get()
     /// ```
     public var corpusRegistry: CorpusRegistryProtocol {
         get { self[CorpusRegistryKey.self] }
