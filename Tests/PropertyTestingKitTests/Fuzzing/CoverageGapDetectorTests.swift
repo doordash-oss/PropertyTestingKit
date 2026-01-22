@@ -313,15 +313,6 @@ struct CoverageGapDetectorTests {
         }
     }
 
-    @Test
-    func workbench() async throws {
-        for _ in 0..<100 {
-            _ = try await fuzz(duration: .seconds(0.1), corpusMode: .refuzzReplace) { input in
-                try parseAndValidate(input)
-            }
-        }
-    }
-
     func parseAndValidate(_ input: Int) throws {
         if input == Int.min {
             // Edge case handling
