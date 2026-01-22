@@ -85,7 +85,7 @@ func fuzzWithMaxIterations<each Input: MutatorProviding & Codable & Sendable>(
 /// - Returns: The fuzz result containing corpus, failures, and stats.
 func fuzzEngineWithMaxIterations<each Input: MutatorProviding & Codable & Sendable>(
     maxIterations: Int,
-    config: FuzzEngine<repeat each Input>.Config? = nil,
+    config: FuzzEngineConfig? = nil,
     corpusDirectory: URL? = nil,
     additionalSeeds: [(repeat each Input)] = [],
     test: @escaping @Sendable ((repeat each Input)) async throws -> Void
@@ -103,7 +103,7 @@ func fuzzEngineWithMaxIterations<each Input: MutatorProviding & Codable & Sendab
             startDate.addingTimeInterval(virtualTime.value)
         })
     }, operation: {
-        let effectiveConfig = config ?? FuzzEngine<repeat each Input>.Config(maxDuration: .seconds(10))
+        let effectiveConfig = config ?? FuzzEngineConfig(maxDuration: .seconds(10))
         let engine = FuzzEngine<repeat each Input>(
             mutators: (repeat (each Input).defaultMutator),
             config: effectiveConfig,

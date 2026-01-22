@@ -17,8 +17,8 @@ import Foundation
 ///
 /// This design fully decouples the hot fuzzing loop from plugin overhead.
 public final class PluginCoordinator<each Input: Sendable>: Sendable {
-    private let eventChannel: KFIFOQueue<PluginEvent<repeat each Input>>
-    let actionChannel: KFIFOQueue<FuzzPluginAction<repeat each Input>>
+    private let eventChannel: SPSCQueue<PluginEvent<repeat each Input>>
+    let actionChannel: SPSCQueue<FuzzPluginAction<repeat each Input>>
 
     private let processor: PluginProcessor<repeat each Input>
 
@@ -26,15 +26,11 @@ public final class PluginCoordinator<each Input: Sendable>: Sendable {
     ///
     /// - Parameters:
     ///   - plugins: The plugins to dispatch events to.
-    ///   - eventChannelCapacity: Capacity for the event channel. Default 45.
-    ///   - actionChannelCapacity: Capacity for the action channel. Default 45.
     public init(
-        plugins: [any FuzzPlugin],
-        eventChannelCapacity: Int = 45,
-        actionChannelCapacity: Int = 45
+        plugins: [any FuzzPlugin]
     ) {
-        self.eventChannel = KFIFOQueue(k: eventChannelCapacity)
-        self.actionChannel = KFIFOQueue(k: actionChannelCapacity)
+        self.eventChannel = SPSCQueue()
+        self.actionChannel = SPSCQueue()
 
         self.processor = PluginProcessor(
             eventChannel: eventChannel,
@@ -73,13 +69,13 @@ public final class PluginCoordinator<each Input: Sendable>: Sendable {
     // MARK: - Stats (for testing/debugging)
 
     /// Number of events dropped due to channel overflow.
-    /// Always returns 0 since channels no longer drop messages.
+    /// Always returns 0 since channels are unbounded.
     public var droppedEventCount: UInt64 {
         0
     }
 
     /// Number of actions dropped due to channel overflow.
-    /// Always returns 0 since channels no longer drop messages.
+    /// Always returns 0 since channels are unbounded.
     public var droppedActionCount: UInt64 {
         0
     }
@@ -88,15 +84,15 @@ public final class PluginCoordinator<each Input: Sendable>: Sendable {
 /// Actor that processes events from the event channel and produces actions
 /// to the action channel.
 actor PluginProcessor<each Input: Sendable> {
-    private let eventChannel: KFIFOQueue<PluginEvent<repeat each Input>>
-    private let actionChannel: KFIFOQueue<FuzzPluginAction<repeat each Input>>
+    private let eventChannel: SPSCQueue<PluginEvent<repeat each Input>>
+    private let actionChannel: SPSCQueue<FuzzPluginAction<repeat each Input>>
     private let plugins: [any FuzzPlugin]
 
     private var processorTask: Task<Void, Never>?
 
     init(
-        eventChannel: KFIFOQueue<PluginEvent<repeat each Input>>,
-        actionChannel: KFIFOQueue<FuzzPluginAction<repeat each Input>>,
+        eventChannel: SPSCQueue<PluginEvent<repeat each Input>>,
+        actionChannel: SPSCQueue<FuzzPluginAction<repeat each Input>>,
         plugins: [any FuzzPlugin]
     ) {
         self.eventChannel = eventChannel

@@ -11,10 +11,10 @@ import Testing
 actor FuzzStateMachine<each Input: Codable & Sendable> {
     private let plugins: [any FuzzPlugin]
     private var pluginCoordinator: PluginCoordinator<repeat each Input>?
-    private let config: FuzzEngine<repeat each Input>.Config
+    private let config: FuzzEngineConfig
     private let corpus: CorpusClient<repeat each Input>
-    private let mutationGenerator: @Sendable ((repeat each Input)) -> [(repeat each Input)]
-    private let randomInputGenerator: @Sendable () -> (repeat each Input)
+    private let mutationGenerator: FuzzEngine<repeat each Input>.MutatorMutate
+    private let randomInputGenerator: FuzzEngine<repeat each Input>.MutatorGenerate
     private let seeds: [(repeat each Input)]
     private let startTime: Date
     private let dateClient: DateClient
@@ -31,10 +31,10 @@ actor FuzzStateMachine<each Input: Codable & Sendable> {
     init(
         seeds: [(repeat each Input)],
         plugins: [any FuzzPlugin],
-        config: FuzzEngine<repeat each Input>.Config,
+        config: FuzzEngineConfig,
         startTime: Date,
-        randomInputGenerator: @escaping @Sendable () -> (repeat each Input),
-        mutationGenerator: @escaping @Sendable ((repeat each Input)) -> [(repeat each Input)],
+        randomInputGenerator: @escaping FuzzEngine<repeat each Input>.MutatorGenerate,
+        mutationGenerator: @escaping FuzzEngine<repeat each Input>.MutatorMutate,
         test: @escaping @Sendable ((repeat each Input)) async throws -> Void,
     ) {
         let corpus = Self.fetchCorpus()

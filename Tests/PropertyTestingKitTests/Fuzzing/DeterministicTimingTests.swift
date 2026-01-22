@@ -64,7 +64,7 @@ struct DeterministicTimingTests {
                     return counters
                 }
             } operation: {
-                let config = FuzzEngine<SingleSeedInt>.Config(
+                let config = FuzzEngineConfig(
                     maxDuration: .seconds(10),
                     verbose: false
                 )
@@ -97,7 +97,7 @@ struct DeterministicTimingTests {
                     return counters
                 }
             } operation: {
-                let config = FuzzEngine<SingleSeedInt>.Config(
+                let config = FuzzEngineConfig(
                     maxDuration: .seconds(100),
                     verbose: false
                 )

@@ -52,11 +52,13 @@ public actor FuzzEngine<each Input: Codable & Sendable> {
     @Dependency(\.corpusRegistry) private var corpusRegistry
 
     // MARK: - Random Helpers (use injected RNG for determinism)
-    private let config: Config
+    private let config: FuzzEngineConfig
     private let corpusDirectory: URL?
     private let mutatorSeeds: MutatorSeeds
     private let mutatorMutate: MutatorMutate
     private let mutatorGenerate: MutatorGenerate
+//    private let mutators: (repeat each M)
+    private let inputSize: Int
 
     /// Initialize with mutators.
     ///
@@ -66,12 +68,14 @@ public actor FuzzEngine<each Input: Codable & Sendable> {
     ///   - corpusDirectory: Where to save/load the corpus.
     public init<each M: Mutator>(
         mutators: (repeat each M),
-        config: Config = Config(),
+        config: FuzzEngineConfig = FuzzEngineConfig(),
         corpusDirectory: URL? = nil
     ) where (repeat (each M).Value) == (repeat each Input) {
         let inputSize = Self.inputCount(for: repeat (each Input).self)
         self.config = config
         self.corpusDirectory = corpusDirectory
+//        self.mutators = mutators
+        self.inputSize = inputSize
 
         // Eagerly extract seeds from mutators
         let eagerlyCapturedSeeds = Self.extractMutatorSeeds(mutators: mutators)
@@ -282,14 +286,16 @@ public actor FuzzEngine<each Input: Codable & Sendable> {
             }
             return .empty
         }
+        let mutateFunction = self.mutatorMutate
+        let generateFunction = self.mutatorGenerate
 
-        let stateMachine = FuzzStateMachine(
+        let stateMachine = FuzzStateMachine<repeat each Input>(
             seeds: allSeeds,
             plugins: config.allPlugins,
             config: config,
             startTime: startTime,
-            randomInputGenerator: mutatorGenerate,
-            mutationGenerator: mutatorMutate,
+            randomInputGenerator: generateFunction,
+            mutationGenerator: mutateFunction,
             test: test
         )
 
@@ -300,7 +306,7 @@ public actor FuzzEngine<each Input: Codable & Sendable> {
         let corpusCountBeforeMinimize = await stateMachineResult.corpus.count()
         if config.minimizeCorpus && corpusCountBeforeMinimize > 1 {
             let minimizedSnapshot = await stateMachineResult.corpus.minimized()
-            finalCorpus = CorpusClient.live(corpus: Corpus(from: minimizedSnapshot))
+            finalCorpus = CorpusClient<repeat each Input>.live(corpus: Corpus(from: minimizedSnapshot))
             if config.verbose {
                 let finalCount = await finalCorpus.count()
                 print("[Fuzz] Minimized corpus: \(corpusCountBeforeMinimize) -> \(finalCount)")

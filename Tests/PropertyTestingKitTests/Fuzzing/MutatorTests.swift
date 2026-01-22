@@ -349,7 +349,7 @@ struct MutatorFuzzEngineTests {
                 mutate: { _ in [] }
             )
 
-            let config = FuzzEngine<String>.Config(
+            let config = FuzzEngineConfig(
                 maxDuration: .seconds(1)            )
 
             let engine = FuzzEngine<String>(mutators: mutator, config: config)
@@ -379,7 +379,7 @@ struct MutatorFuzzEngineTests {
                 mutate: { [$0 + "-mutated"] }
             )
 
-            let config = FuzzEngine<String>.Config(
+            let config = FuzzEngineConfig(
                 maxDuration: .seconds(2)            )
 
             let engine = FuzzEngine<String>(mutators: mutator, config: config)

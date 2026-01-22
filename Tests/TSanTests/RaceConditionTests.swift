@@ -122,7 +122,7 @@ struct FuzzEngineRaceTests {
         try await withThrowingTaskGroup(of: Void.self) { group in
             for _ in 0..<5 {
                 group.addTask {
-                    let config = FuzzEngine<Int>.Config(
+                    let config = FuzzEngineConfig(
                         verbose: false,
                         corpusMode: .refuzzReplace
                     )

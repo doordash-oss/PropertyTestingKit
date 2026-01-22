@@ -276,11 +276,11 @@ struct CoverageGapDetectorTests {
     @Test("FuzzEngine.Config has plugins for gap detection")
     func configHasPlugins() {
         // With plugins, gap detection is enabled by adding CoverageGapPlugin
-        let config = FuzzEngine<Int>.Config(plugins: [CoverageGapPlugin()])
+        let config = FuzzEngineConfig(plugins: [CoverageGapPlugin()])
         #expect(config.plugins.count == 1)
         #expect(config.plugins.contains { $0 is CoverageGapPlugin })
 
-        let defaultConfig = FuzzEngine<Int>.Config()
+        let defaultConfig = FuzzEngineConfig()
         #expect(defaultConfig.plugins.isEmpty)
     }
 

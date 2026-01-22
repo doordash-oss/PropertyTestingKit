@@ -74,7 +74,7 @@ struct FuzzEngineTests {
         let result = await withDependencies {
             $0.corpusRegistry = alwaysInterestingRegistry
         } operation: {
-            let config = FuzzEngine<Int>.Config(
+            let config = FuzzEngineConfig(
                 maxDuration: .seconds(10),
                 minimizeCorpus: false,
                 verbose: false
@@ -101,7 +101,7 @@ struct FuzzEngineTests {
         let result = await withDependencies {
             $0.corpusRegistry = alwaysInterestingRegistry
         } operation: {
-            let config = FuzzEngine<Int>.Config(
+            let config = FuzzEngineConfig(
                 maxDuration: .seconds(10),
                 verbose: false
             )
@@ -130,7 +130,7 @@ struct FuzzEngineTests {
         let result = await withDependencies {
             $0.corpusRegistry = alwaysInterestingRegistry
         } operation: {
-            let config = FuzzEngine<Int>.Config(
+            let config = FuzzEngineConfig(
                 maxDuration: .seconds(10),
                 verbose: true
             )
@@ -155,7 +155,7 @@ struct FuzzEngineTests {
         let result = await withDependencies {
             $0.corpusRegistry = alwaysInterestingRegistry
         } operation: {
-            let config = FuzzEngine<Int>.Config(
+            let config = FuzzEngineConfig(
                 maxDuration: .seconds(10),
                 verbose: false
             )
@@ -194,7 +194,7 @@ struct FuzzEngineTests {
                 delete: { _ in }
             )
         } operation: {
-            let config = FuzzEngine<Int>.Config(
+            let config = FuzzEngineConfig(
                 maxDuration: .seconds(10),
                 minimizeCorpus: true,
                 verbose: true
@@ -521,7 +521,7 @@ struct FuzzEngineTests {
         let result = await withDependencies {
             $0.corpusRegistry = alwaysInterestingRegistry
         } operation: {
-            let config = FuzzEngine<Int>.Config(
+            let config = FuzzEngineConfig(
                 maxDuration: .seconds(10),
                 minimizeCorpus: false,
                 verbose: true

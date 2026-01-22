@@ -121,7 +121,7 @@ public func fuzz<each Input: Codable & Sendable, each M: Mutator>(
 
     if shouldRunRegression || effectiveParallelism == 1 {
         // Single engine mode: handles regression and corpus loading
-        let config = FuzzEngine<repeat each Input>.Config(
+        let config = FuzzEngineConfig(
             maxDuration: duration,
             verbose: verbose,
             corpusMode: corpusMode,
@@ -158,7 +158,7 @@ public func fuzz<each Input: Codable & Sendable, each M: Mutator>(
         for engineIndex in 0..<effectiveParallelism {
             let engineSeeds = distributedSeeds[engineIndex]
             group.addTask {
-                let config = FuzzEngine<repeat each Input>.Config(
+                let config = FuzzEngineConfig(
                     maxDuration: duration,
                     verbose: verbose,
                     corpusMode: .refuzzReplace, // Each engine fuzzes fresh
@@ -541,13 +541,13 @@ public enum FuzzError: Error, LocalizedError {
 /// FUZZ_CORPUS_MODE=regressiononly swift test
 /// ```
 
-extension FuzzEngine.Config {
+extension FuzzEngineConfig {
     /// Create config from environment variables.
-    public static func fromEnvironment() -> FuzzEngine<repeat each Input>.Config {
+    public static func fromEnvironment() -> FuzzEngineConfig {
         @Dependency(\.environment) var environment
         let env = environment.environment()
 
-        var config = FuzzEngine<repeat each Input>.Config()
+        var config = FuzzEngineConfig()
 
         if let duration = env["FUZZ_DURATION"].flatMap(TimeInterval.init) {
             config.maxDuration = .seconds(duration)

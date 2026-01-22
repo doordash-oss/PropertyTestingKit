@@ -29,7 +29,7 @@ struct FuzzAPITests {
                 delete: { _ in }
             )
         } operation: {
-            let config = FuzzEngine<String>.Config(
+            let config = FuzzEngineConfig(
                 maxDuration: .seconds(10),
                 minimizeCorpus: true,
                 verbose: true
@@ -87,7 +87,7 @@ struct FuzzAPITests {
             // Explicitly set live coverage to prevent mock leakage from parallel tests
             $0.coverageCounters = .liveValue
         } operation: {
-            let config = FuzzEngine<String>.Config(
+            let config = FuzzEngineConfig(
                 maxDuration: .seconds(10),
                 verbose: false
             )
@@ -170,7 +170,7 @@ struct FuzzAPITests {
                 ]
             })
         } operation: {
-            let config: FuzzEngine<String>.Config = .fromEnvironment()
+            let config: FuzzEngineConfig = .fromEnvironment()
 
             #expect(config.maxDuration == .seconds(30))
             #expect(config.verbose == true)
@@ -182,7 +182,7 @@ struct FuzzAPITests {
         withDependencies {
             $0.environment = EnvironmentClient(environment: { [:] })
         } operation: {
-            let config: FuzzEngine<String>.Config = .fromEnvironment()
+            let config: FuzzEngineConfig = .fromEnvironment()
 
             #expect(config.maxDuration == .seconds(60))
             #expect(config.verbose == false)
@@ -201,7 +201,7 @@ struct FuzzAPITests {
         let result = await withDependencies {
             $0.corpusRegistry = alwaysInterestingRegistry
         } operation: {
-            let config = FuzzEngine<Bool>.Config(
+            let config = FuzzEngineConfig(
                 maxDuration: .seconds(10),
                 verbose: false
             )

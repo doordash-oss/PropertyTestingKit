@@ -100,7 +100,6 @@
 		92C0A97FA308BAE7318F09BE /* UInt+MutatorProviding.swift in Sources */ = {isa = PBXBuildFile; fileRef = C94A378F579D36D7A0DE6F8D /* UInt+MutatorProviding.swift */; };
 		93A29BA964CA290588A5D762 /* IntMutators.swift in Sources */ = {isa = PBXBuildFile; fileRef = CED4705CAFB71E914729EBE5 /* IntMutators.swift */; };
 		93B2E23B1BBADC7F513EC48E /* String+MutatorProviding.swift in Sources */ = {isa = PBXBuildFile; fileRef = 87964E15BDAEE902B7B38D6E /* String+MutatorProviding.swift */; };
-		9411D6055035E20DD3490798 /* CorpusSchema.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F25239605AF76FC51FDDF99 /* CorpusSchema.swift */; };
 		965AC1F59968645673F07841 /* corpus.json in Resources */ = {isa = PBXBuildFile; fileRef = 87C13394409DA48E4BE31930 /* corpus.json */; };
 		995888DFC95845A88625B91A /* FailureInfo.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CF3A4D9068E7899D99B8C01 /* FailureInfo.swift */; };
 		997046243B39595955A73A07 /* CoverageGap.swift in Sources */ = {isa = PBXBuildFile; fileRef = E710A18D4C3A68A36CF37040 /* CoverageGap.swift */; };
@@ -384,7 +383,6 @@
 		49412A507ECD93C3E85C649B /* CorpusEntryType.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CorpusEntryType.swift; sourceTree = "<group>"; };
 		4E987090D06715A5F99BEC1A /* Double+MutatorProviding.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Double+MutatorProviding.swift"; sourceTree = "<group>"; };
 		4E9F5016469E3378725DCE64 /* ArrayPositionAwareMutator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArrayPositionAwareMutator.swift; sourceTree = "<group>"; };
-		4F25239605AF76FC51FDDF99 /* CorpusSchema.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CorpusSchema.swift; sourceTree = "<group>"; };
 		5150147016EC8550F07948A1 /* ArraySequenceInsertionMutator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArraySequenceInsertionMutator.swift; sourceTree = "<group>"; };
 		51F60E9EF9B6498AC00EEBFE /* ck_f_pr.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ck_f_pr.h; sourceTree = "<group>"; };
 		52C1DEE9A4340554236C9F32 /* SparseCoverage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SparseCoverage.swift; sourceTree = "<group>"; };
@@ -979,7 +977,6 @@
 				3FFCEA0CB033829BFBAEFA52 /* CorpusCoder.swift */,
 				D708E6A5A1B65DA927AFEA9E /* CorpusEntry.swift */,
 				49412A507ECD93C3E85C649B /* CorpusEntryType.swift */,
-				4F25239605AF76FC51FDDF99 /* CorpusSchema.swift */,
 				2CF3A4D9068E7899D99B8C01 /* FailureInfo.swift */,
 			);
 			path = Corpus;
@@ -1724,7 +1721,6 @@
 				29AD704E75D749B097C95BAA /* CorpusEntryType.swift in Sources */,
 				432A7C1997D44CD9561448F1 /* CorpusMode.swift in Sources */,
 				F90AAA32E041831DC6EEF916 /* CorpusPersistenceClient.swift in Sources */,
-				9411D6055035E20DD3490798 /* CorpusSchema.swift in Sources */,
 				0A0B966D3B103DDD9ADC457C /* CoverageCountersClient.swift in Sources */,
 				997046243B39595955A73A07 /* CoverageGap.swift in Sources */,
 				C3CCD2C9B56E9E0FC0574642 /* CoverageGapDetector.swift in Sources */,
