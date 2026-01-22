@@ -558,6 +558,14 @@ struct FuzzAPIPropertyTests {
         let result = try await withDependencies {
             $0.corpusRegistry = alwaysInterestingRegistry
             $0.environment = EnvironmentClient(environment: { [:] })
+            $0.fileManager = FileManagerClient(
+                currentDirectoryPath: { "/test" },
+                fileExists: { _ in false },
+                createDirectory: { _, _ in },
+                removeItem: { _ in },
+                writeData: { _, _ in },
+                readData: { _ in Data() }
+            )
         } operation: {
             // Use refuzzReplace to always start fresh (ignore any saved corpus)
             try await fuzzWithMaxIterations(
