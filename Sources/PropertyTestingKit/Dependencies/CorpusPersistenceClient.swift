@@ -74,11 +74,11 @@ struct CorpusPersistenceClientKey: DependencyKey {
             save: { data, directory in
                 try fileManager.createDirectory(directory, true)
                 let fileURL = directory.appendingPathComponent(corpusFilename)
-                try data.write(to: fileURL)
+                try fileManager.writeData(data, fileURL)
             },
             load: { directory in
                 let fileURL = directory.appendingPathComponent(corpusFilename)
-                return try Data(contentsOf: fileURL)
+                return try fileManager.readData(fileURL)
             },
             exists: { directory in
                 let fileURL = directory.appendingPathComponent(corpusFilename)
