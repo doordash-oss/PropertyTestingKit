@@ -116,6 +116,11 @@ actor FuzzStateMachine<each Input: Codable & Sendable> {
         var iterationCount = 0
         var generatedCount = 0
 
+        // Hoist measurement context creation outside the loop for performance.
+        // This avoids millions of hash table insert/remove operations.
+        let context = coverageCountersClient.beginMeasurement()
+        defer { coverageCountersClient.endMeasurement(context) }
+
         while !Task.isCancelled && !halted {
             // Check time limit
             let elapsed = Duration.seconds(dateClient.now().timeIntervalSince(startTime))
@@ -133,8 +138,10 @@ actor FuzzStateMachine<each Input: Codable & Sendable> {
                 generatedCount += 1
             }
 
+            // Reset coverage for this iteration (cheap memset instead of hash table ops)
+            coverageCountersClient.resetCoverage(context)
+
             // Run test with coverage measurement
-            let context = coverageCountersClient.beginMeasurement()
             do {
                 // Will throw if either the test throws or if it logs an Issue
                 try await testWithIssueCapture(input)
@@ -174,7 +181,6 @@ actor FuzzStateMachine<each Input: Codable & Sendable> {
                     )
                 ))
             }
-            coverageCountersClient.endMeasurement(context)
             iterationCount += 1
         }
 

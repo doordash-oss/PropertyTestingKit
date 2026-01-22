@@ -320,10 +320,14 @@ public actor FuzzEngine<each M: Mutator> where repeat (each M).Value: Codable & 
             print("[Regression] Running \(snapshot.count) saved inputs...")
         }
 
+        // Hoist measurement context creation outside the loop for performance.
+        // This avoids hash table insert/remove operations per entry.
+        let context = coverageCounters.beginMeasurement()
+        defer { coverageCounters.endMeasurement(context) }
+
         for entry in snapshot.entries {
-            // Begin measurement context for this entry
-            let context = coverageCounters.beginMeasurement()
-            defer { coverageCounters.endMeasurement(context) }
+            // Reset coverage for this entry (cheap memset instead of hash table ops)
+            coverageCounters.resetCoverage(context)
 
             var testError: Error?
             do {

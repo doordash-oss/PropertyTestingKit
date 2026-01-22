@@ -20,6 +20,7 @@ private func makeMockCoverageClient(
         isAvailable: { true },
         beginMeasurement: { SanCovCounters.MeasurementContext.testInstance() },
         endMeasurement: { _ in },
+        resetCoverage: { _ in },
         snapshotCoveredArraysWithContext: { _ in
             let counters = countersGenerator()
             var indices: [UInt32] = []

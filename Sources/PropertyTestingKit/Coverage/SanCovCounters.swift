@@ -374,6 +374,17 @@ extension SanCovCounters {
         sancov_end_measurement(context.rawContext)
     }
 
+    /// Reset coverage for a measurement context.
+    ///
+    /// This is a cheap operation (memset + counter reset) compared to
+    /// end+begin which involves hash table insert/remove operations.
+    /// Use this between iterations in the fuzz loop.
+    ///
+    /// - Parameter context: The measurement context to reset.
+    public static func resetCoverage(_ context: MeasurementContext) {
+        sancov_reset_coverage(context.rawContext)
+    }
+
     // MARK: - Context-Aware API
     // These methods operate directly on a measurement context, bypassing TLS lookup.
     // This is critical for Swift concurrency where tasks can hop between threads.
