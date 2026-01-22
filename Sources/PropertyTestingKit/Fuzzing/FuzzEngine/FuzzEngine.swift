@@ -10,6 +10,64 @@ import DequeModule
 import Foundation
 import Testing
 
+// MARK: - MutatorOps (Closure holder - single reference capture)
+
+/// Holds pre-computed closures for mutation operations.
+/// Closures are created once at init, and callers capture this single class reference
+/// instead of the mutator tuple directly. This reduces per-call ARC overhead.
+final class MutatorOps<each Input: Sendable>: @unchecked Sendable {
+    let seeds: [(repeat each Input)]
+    let generateFn: @Sendable () -> (repeat each Input)
+    let mutateFn: @Sendable ((repeat each Input)) -> [(repeat each Input)]
+
+    init<each M: Mutator>(
+        mutators: (repeat each M),
+        inputSize: Int
+    ) where (repeat (each M).Value) == (repeat each Input) {
+        self.seeds = Self.extractSeeds(mutators: mutators, inputSize: inputSize)
+
+        // Store closures that capture mutators.
+        // These are stored once; calling code captures this class reference (1 retain)
+        // rather than capturing the mutator tuple directly (N retains).
+        self.generateFn = {
+            (repeat (each mutators).generate())
+        }
+        self.mutateFn = { input in
+            let positionsMutated: [(repeat [each Input])] = (0..<inputSize).map { replacementIndex in
+                var currentIndex = 0
+                return (repeat {
+                    defer { currentIndex += 1 }
+                    if currentIndex == replacementIndex {
+                        return (each mutators).mutate(each input)
+                    } else {
+                        return [(each input)]
+                    }
+                }())
+            }
+            return positionsMutated.flatMap(cartesianProduct)
+        }
+    }
+
+    private static func extractSeeds<each M: Mutator>(
+        mutators: (repeat each M),
+        inputSize: Int
+    ) -> [(repeat each Input)] where (repeat (each M).Value) == (repeat each Input) {
+        let positionsExpanded: [(repeat [each Input])] = (0..<inputSize).map { expandIndex in
+            var currentIndex = 0
+            return (repeat {
+                defer { currentIndex += 1 }
+                let seeds = (each mutators).seeds
+                if currentIndex == expandIndex {
+                    return seeds
+                } else {
+                    return [seeds[0]]
+                }
+            }())
+        }
+        return positionsExpanded.flatMap(cartesianProduct)
+    }
+}
+
 // MARK: - FuzzEngine
 
 /// A coverage-guided fuzzing engine.
@@ -39,26 +97,21 @@ import Testing
 /// 6. Stop when: iteration limit, time limit, or coverage plateau
 /// 7. Minimize corpus, save to disk
 ///
-public actor FuzzEngine<each Input: Codable & Sendable> {
-    /// Type-erased mutator functions for each input component.
-    public typealias MutatorSeeds = @Sendable () -> [(repeat each Input)]
-    public typealias MutatorMutate = @Sendable ((repeat each Input)) -> [(repeat each Input)]
-    public typealias MutatorGenerate = @Sendable () -> (repeat each Input)
-
+public actor FuzzEngine<each M: Mutator> where repeat (each M).Value: Codable & Sendable {
     @Dependency(\.dateClient) private var dateClient
     @Dependency(\.random) private var random
     @Dependency(\.corpusPersistence) private var corpusPersistenceClient
     @Dependency(\.coverageCounters) private var coverageCounters
     @Dependency(\.corpusRegistry) private var corpusRegistry
 
-    // MARK: - Random Helpers (use injected RNG for determinism)
+    // Type alias for the combined input tuple
+    public typealias Input = (repeat (each M).Value)
+
+    // MARK: - Properties
     private let config: FuzzEngineConfig
     private let corpusDirectory: URL?
-    private let mutatorSeeds: MutatorSeeds
-    private let mutatorMutate: MutatorMutate
-    private let mutatorGenerate: MutatorGenerate
-//    private let mutators: (repeat each M)
-    private let inputSize: Int
+    // Store mutator operations in a class - single reference capture reduces ARC
+    private let ops: MutatorOps<repeat (each M).Value>
 
     /// Initialize with mutators.
     ///
@@ -66,118 +119,25 @@ public actor FuzzEngine<each Input: Codable & Sendable> {
     ///   - mutators: A tuple of mutators, one for each input type.
     ///   - config: Fuzzing configuration.
     ///   - corpusDirectory: Where to save/load the corpus.
-    public init<each M: Mutator>(
+    public init(
         mutators: (repeat each M),
         config: FuzzEngineConfig = FuzzEngineConfig(),
         corpusDirectory: URL? = nil
-    ) where (repeat (each M).Value) == (repeat each Input) {
-        let inputSize = Self.inputCount(for: repeat (each Input).self)
+    ) {
+        let inputSize = Self.inputCount(for: repeat (each M).self)
         self.config = config
         self.corpusDirectory = corpusDirectory
-//        self.mutators = mutators
-        self.inputSize = inputSize
-
-        // Eagerly extract seeds from mutators
-        let eagerlyCapturedSeeds = Self.extractMutatorSeeds(mutators: mutators)
-
-        self.mutatorSeeds = {
-            eagerlyCapturedSeeds
-        }
-
-        // Capture mutators directly in the closure - no type erasure needed
-        self.mutatorMutate = { input in
-            Self.mutateWithMutators(inputSize: inputSize, input: input, mutators: mutators)
-        }
-
-        // Capture generate functionality from mutators
-        self.mutatorGenerate = {
-            Self.generateWithMutators(mutators: mutators)
-        }
+        // Create ops class - callers capture single class reference instead of mutator tuple
+        self.ops = MutatorOps(mutators: mutators, inputSize: inputSize)
     }
 
-    // MARK: - Mutator Helpers
-
-    /// Extract seeds from mutators using position rotation.
-    ///
-    /// Instead of computing full cartesian product (O(n1 * n2 * ... * nk)),
-    /// we rotate through each position's seeds while using a fixed seed for others.
-    /// This ensures every seed is tested at least once with O(n1 + n2 + ... + nk) combinations.
-    ///
-    /// For example, with seeds [a, b] and [1, 2, 3]:
-    /// - Position 0 rotation: (a, 1), (b, 1)  -- all of position 0 with fixed position 1
-    /// - Position 1 rotation: (a, 1), (a, 2), (a, 3)  -- fixed position 0 with all of position 1
-    /// - Total: 5 combinations instead of 6 (cartesian product)
-    ///
-    /// The savings grow dramatically with more positions:
-    /// - 5 positions with [23, 24, 2, 11, 7] seeds: 67 vs 84,744
-    private static func extractMutatorSeeds<each M: Mutator>(
-        mutators: (repeat each M)
-    ) -> [(repeat each Input)] where (repeat (each M).Value) == (repeat each Input) {
-        // Count the number of mutators/positions
-        var count = 0
-        (repeat { _ = each mutators; count += 1 }())
-
-        // For each position, create a tuple of arrays where:
-        // - The expanded position contains all seeds from that mutator
-        // - Other positions contain just the first seed (as a fixed reference value)
-        let positionsExpanded: [(repeat [each Input])] = (0..<count).map { expandIndex in
-            var currentIndex = 0
-            return (repeat {
-                defer { currentIndex += 1 }
-                let seeds = (each mutators).seeds
-                if currentIndex == expandIndex {
-                    // This position: iterate through all seeds
-                    return seeds
-                } else {
-                    // Other positions: use first seed as fixed value
-                    return [seeds[0]]
-                }
-            }())
-        }
-
-        // Use cartesianProduct to expand each position's arrays into full tuples
-        return positionsExpanded.flatMap(cartesianProduct)
-    }
+    // MARK: - Helpers
 
     /// Count the number of elements in a parameter pack.
-    private static func inputCount(for input: repeat (each Input).Type) -> Int {
+    private static func inputCount(for mutator: repeat (each M).Type) -> Int {
         var count = 0
-        (repeat { _ = each input; count += 1 }())
+        (repeat { _ = each mutator; count += 1 }())
         return count
-    }
-
-    /// Generate a random input using the provided mutators.
-    /// Uses parameter pack expansion to call generate on each mutator.
-    private static func generateWithMutators<each M: Mutator>(
-        mutators: (repeat each M)
-    ) -> (repeat each Input) where (repeat (each M).Value) == (repeat each Input) {
-        (repeat (each mutators).generate())
-    }
-
-    /// Mutate an input using the provided mutators.
-    /// Uses parameter pack expansion to avoid type erasure.
-    private static func mutateWithMutators<each M: Mutator>(
-        inputSize: Int,
-        input: (repeat each Input),
-        mutators: (repeat each M)
-    ) -> [(repeat each Input)] where (repeat (each M).Value) == (repeat each Input) {
-        // For each position, create a tuple of arrays where:
-        // - The mutated position contains all mutations from the mutator
-        // - Other positions contain just the original value wrapped in an array
-        let positionsMutated: [(repeat [each Input])] = (0..<inputSize).map { replacementIndex in
-            var currentIndex = 0
-            return (repeat {
-                defer { currentIndex += 1 }
-                if currentIndex == replacementIndex {
-                    return (each mutators).mutate(each input)
-                } else {
-                    return [(each input)]
-                }
-            }())
-        }
-
-        // Use cartesianProduct to expand each position's arrays into full tuples
-        return positionsMutated.flatMap(cartesianProduct)
     }
 
     // MARK: - Fuzzing
@@ -190,17 +150,17 @@ public actor FuzzEngine<each Input: Codable & Sendable> {
     ///   - test: The test closure to fuzz.
     /// - Returns: The fuzz result with corpus and any failures.
     public func run(
-        additionalSeeds: [(repeat each Input)] = [],
-        test: @escaping @Sendable ((repeat each Input)) async throws -> Void
-    ) async -> FuzzResult<repeat each Input> {
+        additionalSeeds: [Input] = [],
+        test: @escaping @Sendable (Input) async throws -> Void
+    ) async -> FuzzResult<repeat (each M).Value> {
         return await runWithMode(additionalSeeds: additionalSeeds, test: test)
     }
 
     /// Internal dispatch based on corpus mode.
     private func runWithMode(
-        additionalSeeds: [(repeat each Input)],
-        test: @escaping @Sendable ((repeat each Input)) async throws -> Void
-    ) async -> FuzzResult<repeat each Input> {
+        additionalSeeds: [Input],
+        test: @escaping @Sendable (Input) async throws -> Void
+    ) async -> FuzzResult<repeat (each M).Value> {
         let corpusExists = corpusDirectory.map { corpusPersistenceClient.exists($0) } ?? false
 
         // Handle refuzzReplace: delete corpus and fuzz fresh
@@ -219,7 +179,7 @@ public actor FuzzEngine<each Input: Codable & Sendable> {
             var allSeeds = additionalSeeds
             if corpusExists, let directory = corpusDirectory {
                 do {
-                    let savedSnapshot: CorpusSnapshot<repeat each Input> = try corpusPersistenceClient.loadSnapshot(from: directory)
+                    let savedSnapshot: CorpusSnapshot<repeat (each M).Value> = try corpusPersistenceClient.loadSnapshot(from: directory)
                     if config.verbose {
                         print("[Fuzz] Mode: refuzzExtend - loaded \(savedSnapshot.count) existing corpus entries as seeds")
                     }
@@ -242,7 +202,7 @@ public actor FuzzEngine<each Input: Codable & Sendable> {
                 return .empty
             }
             do {
-                let savedSnapshot: CorpusSnapshot<repeat each Input> = try corpusPersistenceClient.loadSnapshot(from: directory)
+                let savedSnapshot: CorpusSnapshot<repeat (each M).Value> = try corpusPersistenceClient.loadSnapshot(from: directory)
                 return await runRegression(snapshot: savedSnapshot, test: test)
             } catch {
                 if config.verbose {
@@ -257,7 +217,7 @@ public actor FuzzEngine<each Input: Codable & Sendable> {
         // changed and trigger re-fuzzing automatically.
         if corpusExists, let directory = corpusDirectory {
             do {
-                let savedSnapshot: CorpusSnapshot<repeat each Input> = try corpusPersistenceClient.loadSnapshot(from: directory)
+                let savedSnapshot: CorpusSnapshot<repeat (each M).Value> = try corpusPersistenceClient.loadSnapshot(from: directory)
                 return await runRegression(snapshot: savedSnapshot, test: test)
             } catch {
                 if config.verbose {
@@ -272,12 +232,12 @@ public actor FuzzEngine<each Input: Codable & Sendable> {
     // MARK: - Fuzz Mode
 
     private func runFuzzing(
-        additionalSeeds: [(repeat each Input)] = [],
-        test: @escaping @Sendable ((repeat each Input)) async throws -> Void
-    ) async -> FuzzResult<repeat each Input> {
+        additionalSeeds: [Input] = [],
+        test: @escaping @Sendable (Input) async throws -> Void
+    ) async -> FuzzResult<repeat (each M).Value> {
         let startTime = dateClient.now()
 
-        let allSeeds = additionalSeeds + mutatorSeeds()
+        let allSeeds = additionalSeeds + ops.seeds
 
         // Early exit if no seeds and no way to generate inputs
         if allSeeds.isEmpty {
@@ -286,16 +246,23 @@ public actor FuzzEngine<each Input: Codable & Sendable> {
             }
             return .empty
         }
-        let mutateFunction = self.mutatorMutate
-        let generateFunction = self.mutatorGenerate
 
-        let stateMachine = FuzzStateMachine<repeat each Input>(
+        // Capture ops (single class reference) - reduces ARC overhead vs capturing mutator tuple
+        let ops = self.ops
+        let generateFn: FuzzStateMachine<repeat (each M).Value>.MutatorGenerate = {
+            ops.generateFn()
+        }
+        let mutateFn: FuzzStateMachine<repeat (each M).Value>.MutatorMutate = { input in
+            ops.mutateFn(input)
+        }
+
+        let stateMachine = FuzzStateMachine<repeat (each M).Value>(
             seeds: allSeeds,
             plugins: config.allPlugins,
             config: config,
             startTime: startTime,
-            randomInputGenerator: generateFunction,
-            mutationGenerator: mutateFunction,
+            randomInputGenerator: generateFn,
+            mutationGenerator: mutateFn,
             test: test
         )
 
@@ -306,7 +273,7 @@ public actor FuzzEngine<each Input: Codable & Sendable> {
         let corpusCountBeforeMinimize = await stateMachineResult.corpus.count()
         if config.minimizeCorpus && corpusCountBeforeMinimize > 1 {
             let minimizedSnapshot = await stateMachineResult.corpus.minimized()
-            finalCorpus = CorpusClient<repeat each Input>.live(corpus: Corpus(from: minimizedSnapshot))
+            finalCorpus = CorpusClient<repeat (each M).Value>.live(corpus: Corpus(from: minimizedSnapshot))
             if config.verbose {
                 let finalCount = await finalCorpus.count()
                 print("[Fuzz] Minimized corpus: \(corpusCountBeforeMinimize) -> \(finalCount)")
@@ -341,12 +308,12 @@ public actor FuzzEngine<each Input: Codable & Sendable> {
     // MARK: - Regression Mode
 
     private func runRegression(
-        snapshot: CorpusSnapshot<repeat each Input>,
-        test: @escaping @Sendable ((repeat each Input)) async throws -> Void
-    ) async -> FuzzResult<repeat each Input> {
+        snapshot: CorpusSnapshot<repeat (each M).Value>,
+        test: @escaping @Sendable (Input) async throws -> Void
+    ) async -> FuzzResult<repeat (each M).Value> {
         let startTime = dateClient.now()
-        var failures: [(input: (repeat each Input), error: Error)] = []
-        var coverageChanges: [(input: (repeat each Input), expected: CoverageSignature, actual: CoverageSignature)] = []
+        var failures: [(input: Input, error: Error)] = []
+        var coverageChanges: [(input: Input, expected: CoverageSignature, actual: CoverageSignature)] = []
         var needsRefuzz = false
 
         if config.verbose {

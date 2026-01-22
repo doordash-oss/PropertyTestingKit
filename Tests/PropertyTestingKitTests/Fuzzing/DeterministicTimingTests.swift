@@ -69,7 +69,7 @@ struct DeterministicTimingTests {
                     verbose: false
                 )
 
-                let engine = FuzzEngine<SingleSeedInt>(mutators: SingleSeedInt.defaultMutator, config: config, corpusDirectory: nil)
+                let engine = FuzzEngine(mutators: SingleSeedInt.defaultMutator, config: config, corpusDirectory: nil)
                 return await engine.run { _ in
                     // Advance time by 11 seconds each test (exceeds 10s limit after first test)
                     currentTime.update { $0 = $0.addingTimeInterval(11) }
@@ -102,7 +102,7 @@ struct DeterministicTimingTests {
                     verbose: false
                 )
 
-                let engine = FuzzEngine<SingleSeedInt>(mutators: SingleSeedInt.defaultMutator, config: config, corpusDirectory: nil)
+                let engine = FuzzEngine(mutators: SingleSeedInt.defaultMutator, config: config, corpusDirectory: nil)
                 return await engine.run { _ in
                     // Advance time by exactly 2.5 seconds each test
                     testCount.update { $0 += 1 }

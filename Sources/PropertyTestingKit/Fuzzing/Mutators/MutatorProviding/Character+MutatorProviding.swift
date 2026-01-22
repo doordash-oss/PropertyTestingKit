@@ -6,47 +6,56 @@
 import Dependencies
 import Foundation
 
+// Static arrays at file scope
+private let _characterSeeds: [Character] = ["a", "Z", "0", " ", "\n", "\t", "😄", "\0"]
+private let _asciiPrintable: [Character] = Array(" !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~")
+private let _lowercaseLetters: [Character] = Array("abcdefghijklmnopqrstuvwxyz")
+private let _uppercaseLetters: [Character] = Array("ABCDEFGHIJKLMNOPQRSTUVWXYZ")
+private let _digits: [Character] = Array("0123456789")
+private let _whitespace: [Character] = [" ", "\t", "\n", "\r"]
+private let _emojis: [Character] = ["😀", "🎉", "🚀", "💡", "⚡", "🔥", "✨", "🌟"]
+
+/// Concrete mutator for Character values - avoids closure boxing overhead.
+public struct CharacterMutator: Mutator, Sendable {
+    public let seeds: [Character] = _characterSeeds
+
+    private let fastRNG: FastRNG
+
+    public init() {
+        @Dependency(\.fastRNG) var rng
+        self.fastRNG = rng
+    }
+
+    public func mutate(_ value: Character) -> [Character] {
+        _characterSeeds.filter { $0 != value }
+    }
+
+    public func generate() -> Character {
+        var rng = fastRNG
+        let strategy = Int.random(in: 0..<6, using: &rng)
+        switch strategy {
+        case 0:
+            // Lowercase letter
+            return _lowercaseLetters.randomElement(using: &rng) ?? "a"
+        case 1:
+            // Uppercase letter
+            return _uppercaseLetters.randomElement(using: &rng) ?? "A"
+        case 2:
+            // Digit
+            return _digits.randomElement(using: &rng) ?? "0"
+        case 3:
+            // Whitespace
+            return _whitespace.randomElement(using: &rng) ?? " "
+        case 4:
+            // ASCII printable
+            return _asciiPrintable.randomElement(using: &rng) ?? "a"
+        default:
+            // Emoji
+            return _emojis.randomElement(using: &rng) ?? "😀"
+        }
+    }
+}
+
 extension Character: MutatorProviding {
-    private static let _seeds: [Character] = ["a", "Z", "0", " ", "\n", "\t", "😄", "\0"]
-
-    private static let _alphanumeric: [Character] = Array("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
-    private static let _asciiPrintable: [Character] = Array(" !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~")
-
-    public static let defaultMutator: AnyMutator<Character> = {
-        @Dependency(\.fastRNG) var _fastRNG
-        let fastRNG = _fastRNG
-        return AnyMutator(
-            seeds: _seeds,
-            mutate: { value in _seeds.filter { $0 != value } },
-            generate: {
-                var rng = fastRNG
-                let strategy = Int.random(in: 0..<6, using: &rng)
-                switch strategy {
-                case 0:
-                    // Lowercase letter
-                    let letters = Array("abcdefghijklmnopqrstuvwxyz")
-                    return letters.randomElement(using: &rng) ?? "a"
-                case 1:
-                    // Uppercase letter
-                    let letters = Array("ABCDEFGHIJKLMNOPQRSTUVWXYZ")
-                    return letters.randomElement(using: &rng) ?? "A"
-                case 2:
-                    // Digit
-                    let digits = Array("0123456789")
-                    return digits.randomElement(using: &rng) ?? "0"
-                case 3:
-                    // Whitespace
-                    let whitespace: [Character] = [" ", "\t", "\n", "\r"]
-                    return whitespace.randomElement(using: &rng) ?? " "
-                case 4:
-                    // ASCII printable
-                    return _asciiPrintable.randomElement(using: &rng) ?? "a"
-                default:
-                    // Emoji
-                    let emojis: [Character] = ["😀", "🎉", "🚀", "💡", "⚡", "🔥", "✨", "🌟"]
-                    return emojis.randomElement(using: &rng) ?? "😀"
-                }
-            }
-        )
-    }()
+    public static let defaultMutator = CharacterMutator()
 }

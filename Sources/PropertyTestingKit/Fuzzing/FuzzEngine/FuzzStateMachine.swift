@@ -9,12 +9,16 @@ import DequeModule
 import Testing
 
 actor FuzzStateMachine<each Input: Codable & Sendable> {
+    /// Type-erased mutator functions for input mutation and generation.
+    typealias MutatorMutate = @Sendable ((repeat each Input)) -> [(repeat each Input)]
+    typealias MutatorGenerate = @Sendable () -> (repeat each Input)
+
     private let plugins: [any FuzzPlugin]
     private var pluginCoordinator: PluginCoordinator<repeat each Input>?
     private let config: FuzzEngineConfig
     private let corpus: CorpusClient<repeat each Input>
-    private let mutationGenerator: FuzzEngine<repeat each Input>.MutatorMutate
-    private let randomInputGenerator: FuzzEngine<repeat each Input>.MutatorGenerate
+    private let mutationGenerator: MutatorMutate
+    private let randomInputGenerator: MutatorGenerate
     private let seeds: [(repeat each Input)]
     private let startTime: Date
     private let dateClient: DateClient
@@ -33,8 +37,8 @@ actor FuzzStateMachine<each Input: Codable & Sendable> {
         plugins: [any FuzzPlugin],
         config: FuzzEngineConfig,
         startTime: Date,
-        randomInputGenerator: @escaping FuzzEngine<repeat each Input>.MutatorGenerate,
-        mutationGenerator: @escaping FuzzEngine<repeat each Input>.MutatorMutate,
+        randomInputGenerator: @escaping MutatorGenerate,
+        mutationGenerator: @escaping MutatorMutate,
         test: @escaping @Sendable ((repeat each Input)) async throws -> Void,
     ) {
         let corpus = Self.fetchCorpus()

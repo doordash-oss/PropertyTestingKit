@@ -5,17 +5,27 @@
 
 import Dependencies
 
+/// Concrete mutator for Bool values - avoids closure boxing overhead.
+public struct BoolMutator: Mutator, Sendable {
+    public let seeds: [Bool] = [true, false]
+
+    private let fastRNG: FastRNG
+
+    public init() {
+        @Dependency(\.fastRNG) var rng
+        self.fastRNG = rng
+    }
+
+    public func mutate(_ value: Bool) -> [Bool] {
+        [!value]
+    }
+
+    public func generate() -> Bool {
+        var rng = fastRNG
+        return Bool.random(using: &rng)
+    }
+}
+
 extension Bool: MutatorProviding {
-    public static let defaultMutator: AnyMutator<Bool> = {
-        @Dependency(\.fastRNG) var _fastRNG
-        let fastRNG = _fastRNG
-        return AnyMutator(
-            seeds: [true, false],
-            mutate: { value in [!value] },
-            generate: {
-                var rng = fastRNG
-                return Bool.random(using: &rng)
-            }
-        )
-    }()
+    public static let defaultMutator = BoolMutator()
 }

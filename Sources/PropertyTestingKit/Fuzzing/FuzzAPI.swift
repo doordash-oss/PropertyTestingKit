@@ -133,7 +133,7 @@ public func fuzz<each Input: Codable & Sendable, each M: Mutator>(
             plugins: plugins
         )
 
-        let engine = FuzzEngine<repeat each Input>(
+        let engine = FuzzEngine<repeat each M>(
             mutators: (repeat each mutators),
             config: config,
             corpusDirectory: corpusDir
@@ -170,7 +170,7 @@ public func fuzz<each Input: Codable & Sendable, each M: Mutator>(
                     plugins: plugins
                 )
 
-                let engine = FuzzEngine<repeat each Input>(
+                let engine = FuzzEngine<repeat each M>(
                     mutators: (repeat each mutators),
                     config: config,
                     corpusDirectory: nil // Don't save individual engine corpora
