@@ -104,7 +104,7 @@ func fuzzEngineWithMaxIterations<each Input: MutatorProviding & Codable & Sendab
         })
     }, operation: {
         let effectiveConfig = config ?? FuzzEngineConfig(maxDuration: .seconds(10))
-        let engine = FuzzEngine<repeat each Input>(
+        let engine = FuzzEngine(
             mutators: (repeat (each Input).defaultMutator),
             config: effectiveConfig,
             corpusDirectory: corpusDirectory

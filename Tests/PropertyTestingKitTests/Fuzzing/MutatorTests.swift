@@ -352,7 +352,7 @@ struct MutatorFuzzEngineTests {
             let config = FuzzEngineConfig(
                 maxDuration: .seconds(1)            )
 
-            let engine = FuzzEngine<String>(mutators: mutator, config: config)
+            let engine = FuzzEngine(mutators: mutator, config: config)
             _ = await engine.run { input in
                 await testedInputs.update { $0.append(input) }
             }
@@ -382,7 +382,7 @@ struct MutatorFuzzEngineTests {
             let config = FuzzEngineConfig(
                 maxDuration: .seconds(2)            )
 
-            let engine = FuzzEngine<String>(mutators: mutator, config: config)
+            let engine = FuzzEngine(mutators: mutator, config: config)
             _ = await engine.run { input in
                 await testedInputs.update { $0.append(input) }
             }
