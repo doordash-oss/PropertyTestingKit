@@ -284,34 +284,43 @@ struct CoverageGapDetectorTests {
         #expect(defaultConfig.plugins.isEmpty)
     }
 
-//    @Test("Realistic coverage gap test")
-//    func realisticCoverageGapTest() async throws {
-//        // Use a hash-based check that value profile can't solve easily
-//        @Sendable
-//        func partiallyCoveredFunction(input: Int) {
-//            // Simple hash to defeat value profile guidance
-//            let hash = (input &* 31) ^ (input >> 4)
-//            if hash == 0x7FFFFFFE {
-//                // This branch is effectively unreachable (requires specific input)
-//                print("found magic!")
-//            } else if input < 0 {
-//                print("negative")
-//            } else {
-//                print("positive")
-//            }
-//        }
-//
-//        // This test intentionally creates a coverage gap to verify detection works
-//        await withKnownIssue("Expected coverage gap in partiallyCoveredFunction") {
-//            _ = try await fuzz(
-//                duration: .seconds(0.1),
-//                corpusMode: .refuzzReplace,
-//                plugins: [CoverageGapPlugin()]
-//            ) { (input: Int) in
-//                partiallyCoveredFunction(input: input)
-//            }
-//        }
-//    }
+    @Test("Realistic coverage gap test")
+    func realisticCoverageGapTest() async throws {
+        // Use a hash-based check that value profile can't solve easily
+        @Sendable
+        func partiallyCoveredFunction(input: Int) {
+            // Simple hash to defeat value profile guidance
+            let hash = (input &* 31) ^ (input >> 4)
+            if hash == 0x7FFFFFFE {
+                // This branch is effectively unreachable (requires specific input)
+                print("found magic!")
+            } else if input < 0 {
+                print("negative")
+            } else {
+                print("positive")
+            }
+        }
+
+        // This test intentionally creates a coverage gap to verify detection works
+        await withKnownIssue("Expected coverage gap in partiallyCoveredFunction") {
+            _ = try await fuzz(
+                duration: .seconds(0.1),
+                corpusMode: .refuzzReplace,
+                plugins: [CoverageGapPlugin()]
+            ) { (input: Int) in
+                partiallyCoveredFunction(input: input)
+            }
+        }
+    }
+
+    @Test
+    func workbench() async throws {
+        for _ in 0..<100 {
+            _ = try await fuzz(duration: .seconds(0.1), corpusMode: .refuzzReplace) { input in
+                try parseAndValidate(input)
+            }
+        }
+    }
 
     func parseAndValidate(_ input: Int) throws {
         if input == Int.min {

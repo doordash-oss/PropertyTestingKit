@@ -5,10 +5,10 @@
 
 import Foundation
 import Dependencies
+import DequeModule
 import Testing
 
 actor FuzzStateMachine<each Input: Codable & Sendable> {
-    private var workerPool: WorkerPool<repeat each Input>?
     private let plugins: [any FuzzPlugin]
     private var pluginCoordinator: PluginCoordinator<repeat each Input>?
     private let config: FuzzEngine<repeat each Input>.Config
@@ -22,6 +22,11 @@ actor FuzzStateMachine<each Input: Codable & Sendable> {
     private let test: @Sendable ((repeat each Input)) async throws -> Void
 
     private var mutationsCount: Int = 0
+
+    // Simple loop state (replaces WorkerPool)
+    private var pendingInputs: Deque<(repeat each Input)> = []
+    private var halted: Bool = false
+    private var haltReason: FuzzStats.StopReason = .timeLimit
 
     init(
         seeds: [(repeat each Input)],
@@ -47,77 +52,14 @@ actor FuzzStateMachine<each Input: Codable & Sendable> {
         self.test = test
     }
 
-    func addNewFailure(_ failure: (input: (repeat each Input), error: Error)) {
-        failures.append(failure)
+    private func recordFailure(input: (repeat each Input), error: any Error) {
+        failures.append((input: input, error: error))
     }
 
     struct FuzzStateMachineResult {
         let stats: FuzzStats
         let corpus: CorpusClient<repeat each Input>
         let failures: [(input: (repeat each Input), error: Error)]
-    }
-
-    private func setupWorkerPool(coordinator: PluginCoordinator<repeat each Input>) {
-        let coverageCountersClient = Self.fetchCoverageCounters()
-        let testWithIssueCapture = Self.captureIssues(
-            sourceLocation: config.sourceLocation,
-            test: test
-        )
-        let sourceLocation = config.sourceLocation
-
-        // TODO: Avoid reference cycle
-        self.workerPool = WorkerPool(
-            verbose: config.verbose,
-            seeds: seeds,
-            randomInputGenerator: randomInputGenerator,
-            test: { testInput in
-                // Tests run in parallel
-                // Check for halting conditions
-                await self.haltIfAtLimit(startTime: self.startTime)
-
-                let context = coverageCountersClient.beginMeasurement()
-                do {
-                    // Will throw if either the test throws or if it logs an Issue
-                    try await testWithIssueCapture(testInput)
-
-                    // Coverage snapshot may throw if coverage is unavailable - use empty signature
-                    let coverageSignature: CoverageSignature
-                    if let sparse = try? coverageCountersClient.snapshotCoveredArraysWithContext(context) {
-                        coverageSignature = CoverageSignature(sparse: sparse)
-                    } else {
-                        coverageSignature = CoverageSignature(edges: Set())
-                    }
-                    let didAdd = await self.corpus.addIfInteresting(testInput, coverageSignature)
-
-                    // Fire-and-forget: submit event without blocking (no actor hop)
-                    coordinator.send(event: .iteration(
-                        .init(discoveredNewCoverage: didAdd, input: testInput)
-                    ))
-                } catch is CancellationError {
-                    // Re-throw cancellation to allow worker to exit cleanly
-                    throw CancellationError()
-                } catch {
-                    // On failure, try to get coverage but use empty signature if unavailable
-                    let coverageSignature: CoverageSignature
-                    if let sparse = try? coverageCountersClient.snapshotCoveredArraysWithContext(context) {
-                        coverageSignature = CoverageSignature(sparse: sparse)
-                    } else {
-                        coverageSignature = CoverageSignature(edges: Set())
-                    }
-                    await self.addNewFailure((testInput, error))
-                    // Fire-and-forget: submit event without blocking (no actor hop)
-                    coordinator.send(event: .failureFound(
-                        .init(
-                            input: testInput,
-                            test: testWithIssueCapture,
-                            sourceLocation: sourceLocation,
-                            coverageSignature: coverageSignature
-                        )
-                    ))
-                }
-                coverageCountersClient.endMeasurement(context)
-            }
-        )
     }
 
     func start() async throws -> FuzzStateMachineResult {
@@ -148,7 +90,6 @@ actor FuzzStateMachine<each Input: Codable & Sendable> {
             }
         }
 
-        setupWorkerPool(coordinator: coordinator)
         coordinator.send(event: .start(
             .init(
                 maxDuration: config.maxDuration,
@@ -156,11 +97,86 @@ actor FuzzStateMachine<each Input: Codable & Sendable> {
             )
         ))
 
-        guard let workerPool else {
-            fatalError()
+        // Initialize pending inputs with seeds
+        pendingInputs = Deque(seeds)
+
+        // Setup for test execution
+        let coverageCountersClient = Self.fetchCoverageCounters()
+        let testWithIssueCapture = Self.captureIssues(
+            sourceLocation: config.sourceLocation,
+            test: test
+        )
+        let sourceLocation = config.sourceLocation
+
+        // Simple fuzz loop - no workers, just iterate
+        var iterationCount = 0
+        var generatedCount = 0
+
+        while !Task.isCancelled && !halted {
+            // Check time limit
+            let elapsed = Duration.seconds(dateClient.now().timeIntervalSince(startTime))
+            if elapsed >= config.maxDuration {
+                haltReason = .timeLimit
+                break
+            }
+
+            // Get input: from pending queue or generate random
+            let input: (repeat each Input)
+            if !pendingInputs.isEmpty {
+                input = pendingInputs.removeFirst()
+            } else {
+                input = randomInputGenerator()
+                generatedCount += 1
+            }
+
+            // Run test with coverage measurement
+            let context = coverageCountersClient.beginMeasurement()
+            do {
+                // Will throw if either the test throws or if it logs an Issue
+                try await testWithIssueCapture(input)
+
+                // Coverage snapshot may throw if coverage is unavailable - use empty signature
+                let coverageSignature: CoverageSignature
+                if let sparse = try? coverageCountersClient.snapshotCoveredArraysWithContext(context) {
+                    coverageSignature = CoverageSignature(sparse: sparse)
+                } else {
+                    coverageSignature = CoverageSignature(edges: Set())
+                }
+                let didAdd = await corpus.addIfInteresting(input, coverageSignature)
+
+                // Fire-and-forget: submit event without blocking (no actor hop)
+                coordinator.send(event: .iteration(
+                    .init(discoveredNewCoverage: didAdd, input: input)
+                ))
+            } catch is CancellationError {
+                // Allow clean exit on cancellation
+                break
+            } catch {
+                // On failure, try to get coverage but use empty signature if unavailable
+                let coverageSignature: CoverageSignature
+                if let sparse = try? coverageCountersClient.snapshotCoveredArraysWithContext(context) {
+                    coverageSignature = CoverageSignature(sparse: sparse)
+                } else {
+                    coverageSignature = CoverageSignature(edges: Set())
+                }
+                recordFailure(input: input, error: error)
+                // Fire-and-forget: submit event without blocking (no actor hop)
+                coordinator.send(event: .failureFound(
+                    .init(
+                        input: input,
+                        test: testWithIssueCapture,
+                        sourceLocation: sourceLocation,
+                        coverageSignature: coverageSignature
+                    )
+                ))
+            }
+            coverageCountersClient.endMeasurement(context)
+            iterationCount += 1
         }
 
-        let result = try await workerPool.work()
+        if config.verbose {
+            print("[FUZZ] Fuzz loop finished: iterations=\(iterationCount), generated=\(generatedCount), halted=\(halted)")
+        }
 
         let totalCoveredIndices = await corpus.totalCoverage().executedIndices
         coordinator.send(event: .end(
@@ -177,11 +193,11 @@ actor FuzzStateMachine<each Input: Codable & Sendable> {
         await actionConsumerTask.value
 
         let stats = FuzzStats(
-            totalInputs: result.iterationCount,
+            totalInputs: iterationCount,
             mutations: mutationsCount,
-            generations: result.generatedCount,
+            generations: generatedCount,
             duration: startTime.distance(to: dateClient.now()),
-            stopReason: result.stopReason,
+            stopReason: haltReason,
             failures: failures.count
         )
 
@@ -193,16 +209,6 @@ actor FuzzStateMachine<each Input: Codable & Sendable> {
             corpus: corpus,
             failures: failures
         )
-    }
-
-    private func haltIfAtLimit(startTime: Date) async {
-        let elapsed = Duration.seconds(dateClient.now().timeIntervalSince(startTime))
-        if elapsed >= config.maxDuration {
-            if config.verbose {
-                print("[FUZZ] haltIfAtLimit: elapsed=\(elapsed), maxDuration=\(config.maxDuration) -> HALTING")
-            }
-            workerPool?.halt(reason: .timeLimit)
-        }
     }
 
     /// Takes a test case and throws an error if any expectations failed.
@@ -264,17 +270,17 @@ actor FuzzStateMachine<each Input: Codable & Sendable> {
     private func executeAction(_ action: FuzzPluginAction<repeat each Input>) async {
         switch action {
         case .stop(let stopAction):
-            workerPool?.halt(reason: stopAction.reason)
+            halt(reason: stopAction.reason)
 
         case .recordIssue(let issueAction):
             Issue.record(issueAction.comment, sourceLocation: issueAction.sourceLocation)
 
         case .queueInputs(let queueAction):
-            appendToInputs(queueAction.inputs)
+            pendingInputs.append(contentsOf: queueAction.inputs)
 
         case .selectForMutation(let mutationAction):
             let mutations = mutationGenerator(mutationAction.input)
-            appendToInputs(mutations)
+            pendingInputs.append(contentsOf: mutations)
             mutationsCount += 1
 
         case .submitToCorpus(let corpusAction):
@@ -287,8 +293,9 @@ actor FuzzStateMachine<each Input: Codable & Sendable> {
         }
     }
 
-    private func appendToInputs(_ inputs: [(repeat each Input)]) {
-        workerPool?.pushInputs(inputs)
+    private func halt(reason: FuzzStats.StopReason) {
+        halted = true
+        haltReason = reason
     }
 
     private func addToCorpus(_ input: (repeat each Input), signature: CoverageSignature, type: CorpusEntryType, failureInfo: FailureInfo?) async {
@@ -299,154 +306,5 @@ actor FuzzStateMachine<each Input: Codable & Sendable> {
 extension FuzzStateMachine {
     enum Errors: Error {
         case testFailed
-    }
-}
-
-import Atomics
-
-/// Pool that distributes work to workers via per-worker channels.
-///
-/// Each worker has its own SPSC channel for receiving inputs. Workers pull
-/// from their channel first; if empty, they generate random inputs locally.
-/// This eliminates actor contention on the shared input queue.
-final class WorkerPool<each Input: Sendable>: @unchecked Sendable {
-    let size: Int
-    let verbose: Bool
-    let dispatcher: InputDispatcher<repeat each Input>
-    let randomInputGenerator: @Sendable () -> (repeat each Input)
-    let test: @Sendable ((repeat each Input)) async throws -> Void
-    private var poolTask: Task<Void, any Error>?
-
-    // Atomic counters for lock-free updates from workers
-    private let _processCount: ManagedAtomic<Int>
-    private let _generatedCount: ManagedAtomic<Int>
-    private let _stopReason: ManagedAtomic<Int>  // 0 = none, 1 = timeLimit, 2+ = custom
-    private let _halted: ManagedAtomic<Bool>
-
-    var processCount: Int {
-        _processCount.load(ordering: .relaxed)
-    }
-
-    var generatedCount: Int {
-        _generatedCount.load(ordering: .relaxed)
-    }
-
-    init(
-        size: Int = ProcessInfo.processInfo.processorCount,
-        verbose: Bool = false,
-        seeds: [(repeat each Input)] = [],
-        randomInputGenerator: @escaping @Sendable () -> (repeat each Input),
-        test: @escaping @Sendable ((repeat each Input)) async throws -> Void
-    ) {
-        // Workers at least 1
-        let size = max(1, size)
-        self.size = size
-        self.verbose = verbose
-        self.dispatcher = InputDispatcher(workerCount: size)
-        self.randomInputGenerator = randomInputGenerator
-        self.test = test
-        self._processCount = ManagedAtomic(0)
-        self._generatedCount = ManagedAtomic(0)
-        self._stopReason = ManagedAtomic(0)
-        self._halted = ManagedAtomic(false)
-
-        // Distribute seeds round-robin to workers
-        dispatcher.push(contentsOf: seeds)
-    }
-
-    // TODO: Should the worker pool be in charge of inputs?
-    /// Pushes inputs to be distributed to workers round-robin.
-    func pushInputs(_ inputs: [(repeat each Input)]) {
-        dispatcher.push(contentsOf: inputs)
-    }
-
-    func work() async throws -> WorkerPoolResult {
-        if verbose {
-            print("[FUZZ] WorkerPool.work() starting with size=\(size)")
-        }
-        let verboseCapture = verbose
-        let randomInputGenerator = self.randomInputGenerator
-        let test = self.test
-        let processCountAtomic = _processCount
-        let generatedCountAtomic = _generatedCount
-        let haltedFlag = self._halted
-
-        poolTask = Task {
-            try await withThrowingTaskGroup { group in
-                for workerIndex in 0..<self.size {
-                    // Each worker gets their own channel - they don't see other workers' channels
-                    let channel = self.dispatcher.channel(for: workerIndex)
-                    group.addTask {
-                        var iterationCount = 0
-                        while !Task.isCancelled && !haltedFlag.load(ordering: .relaxed) {
-                            // Try to pull from this worker's channel, generate random if empty
-                            let input: (repeat each Input)
-                            if let queued = channel.dequeue() {
-                                input = queued
-                            } else {
-                                input = randomInputGenerator()
-                                generatedCountAtomic.wrappingIncrement(ordering: .relaxed)
-                            }
-                            try await test(input)
-                            processCountAtomic.wrappingIncrement(ordering: .relaxed)
-                            iterationCount += 1
-                        }
-                        if verboseCapture {
-                            print("[FUZZ] Worker \(workerIndex) exiting: Task.isCancelled=\(Task.isCancelled), iterations=\(iterationCount)")
-                        }
-                    }
-                }
-
-                try await group.waitForAll()
-            }
-        }
-
-        _ = await poolTask?.result
-        let finalProcessCount = _processCount.load(ordering: .relaxed)
-        if verbose {
-            print("[FUZZ] WorkerPool.work() finished, processCount=\(finalProcessCount), stopReason=\(_stopReason.load(ordering: .relaxed))")
-        }
-
-        let stopReason: FuzzStats.StopReason
-        switch _stopReason.load(ordering: .relaxed) {
-        case 1:
-            stopReason = .timeLimit
-        case 2:
-            stopReason = .custom("worker_pool_deinit")
-        default:
-            stopReason = .timeLimit
-        }
-
-        return WorkerPoolResult(
-            iterationCount: finalProcessCount,
-            generatedCount: _generatedCount.load(ordering: .relaxed),
-            stopReason: stopReason
-        )
-    }
-
-    func halt(reason: FuzzStats.StopReason) {
-        // Set halted flag first so workers see it immediately
-        _halted.store(true, ordering: .relaxed)
-
-        if verbose {
-            print("[FUZZ] WorkerPool.halt called with reason: \(reason), poolTask=\(poolTask != nil ? "present" : "nil")")
-        }
-        switch reason {
-        case .timeLimit:
-            _stopReason.store(1, ordering: .relaxed)
-        default:
-            _stopReason.store(2, ordering: .relaxed)
-        }
-        poolTask?.cancel()
-        dispatcher.closeAll()
-        if verbose {
-            print("[FUZZ] WorkerPool.halt: cancel() called")
-        }
-    }
-
-    struct WorkerPoolResult {
-        let iterationCount: Int
-        let generatedCount: Int
-        let stopReason: FuzzStats.StopReason
     }
 }

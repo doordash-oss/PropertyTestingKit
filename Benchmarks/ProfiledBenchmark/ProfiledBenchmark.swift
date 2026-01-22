@@ -54,16 +54,11 @@ let benchmarks: @Sendable () -> Void = {
             maxIterations: 100
         )
     ) { benchmark in
-        let config = FuzzEngine<Int>.Config(
-            maxDuration: .seconds(0.1),
-            corpusMode: .refuzzReplace
-        )
-        let engine = FuzzEngine<Int>(mutators: Int.defaultMutator, config: config)
         for _ in benchmark.scaledIterations {
             let startCPU = getCPUTimeNanos()
             let startWall = DispatchTime.now().uptimeNanoseconds
 
-            let result = await engine.run { input in
+            let result = try await fuzz(duration: .seconds(0.1), corpusMode: .refuzzReplace) { input in
                 try parseAndValidate(input)
             }
 
