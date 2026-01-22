@@ -56,6 +56,7 @@
 		5118F45702A081DEB42B60AA /* DateClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8DCFCD27F236B21539FDC070 /* DateClient.swift */; };
 		5127D413390D3FE20602F726 /* DequeModule in Frameworks */ = {isa = PBXBuildFile; productRef = ED638EEB32787F0136CC6158 /* DequeModule */; };
 		517D2FA0099DD8F832016CB0 /* RelaxedQueue.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1768557AD57A3460E16861E /* RelaxedQueue.swift */; };
+		52A27FF9B915F4953CBE37C3 /* SPSCQueueTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 67313115F82527F359E6AD42 /* SPSCQueueTests.swift */; };
 		52C260E19A743BA5BCADC703 /* CoverageSignature.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BD8E7DDBFB1256A08DEBE05 /* CoverageSignature.swift */; };
 		534C8AE7D3768059DDAEA18D /* Benchmark in Frameworks */ = {isa = PBXBuildFile; productRef = FD911ACF527827DA331405BD /* Benchmark */; };
 		56BD6A924A8704F7BB65D7CD /* ArrayPositionAwareMutator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E9F5016469E3378725DCE64 /* ArrayPositionAwareMutator.swift */; };
@@ -113,6 +114,7 @@
 		A1B5C9D7B4345854FF5D488A /* PropertyTestingKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 2595E9AD80DBFC77F241A7E7 /* PropertyTestingKit.framework */; };
 		A37D8BF967DDC59F6674C589 /* CartesianProduct.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3DC7247C29C4368A12DBDC7 /* CartesianProduct.swift */; };
 		A4917FD92F876D60CD8646DC /* FuzzerStressTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E6E3AD5DC96FE62C844BFA88 /* FuzzerStressTests.swift */; };
+		A6A65D4CE8BA2EC8A2A08E58 /* SPSCQueue.swift in Sources */ = {isa = PBXBuildFile; fileRef = C8F920487E91DCB59E3B530F /* SPSCQueue.swift */; };
 		A791F464FE3BDDB8A76320B5 /* FuzzPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = C46A7E2288E1AE7A59B100CF /* FuzzPlugin.swift */; };
 		A8AB88E38D9F9BBE8CCCD77B /* CorpusCoder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3FFCEA0CB033829BFBAEFA52 /* CorpusCoder.swift */; };
 		AB89E6673C3749E9B3F3A882 /* PlateauDetectorPluginTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BA01B2725BCFE68C918C2336 /* PlateauDetectorPluginTests.swift */; };
@@ -402,6 +404,7 @@
 		6004EB7893C5A9200F3557E7 /* ChannelBenchmarks.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChannelBenchmarks.swift; sourceTree = "<group>"; };
 		6089581A8525B59F997740DA /* ck_pr_lse.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ck_pr_lse.h; sourceTree = "<group>"; };
 		66D7438BFF7FE3F52E951148 /* MWC192.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MWC192.swift; sourceTree = "<group>"; };
+		67313115F82527F359E6AD42 /* SPSCQueueTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SPSCQueueTests.swift; sourceTree = "<group>"; };
 		676196E34E9EA63139657323 /* ck_stdint.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ck_stdint.h; sourceTree = "<group>"; };
 		683A330BCB90F626B21D2422 /* CustomFuzzableTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CustomFuzzableTests.swift; sourceTree = "<group>"; };
 		6ADE3EEEF0705F1A7D88FD97 /* ck_stddef.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ck_stddef.h; sourceTree = "<group>"; };
@@ -479,6 +482,7 @@
 		C7F23079959F6B89989AD2EB /* CorpusMode.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CorpusMode.swift; sourceTree = "<group>"; };
 		C80829DB919B1E7D80F66C9B /* SpecialDoubleMutator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpecialDoubleMutator.swift; sourceTree = "<group>"; };
 		C8D72A5EBCA28D84F6AECC0B /* Data+Shrinkable.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Data+Shrinkable.swift"; sourceTree = "<group>"; };
+		C8F920487E91DCB59E3B530F /* SPSCQueue.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SPSCQueue.swift; sourceTree = "<group>"; };
 		C94A378F579D36D7A0DE6F8D /* UInt+MutatorProviding.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "UInt+MutatorProviding.swift"; sourceTree = "<group>"; };
 		C9952DEBABC45B57A9A83D8B /* HTTPStatusCodeMutator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HTTPStatusCodeMutator.swift; sourceTree = "<group>"; };
 		CB119BBD24F520783D33BA6F /* SanCovHooks.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = SanCovHooks.c; sourceTree = "<group>"; };
@@ -916,6 +920,7 @@
 				2C4EFD7D871B0C5BA50C4ED9 /* KFIFOQueueTests.swift */,
 				AF93BF0B57DCF8F9FA90AD49 /* RelaxedBoundedChannelTests.swift */,
 				3CE03CDB4DC3B26ACCD090E1 /* RelaxedQueueTests.swift */,
+				67313115F82527F359E6AD42 /* SPSCQueueTests.swift */,
 			);
 			name = ConcurrentQueuesTests;
 			path = Tests/ConcurrentQueuesTests;
@@ -1153,6 +1158,7 @@
 				B1768557AD57A3460E16861E /* RelaxedQueue.swift */,
 				3DBF63EB5C024C23AFE63827 /* SegmentQueue.swift */,
 				09E9C3F6DA4EB6FB4BE3B84B /* SpinChannel.swift */,
+				C8F920487E91DCB59E3B530F /* SPSCQueue.swift */,
 				368EB0DBC91A07E925144D22 /* SyncChannel.swift */,
 				FBED26DF9A41FD069EB28115 /* VyukovBoundedChannel.swift */,
 				C58EA6211B00155CCB9207C1 /* VyukovChannel.swift */,
@@ -1577,6 +1583,7 @@
 				7C623E3B67803474ABA76955 /* KFIFOQueueTests.swift in Sources */,
 				B87B6EF259EF22C6CEF5DD74 /* RelaxedBoundedChannelTests.swift in Sources */,
 				8B1C0E3901406D0F1718A612 /* RelaxedQueueTests.swift in Sources */,
+				52A27FF9B915F4953CBE37C3 /* SPSCQueueTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -1626,6 +1633,7 @@
 				ECBE316A69296E918688FA38 /* RealRCQ.swift in Sources */,
 				5B7775C68221FE079AE343F9 /* RelaxedBoundedChannel.swift in Sources */,
 				517D2FA0099DD8F832016CB0 /* RelaxedQueue.swift in Sources */,
+				A6A65D4CE8BA2EC8A2A08E58 /* SPSCQueue.swift in Sources */,
 				701CF2B4CCB8B14F8B85CB4A /* SegmentQueue.swift in Sources */,
 				D2BC2EE4BA5AE7CADCA65873 /* SpinChannel.swift in Sources */,
 				EF353620D890641D543ED36B /* SyncChannel.swift in Sources */,
