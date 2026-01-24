@@ -27,19 +27,6 @@ func getCPUTimeNanos() -> UInt64 {
 
 // MARK: - Test Function
 
-/// A simple function to fuzz - parses an integer and checks bounds.
-func parseAndValidate(_ input: Int) throws {
-    if input == Int.min {
-        // Edge case handling
-    } else if input < 0 {
-        let _ = abs(input)
-    } else if input > 1000 {
-        let _ = input / 2
-    } else {
-        let _ = input * 2
-    }
-}
-
 let benchmarks: @Sendable () -> Void = {
     Benchmark(
         "fuzz(Int) - iterations/sec, refuzzReplace",
@@ -58,8 +45,8 @@ let benchmarks: @Sendable () -> Void = {
             let startCPU = getCPUTimeNanos()
             let startWall = DispatchTime.now().uptimeNanoseconds
 
-            let result = try await fuzz(duration: .seconds(0.1), corpusMode: .refuzzReplace) { input in
-                try parseAndValidate(input)
+            let result = try await fuzz(duration: .seconds(0.1), corpusMode: .refuzzReplace) { (input: Int) in
+                blackHole(input)
             }
 
             let endCPU = getCPUTimeNanos()

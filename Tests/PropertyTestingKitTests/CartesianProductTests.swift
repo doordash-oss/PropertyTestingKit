@@ -203,4 +203,10 @@ struct CartesianProductTests {
         #expect(result[0].0 == 1)
         #expect(result[1].0 == nil)
     }
+
+    // Test added to check discovery
+    @Test("New test for discovery check")
+    func newDiscoveryCheck() {
+        #expect(42 == 42)
+    }
 }

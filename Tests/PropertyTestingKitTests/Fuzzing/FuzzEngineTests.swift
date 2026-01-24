@@ -640,10 +640,6 @@ struct FuzzEngineTests {
 
     @Test("FuzzEngine discovers different coverage for different inputs")
     func testDifferentInputsDiscoverDifferentCoverage() async {
-        // Track which coverage signatures we see for different inputs
-        var coverageByInput: [Int: SparseCoverage] = [:]
-        let coverageLock = SyncBox(coverageByInput)
-
         // Create a mock that records coverage per-input
         let snapshotCoveredArraysFn: @Sendable () -> SparseCoverage = {
             // Return different coverage based on some internal state
@@ -663,9 +659,9 @@ struct FuzzEngineTests {
             await fuzzEngineWithMaxIterations(maxIterations: 50) { (input: Int) in
                 // Different inputs should exercise different code paths
                 if input > 0 {
-                    _ = input * 2
+                    _ = input &* 2
                 } else {
-                    _ = input * 3
+                    _ = input &* 3
                 }
             }
         }
@@ -749,7 +745,7 @@ struct FuzzEngineTests {
 
         let events = SyncBox<[CoverageEvent]>([])
 
-        let result = await withDependencies {
+        _ = await withDependencies {
             $0.coverageCounters = CoverageCountersClient(
                 isAvailable: { true },
                 beginMeasurement: { SanCovCounters.MeasurementContext.testInstance() },
@@ -805,15 +801,15 @@ struct FuzzEngineTests {
                 // Exercise different code paths based on input
                 if input > 0 {
                     if input > 50 {
-                        _ = input * 2
+                        _ = input &* 2
                     } else {
-                        _ = input + 1
+                        _ = input &+ 1
                     }
                 } else if input < 0 {
                     if input < -50 {
-                        _ = input * 3
+                        _ = input &* 3
                     } else {
-                        _ = input - 1
+                        _ = input &- 1
                     }
                 } else {
                     _ = 0

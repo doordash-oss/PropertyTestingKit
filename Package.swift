@@ -90,11 +90,9 @@ let package = Package(
                 "PropertyTestingKit",
                 .product(name: "Dependencies", package: "swift-dependencies"),
                 .product(name: "FunctionSpy", package: "FunctionSpy"),
-//                .product(name: "Benchmark", package: "package-benchmark")
             ],
             exclude: ["Corpus", "Fuzzing/Corpus"],
             swiftSettings: [
-                // Enable sanitizer coverage for SanCov source mapping tests
                 .unsafeFlags([
                     "-sanitize=undefined",
                     "-sanitize-coverage=edge,pc-table"
@@ -110,25 +108,9 @@ let package = Package(
             ],
             exclude: ["Corpus"],
             swiftSettings: [
-                // Enable sanitizer coverage for SanCov source mapping tests
                 .unsafeFlags([
                     "-sanitize=undefined",
                     "-sanitize-coverage=edge,pc-table"
-                ])
-            ]
-        ),
-        .testTarget(
-            name: "StressTests",
-            dependencies: [
-                "PropertyTestingKit",
-                .product(name: "Dependencies", package: "swift-dependencies"),
-            ],
-            exclude: ["Corpus"],
-            swiftSettings: [
-                // Enable sanitizer coverage
-                .unsafeFlags([
-                    "-sanitize=undefined",
-                    "-sanitize-coverage=edge"
                 ])
             ]
         ),

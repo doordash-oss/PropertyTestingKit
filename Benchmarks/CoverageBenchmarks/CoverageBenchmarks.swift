@@ -24,21 +24,6 @@ func getCPUTimeNanos() -> UInt64 {
     return userNanos + systemNanos
 }
 
-// MARK: - Simple test function for fuzz benchmarks
-
-/// A simple function to fuzz - parses an integer and checks bounds.
-func parseAndValidate(_ input: Int) throws {
-    if input == Int.min {
-        // Edge case handling
-    } else if input < 0 {
-        let _ = abs(input)
-    } else if input > 1000 {
-        let _ = input / 2
-    } else {
-        let _ = input * 2
-    }
-}
-
 // MARK: - Benchmarks
 
 let benchmarks: @Sendable () -> Void = {
@@ -52,7 +37,7 @@ let benchmarks: @Sendable () -> Void = {
             warmupIterations: 0,
             scalingFactor: .one,
             maxDuration: .seconds(120),
-            maxIterations: 100
+            maxIterations: 25
         )
     ) { benchmark in
         for _ in benchmark.scaledIterations {
@@ -62,9 +47,9 @@ let benchmarks: @Sendable () -> Void = {
             let result = try await fuzz(
                 duration: .seconds(0.1),
                 corpusMode: .refuzzReplace,
-                parallelism: 8
+                parallelism: 16
             ) { (input: Int) in
-                try parseAndValidate(input)
+                blackHole(input)
             }
 
             let endCPU = getCPUTimeNanos()
@@ -92,7 +77,7 @@ let benchmarks: @Sendable () -> Void = {
             warmupIterations: 0,
             scalingFactor: .one,
             maxDuration: .seconds(120),
-            maxIterations: 100
+            maxIterations: 25
         )
     ) { benchmark in
         for _ in benchmark.scaledIterations {
@@ -105,9 +90,9 @@ let benchmarks: @Sendable () -> Void = {
                         let result = try? await fuzz(
                             duration: .seconds(0.1),
                             corpusMode: .refuzzReplace,
-                            parallelism: 8
+                            parallelism: 16
                         ) { (input: Int) in
-                            try parseAndValidate(input)
+                            blackHole(input)
                         }
                         return result?.stats.totalInputs ?? 0
                     }
@@ -138,7 +123,7 @@ let benchmarks: @Sendable () -> Void = {
             warmupIterations: 0,
             scalingFactor: .one,
             maxDuration: .seconds(120),
-            maxIterations: 100
+            maxIterations: 25
         )
     ) { benchmark in
         for _ in benchmark.scaledIterations {
@@ -151,9 +136,9 @@ let benchmarks: @Sendable () -> Void = {
                         let result = try? await fuzz(
                             duration: .seconds(0.1),
                             corpusMode: .refuzzReplace,
-                            parallelism: 8
+                            parallelism: 16
                         ) { (input: Int) in
-                            try parseAndValidate(input)
+                            blackHole(input)
                         }
                         return result?.stats.totalInputs ?? 0
                     }
@@ -173,4 +158,46 @@ let benchmarks: @Sendable () -> Void = {
             benchmark.measurement(.custom("Effective Parallelism (x100)", polarity: .prefersLarger, useScalingFactor: false), effectiveParallelism)
         }
     }
+
+//    for p in 1...16 {
+//        Benchmark(
+//            "fuzz(Int) - iterations/sec p=\(p)",
+//            configuration: .init(
+//                metrics: [
+//                    .custom("Iterations/sec (K)", polarity: .prefersLarger, useScalingFactor: false),
+//                    .custom("Effective Parallelism (x100)", polarity: .prefersLarger, useScalingFactor: false),
+//                ],
+//                warmupIterations: 0,
+//                scalingFactor: .one,
+//                maxDuration: .seconds(120),
+//                maxIterations: 20
+//            )
+//        ) { benchmark in
+//            for _ in benchmark.scaledIterations {
+//                let startCPU = getCPUTimeNanos()
+//                let startWall = DispatchTime.now().uptimeNanoseconds
+//
+//                let result = try await fuzz(
+//                    duration: .seconds(0.1),
+//                    corpusMode: .refuzzReplace,
+//                    parallelism: p
+//                ) { (input: Int) in
+//                    blackHole(input)
+//                }
+//
+//                let endCPU = getCPUTimeNanos()
+//                let endWall = DispatchTime.now().uptimeNanoseconds
+//
+//                let cpuDelta = endCPU - startCPU
+//                let wallDelta = endWall - startWall
+//
+//                // Effective parallelism = CPU time / wall time, multiplied by 100 for display precision
+//                let effectiveParallelism = wallDelta > 0 ? Int((Double(cpuDelta) / Double(wallDelta)) * 100) : 100
+//
+//                // Multiply by 10 to convert 0.1s -> 1s, divide by 1000 for (K) display
+//                benchmark.measurement(.custom("Iterations/sec (K)", polarity: .prefersLarger, useScalingFactor: false), result.stats.totalInputs / 100)
+//                benchmark.measurement(.custom("Effective Parallelism (x100)", polarity: .prefersLarger, useScalingFactor: false), effectiveParallelism)
+//            }
+//        }
+//    }
 }
