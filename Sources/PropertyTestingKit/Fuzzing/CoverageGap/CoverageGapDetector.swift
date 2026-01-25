@@ -76,11 +76,10 @@ public struct CoverageGapDetector: Sendable {
         }
 
         // Step 1: Get covered edge PCs and do batched DWARF lookup for accurate source paths
-        // dladdr returns binary paths, but DWARF gives us actual source file paths needed
-        // for proper projectPath filtering.
-        var functionEdges: [String: FunctionEdgeInfo] = [:]
-        var testedFunctions: Set<String> = []
-        var functionPCRanges: [String: (min: UInt, max: UInt)] = [:]
+        // Key insight: dladdr gives us consistent functionStart addresses, but inconsistent
+        // filenames (binary path vs source path from DWARF). Use functionStart as the key.
+        var functionEdges: [UInt: FunctionEdgeInfo] = [:]  // Keyed by functionStart
+        var testedFunctionStarts: Set<UInt> = []
 
         // Collect PCs for all covered edges
         var coveredEdgePCs: [(edgeIndex: Int, pc: UInt)] = []
@@ -104,71 +103,75 @@ public struct CoverageGapDetector: Sendable {
                 continue
             }
 
-            // Use DWARF for filename (accurate source path), fall back to dladdr
+            // functionStart is our key - it's consistent across all dladdr calls within the same function
+            let funcStart = dlAddrLocation.functionStart > 0 ? dlAddrLocation.functionStart : pc
+
+            // Use DWARF for filename (accurate source path) and display name
             let dwarfLoc = dwarfLocations[pc]
             let hasDWARF = dwarfLoc != nil
             let filename = dwarfLoc?.file ?? dlAddrLocation.filename
-            let funcName = dwarfLoc?.function ?? dlAddrLocation.functionName
+            // Demangle the function name for display (DWARF may return mangled names)
+            let rawFuncName = dwarfLoc?.function ?? dlAddrLocation.functionName
+            let displayFuncName = rawFuncName.map { demangle($0) }
 
-            guard let filename = filename, let funcName = funcName else {
+            guard let filename = filename, let displayFuncName = displayFuncName else {
                 continue
             }
 
-            // Skip stdlib functions by name (always, regardless of DWARF availability)
-            if isStdlibFunction(funcName) {
+            // Skip stdlib functions by name
+            if let dlAddrFuncName = dlAddrLocation.functionName, isStdlibFunction(dlAddrFuncName) {
+                continue
+            }
+
+            // Skip closure thunks and async continuations (mangled names that start with $s
+            // and contain patterns like TY0_, TY1_, fU_, etc.)
+            if let dlAddrFuncName = dlAddrLocation.functionName, isClosureOrContinuation(dlAddrFuncName) {
                 continue
             }
 
             // Skip excluded paths
-            // When DWARF is unavailable, we only have binary paths from dladdr which can't be
-            // properly filtered by projectPath - skip projectPath check in that case
             let effectiveProjectPath = hasDWARF ? projectPath : nil
             if shouldExclude(filename: filename, projectPath: effectiveProjectPath) {
                 continue
             }
 
-            let key = "\(filename):\(funcName)"
-            testedFunctions.insert(key)
+            // Track this function by its start address
+            testedFunctionStarts.insert(funcStart)
 
-            // Track function start address from dladdr (true function start)
-            let funcStart = dlAddrLocation.functionStart > 0 ? dlAddrLocation.functionStart : pc
-            if let existing = functionPCRanges[key] {
-                // Use minimum of all function starts we've seen (should be the same)
-                functionPCRanges[key] = (min: min(existing.min, funcStart), max: existing.max)
-            } else {
-                functionPCRanges[key] = (min: funcStart, max: 0)  // max will be set from symbol table
-            }
-
-            var info = functionEdges[key] ?? FunctionEdgeInfo(
-                functionName: funcName,
+            var info = functionEdges[funcStart] ?? FunctionEdgeInfo(
+                functionName: displayFuncName,
                 filename: filename
             )
 
             info.totalEdges += 1
             info.coveredEdges += 1
-            functionEdges[key] = info
+            // Track line range from DWARF to filter misattributed uncovered edges
+            if let line = dwarfLoc?.line, line > 0 {
+                info.minLine = min(info.minLine, line)
+                info.maxLine = max(info.maxLine, line)
+            }
+            functionEdges[funcStart] = info
         }
 
         // Query symbol table for accurate function sizes (one-time cost)
         // This gives us precise bounds instead of relying on padding
-        let functionStarts = Array(Set(functionPCRanges.values.map { $0.min }))
-        let functionSizes = await SanCovCounters.getFunctionSizes(at: functionStarts)
+        let functionStartsArray = Array(testedFunctionStarts)
+        let functionSizes = await SanCovCounters.getFunctionSizes(at: functionStartsArray)
 
         // Build per-function PC ranges using accurate sizes from symbol table
         // Fallback to 64KB padding if symbol lookup fails
         let fallbackPadding: UInt = 65536
 
         struct FunctionPCRange {
-            let min: UInt
-            let max: UInt
+            let start: UInt
+            let end: UInt
         }
         var accurateFunctionRanges: [FunctionPCRange] = []
-        accurateFunctionRanges.reserveCapacity(functionPCRanges.count)
+        accurateFunctionRanges.reserveCapacity(testedFunctionStarts.count)
 
         var globalMinPC: UInt = .max
         var globalMaxPC: UInt = 0
-        for (_, range) in functionPCRanges {
-            let funcStart = range.min
+        for funcStart in testedFunctionStarts {
             let funcEnd: UInt
             if let size = functionSizes[funcStart], size > 0 {
                 funcEnd = funcStart + size
@@ -176,13 +179,13 @@ public struct CoverageGapDetector: Sendable {
                 // Fallback if symbol table lookup failed
                 funcEnd = funcStart + fallbackPadding
             }
-            accurateFunctionRanges.append(FunctionPCRange(min: funcStart, max: funcEnd))
+            accurateFunctionRanges.append(FunctionPCRange(start: funcStart, end: funcEnd))
             globalMinPC = min(globalMinPC, funcStart)
             globalMaxPC = max(globalMaxPC, funcEnd)
         }
 
         // If no functions were tested, return early (no gaps to detect)
-        if testedFunctions.isEmpty {
+        if testedFunctionStarts.isEmpty {
             return CoverageGapReport(
                 gaps: [],
                 totalFunctionsAnalyzed: 0,
@@ -192,15 +195,13 @@ public struct CoverageGapDetector: Sendable {
         }
 
         // Step 2: Scan uncovered edges, but only for functions we're tracking
-        // Optimization: First filter by PC range (fast array lookup), then dladdr only for candidates
-        // Collect all edges that need DWARF lookup, then batch process them
+        // Use functionStart as the key (consistent across dladdr calls)
         let coveredSet = coveredIndices
 
-        // First pass: identify uncovered edges in tested functions (no DWARF)
         struct UncoveredEdge {
             let edgeIndex: Int
             let pc: UInt
-            let key: String
+            let funcStart: UInt  // Key for matching
         }
         var uncoveredEdgesNeedingDWARF: [UncoveredEdge] = []
 
@@ -212,60 +213,65 @@ public struct CoverageGapDetector: Sendable {
                 continue
             }
 
-            // Second filter: Per-function PC ranges (using accurate sizes from symbol table)
-            // Check if this PC falls within ANY tested function's range
-            var inAnyFunctionRange = false
+            // Second filter: Check if this PC falls within ANY tested function's range
+            // and get the matching function start
+            var matchingFuncStart: UInt? = nil
             for range in accurateFunctionRanges {
-                if pc >= range.min && pc <= range.max {
-                    inAnyFunctionRange = true
+                if pc >= range.start && pc <= range.end {
+                    matchingFuncStart = range.start
                     break
                 }
             }
 
-            if !inAnyFunctionRange {
+            guard let funcStart = matchingFuncStart else {
                 continue
             }
 
-            guard let location = await SanCovCounters.getSourceLocation(for: edgeIndex) else {
-                continue
-            }
-
-            guard let funcName = location.functionName,
-                  let filename = location.filename else {
-                continue
-            }
-
-            let key = "\(filename):\(funcName)"
-
-            // Only track uncovered edges from tested functions
-            guard testedFunctions.contains(key) else {
+            // Verify this function is in our tracked set
+            guard testedFunctionStarts.contains(funcStart) else {
                 continue
             }
 
             // Track this edge for batch DWARF lookup
-            uncoveredEdgesNeedingDWARF.append(UncoveredEdge(edgeIndex: edgeIndex, pc: pc, key: key))
+            uncoveredEdgesNeedingDWARF.append(UncoveredEdge(edgeIndex: edgeIndex, pc: pc, funcStart: funcStart))
 
-            // Update total count (we don't have line info yet)
-            if var info = functionEdges[key] {
+            // Update total count
+            if var info = functionEdges[funcStart] {
                 info.totalEdges += 1
-                functionEdges[key] = info
+                functionEdges[funcStart] = info
             }
         }
 
+        // Second pass: batch DWARF lookup for all uncovered edges to get line numbers
+        let uncoveredPCs = uncoveredEdgesNeedingDWARF.map { $0.pc }
+        let uncoveredDwarfLocations = await SanCovCounters.getDWARFLocations(for: uncoveredPCs)
 
-        // Second pass: batch DWARF lookup for all uncovered edges
-        // Optimization: Skip DWARF lookup during detection. Line numbers are computed
-        // lazily when detailedSummary is accessed (if ever). This saves ~10-20ms.
         for edge in uncoveredEdgesNeedingDWARF {
-            if var info = functionEdges[edge.key] {
-                // Store edge index and PC, defer line lookup to lazy access
+            if var info = functionEdges[edge.funcStart] {
+                let dwarfLoc = uncoveredDwarfLocations[edge.pc]
+                let line = dwarfLoc?.line ?? 0
+
+                // Filter out edges without DWARF info or outside the function's line range.
+                // PC range matching can be imprecise - DWARF line numbers are authoritative.
+                // Without DWARF, we can't verify the edge belongs to this function.
+                let hasValidLineRange = info.minLine <= info.maxLine
+                if hasValidLineRange {
+                    if line == 0 || line < info.minLine || line > info.maxLine {
+                        // No DWARF info or line outside function - don't count it
+                        info.totalEdges -= 1  // Undo the increment from earlier
+                        functionEdges[edge.funcStart] = info
+                        continue
+                    }
+                }
+
                 info.uncoveredEdges.append(EdgeInfo(
                     index: edge.edgeIndex,
                     pc: edge.pc,
-                    line: 0,  // Will be computed lazily if needed
-                    column: 0
+                    line: line,
+                    column: dwarfLoc?.column ?? 0,
+                    filePath: dwarfLoc?.file
                 ))
-                functionEdges[edge.key] = info
+                functionEdges[edge.funcStart] = info
             }
         }
 
@@ -275,6 +281,19 @@ public struct CoverageGapDetector: Sendable {
         var uncoveredCount = 0
 
         for (_, info) in functionEdges {
+            // Skip closure thunks and async continuations at reporting time
+            // (they might slip through if a different edge was used to register the function)
+            if isClosureOrContinuation(info.functionName) || isStdlibFunction(info.functionName) {
+                continue
+            }
+
+            // Skip functions without DWARF line info - we can't accurately determine edges
+            // without line filtering, which would lead to incorrect coverage percentages
+            let hasValidLineRange = info.minLine <= info.maxLine
+            if !hasValidLineRange {
+                continue
+            }
+
             let coveragePct = info.totalEdges > 0
                 ? Double(info.coveredEdges) / Double(info.totalEdges) * 100
                 : 0
@@ -291,7 +310,8 @@ public struct CoverageGapDetector: Sendable {
                         columnStart: edge.column,
                         edgeIndex: edge.index,
                         pc: edge.pc,
-                        isBranch: false  // TODO: detect branches vs statements
+                        isBranch: false,  // TODO: detect branches vs statements
+                        filePath: edge.filePath
                     )
                 }
 
@@ -371,6 +391,9 @@ private struct FunctionEdgeInfo {
     var totalEdges: Int = 0
     var coveredEdges: Int = 0
     var uncoveredEdges: [EdgeInfo] = []
+    // Track source line range from covered edges to filter misattributed uncovered edges
+    var minLine: Int = Int.max
+    var maxLine: Int = 0
 }
 
 private struct EdgeInfo {
@@ -378,4 +401,5 @@ private struct EdgeInfo {
     let pc: UInt
     let line: Int
     let column: Int
+    let filePath: String?
 }

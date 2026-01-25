@@ -293,7 +293,7 @@ struct CoverageGapDetectorTests {
             let hash = (input &* 31) ^ (input >> 4)
             if hash == 0x7FFFFFFE {
                 // This branch is effectively unreachable (requires specific input)
-                print("found magic!")
+                print("found magic!")  // Line 296 - expected uncovered
             } else if input < 0 {
                 print("negative")
             } else {
@@ -302,7 +302,11 @@ struct CoverageGapDetectorTests {
         }
 
         // This test intentionally creates a coverage gap to verify detection works
-        await withKnownIssue("Expected coverage gap in partiallyCoveredFunction") {
+        // We expect exactly: 75% coverage, uncovered edge at line 296
+        // If the issue doesn't match these criteria, the test will fail as "unexpected issue"
+        let expectedLine = 296
+
+        try await withKnownIssue("Expected coverage gap in partiallyCoveredFunction") {
             _ = try await fuzz(
                 duration: .seconds(0.1),
                 corpusMode: .refuzzReplace,
@@ -310,6 +314,12 @@ struct CoverageGapDetectorTests {
             ) { (input: Int) in
                 partiallyCoveredFunction(input: input)
             }
+        } matching: { issue in
+            let comment = issue.comments.first?.rawValue ?? ""
+            let isCorrectCoverage = comment.contains("75% covered")
+            let isCorrectLine = issue.sourceLocation?.line == expectedLine
+            let isPartiallyCovered = comment.contains("partiallyCoveredFunction")
+            return isCorrectCoverage && isCorrectLine && isPartiallyCovered
         }
     }
 

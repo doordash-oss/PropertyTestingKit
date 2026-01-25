@@ -8,8 +8,8 @@ options:
 settings:
   base:
     SWIFT_VERSION: "6.0"
-    # Enable DWARF debug info embedded in binary for symbolization
-    DEBUG_INFORMATION_FORMAT: dwarf
+    # Generate dSYM for DWARF symbolization (required for coverage gap detection)
+    DEBUG_INFORMATION_FORMAT: dwarf-with-dsym
     GCC_GENERATE_DEBUGGING_SYMBOLS: YES
     SWIFT_OPTIMIZATION_LEVEL: -Onone
     # Prevent stripping of debug symbols

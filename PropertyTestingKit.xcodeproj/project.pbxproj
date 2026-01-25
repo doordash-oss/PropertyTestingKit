@@ -1806,15 +1806,18 @@
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				COMBINE_HIDPI_IMAGES = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/../Frameworks",
-					"@loader_path/../Frameworks",
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) $(TOOLCHAIN_DIR)/usr/lib/swift/macosx";
+				LIBRARY_SEARCH_PATHS = (
+					"$(TOOLCHAIN_DIR)/usr/lib/swift/macosx",
 				);
-				OTHER_SWIFT_FLAGS = "$(inherited) -g";
+				OTHER_LDFLAGS = "$(inherited) -lTesting";
+				OTHER_SWIFT_FLAGS = "$(inherited) -g -plugin-path $(TOOLCHAIN_DIR)/usr/lib/swift/host/plugins/testing";
 				PRODUCT_BUNDLE_IDENTIFIER = com.propertytestingkit.concurrentqueuestests;
 				PRODUCT_NAME = ConcurrentQueuesTests;
 				SDKROOT = macosx;
+				SWIFT_INCLUDE_PATHS = (
+					"$(TOOLCHAIN_DIR)/usr/lib/swift/macosx",
+				);
 			};
 			name = Debug;
 		};
@@ -1851,15 +1854,20 @@
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				COMBINE_HIDPI_IMAGES = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				LD_RUNPATH_SEARCH_PATHS = "$(inherited) $(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin";
-				OTHER_LDFLAGS = "$(inherited) -L$(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin -lclang_rt.ubsan_osx_dynamic";
-				OTHER_SWIFT_FLAGS = "$(inherited) -g -sanitize=undefined -sanitize-coverage=edge,pc-table";
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) $(TOOLCHAIN_DIR)/usr/lib/swift/macosx $(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin";
+				LIBRARY_SEARCH_PATHS = (
+					"$(TOOLCHAIN_DIR)/usr/lib/swift/macosx",
+					"$(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin",
+				);
+				OTHER_LDFLAGS = "$(inherited) -lTesting -lclang_rt.ubsan_osx_dynamic";
+				OTHER_SWIFT_FLAGS = "$(inherited) -g -sanitize=undefined -sanitize-coverage=edge,pc-table -plugin-path $(TOOLCHAIN_DIR)/usr/lib/swift/host/plugins/testing";
 				PRODUCT_BUNDLE_IDENTIFIER = com.propertytestingkit.sancovtests;
 				PRODUCT_NAME = SanCovTests;
 				SDKROOT = macosx;
 				SWIFT_INCLUDE_PATHS = (
 					"$(SRCROOT)/Sources/CLLVMSymbolizer/include",
 					"$(SRCROOT)/Sources/SanCovHooks/include",
+					"$(TOOLCHAIN_DIR)/usr/lib/swift/macosx",
 				);
 			};
 			name = Release;
@@ -1979,15 +1987,18 @@
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				COMBINE_HIDPI_IMAGES = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/../Frameworks",
-					"@loader_path/../Frameworks",
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) $(TOOLCHAIN_DIR)/usr/lib/swift/macosx";
+				LIBRARY_SEARCH_PATHS = (
+					"$(TOOLCHAIN_DIR)/usr/lib/swift/macosx",
 				);
-				OTHER_SWIFT_FLAGS = "$(inherited) -g";
+				OTHER_LDFLAGS = "$(inherited) -lTesting";
+				OTHER_SWIFT_FLAGS = "$(inherited) -g -plugin-path $(TOOLCHAIN_DIR)/usr/lib/swift/host/plugins/testing";
 				PRODUCT_BUNDLE_IDENTIFIER = com.propertytestingkit.concurrentqueuestests;
 				PRODUCT_NAME = ConcurrentQueuesTests;
 				SDKROOT = macosx;
+				SWIFT_INCLUDE_PATHS = (
+					"$(TOOLCHAIN_DIR)/usr/lib/swift/macosx",
+				);
 			};
 			name = Release;
 		};
@@ -2102,15 +2113,20 @@
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				COMBINE_HIDPI_IMAGES = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				LD_RUNPATH_SEARCH_PATHS = "$(inherited) $(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin";
-				OTHER_LDFLAGS = "$(inherited) -L$(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin -lclang_rt.tsan_osx_dynamic";
-				OTHER_SWIFT_FLAGS = "$(inherited) -g -sanitize=thread -sanitize-coverage=edge,pc-table";
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) $(TOOLCHAIN_DIR)/usr/lib/swift/macosx $(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin";
+				LIBRARY_SEARCH_PATHS = (
+					"$(TOOLCHAIN_DIR)/usr/lib/swift/macosx",
+					"$(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin",
+				);
+				OTHER_LDFLAGS = "$(inherited) -lTesting -lclang_rt.tsan_osx_dynamic";
+				OTHER_SWIFT_FLAGS = "$(inherited) -g -sanitize=thread -sanitize-coverage=edge,pc-table -plugin-path $(TOOLCHAIN_DIR)/usr/lib/swift/host/plugins/testing";
 				PRODUCT_BUNDLE_IDENTIFIER = com.propertytestingkit.tsantests;
 				PRODUCT_NAME = TSanTests;
 				SDKROOT = macosx;
 				SWIFT_INCLUDE_PATHS = (
 					"$(SRCROOT)/Sources/CLLVMSymbolizer/include",
 					"$(SRCROOT)/Sources/SanCovHooks/include",
+					"$(TOOLCHAIN_DIR)/usr/lib/swift/macosx",
 				);
 			};
 			name = Debug;
@@ -2137,15 +2153,20 @@
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				COMBINE_HIDPI_IMAGES = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				LD_RUNPATH_SEARCH_PATHS = "$(inherited) $(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin";
-				OTHER_LDFLAGS = "$(inherited) -L$(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin -lclang_rt.ubsan_osx_dynamic";
-				OTHER_SWIFT_FLAGS = "$(inherited) -g -sanitize=undefined -sanitize-coverage=edge,pc-table";
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) $(TOOLCHAIN_DIR)/usr/lib/swift/macosx $(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin";
+				LIBRARY_SEARCH_PATHS = (
+					"$(TOOLCHAIN_DIR)/usr/lib/swift/macosx",
+					"$(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin",
+				);
+				OTHER_LDFLAGS = "$(inherited) -lTesting -lclang_rt.ubsan_osx_dynamic";
+				OTHER_SWIFT_FLAGS = "$(inherited) -g -sanitize=undefined -sanitize-coverage=edge,pc-table -plugin-path $(TOOLCHAIN_DIR)/usr/lib/swift/host/plugins/testing";
 				PRODUCT_BUNDLE_IDENTIFIER = com.propertytestingkit.sancovtests;
 				PRODUCT_NAME = SanCovTests;
 				SDKROOT = macosx;
 				SWIFT_INCLUDE_PATHS = (
 					"$(SRCROOT)/Sources/CLLVMSymbolizer/include",
 					"$(SRCROOT)/Sources/SanCovHooks/include",
+					"$(TOOLCHAIN_DIR)/usr/lib/swift/macosx",
 				);
 			};
 			name = Debug;
@@ -2173,15 +2194,20 @@
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				COMBINE_HIDPI_IMAGES = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				LD_RUNPATH_SEARCH_PATHS = "$(inherited) $(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin";
-				OTHER_LDFLAGS = "$(inherited) -L$(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin -lclang_rt.tsan_osx_dynamic";
-				OTHER_SWIFT_FLAGS = "$(inherited) -g -sanitize=thread -sanitize-coverage=edge,pc-table";
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) $(TOOLCHAIN_DIR)/usr/lib/swift/macosx $(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin";
+				LIBRARY_SEARCH_PATHS = (
+					"$(TOOLCHAIN_DIR)/usr/lib/swift/macosx",
+					"$(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin",
+				);
+				OTHER_LDFLAGS = "$(inherited) -lTesting -lclang_rt.tsan_osx_dynamic";
+				OTHER_SWIFT_FLAGS = "$(inherited) -g -sanitize=thread -sanitize-coverage=edge,pc-table -plugin-path $(TOOLCHAIN_DIR)/usr/lib/swift/host/plugins/testing";
 				PRODUCT_BUNDLE_IDENTIFIER = com.propertytestingkit.tsantests;
 				PRODUCT_NAME = TSanTests;
 				SDKROOT = macosx;
 				SWIFT_INCLUDE_PATHS = (
 					"$(SRCROOT)/Sources/CLLVMSymbolizer/include",
 					"$(SRCROOT)/Sources/SanCovHooks/include",
+					"$(TOOLCHAIN_DIR)/usr/lib/swift/macosx",
 				);
 			};
 			name = Release;
@@ -2253,7 +2279,7 @@
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
-				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEPLOYMENT_POSTPROCESSING = NO;
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
@@ -2337,7 +2363,7 @@
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
-				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEPLOYMENT_POSTPROCESSING = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;

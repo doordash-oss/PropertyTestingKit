@@ -94,13 +94,6 @@ actor FuzzStateMachine<each Input: Codable & Sendable> {
             }
         }
 
-        coordinator.send(event: .start(
-            .init(
-                maxDuration: config.maxDuration,
-                corpusMode: config.corpusMode
-            )
-        ))
-
         // Initialize pending inputs with seeds
         pendingInputs = Deque(seeds)
 
@@ -185,15 +178,6 @@ actor FuzzStateMachine<each Input: Codable & Sendable> {
         if config.verbose {
             print("[FUZZ] Fuzz loop finished: iterations=\(iterationCount), generated=\(generatedCount), halted=\(halted)")
         }
-
-        let totalCoveredIndices = await corpus.totalCoverage().executedIndices
-        coordinator.send(event: .end(
-            .init(
-                totalCoveredIndices: totalCoveredIndices,
-                projectPath: config.projectPath,
-                sourceLocation: config.sourceLocation
-            )
-        ))
 
         // Wait for all plugin events to be processed and actions to be produced
         await coordinator.closeAndAwaitCompletion()

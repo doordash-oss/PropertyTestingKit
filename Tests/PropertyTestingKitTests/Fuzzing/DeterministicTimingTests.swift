@@ -433,7 +433,7 @@ struct DeterministicTimingTests {
         func testCompletesInTime() async throws {
             let testClock = TestClock()
 
-            let timedOut = try await withDependencies {
+            let timedOut = await withDependencies {
                 $0.continuousClockClient = testClock
             } operation: {
                 await runWithTimeout(timeout: .seconds(10)) {

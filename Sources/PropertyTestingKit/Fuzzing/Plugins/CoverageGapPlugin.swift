@@ -44,30 +44,76 @@ public struct CoverageGapPlugin: FuzzPlugin {
     ) -> [FuzzPluginAction<repeat each T>] {
         guard !report.gaps.isEmpty else { return [] }
 
-        return report.gaps.map { gap in
+        var actions: [FuzzPluginAction<repeat each T>] = []
+
+        for gap in report.gaps {
             let file = URL(fileURLWithPath: gap.filename).lastPathComponent
             let pct = String(format: "%.0f", gap.coveragePercentage)
-            // Include line info in the message since we can't create SourceLocation
-            // from runtime strings (SourceLocation requires compile-time StaticStrings)
-            let lines = gap.uncoveredRegions
-                .map { $0.lineStart }
-                .filter { $0 > 0 }
-                .prefix(5)
-                .map(String.init)
-                .joined(separator: ", ")
 
-            let message = if lines.isEmpty {
-                "Coverage gap: \(gap.functionName) in \(file) is \(pct)% covered"
-            } else {
-                "Coverage gap: \(gap.functionName) in \(file) is \(pct)% covered (lines: \(lines))"
+            // Create an issue for each uncovered region at its actual source location
+            for region in gap.uncoveredRegions where region.lineStart > 0 {
+                let desc = region.isBranch ? "branch not taken" : "code not executed"
+                let message = "Coverage gap: \(gap.functionName) (\(pct)% covered) - \(desc)"
+
+                // Use the region's DWARF-resolved file path if available, else fall back to gap's filename
+                let effectiveFilePath = region.filePath ?? gap.filename
+
+                // Construct fileID in "Module/File.swift" format
+                let fileID = fileIDFromPath(effectiveFilePath)
+                let sourceLocation = SourceLocation(
+                    fileID: fileID,
+                    filePath: effectiveFilePath,
+                    line: region.lineStart,
+                    column: max(1, region.columnStart)
+                )
+
+                actions.append(.recordIssue(FuzzPluginAction<repeat each T>.IssueAction(
+                    comment: Comment(rawValue: message),
+                    sourceLocation: sourceLocation
+                )))
             }
 
-            // Use the source location from the fuzz call since we can't create
-            // SourceLocation from runtime strings (it requires compile-time StaticStrings)
-            return .recordIssue(FuzzPluginAction<repeat each T>.IssueAction(
-                comment: Comment(rawValue: message),
-                sourceLocation: endContext.sourceLocation
-            ))
+            // If no regions have line info, fall back to fuzz call location
+            if gap.uncoveredRegions.allSatisfy({ $0.lineStart == 0 }) {
+                let message = "Coverage gap: \(gap.functionName) in \(file) is \(pct)% covered"
+                actions.append(.recordIssue(FuzzPluginAction<repeat each T>.IssueAction(
+                    comment: Comment(rawValue: message),
+                    sourceLocation: endContext.sourceLocation
+                )))
+            }
         }
+
+        return actions
+    }
+
+    /// Construct a fileID from a file path.
+    /// Format: "ModuleName/FileName.swift"
+    private func fileIDFromPath(_ path: String) -> String {
+        let url = URL(fileURLWithPath: path)
+        let fileName = url.lastPathComponent
+
+        // Try to extract module name from path (e.g., "Sources/ModuleName/...")
+        let pathComponents = url.pathComponents
+        if let sourcesIndex = pathComponents.lastIndex(of: "Sources"),
+           sourcesIndex + 1 < pathComponents.count {
+            let moduleName = pathComponents[sourcesIndex + 1]
+            return "\(moduleName)/\(fileName)"
+        }
+
+        // Try "Tests/ModuleName/..."
+        if let testsIndex = pathComponents.lastIndex(of: "Tests"),
+           testsIndex + 1 < pathComponents.count {
+            let moduleName = pathComponents[testsIndex + 1]
+            return "\(moduleName)/\(fileName)"
+        }
+
+        // Fallback: use parent directory as module name
+        if pathComponents.count >= 2 {
+            let parentDir = pathComponents[pathComponents.count - 2]
+            return "\(parentDir)/\(fileName)"
+        }
+
+        // Last resort
+        return "Unknown/\(fileName)"
     }
 }
