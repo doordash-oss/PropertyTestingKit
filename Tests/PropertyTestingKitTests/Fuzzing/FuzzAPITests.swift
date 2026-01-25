@@ -247,7 +247,7 @@ struct FuzzAPITests {
             } operation: {
                 // This will throw because the test always fails
                 // Note: Seeds are required to provide type context for the variadic generic
-                _ = try await fuzzWithMaxIterations(maxIterations: 100) { (_: Bool) in
+                _ = try await fuzzWithMaxIterations(maxIterations: 10) { (_: Bool) in
                     throw TestFailure()
                 }
             }

@@ -117,6 +117,11 @@ SanCovMeasurementContext* sancov_begin_measurement(void);
 /// End a measurement context and clean up its resources.
 void sancov_end_measurement(SanCovMeasurementContext* context);
 
+/// Reset coverage for a measurement context.
+/// This zeros the coverage map with memset (cheap) and resets covered_count.
+/// Use this between iterations instead of end+begin to avoid hash table overhead.
+void sancov_reset_coverage(SanCovMeasurementContext* context);
+
 /// Create a dummy measurement context for testing purposes.
 /// The returned context is not registered with any task and should only be used with mocks.
 /// Caller is responsible for freeing the returned pointer.

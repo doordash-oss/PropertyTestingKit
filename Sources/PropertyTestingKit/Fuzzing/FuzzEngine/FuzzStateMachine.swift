@@ -94,13 +94,6 @@ actor FuzzStateMachine<each Input: Codable & Sendable> {
             }
         }
 
-        coordinator.send(event: .start(
-            .init(
-                maxDuration: config.maxDuration,
-                corpusMode: config.corpusMode
-            )
-        ))
-
         // Initialize pending inputs with seeds
         pendingInputs = Deque(seeds)
 
@@ -115,6 +108,11 @@ actor FuzzStateMachine<each Input: Codable & Sendable> {
         // Simple fuzz loop - no workers, just iterate
         var iterationCount = 0
         var generatedCount = 0
+
+        // Hoist measurement context creation outside the loop for performance.
+        // This avoids millions of hash table insert/remove operations.
+        let context = coverageCountersClient.beginMeasurement()
+        defer { coverageCountersClient.endMeasurement(context) }
 
         while !Task.isCancelled && !halted {
             // Check time limit
@@ -133,20 +131,20 @@ actor FuzzStateMachine<each Input: Codable & Sendable> {
                 generatedCount += 1
             }
 
+            // Reset coverage for this iteration (cheap memset instead of hash table ops)
+            coverageCountersClient.resetCoverage(context)
+
             // Run test with coverage measurement
-            let context = coverageCountersClient.beginMeasurement()
             do {
                 // Will throw if either the test throws or if it logs an Issue
                 try await testWithIssueCapture(input)
 
-                // Coverage snapshot may throw if coverage is unavailable - use empty signature
-                let coverageSignature: CoverageSignature
+                // Coverage snapshot may throw if coverage is unavailable
+                // Use addIfInterestingSparse to avoid creating a Set when coverage isn't interesting
+                var didAdd = false
                 if let sparse = try? coverageCountersClient.snapshotCoveredArraysWithContext(context) {
-                    coverageSignature = CoverageSignature(sparse: sparse)
-                } else {
-                    coverageSignature = CoverageSignature(edges: Set())
+                    didAdd = await corpus.addIfInterestingSparse(input, sparse)
                 }
-                let didAdd = await corpus.addIfInteresting(input, coverageSignature)
 
                 // Fire-and-forget: submit event without blocking (no actor hop)
                 coordinator.send(event: .iteration(
@@ -156,7 +154,7 @@ actor FuzzStateMachine<each Input: Codable & Sendable> {
                 // Allow clean exit on cancellation
                 break
             } catch {
-                // On failure, try to get coverage but use empty signature if unavailable
+                // On failure, we need the full signature for recording
                 let coverageSignature: CoverageSignature
                 if let sparse = try? coverageCountersClient.snapshotCoveredArraysWithContext(context) {
                     coverageSignature = CoverageSignature(sparse: sparse)
@@ -174,22 +172,12 @@ actor FuzzStateMachine<each Input: Codable & Sendable> {
                     )
                 ))
             }
-            coverageCountersClient.endMeasurement(context)
             iterationCount += 1
         }
 
         if config.verbose {
             print("[FUZZ] Fuzz loop finished: iterations=\(iterationCount), generated=\(generatedCount), halted=\(halted)")
         }
-
-        let totalCoveredIndices = await corpus.totalCoverage().executedIndices
-        coordinator.send(event: .end(
-            .init(
-                totalCoveredIndices: totalCoveredIndices,
-                projectPath: config.projectPath,
-                sourceLocation: config.sourceLocation
-            )
-        ))
 
         // Wait for all plugin events to be processed and actions to be produced
         await coordinator.closeAndAwaitCompletion()
@@ -216,45 +204,15 @@ actor FuzzStateMachine<each Input: Codable & Sendable> {
     }
 
     /// Takes a test case and throws an error if any expectations failed.
-    /// Uses `withKnownIssue` to intercept `#expect` failures without recording them.
-    /// Thrown errors are caught inside the body to prevent `withKnownIssue` from logging them.
+    /// Uses lightweight issue detection to intercept `#expect` failures without
+    /// the overhead of `withKnownIssue`.
     private static func captureIssues(
         sourceLocation: SourceLocation,
         test: @escaping @Sendable ((repeat each Input)) async throws -> Void
     ) -> @Sendable ((repeat each Input)) async throws -> Void {
         { input in
-            let capturedIssue = SyncBox<(any Error)?>(nil)
-            let thrownError = SyncBox<(any Error)?>(nil)
-
-            // Use withKnownIssue only for #expect failures.
-            // Catch thrown errors inside the body to prevent withKnownIssue from logging them.
-            await withKnownIssue(
-                isIntermittent: true,
-                sourceLocation: sourceLocation,
-                {
-                    do {
-                        try await test(input)
-                    } catch {
-                        // Capture thrown error before withKnownIssue can log it
-                        thrownError.value = error
-                    }
-                },
-                matching: { issue in
-                    // Capture #expect failures (first one wins)
-                    if capturedIssue.value == nil {
-                        capturedIssue.value = issue.error ?? Errors.testFailed
-                    }
-                    // Return true to suppress from test failure - we re-throw manually
-                    return true
-                }
-            )
-
-            // Re-throw captured errors (thrown error takes priority over #expect failure)
-            if let error = thrownError.value {
-                throw error
-            }
-            if let error = capturedIssue.value {
-                throw error
+            try await captureIssue {
+                try await test(input)
             }
         }
     }
@@ -306,8 +264,3 @@ actor FuzzStateMachine<each Input: Codable & Sendable> {
     }
 }
 
-extension FuzzStateMachine {
-    enum Errors: Error {
-        case testFailed
-    }
-}

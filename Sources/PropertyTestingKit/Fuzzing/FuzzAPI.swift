@@ -121,6 +121,31 @@ public func fuzz<each Input: Codable & Sendable, each M: Mutator>(
 
     if shouldRunRegression || effectiveParallelism == 1 {
         // Single engine mode: handles regression and corpus loading
+        let sourceLocation = SourceLocation(fileID: testFilePath, filePath: testFilePath, line: line, column: 1)
+        let coordinator = PluginCoordinator<repeat each Input>(plugins: plugins)
+        await coordinator.start()
+
+        // Start action consumer task for lifecycle plugin actions
+        let actionConsumerTask = Task {
+            while !coordinator.actionChannel.isClosed {
+                if let action = coordinator.actionChannel.dequeue() {
+                    if case .recordIssue(let issueAction) = action {
+                        Issue.record(issueAction.comment, sourceLocation: issueAction.sourceLocation)
+                    }
+                } else {
+                    await Task.yield()
+                }
+            }
+            while let action = coordinator.actionChannel.dequeue() {
+                if case .recordIssue(let issueAction) = action {
+                    Issue.record(issueAction.comment, sourceLocation: issueAction.sourceLocation)
+                }
+            }
+        }
+
+        // Send start event
+        coordinator.send(event: .start(.init(maxDuration: duration, corpusMode: effectiveCorpusMode)))
+
         let config = FuzzEngineConfig(
             maxDuration: duration,
             verbose: verbose,
@@ -139,13 +164,54 @@ public func fuzz<each Input: Codable & Sendable, each M: Mutator>(
             corpusDirectory: corpusDir
         )
 
-        return try reportFuzzResult(await engine.run(additionalSeeds: seeds, test: test), filePath: filePath, line: line)
+        let result = await engine.run(additionalSeeds: seeds, test: test)
+
+        // Send end event
+        let totalCoveredIndices = result.corpus.totalCoverage.executedIndices
+        coordinator.send(event: .end(.init(
+            totalCoveredIndices: totalCoveredIndices,
+            projectPath: projectPath(from: filePath),
+            sourceLocation: sourceLocation
+        )))
+
+        await coordinator.closeAndAwaitCompletion()
+        await actionConsumerTask.value
+
+        return try reportFuzzResult(result, filePath: filePath, line: line)
     }
 
     // Parallel fuzz mode: run N engines and merge results
     if verbose {
         print("[Fuzz] Running \(effectiveParallelism) parallel fuzz engines")
     }
+
+    // Create coordinator for lifecycle events (start/end)
+    let sourceLocation = SourceLocation(fileID: testFilePath, filePath: testFilePath, line: line, column: 1)
+    let coordinator = PluginCoordinator<repeat each Input>(plugins: plugins)
+    await coordinator.start()
+
+    // Start action consumer task for lifecycle plugin actions
+    let actionConsumerTask = Task {
+        while !coordinator.actionChannel.isClosed {
+            if let action = coordinator.actionChannel.dequeue() {
+                // Only handle recordIssue actions at the API level
+                if case .recordIssue(let issueAction) = action {
+                    Issue.record(issueAction.comment, sourceLocation: issueAction.sourceLocation)
+                }
+            } else {
+                await Task.yield()
+            }
+        }
+        // Drain remaining actions
+        while let action = coordinator.actionChannel.dequeue() {
+            if case .recordIssue(let issueAction) = action {
+                Issue.record(issueAction.comment, sourceLocation: issueAction.sourceLocation)
+            }
+        }
+    }
+
+    // Send start event
+    coordinator.send(event: .start(.init(maxDuration: duration, corpusMode: effectiveCorpusMode)))
 
     // Distribute seeds round-robin across engines
     var distributedSeeds: [[(repeat each Input)]] = Array(repeating: [], count: effectiveParallelism)
@@ -189,6 +255,18 @@ public func fuzz<each Input: Codable & Sendable, each M: Mutator>(
 
     // Merge results from all engines
     let mergedResult = await mergeResults(results, verbose: verbose)
+
+    // Send end event with merged coverage
+    let totalCoveredIndices = mergedResult.corpus.totalCoverage.executedIndices
+    coordinator.send(event: .end(.init(
+        totalCoveredIndices: totalCoveredIndices,
+        projectPath: projectPath(from: filePath),
+        sourceLocation: sourceLocation
+    )))
+
+    // Wait for all lifecycle events to be processed
+    await coordinator.closeAndAwaitCompletion()
+    await actionConsumerTask.value
 
     // Save merged corpus
     if !mergedResult.corpus.entries.isEmpty {

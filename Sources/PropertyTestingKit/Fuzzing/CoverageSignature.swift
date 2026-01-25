@@ -77,6 +77,20 @@ public struct CoverageSignature: Hashable, Sendable {
         !edges.isSubset(of: other.edges)
     }
 
+    /// Returns whether the sparse coverage contains any indices not in this signature.
+    ///
+    /// Optimized to avoid creating an intermediate Set - iterates over the array
+    /// and checks each element against this signature's Set.
+    /// Returns early on first unique index found.
+    public func hasUniqueCoverage(sparse: SparseCoverage) -> Bool {
+        for index in sparse.indices {
+            if !edges.contains(index) {
+                return true
+            }
+        }
+        return false
+    }
+
     /// Returns the union of this signature with another.
     public func union(with other: CoverageSignature) -> CoverageSignature {
         CoverageSignature(edges: edges.union(other.edges))

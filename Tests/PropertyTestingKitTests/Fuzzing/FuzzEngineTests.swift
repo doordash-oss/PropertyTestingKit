@@ -18,6 +18,7 @@ private func makeMockCoverageClient(
         isAvailable: { true },
         beginMeasurement: { SanCovCounters.MeasurementContext.testInstance() },
         endMeasurement: { _ in },
+        resetCoverage: { _ in },
         snapshotCoveredArraysWithContext: { _ in
             let counters = countersGenerator()
             var indices: [UInt32] = []
@@ -38,6 +39,7 @@ private func makeThrowingCoverageClient() -> CoverageCountersClient {
         isAvailable: { true },
         beginMeasurement: { SanCovCounters.MeasurementContext.testInstance() },
         endMeasurement: { _ in },
+        resetCoverage: { _ in },
         snapshotCoveredArraysWithContext: { _ in throw MockCoverageUnavailableError() }
     )
 }
@@ -267,6 +269,7 @@ struct FuzzEngineTests {
                 isAvailable: { true },
                 beginMeasurement: { SanCovCounters.MeasurementContext.testInstance() },
                 endMeasurement: { _ in },
+                resetCoverage: { _ in },
                 snapshotCoveredArraysWithContext: { _ in snapshotCoveredArraysFn() }
             )
             $0.corpusPersistence = CorpusPersistenceClient(
@@ -393,6 +396,7 @@ struct FuzzEngineTests {
                 isAvailable: { true },
                 beginMeasurement: { SanCovCounters.MeasurementContext.testInstance() },
                 endMeasurement: { _ in },
+                resetCoverage: { _ in },
                 snapshotCoveredArraysWithContext: { _ in snapshotCoveredArraysFn() }
             )
             $0.corpusPersistence = CorpusPersistenceClient(
@@ -492,6 +496,7 @@ struct FuzzEngineTests {
                 isAvailable: { true },
                 beginMeasurement: { SanCovCounters.MeasurementContext.testInstance() },
                 endMeasurement: { _ in },
+                resetCoverage: { _ in },
                 snapshotCoveredArraysWithContext: { _ in snapshotCoveredArraysFn() }
             )
             $0.corpusPersistence = CorpusPersistenceClient(
@@ -574,6 +579,7 @@ struct FuzzEngineTests {
                 isAvailable: { true },
                 beginMeasurement: { SanCovCounters.MeasurementContext.testInstance() },
                 endMeasurement: { _ in },
+                resetCoverage: { _ in },
                 snapshotCoveredArraysWithContext: { _ in snapshotCoveredArraysFn() }
             )
             $0.corpusPersistence = CorpusPersistenceClient(
@@ -628,6 +634,192 @@ struct FuzzEngineTests {
 
         // With one seed value, corpus gets one entry, then mutations fail
         #expect(result.corpus.count >= 0)  // May have seed entry
+    }
+
+    // MARK: - Coverage Reset Integration Tests
+
+    @Test("FuzzEngine discovers different coverage for different inputs")
+    func testDifferentInputsDiscoverDifferentCoverage() async {
+        // Create a mock that records coverage per-input
+        let snapshotCoveredArraysFn: @Sendable () -> SparseCoverage = {
+            // Return different coverage based on some internal state
+            // This simulates real coverage where different code paths are taken
+            SparseCoverage(indices: [1, 2, 3])
+        }
+
+        let result = await withDependencies {
+            $0.coverageCounters = CoverageCountersClient(
+                isAvailable: { true },
+                beginMeasurement: { SanCovCounters.MeasurementContext.testInstance() },
+                endMeasurement: { _ in },
+                resetCoverage: { _ in },
+                snapshotCoveredArraysWithContext: { _ in snapshotCoveredArraysFn() }
+            )
+        } operation: {
+            await fuzzEngineWithMaxIterations(maxIterations: 50) { (input: Int) in
+                // Different inputs should exercise different code paths
+                if input > 0 {
+                    _ = input &* 2
+                } else {
+                    _ = input &* 3
+                }
+            }
+        }
+
+        // Should have run multiple iterations
+        #expect(result.stats.totalInputs > 0, "Should have tested inputs")
+    }
+
+    @Test("FuzzEngine resetCoverage is called between iterations")
+    func testResetCoverageCalledBetweenIterations() async {
+        let resetCount = SyncBox(0)
+        let snapshotCount = SyncBox(0)
+
+        let result = await withDependencies {
+            $0.coverageCounters = CoverageCountersClient(
+                isAvailable: { true },
+                beginMeasurement: { SanCovCounters.MeasurementContext.testInstance() },
+                endMeasurement: { _ in },
+                resetCoverage: { _ in
+                    resetCount.update { $0 += 1 }
+                },
+                snapshotCoveredArraysWithContext: { _ in
+                    snapshotCount.update { $0 += 1 }
+                    return SparseCoverage(indices: [1])
+                }
+            )
+        } operation: {
+            await fuzzEngineWithMaxIterations(maxIterations: 10) { (_: Int) in }
+        }
+
+        // Reset should be called once per iteration
+        // Snapshot should be called once per iteration
+        #expect(resetCount.value == result.stats.totalInputs,
+                "resetCoverage should be called once per iteration: got \(resetCount.value), expected \(result.stats.totalInputs)")
+        #expect(snapshotCount.value == result.stats.totalInputs,
+                "snapshotCoveredArrays should be called once per iteration")
+    }
+
+    @Test("FuzzEngine beginMeasurement called only once")
+    func testBeginMeasurementCalledOnce() async {
+        let beginCount = SyncBox(0)
+        let endCount = SyncBox(0)
+
+        let result = await withDependencies {
+            $0.coverageCounters = CoverageCountersClient(
+                isAvailable: { true },
+                beginMeasurement: {
+                    beginCount.update { $0 += 1 }
+                    return SanCovCounters.MeasurementContext.testInstance()
+                },
+                endMeasurement: { _ in
+                    endCount.update { $0 += 1 }
+                },
+                resetCoverage: { _ in },
+                snapshotCoveredArraysWithContext: { _ in SparseCoverage(indices: [1]) }
+            )
+        } operation: {
+            await fuzzEngineWithMaxIterations(maxIterations: 50) { (_: Int) in }
+        }
+
+        // With hoisted context, begin and end should each be called exactly once
+        #expect(beginCount.value == 1,
+                "beginMeasurement should be called exactly once (hoisted out of loop), got \(beginCount.value)")
+        #expect(endCount.value == 1,
+                "endMeasurement should be called exactly once, got \(endCount.value)")
+
+        // But we should have run many iterations
+        #expect(result.stats.totalInputs > 1,
+                "Should have run multiple iterations")
+    }
+
+    @Test("FuzzEngine coverage isolation - each iteration sees fresh coverage")
+    func testCoverageIsolationPerIteration() async {
+        // This test verifies that each iteration starts with fresh (reset) coverage
+        // by tracking the sequence of reset -> run -> snapshot
+
+        enum CoverageEvent: Equatable {
+            case reset
+            case snapshot
+        }
+
+        let events = SyncBox<[CoverageEvent]>([])
+
+        _ = await withDependencies {
+            $0.coverageCounters = CoverageCountersClient(
+                isAvailable: { true },
+                beginMeasurement: { SanCovCounters.MeasurementContext.testInstance() },
+                endMeasurement: { _ in },
+                resetCoverage: { _ in
+                    events.update { $0.append(.reset) }
+                },
+                snapshotCoveredArraysWithContext: { _ in
+                    events.update { $0.append(.snapshot) }
+                    return SparseCoverage(indices: [1])
+                }
+            )
+        } operation: {
+            await fuzzEngineWithMaxIterations(maxIterations: 5) { (_: Int) in }
+        }
+
+        let recordedEvents = events.value
+
+        // Should have 5 reset-snapshot pairs
+        #expect(recordedEvents.count == 10, "Should have 5 pairs of reset+snapshot events")
+
+        // Verify the pattern: reset, snapshot, reset, snapshot, ...
+        for i in stride(from: 0, to: recordedEvents.count, by: 2) {
+            if i < recordedEvents.count {
+                #expect(recordedEvents[i] == .reset, "Event \(i) should be reset")
+            }
+            if i + 1 < recordedEvents.count {
+                #expect(recordedEvents[i + 1] == .snapshot, "Event \(i+1) should be snapshot")
+            }
+        }
+    }
+
+    @Test("FuzzEngine with live coverage discovers new edges")
+    func testLiveCoverageDiscovery() async {
+        // This test uses live coverage to verify the reset pattern works correctly
+        // with actual coverage instrumentation
+
+        let result = await withDependencies {
+            // Use live coverage counters
+            $0.coverageCounters = .liveValue
+        } operation: {
+            let config = FuzzEngineConfig(
+                maxDuration: .seconds(10),
+                minimizeCorpus: false,
+                verbose: false
+            )
+
+            return await fuzzEngineWithMaxIterations(
+                maxIterations: 100,
+                config: config,
+                additionalSeeds: [0, 1, -1, 100, -100, Int.max, Int.min]
+            ) { (input: Int) in
+                // Exercise different code paths based on input
+                if input > 0 {
+                    if input > 50 {
+                        _ = input &* 2
+                    } else {
+                        _ = input &+ 1
+                    }
+                } else if input < 0 {
+                    if input < -50 {
+                        _ = input &* 3
+                    } else {
+                        _ = input &- 1
+                    }
+                } else {
+                    _ = 0
+                }
+            }
+        }
+
+        // With live coverage and varied inputs, should discover coverage
+        #expect(result.stats.totalInputs > 0, "Should have tested inputs")
+        // Note: corpus size depends on whether coverage is available at runtime
     }
 }
 

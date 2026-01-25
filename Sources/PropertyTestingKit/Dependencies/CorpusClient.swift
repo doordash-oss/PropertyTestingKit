@@ -60,6 +60,7 @@ public struct CorpusClient<each Input: Codable & Sendable>: Sendable {
     // MARK: - Mutating Operations
 
     public var addIfInteresting: @Sendable ((repeat each Input), CoverageSignature) async -> Bool
+    public var addIfInterestingSparse: @Sendable ((repeat each Input), SparseCoverage) async -> Bool
     public var batchAddIfInteresting: @Sendable ([Corpus<repeat each Input>.CandidateEntry]) async -> [Bool]
     public var add: @Sendable ((repeat each Input), CoverageSignature, CorpusEntryType, FailureInfo?) async -> Void
     public var minimized: @Sendable () async -> CorpusSnapshot<repeat each Input>
@@ -80,6 +81,7 @@ public struct CorpusClient<each Input: Codable & Sendable>: Sendable {
         hangEntries: @escaping @Sendable () async -> [CorpusEntry<repeat each Input>],
         batchState: @escaping @Sendable () async -> CorpusBatchState<repeat each Input>,
         addIfInteresting: @escaping @Sendable ((repeat each Input), CoverageSignature) async -> Bool,
+        addIfInterestingSparse: @escaping @Sendable ((repeat each Input), SparseCoverage) async -> Bool,
         batchAddIfInteresting: @escaping @Sendable ([Corpus<repeat each Input>.CandidateEntry]) async -> [Bool],
         add: @escaping @Sendable ((repeat each Input), CoverageSignature, CorpusEntryType, FailureInfo?) async -> Void,
         minimized: @escaping @Sendable () async -> CorpusSnapshot<repeat each Input>,
@@ -99,6 +101,7 @@ public struct CorpusClient<each Input: Codable & Sendable>: Sendable {
         self.hangEntries = hangEntries
         self.batchState = batchState
         self.addIfInteresting = addIfInteresting
+        self.addIfInterestingSparse = addIfInterestingSparse
         self.batchAddIfInteresting = batchAddIfInteresting
         self.add = add
         self.minimized = minimized
@@ -124,6 +127,9 @@ public struct CorpusClient<each Input: Codable & Sendable>: Sendable {
             batchState: { await corpus.batchState() },
             addIfInteresting: { input, signature in
                 await corpus.addIfInteresting(input: input, signature: signature)
+            },
+            addIfInterestingSparse: { input, sparse in
+                await corpus.addIfInterestingSparse(input: input, sparse: sparse)
             },
             batchAddIfInteresting: { candidates in
                 await corpus.batchAddIfInteresting(candidates)
@@ -154,6 +160,9 @@ public struct CorpusClient<each Input: Codable & Sendable>: Sendable {
             batchState: { await corpus.batchState() },
             addIfInteresting: { input, signature in
                 await corpus.addIfInteresting(input: input, signature: signature)
+            },
+            addIfInterestingSparse: { input, sparse in
+                await corpus.addIfInterestingSparse(input: input, sparse: sparse)
             },
             batchAddIfInteresting: { candidates in
                 await corpus.batchAddIfInteresting(candidates)
@@ -188,6 +197,17 @@ public struct CorpusClient<each Input: Codable & Sendable>: Sendable {
             batchState: { await corpus.batchState() },
             addIfInteresting: { input, signature in
                 // Always add to corpus (bypass coverage check)
+                await corpus.add(
+                    input: input,
+                    signature: signature,
+                    entryType: .coverage,
+                    failure: nil
+                )
+                return true
+            },
+            addIfInterestingSparse: { input, sparse in
+                // Always add to corpus (bypass coverage check)
+                let signature = CoverageSignature(sparse: sparse)
                 await corpus.add(
                     input: input,
                     signature: signature,

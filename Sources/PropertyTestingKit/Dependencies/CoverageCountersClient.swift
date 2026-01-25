@@ -37,6 +37,10 @@ public struct CoverageCountersClient: Sendable {
     /// This frees the coverage map slot for reuse by other tasks.
     public var endMeasurement: @Sendable (SanCovCounters.MeasurementContext) -> Void
 
+    /// Reset coverage for a measurement context.
+    /// This is a cheap memset operation - use between iterations instead of end+begin.
+    public var resetCoverage: @Sendable (SanCovCounters.MeasurementContext) -> Void
+
     /// Get covered indices using a specific measurement context.
     /// This bypasses TLS lookup, providing O(1) performance even after task hops.
     public var snapshotCoveredArraysWithContext: @Sendable (SanCovCounters.MeasurementContext) throws -> SparseCoverage
@@ -53,6 +57,9 @@ public struct CoverageCountersClient: Sendable {
         endMeasurement: @escaping @Sendable (SanCovCounters.MeasurementContext) -> Void = unimplemented(
             "endMeasurement"
         ),
+        resetCoverage: @escaping @Sendable (SanCovCounters.MeasurementContext) -> Void = unimplemented(
+            "resetCoverage"
+        ),
         snapshotCoveredArraysWithContext: @escaping @Sendable (SanCovCounters.MeasurementContext) throws -> SparseCoverage = unimplemented(
             "snapshotCoveredArraysWithContext",
             placeholder: SparseCoverage()
@@ -61,6 +68,7 @@ public struct CoverageCountersClient: Sendable {
         self.isAvailable = isAvailable
         self.beginMeasurement = beginMeasurement
         self.endMeasurement = endMeasurement
+        self.resetCoverage = resetCoverage
         self.snapshotCoveredArraysWithContext = snapshotCoveredArraysWithContext
     }
 }
@@ -72,6 +80,7 @@ extension CoverageCountersClient: DependencyKey {
         isAvailable: { SanCovCounters.isAvailable },
         beginMeasurement: { SanCovCounters.beginMeasurement() },
         endMeasurement: { SanCovCounters.endMeasurement($0) },
+        resetCoverage: { SanCovCounters.resetCoverage($0) },
         snapshotCoveredArraysWithContext: { try SanCovCounters.snapshotCoveredArrays(with: $0) }
     )
 

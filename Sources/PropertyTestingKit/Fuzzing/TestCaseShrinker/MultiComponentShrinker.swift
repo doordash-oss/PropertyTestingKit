@@ -149,23 +149,13 @@ func tupleTestToShrinkResult<each T: Sendable>(
     candidate: (repeat each T),
     test: @escaping ((repeat each T)) async throws -> Void
 ) async -> ShrinkResult {
-    // Use a sendable box to safely capture the flag across concurrent contexts
-    let issueRecorded = SyncBox(false)
-
-    // withKnownIssue captures any issues recorded during the test
-    // and prevents them from propagating as test failures.
-    // isIntermittent: true prevents failure when no issue is recorded (candidate passes).
     do {
-        try await withKnownIssue(isIntermittent: true) {
+        let issueRecorded = try await hasIssues {
             try await test(candidate)
-        } matching: { _ in
-            issueRecorded.value = true
-            return true  // Treat all issues as "known" to suppress them
         }
+        return issueRecorded ? .fail : .pass
     } catch {
         // Test threw an error - this is a failure
         return .fail
     }
-
-    return issueRecorded.value ? .fail : .pass
 }

@@ -125,6 +125,32 @@ public actor Corpus<each Input: Codable & Sendable>: Sendable {
         return true
     }
 
+    /// Add an entry if it contributes new coverage.
+    /// Optimized to avoid creating a CoverageSignature unless coverage is interesting.
+    ///
+    /// - Returns: `true` if the entry was added, `false` if it was redundant.
+    @discardableResult
+    public func addIfInterestingSparse(
+        input: (repeat each Input),
+        sparse: SparseCoverage
+    ) -> Bool {
+        // Check if this sparse coverage adds new coverage without creating a Set
+        guard totalCoverage.hasUniqueCoverage(sparse: sparse) else {
+            return false
+        }
+
+        // Only create the signature when we know it's interesting
+        let signature = CoverageSignature(sparse: sparse)
+        let entry = CorpusEntry(
+            input: repeat each input,
+            signature: signature
+        )
+        entries.append(entry)
+        totalCoverage.merge(with: signature)
+        updatedAt = dateClient.now()
+        return true
+    }
+
     /// A candidate entry for batch processing.
     public struct CandidateEntry: Sendable {
         public let input: (repeat each Input)

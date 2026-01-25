@@ -146,6 +146,7 @@ public final class SPSCQueue<T: Sendable>: @unchecked Sendable {
     /// memory when the internal node cache is exhausted.
     ///
     /// - Parameter value: The value to enqueue.
+    @inline(__always)
     public func enqueue(_ value: T) {
         // Get a node from cache or allocate new
         let n = allocNode()
@@ -163,6 +164,7 @@ public final class SPSCQueue<T: Sendable>: @unchecked Sendable {
     }
 
     /// Allocate a node from the cache, or create a new one if cache is empty.
+    @inline(__always)
     private func allocNode() -> UnsafeMutablePointer<Node> {
         // Fast path: try to get from cache without reading tail
         if first != tailCopy {
@@ -199,6 +201,7 @@ public final class SPSCQueue<T: Sendable>: @unchecked Sendable {
     /// This operation is always wait-free.
     ///
     /// - Returns: The dequeued value, or `nil` if the queue is empty.
+    @inline(__always)
     public func dequeue() -> T? {
         // Load tail locally
         let tailVal = tail.load(ordering: .relaxed)
@@ -226,6 +229,7 @@ public final class SPSCQueue<T: Sendable>: @unchecked Sendable {
     /// Whether the queue is empty.
     ///
     /// - Note: This is only accurate when called from the consumer thread.
+    @inline(__always)
     public var isEmpty: Bool {
         let tailVal = tail.load(ordering: .relaxed)
         let tailPtr = UnsafeMutablePointer<Node>(bitPattern: tailVal)!
@@ -238,11 +242,13 @@ public final class SPSCQueue<T: Sendable>: @unchecked Sendable {
     // ============================================================
 
     /// Close the queue. After closing, no more values should be enqueued.
+    @inline(__always)
     public func close() {
         closed.store(true, ordering: .releasing)
     }
 
     /// Whether the queue has been closed.
+    @inline(__always)
     public var isClosed: Bool {
         closed.load(ordering: .acquiring)
     }
@@ -250,6 +256,7 @@ public final class SPSCQueue<T: Sendable>: @unchecked Sendable {
     /// Receive a value, returning `nil` if the queue is empty.
     ///
     /// This is an alias for `dequeue()` to match channel semantics.
+    @inline(__always)
     public func receive() -> T? {
         dequeue()
     }

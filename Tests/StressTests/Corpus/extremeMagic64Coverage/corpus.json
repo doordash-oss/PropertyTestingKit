@@ -1,1 +1,0 @@
-{"createdAt":"2026-01-07T23:36:07Z","entries":[{"discoveredAt":"2026-01-07T23:36:07Z","entryType":"coverage","input":["MA=="],"inputReadable":["0"],"signature":{"edges":[21950,21951,21953,23472,23172,23171,21954,23474]}}],"schemaVersion":"v1-23707","totalCoverage":{"edges":[23472,21954,23172,23171,21951,21950,21953,23474]},"updatedAt":"2026-01-07T23:36:07Z"}

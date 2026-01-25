@@ -26,6 +26,10 @@ public struct UncoveredRegion: Sendable, Equatable {
     /// Whether this region represents a branch (vs a statement).
     public let isBranch: Bool
 
+    /// The file path for this specific uncovered region (from DWARF).
+    /// May differ from the function's filename if the region crosses files.
+    public let filePath: String?
+
     public init(
         lineStart: Int,
         columnStart: Int,
@@ -33,7 +37,8 @@ public struct UncoveredRegion: Sendable, Equatable {
         columnEnd: Int = 0,
         edgeIndex: Int,
         pc: UInt = 0,
-        isBranch: Bool = false
+        isBranch: Bool = false,
+        filePath: String? = nil
     ) {
         self.lineStart = lineStart
         self.columnStart = columnStart
@@ -42,5 +47,6 @@ public struct UncoveredRegion: Sendable, Equatable {
         self.edgeIndex = edgeIndex
         self.pc = pc
         self.isBranch = isBranch
+        self.filePath = filePath
     }
 }

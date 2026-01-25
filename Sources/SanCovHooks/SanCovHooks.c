@@ -330,6 +330,17 @@ SanCovMeasurementContext* sancov_create_dummy_context(void) {
     return ctx;
 }
 
+/// Reset coverage for a measurement context (cheap memset, O(1) for covered_count).
+/// Used between iterations in the fuzz loop to avoid hash table insert/remove overhead.
+void sancov_reset_coverage(SanCovMeasurementContext* ctx) {
+    if (ctx == NULL) return;
+
+    if (ctx->coverage_map != NULL && g_guard_count > 0) {
+        memset(ctx->coverage_map, 0, g_guard_count);
+    }
+    ctx->covered_count = 0;
+}
+
 /// Cleanup caches, etc
 void sancov_end_measurement(SanCovMeasurementContext* ctx) {
     if (ctx == NULL) return;
