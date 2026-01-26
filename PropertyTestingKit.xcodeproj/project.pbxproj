@@ -175,9 +175,11 @@
 		EF353620D890641D543ED36B /* SyncChannel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 368EB0DBC91A07E925144D22 /* SyncChannel.swift */; };
 		F14411F20E91CD1254C4E26C /* MultiQueue.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7FAAAD7A8BE8B69E57D78AC3 /* MultiQueue.swift */; };
 		F175208C6823ED3BC2A92224 /* PropertyTestingKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 2595E9AD80DBFC77F241A7E7 /* PropertyTestingKit.framework */; };
+		F378E6F94947B1B907B89907 /* SPSCRingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 27AC86FB58EB8E2350E7003C /* SPSCRingTests.swift */; };
 		F4E3D1DF382DCAC750307163 /* UserService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5305591133199EC528A0A92D /* UserService.swift */; };
 		F4F5214CABA1CC0BBFD80985 /* IntBoundaryMutator.swift in Sources */ = {isa = PBXBuildFile; fileRef = E88B1563B358C2EE651C20E4 /* IntBoundaryMutator.swift */; };
 		F5E12565A5E3B3F657133645 /* STADSPlateauDetectorPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = 40672CAD432576A4635C1676 /* STADSPlateauDetectorPlugin.swift */; };
+		F7672665536078766B291DE7 /* SPSCRing.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8299E2AE16444773464DA367 /* SPSCRing.swift */; };
 		F854221602A30DC642BC0670 /* SimpleCoveragePlateauDetector.swift in Sources */ = {isa = PBXBuildFile; fileRef = 94EB367A0BBDEA977C219F3A /* SimpleCoveragePlateauDetector.swift */; };
 		F8CA279E1D5C86F49E55C093 /* RandomNumberGeneratorClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = C6B7D375C4052AA3BFE8E32A /* RandomNumberGeneratorClient.swift */; };
 		F90AAA32E041831DC6EEF916 /* CorpusPersistenceClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8FED37BAA14224125F5AD7CA /* CorpusPersistenceClient.swift */; };
@@ -335,6 +337,7 @@
 		233B765E89E5C522C4158B51 /* URLMutator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = URLMutator.swift; sourceTree = "<group>"; };
 		248285724DB5F6586AE70506 /* FuzzStateMachine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FuzzStateMachine.swift; sourceTree = "<group>"; };
 		2595E9AD80DBFC77F241A7E7 /* PropertyTestingKit.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = PropertyTestingKit.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		27AC86FB58EB8E2350E7003C /* SPSCRingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SPSCRingTests.swift; sourceTree = "<group>"; };
 		2A865DFA08A7E0DE3F588EDB /* SanCovCounters.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SanCovCounters.swift; sourceTree = "<group>"; };
 		2C2AB425C1886E9C43DA056F /* MutatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MutatorTests.swift; sourceTree = "<group>"; };
 		2C4EFD7D871B0C5BA50C4ED9 /* KFIFOQueueTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KFIFOQueueTests.swift; sourceTree = "<group>"; };
@@ -404,6 +407,7 @@
 		805D70C5E70888046E92D052 /* SanCovTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = SanCovTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		8070E3D26516154F5EEEC862 /* StringMutators.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StringMutators.swift; sourceTree = "<group>"; };
 		807ED515190705E70EEBD7FE /* SyncBox.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncBox.swift; sourceTree = "<group>"; };
+		8299E2AE16444773464DA367 /* SPSCRing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SPSCRing.swift; sourceTree = "<group>"; };
 		82E302CA79A5FD97C9E37328 /* ck_f_pr.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ck_f_pr.h; sourceTree = "<group>"; };
 		83153486221ED8E2CA6B4FB1 /* OPTIMIZATION-HISTORY.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = "OPTIMIZATION-HISTORY.md"; sourceTree = "<group>"; };
 		846F2F02B0AA5A040C5EB704 /* ArrayDuplicationMutator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArrayDuplicationMutator.swift; sourceTree = "<group>"; };
@@ -878,6 +882,7 @@
 				AF93BF0B57DCF8F9FA90AD49 /* RelaxedBoundedChannelTests.swift */,
 				3CE03CDB4DC3B26ACCD090E1 /* RelaxedQueueTests.swift */,
 				67313115F82527F359E6AD42 /* SPSCQueueTests.swift */,
+				27AC86FB58EB8E2350E7003C /* SPSCRingTests.swift */,
 			);
 			name = ConcurrentQueuesTests;
 			path = Tests/ConcurrentQueuesTests;
@@ -1109,6 +1114,7 @@
 				3DBF63EB5C024C23AFE63827 /* SegmentQueue.swift */,
 				09E9C3F6DA4EB6FB4BE3B84B /* SpinChannel.swift */,
 				C8F920487E91DCB59E3B530F /* SPSCQueue.swift */,
+				8299E2AE16444773464DA367 /* SPSCRing.swift */,
 				368EB0DBC91A07E925144D22 /* SyncChannel.swift */,
 				FBED26DF9A41FD069EB28115 /* VyukovBoundedChannel.swift */,
 				C58EA6211B00155CCB9207C1 /* VyukovChannel.swift */,
@@ -1512,6 +1518,7 @@
 				B87B6EF259EF22C6CEF5DD74 /* RelaxedBoundedChannelTests.swift in Sources */,
 				8B1C0E3901406D0F1718A612 /* RelaxedQueueTests.swift in Sources */,
 				52A27FF9B915F4953CBE37C3 /* SPSCQueueTests.swift in Sources */,
+				F378E6F94947B1B907B89907 /* SPSCRingTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -1563,6 +1570,7 @@
 				5B7775C68221FE079AE343F9 /* RelaxedBoundedChannel.swift in Sources */,
 				517D2FA0099DD8F832016CB0 /* RelaxedQueue.swift in Sources */,
 				A6A65D4CE8BA2EC8A2A08E58 /* SPSCQueue.swift in Sources */,
+				F7672665536078766B291DE7 /* SPSCRing.swift in Sources */,
 				701CF2B4CCB8B14F8B85CB4A /* SegmentQueue.swift in Sources */,
 				D2BC2EE4BA5AE7CADCA65873 /* SpinChannel.swift in Sources */,
 				EF353620D890641D543ED36B /* SyncChannel.swift in Sources */,

@@ -123,7 +123,7 @@ public func fuzz<each Input: Codable & Sendable, each M: Mutator>(
         // Single engine mode: handles regression and corpus loading
         let sourceLocation = SourceLocation(fileID: testFilePath, filePath: testFilePath, line: line, column: 1)
         let coordinator = PluginCoordinator<repeat each Input>(plugins: plugins)
-        await coordinator.start()
+        coordinator.start()
 
         // Start action consumer task for lifecycle plugin actions
         let actionConsumerTask = Task {
@@ -188,7 +188,7 @@ public func fuzz<each Input: Codable & Sendable, each M: Mutator>(
     // Create coordinator for lifecycle events (start/end)
     let sourceLocation = SourceLocation(fileID: testFilePath, filePath: testFilePath, line: line, column: 1)
     let coordinator = PluginCoordinator<repeat each Input>(plugins: plugins)
-    await coordinator.start()
+    coordinator.start()
 
     // Start action consumer task for lifecycle plugin actions
     let actionConsumerTask = Task {

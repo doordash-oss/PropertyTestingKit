@@ -11,14 +11,19 @@ import Foundation
 
 /// Coordinates bidirectional async messaging between fuzz engine and plugins.
 ///
-/// Uses two SPSC channels for fully decoupled communication:
+/// Uses two SPSC growable ring buffers for fully decoupled communication:
 /// 1. Event channel: FuzzStateMachine sends events (fire-and-forget, non-blocking)
 /// 2. Action channel: FuzzStateMachine receives actions (pull-based)
 ///
 /// This design fully decouples the hot fuzzing loop from plugin overhead.
+/// Using growable ring buffers eliminates per-enqueue allocation overhead
+/// while avoiding backpressure/blocking issues.
 public final class PluginCoordinator<each Input: Sendable>: Sendable {
-    private let eventChannel: SPSCQueue<PluginEvent<repeat each Input>>
-    let actionChannel: SPSCQueue<FuzzPluginAction<repeat each Input>>
+    /// Default initial channel capacity (power of 2 for efficient indexing)
+    private static var defaultCapacity: Int { 1024 }
+
+    private let eventChannel: SPSCGrowableRing<PluginEvent<repeat each Input>>
+    let actionChannel: SPSCGrowableRing<FuzzPluginAction<repeat each Input>>
 
     private let processor: PluginProcessor<repeat each Input>
 
@@ -26,11 +31,13 @@ public final class PluginCoordinator<each Input: Sendable>: Sendable {
     ///
     /// - Parameters:
     ///   - plugins: The plugins to dispatch events to.
+    ///   - channelCapacity: Initial capacity for channels (grows if needed).
     public init(
-        plugins: [any FuzzPlugin]
+        plugins: [any FuzzPlugin],
+        channelCapacity: Int = 1024
     ) {
-        self.eventChannel = SPSCQueue()
-        self.actionChannel = SPSCQueue()
+        self.eventChannel = SPSCGrowableRing(capacity: channelCapacity)
+        self.actionChannel = SPSCGrowableRing(capacity: channelCapacity)
 
         self.processor = PluginProcessor(
             eventChannel: eventChannel,
@@ -42,8 +49,8 @@ public final class PluginCoordinator<each Input: Sendable>: Sendable {
     /// Start the background processor task.
     ///
     /// Must be called before submitting events.
-    public func start() async {
-        await processor.start()
+    public func start() {
+        processor.start()
     }
 
     /// Submit an event for asynchronous processing (fire-and-forget).
@@ -81,18 +88,18 @@ public final class PluginCoordinator<each Input: Sendable>: Sendable {
     }
 }
 
-/// Actor that processes events from the event channel and produces actions
-/// to the action channel.
-actor PluginProcessor<each Input: Sendable> {
-    private let eventChannel: SPSCQueue<PluginEvent<repeat each Input>>
-    private let actionChannel: SPSCQueue<FuzzPluginAction<repeat each Input>>
+/// Processes events from the event channel and produces actions to the action channel.
+/// Runs as a detached high-priority Task to ensure it gets scheduled independently.
+final class PluginProcessor<each Input: Sendable>: @unchecked Sendable {
+    private let eventChannel: SPSCGrowableRing<PluginEvent<repeat each Input>>
+    private let actionChannel: SPSCGrowableRing<FuzzPluginAction<repeat each Input>>
     private let plugins: [any FuzzPlugin]
 
     private var processorTask: Task<Void, Never>?
 
     init(
-        eventChannel: SPSCQueue<PluginEvent<repeat each Input>>,
-        actionChannel: SPSCQueue<FuzzPluginAction<repeat each Input>>,
+        eventChannel: SPSCGrowableRing<PluginEvent<repeat each Input>>,
+        actionChannel: SPSCGrowableRing<FuzzPluginAction<repeat each Input>>,
         plugins: [any FuzzPlugin]
     ) {
         self.eventChannel = eventChannel
@@ -101,11 +108,12 @@ actor PluginProcessor<each Input: Sendable> {
     }
 
     func start() {
-        processorTask = Task { [self] in
-            // Use dequeue with yield to avoid blocking the cooperative pool
+        // Use Task.detached to get independent scheduling from parent context
+        processorTask = Task.detached(priority: .high) { [self] in
+            // Run event processing loop
             while !eventChannel.isClosed {
                 if let event = eventChannel.dequeue() {
-                    // Dispatch to each plugin and send actions immediately
+                    // Process event with plugins
                     for plugin in plugins {
                         do {
                             let actions = try await plugin.handle(event: event)
@@ -113,11 +121,11 @@ actor PluginProcessor<each Input: Sendable> {
                                 actionChannel.enqueue(action)
                             }
                         } catch {
-                            // TODO: We shouldn't ignore cancellation
                             // Plugin errors logged but don't stop processing
                         }
                     }
                 } else {
+                    // Yield when empty to avoid busy-waiting
                     await Task.yield()
                 }
             }

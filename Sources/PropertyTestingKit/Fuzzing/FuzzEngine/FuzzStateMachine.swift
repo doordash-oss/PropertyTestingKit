@@ -76,7 +76,7 @@ actor FuzzStateMachine<each Input: Codable & Sendable> {
             plugins: plugins
         )
         pluginCoordinator = coordinator
-        await coordinator.start()
+        coordinator.start()
 
         // Start a task to consume actions from the coordinator
         let actionConsumerTask = Task { [self] in
