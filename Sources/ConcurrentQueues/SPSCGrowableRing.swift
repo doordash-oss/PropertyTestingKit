@@ -189,11 +189,12 @@ public final class SPSCGrowableRing<T: Sendable>: @unchecked Sendable {
 
     /// Enqueue a value. Grows the buffer if full.
     ///
+    /// Takes ownership of the value (no copy).
     /// Only call from the single producer thread.
     ///
-    /// - Parameter value: The value to enqueue.
+    /// - Parameter value: The value to enqueue (consumed).
     @inline(__always)
-    public func enqueue(_ value: T) {
+    public func enqueue(_ value: consuming T) {
         let currentTail = tail.load(ordering: .relaxed)
         let nextTail = currentTail &+ 1
 
@@ -209,7 +210,7 @@ public final class SPSCGrowableRing<T: Sendable>: @unchecked Sendable {
     }
 
     @inline(never)
-    private func enqueueSlowPath(_ value: T, currentTail: UInt64, nextTail: UInt64) {
+    private func enqueueSlowPath(_ value: consuming T, currentTail: UInt64, nextTail: UInt64) {
         // Refresh cached head
         cachedHead = head.load(ordering: .acquiring)
 
@@ -303,9 +304,11 @@ public final class SPSCGrowableRing<T: Sendable>: @unchecked Sendable {
 
     /// Dequeue a value. Only call from the single consumer thread.
     ///
+    /// Moves the value out of the buffer (no copy).
+    ///
     /// - Returns: The dequeued value, or `nil` if empty.
     @inline(__always)
-    public func dequeue() -> T? {
+    public func dequeue() -> sending T? {
         let currentHead = head.load(ordering: .relaxed)
 
         if currentHead == cachedTail {
@@ -324,8 +327,11 @@ public final class SPSCGrowableRing<T: Sendable>: @unchecked Sendable {
             let currentMask = mask
             let currentBuffer = buffer
             let slot = Int(currentHead) & currentMask
-            value = currentBuffer[slot]
-            currentBuffer[slot] = nil
+
+            // Move value out instead of copying
+            let ptr = currentBuffer.advanced(by: slot)
+            value = ptr.move()       // Move out, leaves memory uninitialized
+            ptr.initialize(to: nil)  // Re-initialize slot as nil
 
             let s2 = seq.load(ordering: .acquiring)
             if s1 == s2 { break }  // No resize happened, we're good

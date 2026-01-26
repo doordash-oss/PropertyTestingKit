@@ -12,7 +12,7 @@ import Foundation
 
 /// Client for corpus operations, allowing dependency injection.
 ///
-/// This struct wraps all corpus operations as async closures, enabling:
+/// This struct wraps all corpus operations as closures, enabling:
 /// - Mocking in tests (e.g., `addIfInteresting` always returns true)
 /// - Type-safe generic operations via the registry pattern
 ///
@@ -24,68 +24,59 @@ import Foundation
 /// let client: CorpusClient<Int, String> = registry.get()
 ///
 /// // Use client operations
-/// let wasAdded = await client.addIfInteresting((42, "test"), signature)
-/// let count = await client.count()
+/// let wasAdded = client.addIfInteresting((42, "test"), signature)
+/// let count = client.count()
 /// ```
 public struct CorpusClient<each Input: Codable & Sendable>: Sendable {
-    // MARK: - Properties (async closures for actor access)
+    // MARK: - Properties
 
-    public var count: @Sendable () async -> Int
-    public var isEmpty: @Sendable () async -> Bool
-    public var entries: @Sendable () async -> [CorpusEntry<repeat each Input>]
-    public var inputs: @Sendable () async -> [(repeat each Input)]
-    public var signatures: @Sendable () async -> [CoverageSignature]
-    public var totalCoverage: @Sendable () async -> CoverageSignature
-    public var updatedAt: @Sendable () async -> Date
-    public var createdAt: @Sendable () async -> Date
-    public var failureCount: @Sendable () async -> Int
-    public var hangCount: @Sendable () async -> Int
-    public var failureEntries: @Sendable () async -> [CorpusEntry<repeat each Input>]
-    public var hangEntries: @Sendable () async -> [CorpusEntry<repeat each Input>]
+    public var count: @Sendable () -> Int
+    public var isEmpty: @Sendable () -> Bool
+    public var entries: @Sendable () -> [CorpusEntry<repeat each Input>]
+    public var inputs: @Sendable () -> [(repeat each Input)]
+    public var signatures: @Sendable () -> [CoverageSignature]
+    public var totalCoverage: @Sendable () -> CoverageSignature
+    public var updatedAt: @Sendable () -> Date
+    public var createdAt: @Sendable () -> Date
+    public var failureCount: @Sendable () -> Int
+    public var hangCount: @Sendable () -> Int
+    public var failureEntries: @Sendable () -> [CorpusEntry<repeat each Input>]
+    public var hangEntries: @Sendable () -> [CorpusEntry<repeat each Input>]
 
     // MARK: - Batch Operations
 
     /// Get all commonly-needed corpus state in a single call.
-    ///
-    /// Use this at the start of batch generation to avoid multiple actor hops:
-    /// ```swift
-    /// let state = await corpus.batchState()
-    /// for _ in 0..<batchSize {
-    ///     if state.isEmpty { ... }
-    ///     let parent = state.entries.randomElement()?.input
-    /// }
-    /// ```
-    public var batchState: @Sendable () async -> CorpusBatchState<repeat each Input>
+    public var batchState: @Sendable () -> CorpusBatchState<repeat each Input>
 
     // MARK: - Mutating Operations
 
-    public var addIfInteresting: @Sendable ((repeat each Input), CoverageSignature) async -> Bool
-    public var addIfInterestingSparse: @Sendable ((repeat each Input), SparseCoverage) async -> Bool
-    public var batchAddIfInteresting: @Sendable ([Corpus<repeat each Input>.CandidateEntry]) async -> [Bool]
-    public var add: @Sendable ((repeat each Input), CoverageSignature, CorpusEntryType, FailureInfo?) async -> Void
-    public var minimized: @Sendable () async -> CorpusSnapshot<repeat each Input>
-    public var snapshot: @Sendable () async -> CorpusSnapshot<repeat each Input>
+    public var addIfInteresting: @Sendable ((repeat each Input), CoverageSignature) -> Bool
+    public var addIfInterestingSparse: @Sendable ((repeat each Input), SparseCoverage) -> Bool
+    public var batchAddIfInteresting: @Sendable ([Corpus<repeat each Input>.CandidateEntry]) -> [Bool]
+    public var add: @Sendable ((repeat each Input), CoverageSignature, CorpusEntryType, FailureInfo?) -> Void
+    public var minimized: @Sendable () -> CorpusSnapshot<repeat each Input>
+    public var snapshot: @Sendable () -> CorpusSnapshot<repeat each Input>
 
     public init(
-        count: @escaping @Sendable () async -> Int,
-        isEmpty: @escaping @Sendable () async -> Bool,
-        entries: @escaping @Sendable () async -> [CorpusEntry<repeat each Input>],
-        inputs: @escaping @Sendable () async -> [(repeat each Input)],
-        signatures: @escaping @Sendable () async -> [CoverageSignature],
-        totalCoverage: @escaping @Sendable () async -> CoverageSignature,
-        updatedAt: @escaping @Sendable () async -> Date,
-        createdAt: @escaping @Sendable () async -> Date,
-        failureCount: @escaping @Sendable () async -> Int,
-        hangCount: @escaping @Sendable () async -> Int,
-        failureEntries: @escaping @Sendable () async -> [CorpusEntry<repeat each Input>],
-        hangEntries: @escaping @Sendable () async -> [CorpusEntry<repeat each Input>],
-        batchState: @escaping @Sendable () async -> CorpusBatchState<repeat each Input>,
-        addIfInteresting: @escaping @Sendable ((repeat each Input), CoverageSignature) async -> Bool,
-        addIfInterestingSparse: @escaping @Sendable ((repeat each Input), SparseCoverage) async -> Bool,
-        batchAddIfInteresting: @escaping @Sendable ([Corpus<repeat each Input>.CandidateEntry]) async -> [Bool],
-        add: @escaping @Sendable ((repeat each Input), CoverageSignature, CorpusEntryType, FailureInfo?) async -> Void,
-        minimized: @escaping @Sendable () async -> CorpusSnapshot<repeat each Input>,
-        snapshot: @escaping @Sendable () async -> CorpusSnapshot<repeat each Input>
+        count: @escaping @Sendable () -> Int,
+        isEmpty: @escaping @Sendable () -> Bool,
+        entries: @escaping @Sendable () -> [CorpusEntry<repeat each Input>],
+        inputs: @escaping @Sendable () -> [(repeat each Input)],
+        signatures: @escaping @Sendable () -> [CoverageSignature],
+        totalCoverage: @escaping @Sendable () -> CoverageSignature,
+        updatedAt: @escaping @Sendable () -> Date,
+        createdAt: @escaping @Sendable () -> Date,
+        failureCount: @escaping @Sendable () -> Int,
+        hangCount: @escaping @Sendable () -> Int,
+        failureEntries: @escaping @Sendable () -> [CorpusEntry<repeat each Input>],
+        hangEntries: @escaping @Sendable () -> [CorpusEntry<repeat each Input>],
+        batchState: @escaping @Sendable () -> CorpusBatchState<repeat each Input>,
+        addIfInteresting: @escaping @Sendable ((repeat each Input), CoverageSignature) -> Bool,
+        addIfInterestingSparse: @escaping @Sendable ((repeat each Input), SparseCoverage) -> Bool,
+        batchAddIfInteresting: @escaping @Sendable ([Corpus<repeat each Input>.CandidateEntry]) -> [Bool],
+        add: @escaping @Sendable ((repeat each Input), CoverageSignature, CorpusEntryType, FailureInfo?) -> Void,
+        minimized: @escaping @Sendable () -> CorpusSnapshot<repeat each Input>,
+        snapshot: @escaping @Sendable () -> CorpusSnapshot<repeat each Input>
     ) {
         self.count = count
         self.isEmpty = isEmpty
@@ -108,70 +99,42 @@ public struct CorpusClient<each Input: Codable & Sendable>: Sendable {
         self.snapshot = snapshot
     }
 
-    /// Create a live client backed by a Corpus actor.
+    /// Create a live client backed by a Corpus instance.
     public static func live() -> CorpusClient<repeat each Input> {
         let corpus = Corpus<repeat each Input>()
-        return CorpusClient<repeat each Input>(
-            count: { await corpus.count },
-            isEmpty: { await corpus.isEmpty },
-            entries: { await corpus.entries },
-            inputs: { await corpus.inputs },
-            signatures: { await corpus.signatures },
-            totalCoverage: { await corpus.totalCoverage },
-            updatedAt: { await corpus.updatedAt },
-            createdAt: { corpus.createdAt },
-            failureCount: { await corpus.failureCount },
-            hangCount: { await corpus.hangCount },
-            failureEntries: { await corpus.failureEntries },
-            hangEntries: { await corpus.hangEntries },
-            batchState: { await corpus.batchState() },
-            addIfInteresting: { input, signature in
-                await corpus.addIfInteresting(input: input, signature: signature)
-            },
-            addIfInterestingSparse: { input, sparse in
-                await corpus.addIfInterestingSparse(input: input, sparse: sparse)
-            },
-            batchAddIfInteresting: { candidates in
-                await corpus.batchAddIfInteresting(candidates)
-            },
-            add: { input, signature, entryType, failure in
-                await corpus.add(input: input, signature: signature, entryType: entryType, failure: failure)
-            },
-            minimized: { await corpus.minimized() },
-            snapshot: { await corpus.snapshot() }
-        )
+        return live(corpus: corpus)
     }
 
-    /// Create a live client backed by an existing Corpus actor.
+    /// Create a live client backed by an existing Corpus instance.
     public static func live(corpus: Corpus<repeat each Input>) -> CorpusClient<repeat each Input> {
         return CorpusClient<repeat each Input>(
-            count: { await corpus.count },
-            isEmpty: { await corpus.isEmpty },
-            entries: { await corpus.entries },
-            inputs: { await corpus.inputs },
-            signatures: { await corpus.signatures },
-            totalCoverage: { await corpus.totalCoverage },
-            updatedAt: { await corpus.updatedAt },
+            count: { corpus.count },
+            isEmpty: { corpus.isEmpty },
+            entries: { corpus.entries },
+            inputs: { corpus.inputs },
+            signatures: { corpus.signatures },
+            totalCoverage: { corpus.totalCoverage },
+            updatedAt: { corpus.updatedAt },
             createdAt: { corpus.createdAt },
-            failureCount: { await corpus.failureCount },
-            hangCount: { await corpus.hangCount },
-            failureEntries: { await corpus.failureEntries },
-            hangEntries: { await corpus.hangEntries },
-            batchState: { await corpus.batchState() },
+            failureCount: { corpus.failureCount },
+            hangCount: { corpus.hangCount },
+            failureEntries: { corpus.failureEntries },
+            hangEntries: { corpus.hangEntries },
+            batchState: { corpus.batchState() },
             addIfInteresting: { input, signature in
-                await corpus.addIfInteresting(input: input, signature: signature)
+                corpus.addIfInteresting(input: input, signature: signature)
             },
             addIfInterestingSparse: { input, sparse in
-                await corpus.addIfInterestingSparse(input: input, sparse: sparse)
+                corpus.addIfInterestingSparse(input: input, sparse: sparse)
             },
             batchAddIfInteresting: { candidates in
-                await corpus.batchAddIfInteresting(candidates)
+                corpus.batchAddIfInteresting(candidates)
             },
             add: { input, signature, entryType, failure in
-                await corpus.add(input: input, signature: signature, entryType: entryType, failure: failure)
+                corpus.add(input: input, signature: signature, entryType: entryType, failure: failure)
             },
-            minimized: { await corpus.minimized() },
-            snapshot: { await corpus.snapshot() }
+            minimized: { corpus.minimized() },
+            snapshot: { corpus.snapshot() }
         )
     }
 
@@ -182,22 +145,22 @@ public struct CorpusClient<each Input: Codable & Sendable>: Sendable {
     public static func alwaysInteresting() -> CorpusClient<repeat each Input> {
         let corpus = Corpus<repeat each Input>()
         return CorpusClient<repeat each Input>(
-            count: { await corpus.count },
-            isEmpty: { await corpus.isEmpty },
-            entries: { await corpus.entries },
-            inputs: { await corpus.inputs },
-            signatures: { await corpus.signatures },
-            totalCoverage: { await corpus.totalCoverage },
-            updatedAt: { await corpus.updatedAt },
+            count: { corpus.count },
+            isEmpty: { corpus.isEmpty },
+            entries: { corpus.entries },
+            inputs: { corpus.inputs },
+            signatures: { corpus.signatures },
+            totalCoverage: { corpus.totalCoverage },
+            updatedAt: { corpus.updatedAt },
             createdAt: { corpus.createdAt },
-            failureCount: { await corpus.failureCount },
-            hangCount: { await corpus.hangCount },
-            failureEntries: { await corpus.failureEntries },
-            hangEntries: { await corpus.hangEntries },
-            batchState: { await corpus.batchState() },
+            failureCount: { corpus.failureCount },
+            hangCount: { corpus.hangCount },
+            failureEntries: { corpus.failureEntries },
+            hangEntries: { corpus.hangEntries },
+            batchState: { corpus.batchState() },
             addIfInteresting: { input, signature in
                 // Always add to corpus (bypass coverage check)
-                await corpus.add(
+                corpus.add(
                     input: input,
                     signature: signature,
                     entryType: .coverage,
@@ -208,7 +171,7 @@ public struct CorpusClient<each Input: Codable & Sendable>: Sendable {
             addIfInterestingSparse: { input, sparse in
                 // Always add to corpus (bypass coverage check)
                 let signature = CoverageSignature(sparse: sparse)
-                await corpus.add(
+                corpus.add(
                     input: input,
                     signature: signature,
                     entryType: .coverage,
@@ -219,7 +182,7 @@ public struct CorpusClient<each Input: Codable & Sendable>: Sendable {
             batchAddIfInteresting: { candidates in
                 // Always add all candidates to corpus (bypass coverage check)
                 for candidate in candidates {
-                    await corpus.add(
+                    corpus.add(
                         input: candidate.input,
                         signature: candidate.signature,
                         entryType: .coverage,
@@ -229,10 +192,10 @@ public struct CorpusClient<each Input: Codable & Sendable>: Sendable {
                 return [Bool](repeating: true, count: candidates.count)
             },
             add: { input, signature, entryType, failure in
-                await corpus.add(input: input, signature: signature, entryType: entryType, failure: failure)
+                corpus.add(input: input, signature: signature, entryType: entryType, failure: failure)
             },
-            minimized: { await corpus.minimized() },
-            snapshot: { await corpus.snapshot() }
+            minimized: { corpus.minimized() },
+            snapshot: { corpus.snapshot() }
         )
     }
 }

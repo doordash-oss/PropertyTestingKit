@@ -19,8 +19,9 @@ import Foundation
 /// Using growable ring buffers eliminates per-enqueue allocation overhead
 /// while avoiding backpressure/blocking issues.
 public final class PluginCoordinator<each Input: Sendable>: Sendable {
-    /// Default initial channel capacity (power of 2 for efficient indexing)
-    private static var defaultCapacity: Int { 1024 }
+    /// Default initial channel capacity (power of 2 for efficient indexing).
+    /// 64K provides good throughput without frequent resizing at typical rates.
+    private static var defaultCapacity: Int { 65536 }
 
     private let eventChannel: SPSCGrowableRing<PluginEvent<repeat each Input>>
     let actionChannel: SPSCGrowableRing<FuzzPluginAction<repeat each Input>>
@@ -34,7 +35,7 @@ public final class PluginCoordinator<each Input: Sendable>: Sendable {
     ///   - channelCapacity: Initial capacity for channels (grows if needed).
     public init(
         plugins: [any FuzzPlugin],
-        channelCapacity: Int = 1024
+        channelCapacity: Int = 65536
     ) {
         self.eventChannel = SPSCGrowableRing(capacity: channelCapacity)
         self.actionChannel = SPSCGrowableRing(capacity: channelCapacity)
@@ -56,10 +57,10 @@ public final class PluginCoordinator<each Input: Sendable>: Sendable {
     /// Submit an event for asynchronous processing (fire-and-forget).
     ///
     /// This is non-blocking and lock-free. The event will be
-    /// processed by the background task.
+    /// processed by the background task. Takes ownership of the event (no copy).
     ///
-    /// - Parameter event: The plugin event to dispatch.
-    public func send(event: PluginEvent<repeat each Input>) {
+    /// - Parameter event: The plugin event to dispatch (consumed).
+    public func send(event: consuming PluginEvent<repeat each Input>) {
         eventChannel.enqueue(event)
     }
 

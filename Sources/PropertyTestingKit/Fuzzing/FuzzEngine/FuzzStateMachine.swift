@@ -99,80 +99,96 @@ actor FuzzStateMachine<each Input: Codable & Sendable> {
 
         // Setup for test execution
         let coverageCountersClient = Self.fetchCoverageCounters()
-        let testWithIssueCapture = Self.captureIssues(
-            sourceLocation: config.sourceLocation,
-            test: test
-        )
         let sourceLocation = config.sourceLocation
 
         // Simple fuzz loop - no workers, just iterate
         var iterationCount = 0
         var generatedCount = 0
 
-        // Hoist measurement context creation outside the loop for performance.
-        // This avoids millions of hash table insert/remove operations.
-        let context = coverageCountersClient.beginMeasurement()
-        defer { coverageCountersClient.endMeasurement(context) }
+        // Wrap entire loop in issue capture context to avoid per-iteration TaskLocal overhead.
+        // This saves ~12s over millions of iterations by doing one TaskLocal push/pop instead of millions.
+        await withIssueCaptureContext(isolation: self) { issueCaptureContext in
+            let testWithIssueCapture = Self.captureIssues(
+                context: issueCaptureContext,
+                sourceLocation: config.sourceLocation,
+                test: test
+            )
 
-        while !Task.isCancelled && !halted {
-            // Check time limit
-            let elapsed = Duration.seconds(dateClient.now().timeIntervalSince(startTime))
-            if elapsed >= config.maxDuration {
-                haltReason = .timeLimit
-                break
-            }
+            // Hoist measurement context creation outside the loop for performance.
+            // This avoids millions of hash table insert/remove operations.
+            let coverageContext = coverageCountersClient.beginMeasurement()
+            defer { coverageCountersClient.endMeasurement(coverageContext) }
 
-            // Get input: from pending queue or generate random
-            let input: (repeat each Input)
-            if !pendingInputs.isEmpty {
-                input = pendingInputs.removeFirst()
-            } else {
-                input = randomInputGenerator()
-                generatedCount += 1
-            }
+            // Check time limit every N iterations to avoid per-iteration Date.init() overhead.
+            // With ~10M iterations/sec and default interval of 1000, this means ~10K checks/sec.
+            // The interval is configurable via FuzzEngineConfig for tests that need precise control.
+            let timeLimitCheckInterval = config.timeLimitCheckInterval
+            var iterationsSinceTimeCheck = timeLimitCheckInterval // Force check on first iteration
 
-            // Reset coverage for this iteration (cheap memset instead of hash table ops)
-            coverageCountersClient.resetCoverage(context)
-
-            // Run test with coverage measurement
-            do {
-                // Will throw if either the test throws or if it logs an Issue
-                try await testWithIssueCapture(input)
-
-                // Coverage snapshot may throw if coverage is unavailable
-                // Use addIfInterestingSparse to avoid creating a Set when coverage isn't interesting
-                var didAdd = false
-                if let sparse = try? coverageCountersClient.snapshotCoveredArraysWithContext(context) {
-                    didAdd = await corpus.addIfInterestingSparse(input, sparse)
+            while !Task.isCancelled && !halted {
+                // Check time limit periodically (avoids ~3.5s overhead from per-iteration Date.init)
+                iterationsSinceTimeCheck += 1
+                if iterationsSinceTimeCheck >= timeLimitCheckInterval {
+                    iterationsSinceTimeCheck = 0
+                    let elapsed = Duration.seconds(dateClient.now().timeIntervalSince(startTime))
+                    if elapsed >= config.maxDuration {
+                        haltReason = .timeLimit
+                        break
+                    }
                 }
 
-                // Fire-and-forget: submit event without blocking (no actor hop)
-                coordinator.send(event: .iteration(
-                    .init(discoveredNewCoverage: didAdd, input: input)
-                ))
-            } catch is CancellationError {
-                // Allow clean exit on cancellation
-                break
-            } catch {
-                // On failure, we need the full signature for recording
-                let coverageSignature: CoverageSignature
-                if let sparse = try? coverageCountersClient.snapshotCoveredArraysWithContext(context) {
-                    coverageSignature = CoverageSignature(sparse: sparse)
+                // Get input: from pending queue or generate random
+                let input: (repeat each Input)
+                if !pendingInputs.isEmpty {
+                    input = pendingInputs.removeFirst()
                 } else {
-                    coverageSignature = CoverageSignature(edges: Set())
+                    input = randomInputGenerator()
+                    generatedCount += 1
                 }
-                recordFailure(input: input, error: error)
-                // Fire-and-forget: submit event without blocking (no actor hop)
-                coordinator.send(event: .failureFound(
-                    .init(
-                        input: input,
-                        test: testWithIssueCapture,
-                        sourceLocation: sourceLocation,
-                        coverageSignature: coverageSignature
-                    )
-                ))
+
+                // Reset coverage for this iteration (cheap memset instead of hash table ops)
+                coverageCountersClient.resetCoverage(coverageContext)
+
+                // Run test with coverage measurement
+                do {
+                    // Will throw if either the test throws or if it logs an Issue
+                    try await testWithIssueCapture(input)
+
+                    // Coverage snapshot may throw if coverage is unavailable
+                    // Use addIfInterestingSparse to avoid creating a Set when coverage isn't interesting
+                    var didAdd = false
+                    if let sparse = try? coverageCountersClient.snapshotCoveredArraysWithContext(coverageContext) {
+                        didAdd = corpus.addIfInterestingSparse(input, sparse)
+                    }
+
+                    // Fire-and-forget: submit event without blocking (no actor hop)
+                    coordinator.send(event: .iteration(
+                        .init(discoveredNewCoverage: didAdd, input: input)
+                    ))
+                } catch is CancellationError {
+                    // Allow clean exit on cancellation
+                    break
+                } catch {
+                    // On failure, we need the full signature for recording
+                    let coverageSignature: CoverageSignature
+                    if let sparse = try? coverageCountersClient.snapshotCoveredArraysWithContext(coverageContext) {
+                        coverageSignature = CoverageSignature(sparse: sparse)
+                    } else {
+                        coverageSignature = CoverageSignature(edges: Set())
+                    }
+                    recordFailure(input: input, error: error)
+                    // Fire-and-forget: submit event without blocking (no actor hop)
+                    coordinator.send(event: .failureFound(
+                        .init(
+                            input: input,
+                            test: testWithIssueCapture,
+                            sourceLocation: sourceLocation,
+                            coverageSignature: coverageSignature
+                        )
+                    ))
+                }
+                iterationCount += 1
             }
-            iterationCount += 1
         }
 
         if config.verbose {
@@ -206,12 +222,16 @@ actor FuzzStateMachine<each Input: Codable & Sendable> {
     /// Takes a test case and throws an error if any expectations failed.
     /// Uses lightweight issue detection to intercept `#expect` failures without
     /// the overhead of `withKnownIssue`.
+    ///
+    /// This version uses batched issue capture context to avoid per-iteration
+    /// TaskLocal overhead (~12s savings over millions of iterations).
     private static func captureIssues(
+        context: IssueCaptureContext,
         sourceLocation: SourceLocation,
         test: @escaping @Sendable ((repeat each Input)) async throws -> Void
     ) -> @Sendable ((repeat each Input)) async throws -> Void {
         { input in
-            try await captureIssue {
+            try await context.captureIssue {
                 try await test(input)
             }
         }
@@ -245,7 +265,7 @@ actor FuzzStateMachine<each Input: Codable & Sendable> {
             mutationsCount += 1
 
         case .submitToCorpus(let corpusAction):
-            await addToCorpus(
+            addToCorpus(
                 corpusAction.input,
                 signature: corpusAction.coverageSignature,
                 type: corpusAction.entryType,
@@ -259,8 +279,8 @@ actor FuzzStateMachine<each Input: Codable & Sendable> {
         haltReason = reason
     }
 
-    private func addToCorpus(_ input: (repeat each Input), signature: CoverageSignature, type: CorpusEntryType, failureInfo: FailureInfo?) async {
-        await corpus.add(input, signature, type, failureInfo)
+    private func addToCorpus(_ input: (repeat each Input), signature: CoverageSignature, type: CorpusEntryType, failureInfo: FailureInfo?) {
+        corpus.add(input, signature, type, failureInfo)
     }
 }
 

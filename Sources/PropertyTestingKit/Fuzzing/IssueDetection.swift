@@ -30,6 +30,12 @@ private final class IssueCapture: @unchecked Sendable {
     init() {
         _error = nil
     }
+
+    /// Resets the capture state for reuse.
+    @inline(__always)
+    func reset() {
+        _error = nil
+    }
 }
 
 /// Task-local storage for the current issue capture context.
@@ -112,5 +118,98 @@ public func captureIssue(
     }
     if let error = capture.error {
         throw error
+    }
+}
+
+// MARK: - Batched Issue Capture (High-Performance)
+
+/// Context for batched issue capture that avoids per-iteration TaskLocal overhead.
+///
+/// Use this when running many iterations in a loop:
+/// ```swift
+/// await withIssueCaptureContext { context in
+///     for input in inputs {
+///         try await context.captureIssue {
+///             try await test(input)
+///         }
+///     }
+/// }
+/// ```
+public final class IssueCaptureContext: @unchecked Sendable {
+    private let capture: IssueCapture
+
+    fileprivate init(capture: IssueCapture) {
+        self.capture = capture
+    }
+
+    /// Runs the body and throws if any issues were captured.
+    /// This reuses the existing TaskLocal context, avoiding push/pop overhead.
+    ///
+    /// - Parameter body: The test body to execute.
+    /// - Throws: The error thrown by the body, or `IssueRecordedError` if an issue was recorded.
+    @inline(__always)
+    public func captureIssue(
+        in body: () async throws -> Void
+    ) async throws {
+        // Reset capture state for this iteration
+        capture.reset()
+
+        var thrownError: (any Error)?
+        do {
+            try await body()
+        } catch {
+            thrownError = error
+        }
+
+        // Thrown error takes priority over recorded issue
+        if let error = thrownError {
+            throw error
+        }
+        if let error = capture.error {
+            throw error
+        }
+    }
+}
+
+/// Establishes a TaskLocal context once for batched issue capture.
+///
+/// Use this to avoid per-iteration TaskLocal overhead when running many test iterations:
+/// ```swift
+/// await withIssueCaptureContext { context in
+///     for input in inputs {
+///         try await context.captureIssue {
+///             try await test(input)
+///         }
+///     }
+/// }
+/// ```
+///
+/// - Parameter body: The body to execute with the capture context.
+/// - Returns: The result of the body.
+public func withIssueCaptureContext<T, Isolation: Actor>(
+    isolation: isolated Isolation,
+    _ body: (IssueCaptureContext) async throws -> T
+) async rethrows -> T {
+    ensureCallbackRegistered()
+
+    let capture = IssueCapture()
+    let context = IssueCaptureContext(capture: capture)
+
+    return try await $currentCapture.withValue(capture) {
+        try await body(context)
+    }
+}
+
+/// Non-isolated version for use outside of actor contexts.
+public func withIssueCaptureContext<T>(
+    _ body: (IssueCaptureContext) async throws -> T
+) async rethrows -> T {
+    ensureCallbackRegistered()
+
+    let capture = IssueCapture()
+    let context = IssueCaptureContext(capture: capture)
+
+    return try await $currentCapture.withValue(capture) {
+        try await body(context)
     }
 }

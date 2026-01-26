@@ -97,7 +97,7 @@ final class MutatorOps<each Input: Sendable>: @unchecked Sendable {
 /// 6. Stop when: iteration limit, time limit, or coverage plateau
 /// 7. Minimize corpus, save to disk
 ///
-public actor FuzzEngine<each M: Mutator> where repeat (each M).Value: Codable & Sendable {
+public final class FuzzEngine<each M: Mutator>: @unchecked Sendable where repeat (each M).Value: Codable & Sendable {
     @Dependency(\.dateClient) private var dateClient
     @Dependency(\.random) private var random
     @Dependency(\.corpusPersistence) private var corpusPersistenceClient
@@ -270,12 +270,12 @@ public actor FuzzEngine<each M: Mutator> where repeat (each M).Value: Codable & 
 
         // Phase 3: Minimize corpus
         var finalCorpus = stateMachineResult.corpus
-        let corpusCountBeforeMinimize = await stateMachineResult.corpus.count()
+        let corpusCountBeforeMinimize = stateMachineResult.corpus.count()
         if config.minimizeCorpus && corpusCountBeforeMinimize > 1 {
-            let minimizedSnapshot = await stateMachineResult.corpus.minimized()
+            let minimizedSnapshot = stateMachineResult.corpus.minimized()
             finalCorpus = CorpusClient<repeat (each M).Value>.live(corpus: Corpus(from: minimizedSnapshot))
             if config.verbose {
-                let finalCount = await finalCorpus.count()
+                let finalCount = finalCorpus.count()
                 print("[Fuzz] Minimized corpus: \(corpusCountBeforeMinimize) -> \(finalCount)")
             }
         }
@@ -283,7 +283,7 @@ public actor FuzzEngine<each M: Mutator> where repeat (each M).Value: Codable & 
         // Phase 4: Save corpus
         if let directory = corpusDirectory {
             do {
-                let snapshotToSave = await finalCorpus.snapshot()
+                let snapshotToSave = finalCorpus.snapshot()
                 try corpusPersistenceClient.save(snapshotToSave, to: directory)
                 if config.verbose {
                     print("[Fuzz] Saved corpus to \(directory.path)")
@@ -295,7 +295,7 @@ public actor FuzzEngine<each M: Mutator> where repeat (each M).Value: Codable & 
             }
         }
 
-        let finalSnapshot = await finalCorpus.snapshot()
+        let finalSnapshot = finalCorpus.snapshot()
         return FuzzResult(
             corpus: finalSnapshot,
             failures: stateMachineResult.failures,

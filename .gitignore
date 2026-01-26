@@ -12,3 +12,5 @@ DerivedData/
 # Ignore literal ~ directory (created when LLVM_PROFILE_FILE contains unexpanded ~)
 /~
 .claude
+traces
+call_trees

@@ -30,6 +30,12 @@ public struct FuzzEngineConfig: Sendable {
     /// Used for reporting failures and plugin actions.
     public let sourceLocation: SourceLocation
 
+    /// How often to check the time limit (in iterations).
+    /// Higher values reduce overhead from Date.init() calls but may overshoot the time limit slightly.
+    /// Default: 1000 (checks ~10K times/sec at 10M iterations/sec, ~3x faster than per-iteration).
+    /// Tests that need precise iteration control should use 1.
+    public let timeLimitCheckInterval: Int
+
     // MARK: - Plugin Configuration
 
     /// User-provided plugins that handle fuzzing events and return actions.
@@ -52,6 +58,7 @@ public struct FuzzEngineConfig: Sendable {
         verbose: Bool = false,
         corpusMode: CorpusMode? = nil,
         projectPath: String? = nil,
+        timeLimitCheckInterval: Int = 1000,
         fileID: String = #fileID,
         filePath: String = #filePath,
         line: Int = #line,
@@ -65,6 +72,7 @@ public struct FuzzEngineConfig: Sendable {
         // Use provided mode, or check environment, or default to auto
         self.corpusMode = corpusMode ?? CorpusMode.fromEnvironment()
         self.projectPath = projectPath
+        self.timeLimitCheckInterval = timeLimitCheckInterval
         self.sourceLocation = SourceLocation(
             fileID: fileID,
             filePath: filePath,

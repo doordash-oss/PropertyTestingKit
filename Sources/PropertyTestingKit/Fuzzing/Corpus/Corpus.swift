@@ -14,7 +14,10 @@ import Foundation
 ///
 /// The corpus tracks which inputs produce unique coverage and provides
 /// minimization to keep only the essential inputs.
-public actor Corpus<each Input: Codable & Sendable>: Sendable {
+///
+/// Thread safety: Access is serialized by `FuzzStateMachine` actor, so this
+/// class does not need its own actor isolation.
+public final class Corpus<each Input: Codable & Sendable>: @unchecked Sendable {
     @Dependency(\.dateClient) var dateClient
 
     /// All entries in the corpus.
@@ -46,7 +49,6 @@ public actor Corpus<each Input: Codable & Sendable>: Sendable {
     }
 
     // MARK: - Serialization
-    // Note: Actors cannot conform to Codable directly.
     // Use CorpusSnapshot for serialization and create Corpus via init(from:CorpusSnapshot).
 
     /// Create a snapshot of the corpus state for encoding.
@@ -342,8 +344,7 @@ private enum CorpusCodingKeys: String, CodingKey {
 
 /// A serializable snapshot of corpus state.
 ///
-/// Since `Corpus` is an actor, it cannot directly conform to `Codable` in a
-/// synchronous way. This struct captures the corpus state for serialization.
+/// This struct captures the corpus state for serialization.
 public struct CorpusSnapshot<each Input: Codable & Sendable>: Sendable, Codable {
     public let entries: [CorpusEntry<repeat each Input>]
     public let createdAt: Date
@@ -394,7 +395,7 @@ public struct CorpusSnapshot<each Input: Codable & Sendable>: Sendable, Codable 
 
 extension Corpus {
     /// Create a corpus from a snapshot.
-    public init(from snapshot: CorpusSnapshot<repeat each Input>) {
+    public convenience init(from snapshot: CorpusSnapshot<repeat each Input>) {
         self.init(
             entries: snapshot.entries,
             createdAt: snapshot.createdAt,

@@ -359,7 +359,7 @@ private func mergeResults<each Input: Codable & Sendable>(
 
     // Merge corpus: combine all entries, deduplicate by coverage
     // Note: Use explicit closures instead of keypaths to avoid Swift runtime crashes with parameter packs
-    let mergedCorpus = await mergeCorpusSnapshots(results.map { $0.corpus })
+    let mergedCorpus = mergeCorpusSnapshots(results.map { $0.corpus })
 
     // Merge stats: sum counts, take max duration
     let totalInputs = results.reduce(0) { $0 + $1.stats.totalInputs }
@@ -400,7 +400,7 @@ private func mergeResults<each Input: Codable & Sendable>(
 /// Merges multiple corpus snapshots into one, combining coverage.
 private func mergeCorpusSnapshots<each Input: Codable & Sendable>(
     _ snapshots: [CorpusSnapshot<repeat each Input>]
-) async -> CorpusSnapshot<repeat each Input> {
+) -> CorpusSnapshot<repeat each Input> {
     @Dependency(\.dateClient) var dateClient
     @Dependency(\.corpusRegistry) var corpusRegistry
 
@@ -423,11 +423,11 @@ private func mergeCorpusSnapshots<each Input: Codable & Sendable>(
     // Add all entries - addIfInteresting handles deduplication by coverage
     for snapshot in snapshots {
         for entry in snapshot.entries {
-            _ = await mergedCorpus.addIfInteresting(entry.input, entry.signature)
+            _ = mergedCorpus.addIfInteresting(entry.input, entry.signature)
         }
     }
 
-    return await mergedCorpus.snapshot()
+    return mergedCorpus.snapshot()
 }
 
 // MARK: - Fuzz Helpers

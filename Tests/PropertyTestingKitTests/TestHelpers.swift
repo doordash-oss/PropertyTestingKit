@@ -103,7 +103,11 @@ func fuzzEngineWithMaxIterations<each Input: MutatorProviding & Codable & Sendab
             startDate.addingTimeInterval(virtualTime.value)
         })
     }, operation: {
-        let effectiveConfig = config ?? FuzzEngineConfig(maxDuration: .seconds(10))
+        // Use timeLimitCheckInterval: 1 for precise iteration control in tests
+        let effectiveConfig = config ?? FuzzEngineConfig(
+            maxDuration: .seconds(10),
+            timeLimitCheckInterval: 1
+        )
         let engine = FuzzEngine(
             mutators: (repeat (each Input).defaultMutator),
             config: effectiveConfig,
