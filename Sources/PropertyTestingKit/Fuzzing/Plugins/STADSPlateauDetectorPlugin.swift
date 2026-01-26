@@ -37,7 +37,7 @@ public actor STADSPlugin: FuzzPlugin {
         self.detector = STADSPlateauDetector(config: config)
     }
 
-    public func handle<each T: Sendable>(event: PluginEvent<repeat each T>) async throws -> [FuzzPluginAction<repeat each T>] {
+    public func handle<each T: Sendable>(event: consuming PluginEvent<repeat each T>) async throws -> [FuzzPluginAction<repeat each T>] {
         switch event {
         case let .iteration(context):
             detector.record(discoveredNewCoverage: context.discoveredNewCoverage)

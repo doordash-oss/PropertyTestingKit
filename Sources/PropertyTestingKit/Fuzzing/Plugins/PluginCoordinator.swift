@@ -114,17 +114,7 @@ final class PluginProcessor<each Input: Sendable>: @unchecked Sendable {
             // Run event processing loop
             while !eventChannel.isClosed {
                 if let event = eventChannel.dequeue() {
-                    // Process event with plugins
-                    for plugin in plugins {
-                        do {
-                            let actions = try await plugin.handle(event: event)
-                            for action in actions {
-                                actionChannel.enqueue(action)
-                            }
-                        } catch {
-                            // Plugin errors logged but don't stop processing
-                        }
-                    }
+                    await processEvent(event)
                 } else {
                     // Yield when empty to avoid busy-waiting
                     await Task.yield()
@@ -132,21 +122,43 @@ final class PluginProcessor<each Input: Sendable>: @unchecked Sendable {
             }
             // Drain any remaining events
             while let event = eventChannel.dequeue() {
-                for plugin in plugins {
-                    do {
-                        let actions = try await plugin.handle(event: event)
-                        for action in actions {
-                            actionChannel.enqueue(action)
-                        }
-                    } catch {
-                        // Plugin errors logged but don't stop processing
-                    }
-                }
+                await processEvent(event)
             }
         }
     }
 
     func awaitCompletion() async {
         await processorTask?.value
+    }
+
+    /// Process an event through all plugins, using copy for all-but-last and consume for last.
+    private func processEvent(_ event: consuming PluginEvent<repeat each Input>) async {
+        guard !plugins.isEmpty else { return }
+
+        // Process all plugins except the last with copies
+        if plugins.count > 1 {
+            for plugin in plugins.dropLast() {
+                do {
+                    let actions = try await plugin.handle(event: copy event)
+                    for action in actions {
+                        actionChannel.enqueue(action)
+                    }
+                } catch {
+                    // Plugin errors are non-fatal - just skip this plugin's actions
+                }
+            }
+        }
+
+        // Process the last plugin with consume (move semantics)
+        if let lastPlugin = plugins.last {
+            do {
+                let actions = try await lastPlugin.handle(event: consume event)
+                for action in actions {
+                    actionChannel.enqueue(action)
+                }
+            } catch {
+                // Plugin errors are non-fatal
+            }
+        }
     }
 }

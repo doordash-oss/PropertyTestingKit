@@ -19,7 +19,7 @@ public struct CoverageGapPlugin: FuzzPlugin {
         self.detector = CoverageGapDetector(config: config)
     }
 
-    public func handle<each T: Sendable>(event: PluginEvent<repeat each T>) async throws -> [FuzzPluginAction<repeat each T>] {
+    public func handle<each T: Sendable>(event: consuming PluginEvent<repeat each T>) async throws -> [FuzzPluginAction<repeat each T>] {
         switch event {
         case .start:
             // Get counters ready, resolve source locations up front.

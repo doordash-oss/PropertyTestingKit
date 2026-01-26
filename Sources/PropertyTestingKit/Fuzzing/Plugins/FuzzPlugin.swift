@@ -23,7 +23,7 @@ public protocol FuzzPlugin: Sendable {
     /// - Parameter event: The plugin event to handle.
     /// - Returns: Actions for FuzzEngine to execute.
     func handle<each T: Sendable>(
-        event: PluginEvent<repeat each T>
+        event: consuming PluginEvent<repeat each T>
     ) async throws -> [FuzzPluginAction<repeat each T>]
 }
 

@@ -16,7 +16,7 @@ public struct MutationPlugin: FuzzPlugin {
     public init() {}
 
     public func handle<each T: Sendable>(
-        event: PluginEvent<repeat each T>
+        event: consuming PluginEvent<repeat each T>
     ) async throws -> [FuzzPluginAction<repeat each T>] {
         switch event {
         case let .iteration(context):

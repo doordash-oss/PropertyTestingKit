@@ -43,7 +43,7 @@ public struct ShrinkingPlugin: FuzzPlugin {
         self.verbose = verbose
     }
 
-    public func handle<each T: Sendable>(event: PluginEvent<repeat each T>) async throws -> [FuzzPluginAction<repeat each T>] {
+    public func handle<each T: Sendable>(event: consuming PluginEvent<repeat each T>) async throws -> [FuzzPluginAction<repeat each T>] {
         switch event {
         case let .failureFound(context):
             let shrinker = MultiComponentShrinker(config: config)
