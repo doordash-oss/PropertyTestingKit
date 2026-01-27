@@ -31,7 +31,8 @@ public final class SPSCGrowableRing<T: Sendable>: @unchecked Sendable {
     // ============================================================
 
     /// Ring buffer storage. Replaced during resize.
-    private var buffer: UnsafeMutablePointer<T?>
+    /// Slots in [head, tail) are initialized; slots outside are uninitialized.
+    private var buffer: UnsafeMutablePointer<T>
 
     /// Capacity mask for fast modulo (capacity must be power of 2).
     private var mask: Int
@@ -129,7 +130,7 @@ public final class SPSCGrowableRing<T: Sendable>: @unchecked Sendable {
         self.mask = actualCapacity - 1
 
         self.buffer = .allocate(capacity: actualCapacity)
-        buffer.initialize(repeating: nil, count: actualCapacity)
+        // Don't initialize - slots outside [head, tail) are uninitialized by design
 
         _seqPtr = .allocate(capacity: 1)
         _seqPtr.initialize(to: UInt64.AtomicRepresentation(0))
@@ -151,17 +152,16 @@ public final class SPSCGrowableRing<T: Sendable>: @unchecked Sendable {
     }
 
     deinit {
+        // Only deinitialize occupied slots [head, tail)
         let headVal = head.load(ordering: .relaxed)
         let tailVal = tail.load(ordering: .relaxed)
 
         var idx = headVal
         while idx != tailVal {
-            let slot = Int(idx) & mask
-            buffer[slot] = nil
+            buffer.advanced(by: Int(idx) & mask).deinitialize(count: 1)
             idx &+= 1
         }
 
-        buffer.deinitialize(count: _capacity)
         buffer.deallocate()
 
         _seqPtr.deinitialize(count: 1)
@@ -200,7 +200,7 @@ public final class SPSCGrowableRing<T: Sendable>: @unchecked Sendable {
 
         // Fast path: check against cached head
         if nextTail &- cachedHead <= UInt64(_capacity) {
-            buffer[Int(currentTail) & mask] = value
+            buffer.advanced(by: Int(currentTail) & mask).initialize(to: value)
             tail.store(nextTail, ordering: .releasing)
             return
         }
@@ -216,7 +216,7 @@ public final class SPSCGrowableRing<T: Sendable>: @unchecked Sendable {
 
         // Check again with fresh head
         if nextTail &- cachedHead <= UInt64(_capacity) {
-            buffer[Int(currentTail) & mask] = value
+            buffer.advanced(by: Int(currentTail) & mask).initialize(to: value)
             tail.store(nextTail, ordering: .releasing)
             return
         }
@@ -225,7 +225,7 @@ public final class SPSCGrowableRing<T: Sendable>: @unchecked Sendable {
         resize()
 
         // Now enqueue with new capacity
-        buffer[Int(currentTail) & mask] = value
+        buffer.advanced(by: Int(currentTail) & mask).initialize(to: value)
         tail.store(nextTail, ordering: .releasing)
     }
 
@@ -236,11 +236,10 @@ public final class SPSCGrowableRing<T: Sendable>: @unchecked Sendable {
         let newCapacity = oldCapacity * 2
         let newMask = newCapacity - 1
 
-        // Allocate new buffer
-        let newBuffer = UnsafeMutablePointer<T?>.allocate(capacity: newCapacity)
-        newBuffer.initialize(repeating: nil, count: newCapacity)
+        // Allocate new buffer (don't initialize - only occupied slots will be written)
+        let newBuffer = UnsafeMutablePointer<T>.allocate(capacity: newCapacity)
 
-        // Copy elements from old buffer to new buffer
+        // Move elements from old buffer to new buffer
         // Elements are stored at indices [head, tail) modulo old capacity
         // In new buffer, we keep the same logical indices but with new mask
         let headVal = head.load(ordering: .acquiring)
@@ -250,7 +249,8 @@ public final class SPSCGrowableRing<T: Sendable>: @unchecked Sendable {
         while idx != tailVal {
             let oldSlot = Int(idx) & mask
             let newSlot = Int(idx) & newMask
-            newBuffer[newSlot] = buffer[oldSlot]
+            // Move from old to new (old slot becomes uninitialized)
+            newBuffer.advanced(by: newSlot).initialize(to: buffer.advanced(by: oldSlot).move())
             idx &+= 1
         }
 
@@ -266,14 +266,7 @@ public final class SPSCGrowableRing<T: Sendable>: @unchecked Sendable {
         // End resize (even sequence = stable)
         seq.store(seq.load(ordering: .relaxed) &+ 1, ordering: .releasing)
 
-        // Now safe to clear old buffer slots and deallocate
-        idx = headVal
-        while idx != tailVal {
-            let oldSlot = Int(idx) & (oldCapacity - 1)
-            oldBuffer[oldSlot] = nil
-            idx &+= 1
-        }
-        oldBuffer.deinitialize(count: oldCapacity)
+        // Old buffer slots are now uninitialized (due to move), just deallocate
         oldBuffer.deallocate()
     }
 
@@ -293,7 +286,7 @@ public final class SPSCGrowableRing<T: Sendable>: @unchecked Sendable {
             }
         }
 
-        buffer[Int(currentTail) & mask] = value
+        buffer.advanced(by: Int(currentTail) & mask).initialize(to: value)
         tail.store(nextTail, ordering: .releasing)
         return true
     }
@@ -328,17 +321,16 @@ public final class SPSCGrowableRing<T: Sendable>: @unchecked Sendable {
             let currentBuffer = buffer
             let slot = Int(currentHead) & currentMask
 
-            // Move value out instead of copying
+            // Move value out (leaves slot uninitialized, which is correct)
             let ptr = currentBuffer.advanced(by: slot)
-            value = ptr.move()       // Move out, leaves memory uninitialized
-            ptr.initialize(to: nil)  // Re-initialize slot as nil
+            value = ptr.move()
+            // No reinitialization needed - slot is now uninitialized
 
             let s2 = seq.load(ordering: .acquiring)
             if s1 == s2 { break }  // No resize happened, we're good
             // Resize happened mid-read, but that's actually fine for SPSC:
-            // The value was copied to new buffer, and we already read it.
-            // The nil write went to old buffer which is being deallocated.
-            // This is safe because resize copies before swapping.
+            // The value was moved to new buffer, and we already read it.
+            // This is safe because resize moves before swapping.
             break
         }
 
