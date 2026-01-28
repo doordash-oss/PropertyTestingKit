@@ -152,7 +152,9 @@
 		D2E3F837D79E6068D622D78D /* ChannelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A29215654D59B4626E5E398 /* ChannelTests.swift */; };
 		D304EFC84705417D212EA91D /* CoverageSignatureTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09F9A66C1671353C4CCF4F16 /* CoverageSignatureTests.swift */; };
 		D3BBDD6471BDB998F4979E48 /* FileManagerClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A5FD30F272F4610F9D0637A /* FileManagerClient.swift */; };
+		D4E4A695B3002B71FE1FAEC4 /* SPSCGrowableRing.swift in Sources */ = {isa = PBXBuildFile; fileRef = D34F3E4EBEAE11696CCEB73B /* SPSCGrowableRing.swift */; };
 		D5304C43DD6EFBF89321404D /* PropertyTestingKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 2595E9AD80DBFC77F241A7E7 /* PropertyTestingKit.framework */; };
+		D5645DFA85C2ABBD0E34ACC2 /* ParallelTimingTest.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6A80CC19DCB4C4527B0777F /* ParallelTimingTest.swift */; };
 		D5983ABABFE63D62EA5C3D51 /* OPTIMIZATION-HISTORY.md in Resources */ = {isa = PBXBuildFile; fileRef = 83153486221ED8E2CA6B4FB1 /* OPTIMIZATION-HISTORY.md */; };
 		D7A5330868F7D3869BA65F92 /* ConcurrentQueues.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 53CAAC0D19F2954667E891FB /* ConcurrentQueues.framework */; };
 		DB3B9AFA08DCD50172E473CB /* CLLVMSymbolizer.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 6B4DC0FA0EFB0DDF25E4C353 /* CLLVMSymbolizer.cpp */; };
@@ -476,6 +478,7 @@
 		CF7909559B042C15C36EAABE /* PropertyTestingKitTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = PropertyTestingKitTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		D1393E951BCEFB24A64C09FD /* RelaxedBoundedChannel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RelaxedBoundedChannel.swift; sourceTree = "<group>"; };
 		D2671C4A43D9243DDBC246A9 /* DWARFSymbolizerError.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DWARFSymbolizerError.swift; sourceTree = "<group>"; };
+		D34F3E4EBEAE11696CCEB73B /* SPSCGrowableRing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SPSCGrowableRing.swift; sourceTree = "<group>"; };
 		D491815E0AB84AD49314DF0A /* KFIFOQueue.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KFIFOQueue.swift; sourceTree = "<group>"; };
 		D51DB081E26BBC926EBD26BD /* Mutator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Mutator.swift; sourceTree = "<group>"; };
 		D543CBF031454223DE6AE5E2 /* ck_pr.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ck_pr.h; sourceTree = "<group>"; };
@@ -512,6 +515,7 @@
 		F58C560D0D81EBCA41AC8282 /* TestCaseShrinkerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TestCaseShrinkerTests.swift; sourceTree = "<group>"; };
 		F5F59F7C0FD59FAD26BADFE6 /* PlateauDetectorPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlateauDetectorPlugin.swift; sourceTree = "<group>"; };
 		F5FAD6386630E58099EFA884 /* ck_pr.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ck_pr.h; sourceTree = "<group>"; };
+		F6A80CC19DCB4C4527B0777F /* ParallelTimingTest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ParallelTimingTest.swift; sourceTree = "<group>"; };
 		F71FA6525A4595B0EBFA0AE2 /* RealRCQ.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RealRCQ.swift; sourceTree = "<group>"; };
 		F7B5F39FFCE93451B38B3FBA /* PropertyBasedSelfTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PropertyBasedSelfTests.swift; sourceTree = "<group>"; };
 		F853A816879F7A6E163BE7B4 /* StringBoundaryMutator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StringBoundaryMutator.swift; sourceTree = "<group>"; };
@@ -1058,6 +1062,7 @@
 				C4C33B33085A4DB5D1981F0A /* CoverageCountersTests.swift */,
 				DAE561F78BDA61BB34264F21 /* IssueDetectionTests.swift */,
 				B64D06718A05E1272E84861D /* MockDatabase.swift */,
+				F6A80CC19DCB4C4527B0777F /* ParallelTimingTest.swift */,
 				F7B5F39FFCE93451B38B3FBA /* PropertyBasedSelfTests.swift */,
 				5694654408A37C1D96C8CCA5 /* TestHelpers.swift */,
 				5305591133199EC528A0A92D /* UserService.swift */,
@@ -1113,6 +1118,7 @@
 				B1768557AD57A3460E16861E /* RelaxedQueue.swift */,
 				3DBF63EB5C024C23AFE63827 /* SegmentQueue.swift */,
 				09E9C3F6DA4EB6FB4BE3B84B /* SpinChannel.swift */,
+				D34F3E4EBEAE11696CCEB73B /* SPSCGrowableRing.swift */,
 				C8F920487E91DCB59E3B530F /* SPSCQueue.swift */,
 				8299E2AE16444773464DA367 /* SPSCRing.swift */,
 				368EB0DBC91A07E925144D22 /* SyncChannel.swift */,
@@ -1569,6 +1575,7 @@
 				ECBE316A69296E918688FA38 /* RealRCQ.swift in Sources */,
 				5B7775C68221FE079AE343F9 /* RelaxedBoundedChannel.swift in Sources */,
 				517D2FA0099DD8F832016CB0 /* RelaxedQueue.swift in Sources */,
+				D4E4A695B3002B71FE1FAEC4 /* SPSCGrowableRing.swift in Sources */,
 				A6A65D4CE8BA2EC8A2A08E58 /* SPSCQueue.swift in Sources */,
 				F7672665536078766B291DE7 /* SPSCRing.swift in Sources */,
 				701CF2B4CCB8B14F8B85CB4A /* SegmentQueue.swift in Sources */,
@@ -1615,6 +1622,7 @@
 				E8ED514CBE637B3DB6879755 /* IssueDetectionTests.swift in Sources */,
 				19E5E7F83FA7FB0675B65818 /* MockDatabase.swift in Sources */,
 				902AD170388F6A40C15ECCA5 /* MutatorTests.swift in Sources */,
+				D5645DFA85C2ABBD0E34ACC2 /* ParallelTimingTest.swift in Sources */,
 				AB89E6673C3749E9B3F3A882 /* PlateauDetectorPluginTests.swift in Sources */,
 				AD1F49DE9664EE8298A6BAAB /* PluginCoordinatorTests.swift in Sources */,
 				14CE5AF65788D0ED532C423D /* PropertyBasedSelfTests.swift in Sources */,

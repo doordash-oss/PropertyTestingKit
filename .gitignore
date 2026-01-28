@@ -14,3 +14,4 @@ DerivedData/
 .claude
 traces
 call_trees
+__BenchmarkBoilerplate*

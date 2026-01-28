@@ -89,6 +89,46 @@ public final class PluginCoordinator<each Input: Sendable>: Sendable {
     }
 }
 
+/// Synchronous plugin processor that processes events inline without channels.
+/// Processes plugins sequentially and executes actions immediately.
+struct SyncPluginProcessor: Sendable {
+    let plugins: [any FuzzPlugin]
+
+    func process<each Input: Sendable>(
+        isolation: isolated (any Actor)? = #isolation,
+        event: consuming PluginEvent<repeat each Input>,
+        execute: (FuzzPluginAction<repeat each Input>) -> Void
+    ) async {
+        guard !plugins.isEmpty else { return }
+
+        // Process all plugins except the last with copies
+        if plugins.count > 1 {
+            for plugin in plugins.dropLast() {
+                do {
+                    let actions = try await plugin.handle(event: copy event)
+                    for action in actions {
+                        execute(action)
+                    }
+                } catch {
+                    // Plugin errors are non-fatal
+                }
+            }
+        }
+
+        // Process the last plugin with consume (move semantics)
+        if let lastPlugin = plugins.last {
+            do {
+                let actions = try await lastPlugin.handle(event: consume event)
+                for action in actions {
+                    execute(action)
+                }
+            } catch {
+                // Plugin errors are non-fatal
+            }
+        }
+    }
+}
+
 /// Processes events from the event channel and produces actions to the action channel.
 /// Runs as a detached high-priority Task to ensure it gets scheduled independently.
 final class PluginProcessor<each Input: Sendable>: @unchecked Sendable {

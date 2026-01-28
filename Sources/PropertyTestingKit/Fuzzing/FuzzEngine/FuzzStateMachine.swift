@@ -13,8 +13,8 @@ actor FuzzStateMachine<each Input: Codable & Sendable> {
     typealias MutatorMutate = @Sendable ((repeat each Input)) -> [(repeat each Input)]
     typealias MutatorGenerate = @Sendable () -> (repeat each Input)
 
-    private let plugins: [any FuzzPlugin]
-    private var pluginCoordinator: PluginCoordinator<repeat each Input>?
+    /// Synchronous plugin processor for inline event processing.
+    private let pluginProcessor: SyncPluginProcessor
     private let config: FuzzEngineConfig
     private let corpus: CorpusClient<repeat each Input>
     private let mutationGenerator: MutatorMutate
@@ -39,7 +39,7 @@ actor FuzzStateMachine<each Input: Codable & Sendable> {
         startTime: Date,
         randomInputGenerator: @escaping MutatorGenerate,
         mutationGenerator: @escaping MutatorMutate,
-        test: @escaping @Sendable ((repeat each Input)) async throws -> Void,
+        test: @escaping @Sendable ((repeat each Input)) async throws -> Void
     ) {
         let corpus = Self.fetchCorpus()
 
@@ -49,7 +49,7 @@ actor FuzzStateMachine<each Input: Codable & Sendable> {
         self.startTime = startTime
         self.seeds = seeds
         self.randomInputGenerator = randomInputGenerator
-        self.plugins = plugins
+        self.pluginProcessor = SyncPluginProcessor(plugins: plugins)
         self.config = config
         self.corpus = corpus
         self.mutationGenerator = mutationGenerator
@@ -69,29 +69,6 @@ actor FuzzStateMachine<each Input: Codable & Sendable> {
     func start() async throws -> FuzzStateMachineResult {
         if config.verbose {
             print("[FUZZ] FuzzStateMachine.start() called, maxDuration=\(config.maxDuration)")
-        }
-
-        // Create and start the plugin coordinator with bidirectional messaging
-        let coordinator = PluginCoordinator<repeat each Input>(
-            plugins: plugins
-        )
-        pluginCoordinator = coordinator
-        coordinator.start()
-
-        // Start a task to consume actions from the coordinator
-        let actionConsumerTask = Task { [self] in
-            // Use dequeue with yield to avoid blocking the cooperative pool
-            while !coordinator.actionChannel.isClosed {
-                if let action = coordinator.actionChannel.dequeue() {
-                    await self.executeAction(action)
-                } else {
-                    await Task.yield()
-                }
-            }
-            // Drain any remaining actions
-            while let action = coordinator.actionChannel.dequeue() {
-                await self.executeAction(action)
-            }
         }
 
         // Initialize pending inputs with seeds
@@ -161,10 +138,12 @@ actor FuzzStateMachine<each Input: Codable & Sendable> {
                         didAdd = corpus.addIfInterestingSparse(input, sparse)
                     }
 
-                    // Fire-and-forget: submit event without blocking (no actor hop)
-                    coordinator.send(event: .iteration(
-                        .init(discoveredNewCoverage: didAdd, input: input)
-                    ))
+                    // Process iteration event synchronously
+                    await process(
+                        event: .iteration(
+                            .init(discoveredNewCoverage: didAdd, input: input)
+                        )
+                    )
                 } catch is CancellationError {
                     // Allow clean exit on cancellation
                     break
@@ -177,15 +156,17 @@ actor FuzzStateMachine<each Input: Codable & Sendable> {
                         coverageSignature = CoverageSignature(edges: Set())
                     }
                     recordFailure(input: input, error: error)
-                    // Fire-and-forget: submit event without blocking (no actor hop)
-                    coordinator.send(event: .failureFound(
-                        .init(
-                            input: input,
-                            test: testWithIssueCapture,
-                            sourceLocation: sourceLocation,
-                            coverageSignature: coverageSignature
+                    // Process failure event synchronously
+                    await process(
+                        event: .failureFound(
+                            .init(
+                                input: input,
+                                test: testWithIssueCapture,
+                                sourceLocation: sourceLocation,
+                                coverageSignature: coverageSignature
+                            )
                         )
-                    ))
+                    )
                 }
                 iterationCount += 1
             }
@@ -194,11 +175,6 @@ actor FuzzStateMachine<each Input: Codable & Sendable> {
         if config.verbose {
             print("[FUZZ] Fuzz loop finished: iterations=\(iterationCount), generated=\(generatedCount), halted=\(halted)")
         }
-
-        // Wait for all plugin events to be processed and actions to be produced
-        await coordinator.closeAndAwaitCompletion()
-        // Wait for all actions to be executed
-        await actionConsumerTask.value
 
         let stats = FuzzStats(
             totalInputs: iterationCount,
@@ -247,8 +223,14 @@ actor FuzzStateMachine<each Input: Codable & Sendable> {
         return coverageCounters
     }
 
+    private func process(event: PluginEvent<repeat each Input>) async {
+        await pluginProcessor.process(isolation: self, event: event) { action in
+            self.executeAction(action)
+        }
+    }
+
     /// Executes a single plugin action.
-    private func executeAction(_ action: FuzzPluginAction<repeat each Input>) async {
+    private func executeAction(_ action: FuzzPluginAction<repeat each Input>) {
         switch action {
         case .stop(let stopAction):
             halt(reason: stopAction.reason)

@@ -32,3 +32,6 @@
 ## Scripts
 - If you find yourself performing operations frequently, add a script to the `scripts` directory.
 - If one of those scripts stops working, fix it.
+
+## Plugin Architecture
+- Do not skip plugin events as an optimization. Plugins like plateau detectors need to see every iteration to track statistics correctly.
