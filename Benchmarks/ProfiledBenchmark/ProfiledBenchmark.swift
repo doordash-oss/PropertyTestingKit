@@ -56,8 +56,10 @@ let benchmarks: @Sendable () -> Void = {
             let wallDelta = endWall - startWall
             let effectiveParallelism = wallDelta > 0 ? Int((Double(cpuDelta) / Double(wallDelta)) * 100) : 100
 
-            // Multiply by 10 to convert 0.1s -> 1s, divide by 1000 for (K) display
-            benchmark.measurement(.custom("Iterations/sec (K)", polarity: .prefersLarger, useScalingFactor: false), result.stats.totalInputs / 100)
+            // Calculate iterations/sec based on actual wallclock time, divide by 1000 for (K) display
+            let wallSeconds = Double(wallDelta) / 1_000_000_000.0
+            let iterationsPerSec = wallSeconds > 0 ? Int(Double(result.stats.totalInputs) / wallSeconds / 1000.0) : 0
+            benchmark.measurement(.custom("Iterations/sec (K)", polarity: .prefersLarger, useScalingFactor: false), iterationsPerSec)
             benchmark.measurement(.custom("Effective Parallelism (x100)", polarity: .prefersLarger, useScalingFactor: false), effectiveParallelism)
         }
     }

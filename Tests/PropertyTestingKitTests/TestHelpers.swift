@@ -21,7 +21,6 @@ import Dependencies
 ///   - seeds: Initial seed values for fuzzing.
 ///   - duration: The virtual duration (defaults to 60 seconds, but clock is advanced to complete in maxIterations).
 ///   - corpusMode: How to handle existing corpus files.
-///   - plugins: Additional plugins to use during fuzzing.
 ///   - filePath: Source file path for error reporting.
 ///   - function: Function name for error reporting.
 ///   - line: Line number for error reporting.
@@ -33,7 +32,6 @@ func fuzzWithMaxIterations<each Input: MutatorProviding & Codable & Sendable>(
     duration: Duration = .seconds(60),
     corpusMode: CorpusMode? = nil,
     parallelism: Int = 1,
-    plugins: [any FuzzPlugin] = [],
     filePath: StaticString = #filePath,
     function: StaticString = #function,
     line: Int = #line,
@@ -57,7 +55,6 @@ func fuzzWithMaxIterations<each Input: MutatorProviding & Codable & Sendable>(
             duration: .seconds(10),
             corpusMode: corpusMode,
             parallelism: parallelism,
-            plugins: plugins,
             filePath: filePath,
             function: function,
             line: line,
@@ -113,7 +110,16 @@ func fuzzEngineWithMaxIterations<each Input: MutatorProviding & Codable & Sendab
             config: effectiveConfig,
             corpusDirectory: corpusDirectory
         )
-        return await engine.run(additionalSeeds: additionalSeeds) { input in
+        // Create default plugin processor (MutationPlugin)
+        let processor = SyncPluginProcessor(plugins: (MutationPlugin()))
+        let processPlugins: @Sendable (
+            isolated (any Actor)?,
+            consuming PluginEvent<repeat each Input>,
+            (FuzzPluginAction<repeat each Input>) -> Void
+        ) async -> Void = { isolation, event, execute in
+            await processor.process(isolation: isolation, event: event, execute: execute)
+        }
+        return await engine.run(additionalSeeds: additionalSeeds, processPlugins: processPlugins) { input in
             defer {
                 virtualTime.update { $0 += advancement }
             }
@@ -131,7 +137,6 @@ func fuzzEngineWithMaxIterations<each Input: MutatorProviding & Codable & Sendab
 ///   - mutators: The custom mutators to use for fuzzing.
 ///   - seeds: Initial seed values for fuzzing.
 ///   - corpusMode: How to handle existing corpus files.
-///   - plugins: Additional plugins to use during fuzzing.
 ///   - filePath: Source file path for error reporting.
 ///   - function: Function name for error reporting.
 ///   - line: Line number for error reporting.
@@ -143,7 +148,6 @@ func fuzzWithMaxIterations<each Input: Codable & Sendable, each M: Mutator>(
     seeds: [(repeat each Input)] = [],
     corpusMode: CorpusMode? = nil,
     parallelism: Int = 1,
-    plugins: [any FuzzPlugin] = [],
     filePath: StaticString = #filePath,
     function: StaticString = #function,
     line: Int = #line,
@@ -168,7 +172,6 @@ func fuzzWithMaxIterations<each Input: Codable & Sendable, each M: Mutator>(
             duration: .seconds(10),
             corpusMode: corpusMode,
             parallelism: parallelism,
-            plugins: plugins,
             filePath: filePath,
             function: function,
             line: line,

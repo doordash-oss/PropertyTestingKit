@@ -128,7 +128,17 @@ struct FuzzEngineRaceTests {
                     )
                     let engine = FuzzEngine(mutators: Int.defaultMutator, config: config)
 
-                    _ = try await engine.run { (input: Int) in
+                    // Create default plugin processor (MutationPlugin)
+                    let processor = SyncPluginProcessor(plugins: (MutationPlugin()))
+                    let processPlugins: @Sendable (
+                        isolated (any Actor)?,
+                        consuming PluginEvent<Int>,
+                        (FuzzPluginAction<Int>) -> Void
+                    ) async -> Void = { isolation, event, execute in
+                        await processor.process(isolation: isolation, event: event, execute: execute)
+                    }
+
+                    _ = try await engine.run(processPlugins: processPlugins) { (input: Int) in
                         // Simple test that doesn't fail
                         // Use overflow operators to avoid arithmetic overflow crashes
                         // when fuzzer generates extreme Int values

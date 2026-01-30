@@ -353,7 +353,16 @@ struct MutatorFuzzEngineTests {
                 maxDuration: .seconds(1)            )
 
             let engine = FuzzEngine(mutators: mutator, config: config)
-            _ = await engine.run { input in
+            // Create default plugin processor (MutationPlugin)
+            let processor = SyncPluginProcessor(plugins: (MutationPlugin()))
+            let processPlugins: @Sendable (
+                isolated (any Actor)?,
+                consuming PluginEvent<String>,
+                (FuzzPluginAction<String>) -> Void
+            ) async -> Void = { isolation, event, execute in
+                await processor.process(isolation: isolation, event: event, execute: execute)
+            }
+            _ = await engine.run(processPlugins: processPlugins) { input in
                 await testedInputs.update { $0.append(input) }
             }
         }
@@ -383,7 +392,16 @@ struct MutatorFuzzEngineTests {
                 maxDuration: .seconds(2)            )
 
             let engine = FuzzEngine(mutators: mutator, config: config)
-            _ = await engine.run { input in
+            // Create default plugin processor (MutationPlugin)
+            let processor = SyncPluginProcessor(plugins: (MutationPlugin()))
+            let processPlugins: @Sendable (
+                isolated (any Actor)?,
+                consuming PluginEvent<String>,
+                (FuzzPluginAction<String>) -> Void
+            ) async -> Void = { isolation, event, execute in
+                await processor.process(isolation: isolation, event: event, execute: execute)
+            }
+            _ = await engine.run(processPlugins: processPlugins) { input in
                 await testedInputs.update { $0.append(input) }
             }
         }

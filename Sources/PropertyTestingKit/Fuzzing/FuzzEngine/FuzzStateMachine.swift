@@ -13,8 +13,16 @@ actor FuzzStateMachine<each Input: Codable & Sendable> {
     typealias MutatorMutate = @Sendable ((repeat each Input)) -> [(repeat each Input)]
     typealias MutatorGenerate = @Sendable () -> (repeat each Input)
 
-    /// Synchronous plugin processor for inline event processing.
-    private let pluginProcessor: SyncPluginProcessor
+    /// Type-erased plugin processor closure.
+    /// Captures concrete plugin types via closure; signature only mentions Input types.
+    typealias PluginProcessorFn = @Sendable (
+        isolated (any Actor)?,
+        consuming PluginEvent<repeat each Input>,
+        (FuzzPluginAction<repeat each Input>) -> Void
+    ) async -> Void
+
+    /// Plugin processor closure that captures concrete plugin types.
+    private let processPlugins: PluginProcessorFn
     private let config: FuzzEngineConfig
     private let corpus: CorpusClient<repeat each Input>
     private let mutationGenerator: MutatorMutate
@@ -34,7 +42,7 @@ actor FuzzStateMachine<each Input: Codable & Sendable> {
 
     init(
         seeds: [(repeat each Input)],
-        plugins: [any FuzzPlugin],
+        processPlugins: @escaping PluginProcessorFn,
         config: FuzzEngineConfig,
         startTime: Date,
         randomInputGenerator: @escaping MutatorGenerate,
@@ -49,7 +57,7 @@ actor FuzzStateMachine<each Input: Codable & Sendable> {
         self.startTime = startTime
         self.seeds = seeds
         self.randomInputGenerator = randomInputGenerator
-        self.pluginProcessor = SyncPluginProcessor(plugins: plugins)
+        self.processPlugins = processPlugins
         self.config = config
         self.corpus = corpus
         self.mutationGenerator = mutationGenerator
@@ -107,6 +115,8 @@ actor FuzzStateMachine<each Input: Codable & Sendable> {
                 iterationsSinceTimeCheck += 1
                 if iterationsSinceTimeCheck >= timeLimitCheckInterval {
                     iterationsSinceTimeCheck = 0
+                    // Yield to allow other tasks to run (enables parallel fuzz runs)
+                    await Task.yield()
                     let elapsed = Duration.seconds(dateClient.now().timeIntervalSince(startTime))
                     if elapsed >= config.maxDuration {
                         haltReason = .timeLimit
@@ -224,7 +234,7 @@ actor FuzzStateMachine<each Input: Codable & Sendable> {
     }
 
     private func process(event: PluginEvent<repeat each Input>) async {
-        await pluginProcessor.process(isolation: self, event: event) { action in
+        await processPlugins(self, event) { action in
             self.executeAction(action)
         }
     }

@@ -273,17 +273,6 @@ struct CoverageGapDetectorTests {
         #expect(result.failures.isEmpty)
     }
 
-    @Test("FuzzEngine.Config has plugins for gap detection")
-    func configHasPlugins() {
-        // With plugins, gap detection is enabled by adding CoverageGapPlugin
-        let config = FuzzEngineConfig(plugins: [CoverageGapPlugin()])
-        #expect(config.plugins.count == 1)
-        #expect(config.plugins.contains { $0 is CoverageGapPlugin })
-
-        let defaultConfig = FuzzEngineConfig()
-        #expect(defaultConfig.plugins.isEmpty)
-    }
-
     @Test("Realistic coverage gap test")
     func realisticCoverageGapTest() async throws {
         // Use a hash-based check that value profile can't solve easily
@@ -293,7 +282,7 @@ struct CoverageGapDetectorTests {
             let hash = (input &* 31) ^ (input >> 4)
             if hash == 0x7FFFFFFE {
                 // This branch is effectively unreachable (requires specific input)
-                print("found magic!")  // Line 296 - expected uncovered
+                print("found magic!")  // Line 285 - expected uncovered
             } else if input < 0 {
                 print("negative")
             } else {
@@ -302,15 +291,16 @@ struct CoverageGapDetectorTests {
         }
 
         // This test intentionally creates a coverage gap to verify detection works
-        // We expect exactly: 75% coverage, uncovered edge at line 296
+        // We expect exactly: 75% coverage, uncovered edge at line 285
         // If the issue doesn't match these criteria, the test will fail as "unexpected issue"
-        let expectedLine = 296
+        let expectedLine = 285
 
         try await withKnownIssue("Expected coverage gap in partiallyCoveredFunction") {
+            // MutationPlugin is included by default via defaultBehaviorPlugins
             _ = try await fuzz(
                 duration: .seconds(0.1),
                 corpusMode: .refuzzReplace,
-                plugins: [CoverageGapPlugin()]
+                plugins: (CoverageGapPlugin())
             ) { (input: Int) in
                 partiallyCoveredFunction(input: input)
             }

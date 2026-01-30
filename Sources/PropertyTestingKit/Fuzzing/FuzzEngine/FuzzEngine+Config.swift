@@ -36,22 +36,6 @@ public struct FuzzEngineConfig: Sendable {
     /// Tests that need precise iteration control should use 1.
     public let timeLimitCheckInterval: Int
 
-    // MARK: - Plugin Configuration
-
-    /// User-provided plugins that handle fuzzing events and return actions.
-    /// Plugins run in array order for each event, after baseline plugins.
-    /// Default: empty (no additional plugins).
-    public let plugins: [any FuzzPlugin]
-
-    /// These plugins represent core behavior of the fuzzing engine. Users may alter or remove these,
-    /// but doing so could break core functionality.
-    public let defaultBehaviorPlugins: [any FuzzPlugin]
-
-    /// All plugins combined: baseline plugins followed by user plugins.
-    public var allPlugins: [any FuzzPlugin] {
-        defaultBehaviorPlugins + plugins
-    }
-
     public init(
         maxDuration: Duration = .seconds(60),
         minimizeCorpus: Bool = true,
@@ -62,9 +46,7 @@ public struct FuzzEngineConfig: Sendable {
         fileID: String = #fileID,
         filePath: String = #filePath,
         line: Int = #line,
-        column: Int = #column,
-        plugins: [any FuzzPlugin] = [],
-        defaultBehaviorPlugins: [any FuzzPlugin] = [MutationPlugin()]
+        column: Int = #column
     ) {
         self.maxDuration = maxDuration
         self.minimizeCorpus = minimizeCorpus
@@ -79,7 +61,5 @@ public struct FuzzEngineConfig: Sendable {
             line: line,
             column: column
         )
-        self.plugins = plugins
-        self.defaultBehaviorPlugins = defaultBehaviorPlugins
     }
 }

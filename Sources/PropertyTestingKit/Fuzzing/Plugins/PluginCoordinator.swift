@@ -90,35 +90,19 @@ public final class PluginCoordinator<each Input: Sendable>: Sendable {
 }
 
 /// Synchronous plugin processor that processes events inline without channels.
-/// Processes plugins sequentially and executes actions immediately.
-struct SyncPluginProcessor: Sendable {
-    let plugins: [any FuzzPlugin]
+/// Generic over plugin types to enable monomorphization and eliminate protocol witness overhead.
+struct SyncPluginProcessor<each Plugin: FuzzPlugin>: Sendable {
+    let plugins: (repeat each Plugin)
 
     func process<each Input: Sendable>(
         isolation: isolated (any Actor)? = #isolation,
         event: consuming PluginEvent<repeat each Input>,
         execute: (FuzzPluginAction<repeat each Input>) -> Void
     ) async {
-        guard !plugins.isEmpty else { return }
-
-        // Process all plugins except the last with copies
-        if plugins.count > 1 {
-            for plugin in plugins.dropLast() {
-                do {
-                    let actions = try await plugin.handle(event: copy event)
-                    for action in actions {
-                        execute(action)
-                    }
-                } catch {
-                    // Plugin errors are non-fatal
-                }
-            }
-        }
-
-        // Process the last plugin with consume (move semantics)
-        if let lastPlugin = plugins.last {
+        // Process each plugin with copy semantics (compiler optimizes final copy away)
+        for plugin in repeat each plugins {
             do {
-                let actions = try await lastPlugin.handle(event: consume event)
+                let actions = try await plugin.handle(event: copy event)
                 for action in actions {
                     execute(action)
                 }
@@ -126,6 +110,8 @@ struct SyncPluginProcessor: Sendable {
                 // Plugin errors are non-fatal
             }
         }
+        // Consume the event to satisfy ownership
+        _ = consume event
     }
 }
 
