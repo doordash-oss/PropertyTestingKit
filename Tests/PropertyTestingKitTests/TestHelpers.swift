@@ -112,14 +112,20 @@ func fuzzEngineWithMaxIterations<each Input: MutatorProviding & Codable & Sendab
         )
         // Create default plugin processor (MutationPlugin)
         let processor = SyncPluginProcessor(plugins: (MutationPlugin()))
-        let processPlugins: @Sendable (
+        let processSyncPlugins: @Sendable (
+            consuming SyncPluginEvent<repeat each Input>,
+            (FuzzPluginAction<repeat each Input>) -> Void
+        ) -> Void = { event, execute in
+            processor.processSync(event: event, execute: execute)
+        }
+        let processAsyncPlugins: @Sendable (
             isolated (any Actor)?,
-            consuming PluginEvent<repeat each Input>,
+            consuming AsyncPluginEvent<repeat each Input>,
             (FuzzPluginAction<repeat each Input>) -> Void
         ) async -> Void = { isolation, event, execute in
-            await processor.process(isolation: isolation, event: event, execute: execute)
+            await processor.processAsync(isolation: isolation, event: event, execute: execute)
         }
-        return await engine.run(additionalSeeds: additionalSeeds, processPlugins: processPlugins) { input in
+        return await engine.run(additionalSeeds: additionalSeeds, processSyncPlugins: processSyncPlugins, processAsyncPlugins: processAsyncPlugins) { input in
             defer {
                 virtualTime.update { $0 += advancement }
             }

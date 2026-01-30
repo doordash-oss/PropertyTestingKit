@@ -13,41 +13,40 @@ import Foundation
 struct PlateauDetectorPluginTests {
 
     @Test("Plugin has correct ID")
-    func testPluginId() async {
+    func testPluginId() {
         let plugin = PlateauDetectorPlugin()
-        let id = await plugin.id
-        #expect(id == "plateau_detector")
+        #expect(plugin.id == "plateau_detector")
     }
 
     @Test("Plugin returns empty for non-iteration events")
     func testNonIterationEventsReturnEmpty() async throws {
         let plugin = PlateauDetectorPlugin()
 
-        let startContext = PluginEvent<Int>.StartContext(
+        let startContext = AsyncPluginEvent<Int>.StartContext(
             maxDuration: .seconds(60),
             corpusMode: .auto
         )
-        let actions = try await plugin.handle(event: PluginEvent<Int>.start(startContext))
+        let actions = try await plugin.handleAsync(event: AsyncPluginEvent<Int>.start(startContext))
         #expect(actions.isEmpty)
     }
 
     @Test("Plugin does not stop when coverage is being discovered")
-    func testNoStopWithCoverageDiscovery() async throws {
+    func testNoStopWithCoverageDiscovery() {
         let plugin = PlateauDetectorPlugin()
 
         // Simulate iterations with new coverage each time
         for i in 0..<50 {
-            let context = PluginEvent<Int>.IterationContext(
+            let context = SyncPluginEvent<Int>.IterationContext(
                 discoveredNewCoverage: true,
                 input: i
             )
-            let actions = try await plugin.handle(event: PluginEvent<Int>.iteration(context))
+            let actions = plugin.handle(event: SyncPluginEvent<Int>.iteration(context))
             #expect(actions.isEmpty, "Should not stop when discovering coverage")
         }
     }
 
     @Test("Plugin returns stop action after plateau")
-    func testStopAfterPlateau() async throws {
+    func testStopAfterPlateau() {
         // Configure with small window for faster testing
         // minDiscoveryRate: 0.01 means 0 discoveries per 10 iterations is "low"
         // confirmationWindows: 2 means we need 2 consecutive low windows
@@ -62,11 +61,11 @@ struct PlateauDetectorPluginTests {
         // Need: 10 iterations to fill first window, then 2+ windows of low rate
         var stoppedAt: Int?
         for i in 0..<100 {
-            let context = PluginEvent<Int>.IterationContext(
+            let context = SyncPluginEvent<Int>.IterationContext(
                 discoveredNewCoverage: false,
                 input: i
             )
-            let actions = try await plugin.handle(event: PluginEvent<Int>.iteration(context))
+            let actions = plugin.handle(event: SyncPluginEvent<Int>.iteration(context))
 
             if !actions.isEmpty {
                 // Should be a stop action

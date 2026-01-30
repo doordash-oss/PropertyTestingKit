@@ -25,36 +25,34 @@ import Foundation
 /// Böhme, M. et al. (2023). "Green Fuzzing: A Saturation-Based Stopping Criterion
 /// using a Probabilistic Model to Predict Fuzzing Progress"
 /// ISSTA 2023.
-public actor SaturationPlugin: FuzzPlugin {
+public struct SaturationPlugin: FuzzPlugin {
     public let id: String = "saturation_detector"
 
-    private var detector: SaturationPlateauDetector
+    private let detector: Box<SaturationPlateauDetector>
 
     /// Create a saturation plateau detector plugin.
     ///
     /// - Parameter config: Configuration for saturation detection.
     public init(config: SaturationPlateauDetector.Config = .init()) {
-        self.detector = SaturationPlateauDetector(config: config)
+        self.detector = Box(SaturationPlateauDetector(config: config))
     }
 
-    public func handle<each T: Sendable>(event: consuming PluginEvent<repeat each T>) async throws -> [FuzzPluginAction<repeat each T>] {
+    public func handle<each T: Sendable>(event: SyncPluginEvent<repeat each T>) -> [FuzzPluginAction<repeat each T>] {
         switch event {
         case let .iteration(context):
-            detector.record(discoveredNewCoverage: context.discoveredNewCoverage)
+            detector.value.record(discoveredNewCoverage: context.discoveredNewCoverage)
 
-            if detector.hasPlateaued {
+            if detector.value.hasPlateaued {
                 return [.stop(FuzzPluginAction<repeat each T>.StopAction(reason: .custom("saturation_plateau")))]
             }
 
-            return []
-        default:
             return []
         }
     }
 
     /// Get the underlying saturation detection statistics.
     public func saturationStats() -> SaturationPlateauStats {
-        detector.stats()
+        detector.value.stats()
     }
 }
 

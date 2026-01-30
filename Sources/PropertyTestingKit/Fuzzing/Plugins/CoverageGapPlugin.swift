@@ -19,7 +19,7 @@ public struct CoverageGapPlugin: FuzzPlugin {
         self.detector = CoverageGapDetector(config: config)
     }
 
-    public func handle<each T: Sendable>(event: consuming PluginEvent<repeat each T>) async throws -> [FuzzPluginAction<repeat each T>] {
+    public func handleAsync<each T: Sendable>(event: AsyncPluginEvent<repeat each T>) async throws -> [FuzzPluginAction<repeat each T>] {
         switch event {
         case .start:
             // Get counters ready, resolve source locations up front.
@@ -33,14 +33,14 @@ public struct CoverageGapPlugin: FuzzPlugin {
                 )
 
             return constructIssueActions(report: coverageGapReport, endContext: endContext)
-        default:
+        case .failureFound:
             return []
         }
     }
 
     private func constructIssueActions<each T: Sendable>(
         report: CoverageGapReport,
-        endContext: PluginEvent<repeat each T>.EndContext
+        endContext: AsyncPluginEvent<repeat each T>.EndContext
     ) -> [FuzzPluginAction<repeat each T>] {
         guard !report.gaps.isEmpty else { return [] }
 

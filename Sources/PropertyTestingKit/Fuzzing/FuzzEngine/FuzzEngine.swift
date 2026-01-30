@@ -107,11 +107,16 @@ public final class FuzzEngine<each M: Mutator>: @unchecked Sendable where repeat
     // Type alias for the combined input tuple
     public typealias Input = (repeat (each M).Value)
 
-    /// Type-erased plugin processor closure.
-    /// Captures concrete plugin types via closure; signature only mentions Input types.
-    typealias PluginProcessorFn = @Sendable (
+    /// Synchronous plugin processor for iteration events (hot path).
+    typealias SyncPluginProcessorFn = @Sendable (
+        consuming SyncPluginEvent<repeat (each M).Value>,
+        (FuzzPluginAction<repeat (each M).Value>) -> Void
+    ) -> Void
+
+    /// Asynchronous plugin processor for rare events (cold path).
+    typealias AsyncPluginProcessorFn = @Sendable (
         isolated (any Actor)?,
-        consuming PluginEvent<repeat (each M).Value>,
+        consuming AsyncPluginEvent<repeat (each M).Value>,
         (FuzzPluginAction<repeat (each M).Value>) -> Void
     ) async -> Void
 
@@ -155,21 +160,24 @@ public final class FuzzEngine<each M: Mutator>: @unchecked Sendable where repeat
     /// - Parameters:
     ///   - additionalSeeds: Extra seed values to include alongside `Input.fuzz` defaults.
     ///     Use this to provide domain-specific inputs that target your code's edge cases.
-    ///   - processPlugins: Type-erased plugin processor closure that captures concrete plugin types.
+    ///   - processSyncPlugins: Sync plugin processor for iteration events (hot path).
+    ///   - processAsyncPlugins: Async plugin processor for rare events (cold path).
     ///   - test: The test closure to fuzz.
     /// - Returns: The fuzz result with corpus and any failures.
     func run(
         additionalSeeds: [Input] = [],
-        processPlugins: @escaping PluginProcessorFn,
+        processSyncPlugins: @escaping SyncPluginProcessorFn,
+        processAsyncPlugins: @escaping AsyncPluginProcessorFn,
         test: @escaping @Sendable (Input) async throws -> Void
     ) async -> FuzzResult<repeat (each M).Value> {
-        return await runWithMode(additionalSeeds: additionalSeeds, processPlugins: processPlugins, test: test)
+        return await runWithMode(additionalSeeds: additionalSeeds, processSyncPlugins: processSyncPlugins, processAsyncPlugins: processAsyncPlugins, test: test)
     }
 
     /// Internal dispatch based on corpus mode.
     private func runWithMode(
         additionalSeeds: [Input],
-        processPlugins: @escaping PluginProcessorFn,
+        processSyncPlugins: @escaping SyncPluginProcessorFn,
+        processAsyncPlugins: @escaping AsyncPluginProcessorFn,
         test: @escaping @Sendable (Input) async throws -> Void
     ) async -> FuzzResult<repeat (each M).Value> {
         let corpusExists = corpusDirectory.map { corpusPersistenceClient.exists($0) } ?? false
@@ -182,7 +190,7 @@ public final class FuzzEngine<each M: Mutator>: @unchecked Sendable where repeat
                 }
                 try? corpusPersistenceClient.delete(directory)
             }
-            return await runFuzzing(additionalSeeds: additionalSeeds, processPlugins: processPlugins, test: test)
+            return await runFuzzing(additionalSeeds: additionalSeeds, processSyncPlugins: processSyncPlugins, processAsyncPlugins: processAsyncPlugins, test: test)
         }
 
         // Handle refuzzExtend: load corpus as seeds and continue fuzzing
@@ -201,7 +209,7 @@ public final class FuzzEngine<each M: Mutator>: @unchecked Sendable where repeat
                     }
                 }
             }
-            return await runFuzzing(additionalSeeds: allSeeds, processPlugins: processPlugins, test: test)
+            return await runFuzzing(additionalSeeds: allSeeds, processSyncPlugins: processSyncPlugins, processAsyncPlugins: processAsyncPlugins, test: test)
         }
 
         // Handle regressionOnly: only run regression, return empty if no corpus
@@ -214,7 +222,7 @@ public final class FuzzEngine<each M: Mutator>: @unchecked Sendable where repeat
             }
             do {
                 let savedSnapshot: CorpusSnapshot<repeat (each M).Value> = try corpusPersistenceClient.loadSnapshot(from: directory)
-                return await runRegression(snapshot: savedSnapshot, processPlugins: processPlugins, test: test)
+                return await runRegression(snapshot: savedSnapshot, processSyncPlugins: processSyncPlugins, processAsyncPlugins: processAsyncPlugins, test: test)
             } catch {
                 if config.verbose {
                     print("[Fuzz] Mode: regressionOnly - failed to load corpus: \(error)")
@@ -229,7 +237,7 @@ public final class FuzzEngine<each M: Mutator>: @unchecked Sendable where repeat
         if corpusExists, let directory = corpusDirectory {
             do {
                 let savedSnapshot: CorpusSnapshot<repeat (each M).Value> = try corpusPersistenceClient.loadSnapshot(from: directory)
-                return await runRegression(snapshot: savedSnapshot, processPlugins: processPlugins, test: test)
+                return await runRegression(snapshot: savedSnapshot, processSyncPlugins: processSyncPlugins, processAsyncPlugins: processAsyncPlugins, test: test)
             } catch {
                 if config.verbose {
                     print("[Fuzz] Failed to load corpus: \(error), starting fresh")
@@ -237,14 +245,15 @@ public final class FuzzEngine<each M: Mutator>: @unchecked Sendable where repeat
             }
         }
 
-        return await runFuzzing(additionalSeeds: additionalSeeds, processPlugins: processPlugins, test: test)
+        return await runFuzzing(additionalSeeds: additionalSeeds, processSyncPlugins: processSyncPlugins, processAsyncPlugins: processAsyncPlugins, test: test)
     }
 
     // MARK: - Fuzz Mode
 
     private func runFuzzing(
         additionalSeeds: [Input] = [],
-        processPlugins: @escaping PluginProcessorFn,
+        processSyncPlugins: @escaping SyncPluginProcessorFn,
+        processAsyncPlugins: @escaping AsyncPluginProcessorFn,
         test: @escaping @Sendable (Input) async throws -> Void
     ) async -> FuzzResult<repeat (each M).Value> {
         let startTime = dateClient.now()
@@ -270,7 +279,8 @@ public final class FuzzEngine<each M: Mutator>: @unchecked Sendable where repeat
 
         let stateMachine = FuzzStateMachine<repeat (each M).Value>(
             seeds: allSeeds,
-            processPlugins: processPlugins,
+            processSyncPlugins: processSyncPlugins,
+            processAsyncPlugins: processAsyncPlugins,
             config: config,
             startTime: startTime,
             randomInputGenerator: generateFn,
@@ -310,12 +320,12 @@ public final class FuzzEngine<each M: Mutator>: @unchecked Sendable where repeat
         let finalSnapshot = finalCorpus.snapshot()
 
         // Send .end event to plugins (for coverage gap analysis, etc.)
-        let endContext = PluginEvent<repeat (each M).Value>.EndContext(
+        let endContext = AsyncPluginEvent<repeat (each M).Value>.EndContext(
             totalCoveredIndices: finalSnapshot.totalCoverage.executedIndices,
             projectPath: config.projectPath,
             sourceLocation: config.sourceLocation
         )
-        await processPlugins(nil, .end(endContext)) { action in
+        await processAsyncPlugins(nil, .end(endContext)) { action in
             self.executeEndAction(action)
         }
 
@@ -343,7 +353,8 @@ public final class FuzzEngine<each M: Mutator>: @unchecked Sendable where repeat
 
     private func runRegression(
         snapshot: CorpusSnapshot<repeat (each M).Value>,
-        processPlugins: @escaping PluginProcessorFn,
+        processSyncPlugins: @escaping SyncPluginProcessorFn,
+        processAsyncPlugins: @escaping AsyncPluginProcessorFn,
         test: @escaping @Sendable (Input) async throws -> Void
     ) async -> FuzzResult<repeat (each M).Value> {
         let startTime = dateClient.now()
@@ -401,7 +412,7 @@ public final class FuzzEngine<each M: Mutator>: @unchecked Sendable where repeat
             if let directory = corpusDirectory {
                 try? corpusPersistenceClient.delete(directory)
             }
-            return await runFuzzing(processPlugins: processPlugins, test: test)
+            return await runFuzzing(processSyncPlugins: processSyncPlugins, processAsyncPlugins: processAsyncPlugins, test: test)
         }
 
         let duration = dateClient.now().timeIntervalSince(startTime)
@@ -414,12 +425,12 @@ public final class FuzzEngine<each M: Mutator>: @unchecked Sendable where repeat
         )
 
         // Send .end event to plugins (for coverage gap analysis, etc.)
-        let endContext = PluginEvent<repeat (each M).Value>.EndContext(
+        let endContext = AsyncPluginEvent<repeat (each M).Value>.EndContext(
             totalCoveredIndices: snapshot.totalCoverage.executedIndices,
             projectPath: config.projectPath,
             sourceLocation: config.sourceLocation
         )
-        await processPlugins(nil, .end(endContext)) { action in
+        await processAsyncPlugins(nil, .end(endContext)) { action in
             self.executeEndAction(action)
         }
 

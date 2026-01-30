@@ -103,6 +103,7 @@ func concatPlugins<each D: FuzzPlugin, each P: FuzzPlugin>(
 }
 
 @discardableResult
+@inlinable
 public func fuzz<each Input: Codable & Sendable, each M: Mutator, each D: FuzzPlugin, each P: FuzzPlugin>(
     using mutators: repeat each M,
     seeds: [(repeat each Input)] = [],
@@ -120,12 +121,21 @@ public func fuzz<each Input: Codable & Sendable, each M: Mutator, each D: FuzzPl
     let allPlugins = concatPlugins(defaultBehaviorPlugins, plugins)
     let processor = SyncPluginProcessor(plugins: allPlugins)
 
-    let processPlugins: @Sendable (
+    // Sync closure for hot path (iteration events)
+    let processSyncPlugins: @Sendable (
+        consuming SyncPluginEvent<repeat each Input>,
+        (FuzzPluginAction<repeat each Input>) -> Void
+    ) -> Void = { event, execute in
+        processor.processSync(event: event, execute: execute)
+    }
+
+    // Async closure for cold path (start/end/failureFound events)
+    let processAsyncPlugins: @Sendable (
         isolated (any Actor)?,
-        consuming PluginEvent<repeat each Input>,
+        consuming AsyncPluginEvent<repeat each Input>,
         (FuzzPluginAction<repeat each Input>) -> Void
     ) async -> Void = { isolation, event, execute in
-        await processor.process(isolation: isolation, event: event, execute: execute)
+        await processor.processAsync(isolation: isolation, event: event, execute: execute)
     }
 
     return try await fuzzInternal(
@@ -134,7 +144,8 @@ public func fuzz<each Input: Codable & Sendable, each M: Mutator, each D: FuzzPl
         duration: duration,
         corpusMode: corpusMode,
         parallelism: parallelism,
-        processPlugins: processPlugins,
+        processSyncPlugins: processSyncPlugins,
+        processAsyncPlugins: processAsyncPlugins,
         filePath: filePath,
         function: function,
         line: line,
@@ -143,15 +154,20 @@ public func fuzz<each Input: Codable & Sendable, each M: Mutator, each D: FuzzPl
 }
 
 /// Internal implementation shared by all fuzz overloads.
-private func fuzzInternal<each Input: Codable & Sendable, each M: Mutator>(
+@usableFromInline
+func fuzzInternal<each Input: Codable & Sendable, each M: Mutator>(
     mutators: (repeat each M),
     seeds: [(repeat each Input)],
     duration: Duration,
     corpusMode: CorpusMode?,
     parallelism: Int,
-    processPlugins: @Sendable @escaping (
+    processSyncPlugins: @Sendable @escaping (
+        consuming SyncPluginEvent<repeat each Input>,
+        (FuzzPluginAction<repeat each Input>) -> Void
+    ) -> Void,
+    processAsyncPlugins: @Sendable @escaping (
         isolated (any Actor)?,
-        consuming PluginEvent<repeat each Input>,
+        consuming AsyncPluginEvent<repeat each Input>,
         (FuzzPluginAction<repeat each Input>) -> Void
     ) async -> Void,
     filePath: StaticString,
@@ -192,7 +208,7 @@ private func fuzzInternal<each Input: Codable & Sendable, each M: Mutator>(
             corpusDirectory: corpusDir
         )
 
-        let result = await engine.run(additionalSeeds: seeds, processPlugins: processPlugins, test: test)
+        let result = await engine.run(additionalSeeds: seeds, processSyncPlugins: processSyncPlugins, processAsyncPlugins: processAsyncPlugins, test: test)
 
         return try reportFuzzResult(result, filePath: filePath, line: line)
     }
@@ -230,7 +246,7 @@ private func fuzzInternal<each Input: Codable & Sendable, each M: Mutator>(
                     corpusDirectory: nil // Don't save individual engine corpora
                 )
 
-                return await engine.run(additionalSeeds: engineSeeds, processPlugins: processPlugins, test: test)
+                return await engine.run(additionalSeeds: engineSeeds, processSyncPlugins: processSyncPlugins, processAsyncPlugins: processAsyncPlugins, test: test)
             }
         }
 
@@ -281,6 +297,7 @@ private func fuzzInternal<each Input: Codable & Sendable, each M: Mutator>(
 ///
 /// - Throws: Re-throws test failures, or throws if fuzzing finds failures.
 @discardableResult
+@inlinable
 public func fuzz<each Input: MutatorProviding & Codable & Sendable, each D: FuzzPlugin, each P: FuzzPlugin>(
     seeds: [(repeat each Input)] = [],
     duration: Duration = .seconds(60),

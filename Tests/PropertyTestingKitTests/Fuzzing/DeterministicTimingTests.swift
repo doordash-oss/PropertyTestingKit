@@ -73,14 +73,20 @@ struct DeterministicTimingTests {
                 let engine = FuzzEngine(mutators: SingleSeedInt.defaultMutator, config: config, corpusDirectory: nil)
                 // Create default plugin processor (MutationPlugin)
                 let processor = SyncPluginProcessor(plugins: (MutationPlugin()))
-                let processPlugins: @Sendable (
+                let processSyncPlugins: @Sendable (
+                    consuming SyncPluginEvent<SingleSeedInt>,
+                    (FuzzPluginAction<SingleSeedInt>) -> Void
+                ) -> Void = { event, execute in
+                    processor.processSync(event: event, execute: execute)
+                }
+                let processAsyncPlugins: @Sendable (
                     isolated (any Actor)?,
-                    consuming PluginEvent<SingleSeedInt>,
+                    consuming AsyncPluginEvent<SingleSeedInt>,
                     (FuzzPluginAction<SingleSeedInt>) -> Void
                 ) async -> Void = { isolation, event, execute in
-                    await processor.process(isolation: isolation, event: event, execute: execute)
+                    await processor.processAsync(isolation: isolation, event: event, execute: execute)
                 }
-                return await engine.run(processPlugins: processPlugins) { _ in
+                return await engine.run(processSyncPlugins: processSyncPlugins, processAsyncPlugins: processAsyncPlugins) { _ in
                     // Advance time by 11 seconds each test (exceeds 10s limit after first test)
                     currentTime.update { $0 = $0.addingTimeInterval(11) }
                 }
@@ -115,14 +121,20 @@ struct DeterministicTimingTests {
                 let engine = FuzzEngine(mutators: SingleSeedInt.defaultMutator, config: config, corpusDirectory: nil)
                 // Create default plugin processor (MutationPlugin)
                 let processor = SyncPluginProcessor(plugins: (MutationPlugin()))
-                let processPlugins: @Sendable (
+                let processSyncPlugins: @Sendable (
+                    consuming SyncPluginEvent<SingleSeedInt>,
+                    (FuzzPluginAction<SingleSeedInt>) -> Void
+                ) -> Void = { event, execute in
+                    processor.processSync(event: event, execute: execute)
+                }
+                let processAsyncPlugins: @Sendable (
                     isolated (any Actor)?,
-                    consuming PluginEvent<SingleSeedInt>,
+                    consuming AsyncPluginEvent<SingleSeedInt>,
                     (FuzzPluginAction<SingleSeedInt>) -> Void
                 ) async -> Void = { isolation, event, execute in
-                    await processor.process(isolation: isolation, event: event, execute: execute)
+                    await processor.processAsync(isolation: isolation, event: event, execute: execute)
                 }
-                return await engine.run(processPlugins: processPlugins) { _ in
+                return await engine.run(processSyncPlugins: processSyncPlugins, processAsyncPlugins: processAsyncPlugins) { _ in
                     // Advance time by exactly 2.5 seconds each test
                     testCount.update { $0 += 1 }
                     currentTime.update { $0 = $0.addingTimeInterval(2.5) }

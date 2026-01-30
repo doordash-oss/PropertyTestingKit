@@ -25,36 +25,34 @@ import Foundation
 ///
 /// Böhme, M. (2018). "STADS: Software Testing as Species Discovery"
 /// IEEE Transactions on Software Engineering.
-public actor STADSPlugin: FuzzPlugin {
+public struct STADSPlugin: FuzzPlugin {
     public let id: String = "stads_detector"
 
-    private var detector: STADSPlateauDetector
+    private let detector: Box<STADSPlateauDetector>
 
     /// Create a STADS plateau detector plugin.
     ///
     /// - Parameter config: Configuration for STADS detection.
     public init(config: STADSPlateauDetector.Config = .init()) {
-        self.detector = STADSPlateauDetector(config: config)
+        self.detector = Box(STADSPlateauDetector(config: config))
     }
 
-    public func handle<each T: Sendable>(event: consuming PluginEvent<repeat each T>) async throws -> [FuzzPluginAction<repeat each T>] {
+    public func handle<each T: Sendable>(event: SyncPluginEvent<repeat each T>) -> [FuzzPluginAction<repeat each T>] {
         switch event {
         case let .iteration(context):
-            detector.record(discoveredNewCoverage: context.discoveredNewCoverage)
+            detector.value.record(discoveredNewCoverage: context.discoveredNewCoverage)
 
-            if detector.hasPlateaued {
+            if detector.value.hasPlateaued {
                 return [.stop(FuzzPluginAction<repeat each T>.StopAction(reason: .custom("stads_plateau")))]
             }
 
-            return []
-        default:
             return []
         }
     }
 
     /// Get the underlying STADS detection statistics.
     public func stadsStats() -> STADSPlateauStats {
-        detector.stats()
+        detector.value.stats()
     }
 }
 

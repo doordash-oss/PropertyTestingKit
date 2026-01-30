@@ -43,7 +43,7 @@ public struct ShrinkingPlugin: FuzzPlugin {
         self.verbose = verbose
     }
 
-    public func handle<each T: Sendable>(event: consuming PluginEvent<repeat each T>) async throws -> [FuzzPluginAction<repeat each T>] {
+    public func handleAsync<each T: Sendable>(event: AsyncPluginEvent<repeat each T>) async throws -> [FuzzPluginAction<repeat each T>] {
         switch event {
         case let .failureFound(context):
             let shrinker = MultiComponentShrinker(config: config)
@@ -83,7 +83,7 @@ public struct ShrinkingPlugin: FuzzPlugin {
                     sourceLocation: context.sourceLocation
                 ))
             ]
-        default:
+        case .start, .end:
             return []
         }
     }

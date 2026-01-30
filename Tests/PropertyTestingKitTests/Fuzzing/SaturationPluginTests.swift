@@ -13,14 +13,13 @@ import Foundation
 struct SaturationPluginActionTests {
 
     @Test("Plugin has correct ID")
-    func testPluginId() async {
+    func testPluginId() {
         let plugin = SaturationPlugin()
-        let id = await plugin.id
-        #expect(id == "saturation_detector")
+        #expect(plugin.id == "saturation_detector")
     }
 
     @Test("Plugin returns stop action when saturated")
-    func testStopWhenSaturated() async throws {
+    func testStopWhenSaturated() {
         let config = SaturationPlateauDetector.Config(
             minSaturation: 0.9,
             minGrowthRate: 0.01,
@@ -32,11 +31,11 @@ struct SaturationPluginActionTests {
         // Simulate iterations without discovery to reach saturation
         var stoppedAt: Int?
         for i in 0..<500 {
-            let context = PluginEvent<Int>.IterationContext(
+            let context = SyncPluginEvent<Int>.IterationContext(
                 discoveredNewCoverage: false,
                 input: i
             )
-            let actions = try await plugin.handle(event: PluginEvent<Int>.iteration(context))
+            let actions = plugin.handle(event: SyncPluginEvent<Int>.iteration(context))
 
             if !actions.isEmpty {
                 if case .stop(let stopAction) = actions[0] {

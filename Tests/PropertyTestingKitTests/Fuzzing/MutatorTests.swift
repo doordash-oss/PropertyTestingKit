@@ -355,14 +355,20 @@ struct MutatorFuzzEngineTests {
             let engine = FuzzEngine(mutators: mutator, config: config)
             // Create default plugin processor (MutationPlugin)
             let processor = SyncPluginProcessor(plugins: (MutationPlugin()))
-            let processPlugins: @Sendable (
+            let processSyncPlugins: @Sendable (
+                consuming SyncPluginEvent<String>,
+                (FuzzPluginAction<String>) -> Void
+            ) -> Void = { event, execute in
+                processor.processSync(event: event, execute: execute)
+            }
+            let processAsyncPlugins: @Sendable (
                 isolated (any Actor)?,
-                consuming PluginEvent<String>,
+                consuming AsyncPluginEvent<String>,
                 (FuzzPluginAction<String>) -> Void
             ) async -> Void = { isolation, event, execute in
-                await processor.process(isolation: isolation, event: event, execute: execute)
+                await processor.processAsync(isolation: isolation, event: event, execute: execute)
             }
-            _ = await engine.run(processPlugins: processPlugins) { input in
+            _ = await engine.run(processSyncPlugins: processSyncPlugins, processAsyncPlugins: processAsyncPlugins) { input in
                 await testedInputs.update { $0.append(input) }
             }
         }
@@ -394,14 +400,20 @@ struct MutatorFuzzEngineTests {
             let engine = FuzzEngine(mutators: mutator, config: config)
             // Create default plugin processor (MutationPlugin)
             let processor = SyncPluginProcessor(plugins: (MutationPlugin()))
-            let processPlugins: @Sendable (
+            let processSyncPlugins: @Sendable (
+                consuming SyncPluginEvent<String>,
+                (FuzzPluginAction<String>) -> Void
+            ) -> Void = { event, execute in
+                processor.processSync(event: event, execute: execute)
+            }
+            let processAsyncPlugins: @Sendable (
                 isolated (any Actor)?,
-                consuming PluginEvent<String>,
+                consuming AsyncPluginEvent<String>,
                 (FuzzPluginAction<String>) -> Void
             ) async -> Void = { isolation, event, execute in
-                await processor.process(isolation: isolation, event: event, execute: execute)
+                await processor.processAsync(isolation: isolation, event: event, execute: execute)
             }
-            _ = await engine.run(processPlugins: processPlugins) { input in
+            _ = await engine.run(processSyncPlugins: processSyncPlugins, processAsyncPlugins: processAsyncPlugins) { input in
                 await testedInputs.update { $0.append(input) }
             }
         }

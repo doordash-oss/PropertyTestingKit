@@ -215,11 +215,11 @@ struct SaturationPluginTests {
 
         // Record many non-discoveries via iteration events
         for i in 0..<50 {
-            let iterationContext = PluginEvent<Int>.IterationContext(
+            let iterationContext = SyncPluginEvent<Int>.IterationContext(
                 discoveredNewCoverage: false,
                 input: i
             )
-            let actions = try await plugin.handle(event: PluginEvent<Int>.iteration(iterationContext))
+            let actions = plugin.handle(event: SyncPluginEvent<Int>.iteration(iterationContext))
 
             // Check if we got a stop action
             if actions.contains(where: {

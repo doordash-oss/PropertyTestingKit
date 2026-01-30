@@ -25,6 +25,32 @@ func getCPUTimeNanos() -> UInt64 {
     return userNanos + systemNanos
 }
 
+// MARK: - Profiling Benchmark (long-running for Instruments)
+
+/// Long-running benchmark specifically for profiling with Instruments.
+/// Runs for 30 seconds to give enough data for meaningful profiling.
+let profilingBenchmark: @Sendable () -> Void = {
+    Benchmark(
+        "Profiling - 30s fuzz run",
+        configuration: .init(
+            metrics: [
+                .custom("Iterations (M)", polarity: .prefersLarger, useScalingFactor: false),
+            ],
+            warmupIterations: 0,
+            scalingFactor: .one,
+            maxDuration: .seconds(60),
+            maxIterations: 1
+        )
+    ) { benchmark in
+        let result = try await fuzz(duration: .seconds(30), corpusMode: .refuzzReplace) { (input: Int) in
+            blackHole(input)
+        }
+
+        let iterationsM = result.stats.totalInputs / 1_000_000
+        benchmark.measurement(.custom("Iterations (M)", polarity: .prefersLarger, useScalingFactor: false), iterationsM)
+    }
+}
+
 // MARK: - Test Function
 
 let benchmarks: @Sendable () -> Void = {

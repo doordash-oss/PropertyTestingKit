@@ -22,29 +22,29 @@ struct ShrinkingPluginTests {
     func testNonFailureEventsReturnEmpty() async throws {
         let plugin = ShrinkingPlugin()
 
-        // Test start event
-        let startContext = PluginEvent<Int>.StartContext(
+        // Test start event (async)
+        let startContext = AsyncPluginEvent<Int>.StartContext(
             maxDuration: .seconds(60),
             corpusMode: .auto
         )
-        let startActions = try await plugin.handle(event: PluginEvent<Int>.start(startContext))
+        let startActions = try await plugin.handleAsync(event: AsyncPluginEvent<Int>.start(startContext))
         #expect(startActions.isEmpty)
 
-        // Test iteration event
-        let iterationContext = PluginEvent<Int>.IterationContext(
+        // Test iteration event (sync)
+        let iterationContext = SyncPluginEvent<Int>.IterationContext(
             discoveredNewCoverage: true,
             input: 42
         )
-        let iterationActions = try await plugin.handle(event: PluginEvent<Int>.iteration(iterationContext))
+        let iterationActions = plugin.handle(event: SyncPluginEvent<Int>.iteration(iterationContext))
         #expect(iterationActions.isEmpty)
 
-        // Test end event
-        let endContext = PluginEvent<Int>.EndContext(
+        // Test end event (async)
+        let endContext = AsyncPluginEvent<Int>.EndContext(
             totalCoveredIndices: Set([1, 2, 3]),
             projectPath: nil,
             sourceLocation: SourceLocation(fileID: #fileID, filePath: #filePath, line: #line, column: 1)
         )
-        let endActions = try await plugin.handle(event: PluginEvent<Int>.end(endContext))
+        let endActions = try await plugin.handleAsync(event: AsyncPluginEvent<Int>.end(endContext))
         #expect(endActions.isEmpty)
     }
 
@@ -53,7 +53,7 @@ struct ShrinkingPluginTests {
         let plugin = ShrinkingPlugin()
 
         // Create a failure context with an array that can be shrunk
-        let failureContext = PluginEvent<[Int]>.FailureFoundContext(
+        let failureContext = AsyncPluginEvent<[Int]>.FailureFoundContext(
             input: [1, 2, 3, 42, 5],
             test: { input in
                 // Fail if array contains 42
@@ -65,7 +65,7 @@ struct ShrinkingPluginTests {
             coverageSignature: CoverageSignature(edges: Set<UInt32>([]))
         )
 
-        let actions = try await plugin.handle(event: PluginEvent<[Int]>.failureFound(failureContext))
+        let actions = try await plugin.handleAsync(event: AsyncPluginEvent<[Int]>.failureFound(failureContext))
 
         // Should return 3 actions: selectForMutation, submitToCorpus, recordIssue
         #expect(actions.count == 3)
@@ -97,7 +97,7 @@ struct ShrinkingPluginTests {
     func testShrinkingMinimizesInput() async throws {
         let plugin = ShrinkingPlugin()
 
-        let failureContext = PluginEvent<[Int]>.FailureFoundContext(
+        let failureContext = AsyncPluginEvent<[Int]>.FailureFoundContext(
             input: [1, 2, 3, 42, 5, 6, 7],
             test: { input in
                 if input.contains(42) {
@@ -108,7 +108,7 @@ struct ShrinkingPluginTests {
             coverageSignature: CoverageSignature(edges: Set<UInt32>([]))
         )
 
-        let actions = try await plugin.handle(event: PluginEvent<[Int]>.failureFound(failureContext))
+        let actions = try await plugin.handleAsync(event: AsyncPluginEvent<[Int]>.failureFound(failureContext))
 
         // Find the selectForMutation action and check the shrunk input
         for action in actions {

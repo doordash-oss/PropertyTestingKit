@@ -112,11 +112,10 @@ actor DWARFSymbolizerHelper {
             return nil
         }
         let fileOffset = runtimeToFileOffset(pc)
-        return await symbolizer.lookup(address: fileOffset)
+        return symbolizer.lookup(address: fileOffset)
     }
 
     /// Batch look up DWARF info for multiple PC addresses.
-    /// Much faster than individual lookups due to reduced actor overhead.
     func lookupBatch(pcs: [UInt]) async -> [UInt: DWARFSourceLocation] {
         guard let symbolizer = shared else {
             return [:]
@@ -126,7 +125,7 @@ actor DWARFSymbolizerHelper {
         let addresses = pcs.map { runtimeToFileOffset($0) }
 
         // Batch lookup
-        let results = await symbolizer.lookup(addresses: addresses)
+        let results = symbolizer.lookup(addresses: addresses)
 
         // Map back to runtime PCs
         var pcResults: [UInt: DWARFSourceLocation] = [:]

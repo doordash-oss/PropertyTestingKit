@@ -14,23 +14,88 @@ import Foundation
 ///
 /// Plugins receive events from the fuzz engine and return actions to be executed.
 /// Plugins run in array order - first plugin handles event first.
+///
+/// The protocol has two handler methods:
+/// - `handle(event:)` - Synchronous, called for iteration events (hot path, millions of calls)
+/// - `handleAsync(event:)` - Asynchronous, called for rare events (start, end, failureFound)
+///
+/// Default implementations return empty arrays, so plugins only need to implement
+/// the methods for events they care about.
 public protocol FuzzPlugin: Sendable {
     /// Unique identifier for this plugin (for logging).
     var id: String { get }
 
-    /// Handle an event and return actions to execute.
+    /// Handle a synchronous event and return actions to execute.
     ///
-    /// - Parameter event: The plugin event to handle.
+    /// This is the hot path - called millions of times per fuzz run.
+    /// Must be synchronous to avoid async overhead.
+    ///
+    /// - Parameter event: The sync plugin event to handle (iteration events).
     /// - Returns: Actions for FuzzEngine to execute.
     func handle<each T: Sendable>(
-        event: consuming PluginEvent<repeat each T>
+        event: SyncPluginEvent<repeat each T>
+    ) -> [FuzzPluginAction<repeat each T>]
+
+    /// Handle an asynchronous event and return actions to execute.
+    ///
+    /// Called for rare events like start, end, and failureFound.
+    /// Async is acceptable here since these events happen infrequently.
+    ///
+    /// - Parameter event: The async plugin event to handle.
+    /// - Returns: Actions for FuzzEngine to execute.
+    func handleAsync<each T: Sendable>(
+        event: AsyncPluginEvent<repeat each T>
     ) async throws -> [FuzzPluginAction<repeat each T>]
 }
 
-// MARK: - Plugin Events
+// MARK: - Default Implementations
 
-/// Events dispatched to plugins during fuzzing.
-public enum PluginEvent<each T: Sendable>: Sendable {
+extension FuzzPlugin {
+    /// Default implementation: do nothing for sync events.
+    public func handle<each T: Sendable>(
+        event: SyncPluginEvent<repeat each T>
+    ) -> [FuzzPluginAction<repeat each T>] {
+        return []
+    }
+
+    /// Default implementation: do nothing for async events.
+    public func handleAsync<each T: Sendable>(
+        event: AsyncPluginEvent<repeat each T>
+    ) async throws -> [FuzzPluginAction<repeat each T>] {
+        return []
+    }
+}
+
+// MARK: - Sync Plugin Events (Hot Path)
+
+/// Synchronous events dispatched to plugins during fuzzing.
+/// These are called millions of times and must be handled synchronously.
+public enum SyncPluginEvent<each T: Sendable>: Sendable {
+    /// An iteration completed.
+    case iteration(IterationContext)
+
+    /// Context provided after each iteration.
+    public struct IterationContext: Sendable {
+        /// Whether this iteration discovered new coverage.
+        public let discoveredNewCoverage: Bool
+        /// The input that was tested in this iteration.
+        public let input: (repeat each T)
+
+        public init(
+            discoveredNewCoverage: Bool,
+            input: consuming (repeat each T)
+        ) {
+            self.discoveredNewCoverage = discoveredNewCoverage
+            self.input = input
+        }
+    }
+}
+
+// MARK: - Async Plugin Events (Cold Path)
+
+/// Asynchronous events dispatched to plugins during fuzzing.
+/// These are called rarely and can be handled asynchronously.
+public enum AsyncPluginEvent<each T: Sendable>: Sendable {
     /// Fuzzing is starting.
     case start(StartContext)
 
@@ -39,11 +104,6 @@ public enum PluginEvent<each T: Sendable>: Sendable {
 
     /// A test failure was found.
     case failureFound(FailureFoundContext)
-
-    /// An iteration completed.
-    case iteration(IterationContext)
-
-    // MARK: - Context Types
 
     /// Context provided when fuzzing starts.
     public struct StartContext: Sendable {
@@ -103,22 +163,17 @@ public enum PluginEvent<each T: Sendable>: Sendable {
             self.coverageSignature = coverageSignature
         }
     }
+}
 
-    /// Context provided after each iteration.
-    public struct IterationContext: Sendable {
-        /// Whether this iteration discovered new coverage.
-        public let discoveredNewCoverage: Bool
-        /// The input that was tested in this iteration.
-        public let input: (repeat each T)
+// MARK: - Legacy PluginEvent (for compatibility during migration)
 
-        public init(
-            discoveredNewCoverage: Bool,
-            input: consuming (repeat each T)
-        ) {
-            self.discoveredNewCoverage = discoveredNewCoverage
-            self.input = input
-        }
-    }
+/// Combined event type - deprecated, use SyncPluginEvent or AsyncPluginEvent instead.
+@available(*, deprecated, message: "Use SyncPluginEvent for iteration events or AsyncPluginEvent for other events")
+public enum PluginEvent<each T: Sendable>: Sendable {
+    case start(AsyncPluginEvent<repeat each T>.StartContext)
+    case end(AsyncPluginEvent<repeat each T>.EndContext)
+    case failureFound(AsyncPluginEvent<repeat each T>.FailureFoundContext)
+    case iteration(SyncPluginEvent<repeat each T>.IterationContext)
 }
 
 // MARK: - Plugin Actions

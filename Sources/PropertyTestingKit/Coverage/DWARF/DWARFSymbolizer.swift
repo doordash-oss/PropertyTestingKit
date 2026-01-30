@@ -26,16 +26,16 @@ private final class SymbolizerRef: @unchecked Sendable {
 
 /// Symbolizer that uses LLVM to resolve addresses to source locations.
 ///
-/// This actor provides thread-safe access to LLVM symbolization.
+/// Thread-safe: The underlying LLVM C wrapper uses mutexes internally.
 ///
 /// Usage:
 /// ```swift
 /// let symbolizer = try DWARFSymbolizer(path: "/path/to/binary")
-/// if let location = await symbolizer.lookup(address: 0x100003f40) {
+/// if let location = symbolizer.lookup(address: 0x100003f40) {
 ///     print("\(location.file):\(location.line)")
 /// }
 /// ```
-public actor DWARFSymbolizer: Sendable {
+public struct DWARFSymbolizer: Sendable {
     private let ref: SymbolizerRef
 
     /// Initialize a symbolizer for the given binary path.

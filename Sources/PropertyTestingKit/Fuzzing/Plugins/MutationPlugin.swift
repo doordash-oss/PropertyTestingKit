@@ -16,16 +16,13 @@ public struct MutationPlugin: FuzzPlugin {
     public init() {}
 
     public func handle<each T: Sendable>(
-        event: consuming PluginEvent<repeat each T>
-    ) async throws -> [FuzzPluginAction<repeat each T>] {
+        event: SyncPluginEvent<repeat each T>
+    ) -> [FuzzPluginAction<repeat each T>] {
         switch event {
         case let .iteration(context):
             if context.discoveredNewCoverage {
                 return [.selectForMutation(.init(input: context.input))]
             }
-            return []
-
-        case .start, .end, .failureFound:
             return []
         }
     }

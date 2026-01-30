@@ -22,11 +22,11 @@ struct CoverageGapPluginActionTests {
     func testNonEndEventsReturnEmpty() async throws {
         let plugin = CoverageGapPlugin()
 
-        let startContext = PluginEvent<Int>.StartContext(
+        let startContext = AsyncPluginEvent<Int>.StartContext(
             maxDuration: .seconds(60),
             corpusMode: .auto
         )
-        let actions = try await plugin.handle(event: PluginEvent<Int>.start(startContext))
+        let actions = try await plugin.handleAsync(event: AsyncPluginEvent<Int>.start(startContext))
         #expect(actions.isEmpty)
     }
 }

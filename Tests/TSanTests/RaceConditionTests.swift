@@ -130,15 +130,21 @@ struct FuzzEngineRaceTests {
 
                     // Create default plugin processor (MutationPlugin)
                     let processor = SyncPluginProcessor(plugins: (MutationPlugin()))
-                    let processPlugins: @Sendable (
+                    let processSyncPlugins: @Sendable (
+                        consuming SyncPluginEvent<Int>,
+                        (FuzzPluginAction<Int>) -> Void
+                    ) -> Void = { event, execute in
+                        processor.processSync(event: event, execute: execute)
+                    }
+                    let processAsyncPlugins: @Sendable (
                         isolated (any Actor)?,
-                        consuming PluginEvent<Int>,
+                        consuming AsyncPluginEvent<Int>,
                         (FuzzPluginAction<Int>) -> Void
                     ) async -> Void = { isolation, event, execute in
-                        await processor.process(isolation: isolation, event: event, execute: execute)
+                        await processor.processAsync(isolation: isolation, event: event, execute: execute)
                     }
 
-                    _ = try await engine.run(processPlugins: processPlugins) { (input: Int) in
+                    _ = try await engine.run(processSyncPlugins: processSyncPlugins, processAsyncPlugins: processAsyncPlugins) { (input: Int) in
                         // Simple test that doesn't fail
                         // Use overflow operators to avoid arithmetic overflow crashes
                         // when fuzzer generates extreme Int values

@@ -5,31 +5,42 @@
 
 import Foundation
 
-public actor PlateauDetectorPlugin: FuzzPlugin {
-    public let id: String = "plateau_detector" 
+public struct PlateauDetectorPlugin: FuzzPlugin {
+    public let id: String = "plateau_detector"
 
-    private var detector: SimpleCoveragePlateauDetector
+    private let detector: Box<SimpleCoveragePlateauDetector>
 
     /// Create a plateau detector plugin.
     ///
     /// - Parameters:
     ///   - config: Configuration for plateau detection.
     public init(config: SimpleCoveragePlateauDetector.Config = .init()) {
-        self.detector = SimpleCoveragePlateauDetector(config: config)
+        self.detector = Box(SimpleCoveragePlateauDetector(config: config))
     }
 
-    public func handle<each T: Sendable>(event: consuming PluginEvent<repeat each T>) async throws -> [FuzzPluginAction<repeat each T>] {
+    public func handle<each T: Sendable>(event: SyncPluginEvent<repeat each T>) -> [FuzzPluginAction<repeat each T>] {
         switch event {
         case let .iteration(context):
-            detector.record(discoveredNewCoverage: context.discoveredNewCoverage)
+            detector.value.record(discoveredNewCoverage: context.discoveredNewCoverage)
 
-            if detector.hasPlateaued {
+            if detector.value.hasPlateaued {
                 return [.stop(FuzzPluginAction<repeat each T>.StopAction(reason: .custom("coverage_plateaued")))]
             }
 
             return []
-        default:
-            return []
         }
+    }
+}
+
+/// Simple box for reference semantics. Not thread-safe.
+/// Plugins run on a single task so no synchronization needed.
+@usableFromInline
+final class Box<Value>: @unchecked Sendable {
+    @usableFromInline
+    var value: Value
+
+    @usableFromInline
+    init(_ value: Value) {
+        self.value = value
     }
 }

@@ -8,21 +8,30 @@ import Dependencies
 import DequeModule
 import Testing
 
-actor FuzzStateMachine<each Input: Codable & Sendable> {
+/// Manages the fuzzing loop state. Not thread-safe - only used from a single task.
+final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendable {
     /// Type-erased mutator functions for input mutation and generation.
     typealias MutatorMutate = @Sendable ((repeat each Input)) -> [(repeat each Input)]
     typealias MutatorGenerate = @Sendable () -> (repeat each Input)
 
-    /// Type-erased plugin processor closure.
+    /// Synchronous plugin processor for iteration events (hot path).
     /// Captures concrete plugin types via closure; signature only mentions Input types.
-    typealias PluginProcessorFn = @Sendable (
+    typealias SyncPluginProcessorFn = @Sendable (
+        consuming SyncPluginEvent<repeat each Input>,
+        (FuzzPluginAction<repeat each Input>) -> Void
+    ) -> Void
+
+    /// Asynchronous plugin processor for rare events (cold path).
+    typealias AsyncPluginProcessorFn = @Sendable (
         isolated (any Actor)?,
-        consuming PluginEvent<repeat each Input>,
+        consuming AsyncPluginEvent<repeat each Input>,
         (FuzzPluginAction<repeat each Input>) -> Void
     ) async -> Void
 
-    /// Plugin processor closure that captures concrete plugin types.
-    private let processPlugins: PluginProcessorFn
+    /// Sync plugin processor closure for iteration events.
+    private let processSyncPlugins: SyncPluginProcessorFn
+    /// Async plugin processor closure for rare events.
+    private let processAsyncPlugins: AsyncPluginProcessorFn
     private let config: FuzzEngineConfig
     private let corpus: CorpusClient<repeat each Input>
     private let mutationGenerator: MutatorMutate
@@ -42,7 +51,8 @@ actor FuzzStateMachine<each Input: Codable & Sendable> {
 
     init(
         seeds: [(repeat each Input)],
-        processPlugins: @escaping PluginProcessorFn,
+        processSyncPlugins: @escaping SyncPluginProcessorFn,
+        processAsyncPlugins: @escaping AsyncPluginProcessorFn,
         config: FuzzEngineConfig,
         startTime: Date,
         randomInputGenerator: @escaping MutatorGenerate,
@@ -57,7 +67,8 @@ actor FuzzStateMachine<each Input: Codable & Sendable> {
         self.startTime = startTime
         self.seeds = seeds
         self.randomInputGenerator = randomInputGenerator
-        self.processPlugins = processPlugins
+        self.processSyncPlugins = processSyncPlugins
+        self.processAsyncPlugins = processAsyncPlugins
         self.config = config
         self.corpus = corpus
         self.mutationGenerator = mutationGenerator
@@ -92,7 +103,7 @@ actor FuzzStateMachine<each Input: Codable & Sendable> {
 
         // Wrap entire loop in issue capture context to avoid per-iteration TaskLocal overhead.
         // This saves ~12s over millions of iterations by doing one TaskLocal push/pop instead of millions.
-        await withIssueCaptureContext(isolation: self) { issueCaptureContext in
+        await withIssueCaptureContext { issueCaptureContext in
             let testWithIssueCapture = Self.captureIssues(
                 context: issueCaptureContext,
                 sourceLocation: config.sourceLocation,
@@ -148,12 +159,12 @@ actor FuzzStateMachine<each Input: Codable & Sendable> {
                         didAdd = corpus.addIfInterestingSparse(input, sparse)
                     }
 
-                    // Process iteration event synchronously
-                    await process(
-                        event: .iteration(
-                            .init(discoveredNewCoverage: didAdd, input: input)
-                        )
-                    )
+                    // Process iteration event synchronously (hot path - no async)
+                    processSyncPlugins(
+                        .iteration(.init(discoveredNewCoverage: didAdd, input: input))
+                    ) { action in
+                        self.executeAction(action)
+                    }
                 } catch is CancellationError {
                     // Allow clean exit on cancellation
                     break
@@ -166,9 +177,10 @@ actor FuzzStateMachine<each Input: Codable & Sendable> {
                         coverageSignature = CoverageSignature(edges: Set())
                     }
                     recordFailure(input: input, error: error)
-                    // Process failure event synchronously
-                    await process(
-                        event: .failureFound(
+                    // Process failure event asynchronously (cold path - async OK)
+                    await processAsyncPlugins(
+                        nil,
+                        .failureFound(
                             .init(
                                 input: input,
                                 test: testWithIssueCapture,
@@ -176,7 +188,9 @@ actor FuzzStateMachine<each Input: Codable & Sendable> {
                                 coverageSignature: coverageSignature
                             )
                         )
-                    )
+                    ) { action in
+                        self.executeAction(action)
+                    }
                 }
                 iterationCount += 1
             }
@@ -231,12 +245,6 @@ actor FuzzStateMachine<each Input: Codable & Sendable> {
     private static func fetchCoverageCounters() -> CoverageCountersClient {
         @Dependency(\.coverageCounters) var coverageCounters
         return coverageCounters
-    }
-
-    private func process(event: PluginEvent<repeat each Input>) async {
-        await processPlugins(self, event) { action in
-            self.executeAction(action)
-        }
     }
 
     /// Executes a single plugin action.
