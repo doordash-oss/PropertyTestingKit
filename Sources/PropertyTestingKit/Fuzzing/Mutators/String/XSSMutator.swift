@@ -6,7 +6,7 @@
 import Dependencies
 
 struct XSSMutator: Mutator, Sendable {
-    @Dependency(\.random) private var random
+    @Dependency(\.fastRNG) private var fastRNG
 
     var seeds: [String] {
         [
@@ -34,6 +34,7 @@ struct XSSMutator: Mutator, Sendable {
     }
 
     func generate() -> String {
-        random { rng in seeds.randomElement(using: &rng) } ?? "<script>alert(1)</script>"
+        var rng = fastRNG
+        return seeds.randomElement(using: &rng) ?? "<script>alert(1)</script>"
     }
 }

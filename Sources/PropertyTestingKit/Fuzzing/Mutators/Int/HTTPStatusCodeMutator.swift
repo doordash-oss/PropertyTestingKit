@@ -6,7 +6,7 @@
 import Dependencies
 
 struct HTTPStatusCodeMutator: Mutator, Sendable {
-    @Dependency(\.random) private var random
+    @Dependency(\.fastRNG) private var fastRNG
 
     var seeds: [Int] {
         [
@@ -25,6 +25,7 @@ struct HTTPStatusCodeMutator: Mutator, Sendable {
     }
 
     func generate() -> Int {
-        random { rng in Int.random(in: 100...599, using: &rng) }
+        var rng = fastRNG
+        return Int.random(in: 100...599, using: &rng)
     }
 }

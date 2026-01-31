@@ -6,7 +6,7 @@
 import Dependencies
 
 struct EmptyStringMutator: Mutator, Sendable {
-    @Dependency(\.random) private var random
+    @Dependency(\.fastRNG) private var fastRNG
 
     var seeds: [String] {
         ["", " ", "\t", "\n", "\0"]
@@ -24,6 +24,7 @@ struct EmptyStringMutator: Mutator, Sendable {
     }
 
     func generate() -> String {
-        random { rng in seeds.randomElement(using: &rng) } ?? ""
+        var rng = fastRNG
+        return seeds.randomElement(using: &rng) ?? ""
     }
 }

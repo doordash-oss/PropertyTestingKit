@@ -7,7 +7,7 @@ import Dependencies
 import Foundation
 
 struct WhitespaceMutator: Mutator, Sendable {
-    @Dependency(\.random) private var random
+    @Dependency(\.fastRNG) private var fastRNG
 
     var seeds: [String] {
         [
@@ -35,6 +35,7 @@ struct WhitespaceMutator: Mutator, Sendable {
     }
 
     func generate() -> String {
-        random { rng in seeds.randomElement(using: &rng) } ?? " "
+        var rng = fastRNG
+        return seeds.randomElement(using: &rng) ?? " "
     }
 }

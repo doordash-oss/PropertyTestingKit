@@ -6,7 +6,7 @@
 import Dependencies
 
 struct DoubleBoundaryMutator: Mutator, Sendable {
-    @Dependency(\.random) private var random
+    @Dependency(\.fastRNG) private var fastRNG
 
     var seeds: [Double] {
         [
@@ -31,6 +31,7 @@ struct DoubleBoundaryMutator: Mutator, Sendable {
     }
 
     func generate() -> Double {
-        random { rng in seeds.randomElement(using: &rng) } ?? 0.0
+        var rng = fastRNG
+        return seeds.randomElement(using: &rng) ?? 0.0
     }
 }

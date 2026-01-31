@@ -6,7 +6,7 @@
 import Dependencies
 
 struct PortMutator: Mutator, Sendable {
-    @Dependency(\.random) private var random
+    @Dependency(\.fastRNG) private var fastRNG
 
     var seeds: [Int] {
         [
@@ -26,6 +26,7 @@ struct PortMutator: Mutator, Sendable {
     }
 
     func generate() -> Int {
-        random { rng in Int.random(in: 0...65535, using: &rng) }
+        var rng = fastRNG
+        return Int.random(in: 0...65535, using: &rng)
     }
 }

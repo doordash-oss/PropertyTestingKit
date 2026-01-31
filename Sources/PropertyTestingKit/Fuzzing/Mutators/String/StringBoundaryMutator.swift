@@ -6,7 +6,7 @@
 import Dependencies
 
 struct StringBoundaryMutator: Mutator, Sendable {
-    @Dependency(\.random) private var random
+    @Dependency(\.fastRNG) private var fastRNG
 
     var seeds: [String] {
         [
@@ -31,11 +31,10 @@ struct StringBoundaryMutator: Mutator, Sendable {
     }
 
     func generate() -> String {
-        random { rng in
-            let lengths = [0, 1, 10, 100, 255, 256, 1000]
-            let length = lengths.randomElement(using: &rng) ?? 10
-            let chars = Array("abcdefghijklmnopqrstuvwxyz")
-            return String((0..<length).map { _ in chars.randomElement(using: &rng)! })
-        }
+        var rng = fastRNG
+        let lengths = [0, 1, 10, 100, 255, 256, 1000]
+        let length = lengths.randomElement(using: &rng) ?? 10
+        let chars = Array("abcdefghijklmnopqrstuvwxyz")
+        return String((0..<length).map { _ in chars.randomElement(using: &rng)! })
     }
 }

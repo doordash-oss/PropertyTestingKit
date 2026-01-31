@@ -16,11 +16,11 @@ import Foundation
 ///
 /// Note: `now` is synchronous because `Date()` is thread-safe and doesn't
 /// require actor isolation. This avoids unnecessary async overhead in hot paths.
-public struct DateClient: Sendable {
+struct DateClient: Sendable {
     /// Generate the current date.
-    public var now: @Sendable () -> Date
+    var now: @Sendable () -> Date
 
-    public init(now: @escaping @Sendable () -> Date) {
+    init(now: @escaping @Sendable () -> Date) {
         self.now = now
     }
 }
@@ -29,7 +29,7 @@ public struct DateClient: Sendable {
 
 extension DateClient {
     /// Create a client that always returns a constant date.
-    public static func constant(_ date: Date) -> DateClient {
+    static func constant(_ date: Date) -> DateClient {
         DateClient(now: { date })
     }
 }
@@ -37,15 +37,15 @@ extension DateClient {
 // MARK: - Dependency Key
 
 extension DateClient: DependencyKey {
-    public static let liveValue = DateClient(now: { Date() })
+    static let liveValue = DateClient(now: { Date() })
 
     /// Test value uses real dates so we don't interfere with users' tests.
     /// PropertyTestingKit's own tests can override with `.constant()` when needed.
-    public static let testValue = liveValue
+    static let testValue = liveValue
 }
 
 extension DependencyValues {
-    public var dateClient: DateClient {
+    var dateClient: DateClient {
         get { self[DateClient.self] }
         set { self[DateClient.self] = newValue }
     }

@@ -6,7 +6,7 @@
 import Dependencies
 
 struct URLMutator: Mutator, Sendable {
-    @Dependency(\.random) private var random
+    @Dependency(\.fastRNG) private var fastRNG
 
     var seeds: [String] {
         [
@@ -35,13 +35,12 @@ struct URLMutator: Mutator, Sendable {
     }
 
     func generate() -> String {
-        random { rng in
-            let chars = Array("abcdefghijklmnopqrstuvwxyz")
-            let protocols = ["https://", "http://", "ftp://"]
-            let domain = String((0..<Int.random(in: 4...10, using: &rng)).map { _ in chars.randomElement(using: &rng)! })
-            let tlds = ["com", "org", "net", "io"]
-            let path = Bool.random(using: &rng) ? "/\(String((0..<5).map { _ in chars.randomElement(using: &rng)! }))" : ""
-            return "\(protocols.randomElement(using: &rng)!)\(domain).\(tlds.randomElement(using: &rng)!)\(path)"
-        }
+        var rng = fastRNG
+        let chars = Array("abcdefghijklmnopqrstuvwxyz")
+        let protocols = ["https://", "http://", "ftp://"]
+        let domain = String((0..<Int.random(in: 4...10, using: &rng)).map { _ in chars.randomElement(using: &rng)! })
+        let tlds = ["com", "org", "net", "io"]
+        let path = Bool.random(using: &rng) ? "/\(String((0..<5).map { _ in chars.randomElement(using: &rng)! }))" : ""
+        return "\(protocols.randomElement(using: &rng)!)\(domain).\(tlds.randomElement(using: &rng)!)\(path)"
     }
 }

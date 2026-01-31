@@ -6,7 +6,7 @@
 import Dependencies
 
 struct PhoneNumberMutator: Mutator, Sendable {
-    @Dependency(\.random) private var random
+    @Dependency(\.fastRNG) private var fastRNG
 
     var seeds: [String] {
         [
@@ -38,15 +38,14 @@ struct PhoneNumberMutator: Mutator, Sendable {
     }
 
     func generate() -> String {
-        random { rng in
-            // Generate random phone number
-            let digits = (0..<10).map { _ in String(Int.random(in: 0...9, using: &rng)) }.joined()
-            let formats = [
-                { (d: String) in "+1-\(d.prefix(3))-\(d.dropFirst(3).prefix(3))-\(d.suffix(4))" },
-                { (d: String) in "(\(d.prefix(3))) \(d.dropFirst(3).prefix(3))-\(d.suffix(4))" },
-                { (d: String) in d },
-            ]
-            return formats.randomElement(using: &rng)!(digits)
-        }
+        var rng = fastRNG
+        // Generate random phone number
+        let digits = (0..<10).map { _ in String(Int.random(in: 0...9, using: &rng)) }.joined()
+        let formats = [
+            { (d: String) in "+1-\(d.prefix(3))-\(d.dropFirst(3).prefix(3))-\(d.suffix(4))" },
+            { (d: String) in "(\(d.prefix(3))) \(d.dropFirst(3).prefix(3))-\(d.suffix(4))" },
+            { (d: String) in d },
+        ]
+        return formats.randomElement(using: &rng)!(digits)
     }
 }

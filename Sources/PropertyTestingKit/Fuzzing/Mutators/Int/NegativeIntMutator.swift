@@ -6,7 +6,7 @@
 import Dependencies
 
 struct NegativeIntMutator: Mutator, Sendable {
-    @Dependency(\.random) private var random
+    @Dependency(\.fastRNG) private var fastRNG
 
     var seeds: [Int] {
         [-1, -2, -10, -100, -1000, Int.min, Int.min + 1]
@@ -22,6 +22,7 @@ struct NegativeIntMutator: Mutator, Sendable {
     }
 
     func generate() -> Int {
-        random { rng in -Int.random(in: 1...Int.max, using: &rng) }
+        var rng = fastRNG
+        return -Int.random(in: 1...Int.max, using: &rng)
     }
 }

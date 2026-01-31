@@ -6,7 +6,7 @@
 import Dependencies
 
 struct PowerOfTwoMutator: Mutator, Sendable {
-    @Dependency(\.random) private var random
+    @Dependency(\.fastRNG) private var fastRNG
 
     var seeds: [Int] {
         [1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768, 65536]
@@ -22,7 +22,8 @@ struct PowerOfTwoMutator: Mutator, Sendable {
     }
 
     func generate() -> Int {
-        let power = random { rng in Int.random(in: 0...16, using: &rng) }
+        var rng = fastRNG
+        let power = Int.random(in: 0...16, using: &rng)
         return 1 << power
     }
 }

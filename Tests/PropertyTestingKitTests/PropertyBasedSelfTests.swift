@@ -336,23 +336,20 @@ struct CorpusEntryPropertyTests {
         let entry = CorpusEntry(
             input: "test input",
             signature: CoverageSignature(edges: Set<UInt32>([0, 5])),
-            discoveredAt: Date()
+            entryType: .coverage,
+            failure: nil
         )
 
-        let encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .iso8601
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
+        let encoder = JSONEncoder.corpusEncoder
+        let decoder = JSONDecoder.corpusDecoder
 
         let data = try encoder.encode(entry)
         let decoded = try decoder.decode(CorpusEntry<String>.self, from: data)
 
         #expect(decoded.input == entry.input)
         #expect(decoded.signature == entry.signature)
-        // Date comparison with some tolerance due to serialization
-        let timeDiff: Double = decoded.discoveredAt.timeIntervalSince(entry.discoveredAt)
-        let withinTolerance: Bool = Swift.abs(timeDiff) < Double(1.0)
-        #expect(withinTolerance, "Date should be within 1 second")
+        #expect(decoded.entryType == entry.entryType)
+        #expect(decoded.failure == nil)
     }
 }
 

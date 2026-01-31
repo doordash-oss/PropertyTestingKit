@@ -69,7 +69,7 @@ public protocol Mutator<Value>: Sendable {
     /// This is used when the seed queue is exhausted and fresh random
     /// inputs are needed to continue exploration.
     ///
-    /// Uses the `@Dependency(\.random)` client for random number generation,
+    /// Uses the `@Dependency(\.fastRNG)` client for random number generation,
     /// which can be overridden in tests for determinism.
     func generate() -> Value
 }
@@ -137,7 +137,7 @@ public struct AnyMutator<Value: Sendable>: Mutator, Sendable {
 
 /// A mutator that combines multiple mutation strategies.
 public struct ComposedMutator<Value: Sendable>: Mutator, Sendable {
-    @Dependency(\.random) private var random
+    @Dependency(\.fastRNG) private var fastRNG
 
     private let mutators: [AnyMutator<Value>]
 
@@ -154,9 +154,8 @@ public struct ComposedMutator<Value: Sendable>: Mutator, Sendable {
         guard !mutators.isEmpty else {
             fatalError("Cannot generate from empty ComposedMutator")
         }
-        let index = random { rng in
-            Int.random(in: 0..<mutators.count, using: &rng)
-        }
+        var rng = fastRNG
+        let index = Int.random(in: 0..<mutators.count, using: &rng)
         return mutators[index].generate()
     }
 
@@ -169,7 +168,7 @@ public struct ComposedMutator<Value: Sendable>: Mutator, Sendable {
 
 /// A mutator with a single strategy.
 public struct SingleMutator<Value: Sendable>: Mutator, Sendable {
-    @Dependency(\.random) private var random
+    @Dependency(\.fastRNG) private var fastRNG
 
     public let seeds: [Value]
     private let _mutate: @Sendable (Value) -> [Value]
@@ -187,10 +186,9 @@ public struct SingleMutator<Value: Sendable>: Mutator, Sendable {
             guard !seeds.isEmpty else {
                 fatalError("Cannot generate from empty seeds")
             }
-            return random { rng in
-                let index = Int.random(in: 0..<seeds.count, using: &rng)
-                return seeds[index]
-            }
+            var rng = fastRNG
+            let index = Int.random(in: 0..<seeds.count, using: &rng)
+            return seeds[index]
         }
     }
 

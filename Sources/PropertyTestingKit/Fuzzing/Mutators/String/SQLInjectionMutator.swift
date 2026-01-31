@@ -6,7 +6,7 @@
 import Dependencies
 
 struct SQLInjectionMutator: Mutator, Sendable {
-    @Dependency(\.random) private var random
+    @Dependency(\.fastRNG) private var fastRNG
 
     var seeds: [String] {
         [
@@ -35,6 +35,7 @@ struct SQLInjectionMutator: Mutator, Sendable {
     }
 
     func generate() -> String {
-        random { rng in seeds.randomElement(using: &rng) } ?? "' OR 1=1--"
+        var rng = fastRNG
+        return seeds.randomElement(using: &rng) ?? "' OR 1=1--"
     }
 }

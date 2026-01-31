@@ -86,7 +86,7 @@ extension CoverageCountersClient: DependencyKey {
 
     /// Test value uses live coverage counters since they're read-only and safe.
     /// For tests that need to control coverage behavior, override with a custom mock.
-    public static let testValue = liveValue
+    static let testValue = liveValue
 }
 
 extension DependencyValues {

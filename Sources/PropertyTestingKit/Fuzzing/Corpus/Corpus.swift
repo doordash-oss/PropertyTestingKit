@@ -30,7 +30,7 @@ public final class Corpus<each Input: Codable & Sendable>: @unchecked Sendable {
         self.totalCoverage = totalCoverage
     }
 
-    public init() {
+    init() {
         self.entries = []
         self.totalCoverage = CoverageSignature(edges: [])
     }
@@ -39,7 +39,7 @@ public final class Corpus<each Input: Codable & Sendable>: @unchecked Sendable {
     // Use CorpusSnapshot for serialization and create Corpus via init(from:CorpusSnapshot).
 
     /// Create a snapshot of the corpus state for encoding.
-    public func snapshot() -> CorpusSnapshot<repeat each Input> {
+    func snapshot() -> CorpusSnapshot<repeat each Input> {
         CorpusSnapshot(
             entries: entries,
             totalCoverage: totalCoverage
@@ -68,7 +68,7 @@ public final class Corpus<each Input: Codable & Sendable>: @unchecked Sendable {
     ///
     /// - Returns: `true` if the entry was added, `false` if it was redundant.
     @discardableResult
-    public func addIfInteresting(
+    func addIfInteresting(
         input: repeat each Input,
         signature: CoverageSignature
     ) -> Bool {
@@ -79,7 +79,7 @@ public final class Corpus<each Input: Codable & Sendable>: @unchecked Sendable {
     }
 
     @discardableResult
-    public func addIfInteresting(
+    func addIfInteresting(
         input: (repeat each Input),
         signature: CoverageSignature
     ) -> Bool {
@@ -102,7 +102,7 @@ public final class Corpus<each Input: Codable & Sendable>: @unchecked Sendable {
     ///
     /// - Returns: `true` if the entry was added, `false` if it was redundant.
     @discardableResult
-    public func addIfInterestingSparse(
+    func addIfInterestingSparse(
         input: (repeat each Input),
         sparse: SparseCoverage
     ) -> Bool {
@@ -123,7 +123,7 @@ public final class Corpus<each Input: Codable & Sendable>: @unchecked Sendable {
     }
 
     /// Add an entry unconditionally.
-    public func add(
+    func add(
         input: repeat each Input,
         signature: CoverageSignature,
         entryType: CorpusEntryType = .coverage,
@@ -137,7 +137,7 @@ public final class Corpus<each Input: Codable & Sendable>: @unchecked Sendable {
         )
     }
 
-    public func add(
+    func add(
         input: (repeat each Input),
         signature: CoverageSignature,
         entryType: CorpusEntryType = .coverage,
@@ -165,7 +165,7 @@ public final class Corpus<each Input: Codable & Sendable>: @unchecked Sendable {
     /// that "previously-failing cases must be preserved during minimization."
     ///
     /// - Returns: A snapshot of the minimized corpus.
-    public func minimized() -> CorpusSnapshot<repeat each Input> {
+    func minimized() -> CorpusSnapshot<repeat each Input> {
         guard !entries.isEmpty else { return snapshot() }
 
         var minimizedEntries: [CorpusEntry<repeat each Input>] = []
@@ -274,39 +274,10 @@ public struct CorpusSnapshot<each Input: Codable & Sendable>: Sendable, Codable 
 
 extension Corpus {
     /// Create a corpus from a snapshot.
-    public convenience init(from snapshot: CorpusSnapshot<repeat each Input>) {
+    convenience init(from snapshot: CorpusSnapshot<repeat each Input>) {
         self.init(
             entries: snapshot.entries,
             totalCoverage: snapshot.totalCoverage
         )
-    }
-}
-
-// MARK: - Batch State
-
-/// A snapshot of corpus state for efficient batch operations.
-///
-/// This struct captures all commonly-needed corpus state in a single structure,
-/// allowing FuzzEngine to avoid multiple actor boundary crossings during batch
-/// generation. Instead of 4 actor hops per batch entry (~400 for batch of 100),
-/// we get all state in 1 hop total.
-public struct CorpusBatchState<each Input: Codable & Sendable>: Sendable {
-    /// Whether the corpus is empty.
-    public let isEmpty: Bool
-
-    /// Number of entries in the corpus.
-    public let count: Int
-
-    /// All entries in the corpus.
-    public let entries: [CorpusEntry<repeat each Input>]
-
-    public init(
-        isEmpty: Bool,
-        count: Int,
-        entries: [CorpusEntry<repeat each Input>]
-    ) {
-        self.isEmpty = isEmpty
-        self.count = count
-        self.entries = entries
     }
 }

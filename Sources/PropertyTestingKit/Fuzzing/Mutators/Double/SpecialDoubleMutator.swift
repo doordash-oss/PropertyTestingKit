@@ -6,7 +6,7 @@
 import Dependencies
 
 struct SpecialDoubleMutator: Mutator, Sendable {
-    @Dependency(\.random) private var random
+    @Dependency(\.fastRNG) private var fastRNG
 
     var seeds: [Double] {
         [
@@ -31,6 +31,7 @@ struct SpecialDoubleMutator: Mutator, Sendable {
     }
 
     func generate() -> Double {
-        random { rng in seeds.randomElement(using: &rng) } ?? Double.nan
+        var rng = fastRNG
+        return seeds.randomElement(using: &rng) ?? Double.nan
     }
 }

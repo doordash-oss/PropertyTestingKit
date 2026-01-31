@@ -6,7 +6,7 @@
 import Dependencies
 
 struct PercentageMutator: Mutator, Sendable {
-    @Dependency(\.random) private var random
+    @Dependency(\.fastRNG) private var fastRNG
 
     var seeds: [Double] {
         [0.0, 0.5, 1.0, -0.1, 1.1, 0.01, 0.99, 0.001, 0.999]
@@ -22,6 +22,7 @@ struct PercentageMutator: Mutator, Sendable {
     }
 
     func generate() -> Double {
-        random { rng in Double.random(in: 0.0...1.0, using: &rng) }
+        var rng = fastRNG
+        return Double.random(in: 0.0...1.0, using: &rng)
     }
 }

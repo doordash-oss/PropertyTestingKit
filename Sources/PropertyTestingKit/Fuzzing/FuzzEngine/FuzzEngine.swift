@@ -99,7 +99,6 @@ final class MutatorOps<each Input: Sendable>: @unchecked Sendable {
 ///
 public final class FuzzEngine<each M: Mutator>: @unchecked Sendable where repeat (each M).Value: Codable & Sendable {
     @Dependency(\.dateClient) private var dateClient
-    @Dependency(\.random) private var random
     @Dependency(\.corpusPersistence) private var corpusPersistenceClient
     @Dependency(\.coverageCounters) private var coverageCounters
     @Dependency(\.corpusRegistry) private var corpusRegistry

@@ -54,12 +54,12 @@ import MachO
 ///     ]
 /// )
 /// ```
-public enum SanCovCounters {
+enum SanCovCounters {
     /// Check if SanitizerCoverage counters are available.
     ///
     /// Returns `true` if the binary was compiled with sanitizer coverage flags
     /// and the counters have been initialized.
-    public static var isAvailable: Bool {
+    static var isAvailable: Bool {
         sancov_counters_available()
     }
 
@@ -69,12 +69,12 @@ public enum SanCovCounters {
         }
     }
 
-    public enum Errors: Error {
+    enum Errors: Error {
         case coverageNotAvailable
     }
 
     /// Get the total number of instrumented edges.
-    public static var totalEdgeCount: Int {
+    static var totalEdgeCount: Int {
         sancov_get_counter_count()
     }
 

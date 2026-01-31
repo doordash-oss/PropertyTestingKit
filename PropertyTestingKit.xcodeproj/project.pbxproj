@@ -58,7 +58,6 @@
 		5BD7C2E8D9C80257F0AA459D /* FastRNG.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6FCF623F07EE6A39B03A9667 /* FastRNG.swift */; };
 		5CE75ACE29DD3F8860FAA19D /* STADSPlateauDetector.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1733E8C2C5D2FC2BC7394036 /* STADSPlateauDetector.swift */; };
 		5D7BD139A169A1190764B4E8 /* CoverageGapPluginTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3DCC188A42F8F55099B6EC2C /* CoverageGapPluginTests.swift */; };
-		5F077D9A65EB04B36E8CE1E3 /* Xoshiro256PlusPlus.swift in Sources */ = {isa = PBXBuildFile; fileRef = 589E8DC0D8B9FB632EF6F8FA /* Xoshiro256PlusPlus.swift */; };
 		605B9C253222E341C0385AB9 /* Double+MutatorProviding.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E987090D06715A5F99BEC1A /* Double+MutatorProviding.swift */; };
 		60F4B0B951427866AB7380DC /* CorpusEntry.swift in Sources */ = {isa = PBXBuildFile; fileRef = D708E6A5A1B65DA927AFEA9E /* CorpusEntry.swift */; };
 		61031F0CE3C1B19C1D04DF89 /* PropertyTestingKit.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 2595E9AD80DBFC77F241A7E7 /* PropertyTestingKit.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
@@ -160,7 +159,6 @@
 		F8CA279E1D5C86F49E55C093 /* RandomNumberGeneratorClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = C6B7D375C4052AA3BFE8E32A /* RandomNumberGeneratorClient.swift */; };
 		F90AAA32E041831DC6EEF916 /* CorpusPersistenceClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8FED37BAA14224125F5AD7CA /* CorpusPersistenceClient.swift */; };
 		F997A4DDB225D63D65B476AA /* Corpus.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA3C0B16540F4626B5B88CD7 /* Corpus.swift */; };
-		FAE454D657D928B2962AB47B /* SeededRandomNumberGenerator.swift in Sources */ = {isa = PBXBuildFile; fileRef = CBD2703ECFC03CDB4AF0A1EC /* SeededRandomNumberGenerator.swift */; };
 		FD441F5D3E24D693D0A26B7B /* EmailMutator.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4BDE3BB5DB51115A5922433 /* EmailMutator.swift */; };
 		FD77D76B952C21FFC395E793 /* KFIFOQueue.swift in Sources */ = {isa = PBXBuildFile; fileRef = D491815E0AB84AD49314DF0A /* KFIFOQueue.swift */; };
 /* End PBXBuildFile section */
@@ -338,7 +336,6 @@
 		5793C170004170EB1BC50580 /* SanCovResetTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SanCovResetTests.swift; sourceTree = "<group>"; };
 		57EB1A242BFD17108D7B7C76 /* ck_f_pr.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ck_f_pr.h; sourceTree = "<group>"; };
 		5808442EF808C1EDDA75846C /* ck_cc.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ck_cc.h; sourceTree = "<group>"; };
-		589E8DC0D8B9FB632EF6F8FA /* Xoshiro256PlusPlus.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Xoshiro256PlusPlus.swift; sourceTree = "<group>"; };
 		5B885ACEB672DD762DA0F839 /* ProfiledBenchmark */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = text; path = ProfiledBenchmark; sourceTree = BUILT_PRODUCTS_DIR; };
 		5DE9A7DAD99528274ED05439 /* DeterministicTimingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeterministicTimingTests.swift; sourceTree = "<group>"; };
 		5DF47986A6DF631A9EB89635 /* ck_f_pr.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ck_f_pr.h; sourceTree = "<group>"; };
@@ -421,7 +418,6 @@
 		C94A378F579D36D7A0DE6F8D /* UInt+MutatorProviding.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "UInt+MutatorProviding.swift"; sourceTree = "<group>"; };
 		C9952DEBABC45B57A9A83D8B /* HTTPStatusCodeMutator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HTTPStatusCodeMutator.swift; sourceTree = "<group>"; };
 		CB119BBD24F520783D33BA6F /* SanCovHooks.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = SanCovHooks.c; sourceTree = "<group>"; };
-		CBD2703ECFC03CDB4AF0A1EC /* SeededRandomNumberGenerator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SeededRandomNumberGenerator.swift; sourceTree = "<group>"; };
 		CC834389B8A7AF84299B4237 /* Int+MutatorProviding.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Int+MutatorProviding.swift"; sourceTree = "<group>"; };
 		CED4705CAFB71E914729EBE5 /* IntMutators.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IntMutators.swift; sourceTree = "<group>"; };
 		CEE33D6A37CCAA419FE56BDE /* ck_f_pr.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ck_f_pr.h; sourceTree = "<group>"; };
@@ -598,7 +594,6 @@
 			children = (
 				6FCF623F07EE6A39B03A9667 /* FastRNG.swift */,
 				66D7438BFF7FE3F52E951148 /* MWC192.swift */,
-				589E8DC0D8B9FB632EF6F8FA /* Xoshiro256PlusPlus.swift */,
 			);
 			path = Random;
 			sourceTree = "<group>";
@@ -979,7 +974,6 @@
 		A77974B787838CD93CE6071A /* Support */ = {
 			isa = PBXGroup;
 			children = (
-				CBD2703ECFC03CDB4AF0A1EC /* SeededRandomNumberGenerator.swift */,
 				AF1E91685C6019AA1D8E23F9 /* Synchronized.swift */,
 			);
 			path = Support;
@@ -1517,7 +1511,6 @@
 				073726C59F65CF54C9DB2A9D /* STADSPluginTests.swift in Sources */,
 				77318276C93EAB250B715AAD /* SaturationPlateauDetectorTests.swift in Sources */,
 				7860427F4252E7CF955018E1 /* SaturationPluginTests.swift in Sources */,
-				FAE454D657D928B2962AB47B /* SeededRandomNumberGenerator.swift in Sources */,
 				0194A2B0922DC21A5E35E179 /* ShrinkingPluginTests.swift in Sources */,
 				CF148FE630379ED6CAF42AA4 /* SimpleCoveragePlateauDetectorTests.swift in Sources */,
 				9DADB5A1F40BF13558A2BD55 /* Synchronized.swift in Sources */,
@@ -1621,7 +1614,6 @@
 				E84A0D3FEB919703F75C1BA1 /* UnicodeMutator.swift in Sources */,
 				9E5C3463A81E92C8411CBBC4 /* WhitespaceMutator.swift in Sources */,
 				3C0A06D9F8141B7C2EEC9073 /* XSSMutator.swift in Sources */,
-				5F077D9A65EB04B36E8CE1E3 /* Xoshiro256PlusPlus.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

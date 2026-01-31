@@ -6,7 +6,7 @@
 import Dependencies
 
 struct EmailMutator: Mutator, Sendable {
-    @Dependency(\.random) private var random
+    @Dependency(\.fastRNG) private var fastRNG
 
     var seeds: [String] {
         [
@@ -37,12 +37,11 @@ struct EmailMutator: Mutator, Sendable {
     }
 
     func generate() -> String {
-        random { rng in
-            let chars = Array("abcdefghijklmnopqrstuvwxyz")
-            let local = String((0..<Int.random(in: 3...10, using: &rng)).map { _ in chars.randomElement(using: &rng)! })
-            let domain = String((0..<Int.random(in: 3...8, using: &rng)).map { _ in chars.randomElement(using: &rng)! })
-            let tlds = ["com", "org", "net", "io", "co.uk"]
-            return "\(local)@\(domain).\(tlds.randomElement(using: &rng)!)"
-        }
+        var rng = fastRNG
+        let chars = Array("abcdefghijklmnopqrstuvwxyz")
+        let local = String((0..<Int.random(in: 3...10, using: &rng)).map { _ in chars.randomElement(using: &rng)! })
+        let domain = String((0..<Int.random(in: 3...8, using: &rng)).map { _ in chars.randomElement(using: &rng)! })
+        let tlds = ["com", "org", "net", "io", "co.uk"]
+        return "\(local)@\(domain).\(tlds.randomElement(using: &rng)!)"
     }
 }
