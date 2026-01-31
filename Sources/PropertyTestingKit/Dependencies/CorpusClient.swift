@@ -34,25 +34,12 @@ public struct CorpusClient<each Input: Codable & Sendable>: Sendable {
     public var isEmpty: @Sendable () -> Bool
     public var entries: @Sendable () -> [CorpusEntry<repeat each Input>]
     public var inputs: @Sendable () -> [(repeat each Input)]
-    public var signatures: @Sendable () -> [CoverageSignature]
     public var totalCoverage: @Sendable () -> CoverageSignature
-    public var updatedAt: @Sendable () -> Date
-    public var createdAt: @Sendable () -> Date
-    public var failureCount: @Sendable () -> Int
-    public var hangCount: @Sendable () -> Int
-    public var failureEntries: @Sendable () -> [CorpusEntry<repeat each Input>]
-    public var hangEntries: @Sendable () -> [CorpusEntry<repeat each Input>]
-
-    // MARK: - Batch Operations
-
-    /// Get all commonly-needed corpus state in a single call.
-    public var batchState: @Sendable () -> CorpusBatchState<repeat each Input>
 
     // MARK: - Mutating Operations
 
     public var addIfInteresting: @Sendable ((repeat each Input), CoverageSignature) -> Bool
     public var addIfInterestingSparse: @Sendable ((repeat each Input), SparseCoverage) -> Bool
-    public var batchAddIfInteresting: @Sendable ([Corpus<repeat each Input>.CandidateEntry]) -> [Bool]
     public var add: @Sendable ((repeat each Input), CoverageSignature, CorpusEntryType, FailureInfo?) -> Void
     public var minimized: @Sendable () -> CorpusSnapshot<repeat each Input>
     public var snapshot: @Sendable () -> CorpusSnapshot<repeat each Input>
@@ -62,18 +49,9 @@ public struct CorpusClient<each Input: Codable & Sendable>: Sendable {
         isEmpty: @escaping @Sendable () -> Bool,
         entries: @escaping @Sendable () -> [CorpusEntry<repeat each Input>],
         inputs: @escaping @Sendable () -> [(repeat each Input)],
-        signatures: @escaping @Sendable () -> [CoverageSignature],
         totalCoverage: @escaping @Sendable () -> CoverageSignature,
-        updatedAt: @escaping @Sendable () -> Date,
-        createdAt: @escaping @Sendable () -> Date,
-        failureCount: @escaping @Sendable () -> Int,
-        hangCount: @escaping @Sendable () -> Int,
-        failureEntries: @escaping @Sendable () -> [CorpusEntry<repeat each Input>],
-        hangEntries: @escaping @Sendable () -> [CorpusEntry<repeat each Input>],
-        batchState: @escaping @Sendable () -> CorpusBatchState<repeat each Input>,
         addIfInteresting: @escaping @Sendable ((repeat each Input), CoverageSignature) -> Bool,
         addIfInterestingSparse: @escaping @Sendable ((repeat each Input), SparseCoverage) -> Bool,
-        batchAddIfInteresting: @escaping @Sendable ([Corpus<repeat each Input>.CandidateEntry]) -> [Bool],
         add: @escaping @Sendable ((repeat each Input), CoverageSignature, CorpusEntryType, FailureInfo?) -> Void,
         minimized: @escaping @Sendable () -> CorpusSnapshot<repeat each Input>,
         snapshot: @escaping @Sendable () -> CorpusSnapshot<repeat each Input>
@@ -82,18 +60,9 @@ public struct CorpusClient<each Input: Codable & Sendable>: Sendable {
         self.isEmpty = isEmpty
         self.entries = entries
         self.inputs = inputs
-        self.signatures = signatures
         self.totalCoverage = totalCoverage
-        self.updatedAt = updatedAt
-        self.createdAt = createdAt
-        self.failureCount = failureCount
-        self.hangCount = hangCount
-        self.failureEntries = failureEntries
-        self.hangEntries = hangEntries
-        self.batchState = batchState
         self.addIfInteresting = addIfInteresting
         self.addIfInterestingSparse = addIfInterestingSparse
-        self.batchAddIfInteresting = batchAddIfInteresting
         self.add = add
         self.minimized = minimized
         self.snapshot = snapshot
@@ -112,23 +81,12 @@ public struct CorpusClient<each Input: Codable & Sendable>: Sendable {
             isEmpty: { corpus.isEmpty },
             entries: { corpus.entries },
             inputs: { corpus.inputs },
-            signatures: { corpus.signatures },
             totalCoverage: { corpus.totalCoverage },
-            updatedAt: { corpus.updatedAt },
-            createdAt: { corpus.createdAt },
-            failureCount: { corpus.failureCount },
-            hangCount: { corpus.hangCount },
-            failureEntries: { corpus.failureEntries },
-            hangEntries: { corpus.hangEntries },
-            batchState: { corpus.batchState() },
             addIfInteresting: { input, signature in
                 corpus.addIfInteresting(input: input, signature: signature)
             },
             addIfInterestingSparse: { input, sparse in
                 corpus.addIfInterestingSparse(input: input, sparse: sparse)
-            },
-            batchAddIfInteresting: { candidates in
-                corpus.batchAddIfInteresting(candidates)
             },
             add: { input, signature, entryType, failure in
                 corpus.add(input: input, signature: signature, entryType: entryType, failure: failure)
@@ -149,15 +107,7 @@ public struct CorpusClient<each Input: Codable & Sendable>: Sendable {
             isEmpty: { corpus.isEmpty },
             entries: { corpus.entries },
             inputs: { corpus.inputs },
-            signatures: { corpus.signatures },
             totalCoverage: { corpus.totalCoverage },
-            updatedAt: { corpus.updatedAt },
-            createdAt: { corpus.createdAt },
-            failureCount: { corpus.failureCount },
-            hangCount: { corpus.hangCount },
-            failureEntries: { corpus.failureEntries },
-            hangEntries: { corpus.hangEntries },
-            batchState: { corpus.batchState() },
             addIfInteresting: { input, signature in
                 // Always add to corpus (bypass coverage check)
                 corpus.add(
@@ -178,18 +128,6 @@ public struct CorpusClient<each Input: Codable & Sendable>: Sendable {
                     failure: nil
                 )
                 return true
-            },
-            batchAddIfInteresting: { candidates in
-                // Always add all candidates to corpus (bypass coverage check)
-                for candidate in candidates {
-                    corpus.add(
-                        input: candidate.input,
-                        signature: candidate.signature,
-                        entryType: .coverage,
-                        failure: nil
-                    )
-                }
-                return [Bool](repeating: true, count: candidates.count)
             },
             add: { input, signature, entryType, failure in
                 corpus.add(input: input, signature: signature, entryType: entryType, failure: failure)

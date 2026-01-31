@@ -18,33 +18,20 @@ import Foundation
 /// Thread safety: Access is serialized by `FuzzStateMachine` actor, so this
 /// class does not need its own actor isolation.
 public final class Corpus<each Input: Codable & Sendable>: @unchecked Sendable {
-    @Dependency(\.dateClient) var dateClient
 
     /// All entries in the corpus.
     public private(set) var entries: [CorpusEntry<repeat each Input>]
 
-    /// When this corpus was created.
-    public let createdAt: Date
-
-    /// When this corpus was last updated.
-    public private(set) var updatedAt: Date
-
     /// The union of all coverage signatures.
     public private(set) var totalCoverage: CoverageSignature
 
-    init(entries: [CorpusEntry<repeat each Input>], createdAt: Date, updatedAt: Date, totalCoverage: CoverageSignature) {
+    init(entries: [CorpusEntry<repeat each Input>], totalCoverage: CoverageSignature) {
         self.entries = entries
-        self.createdAt = createdAt
-        self.updatedAt = updatedAt
         self.totalCoverage = totalCoverage
     }
 
     public init() {
-        @Dependency(\.dateClient) var dateClient
-        let now = dateClient.now()
         self.entries = []
-        self.createdAt = now
-        self.updatedAt = now
         self.totalCoverage = CoverageSignature(edges: [])
     }
 
@@ -55,8 +42,6 @@ public final class Corpus<each Input: Codable & Sendable>: @unchecked Sendable {
     public func snapshot() -> CorpusSnapshot<repeat each Input> {
         CorpusSnapshot(
             entries: entries,
-            createdAt: createdAt,
-            updatedAt: updatedAt,
             totalCoverage: totalCoverage
         )
     }
@@ -75,20 +60,6 @@ public final class Corpus<each Input: Codable & Sendable>: @unchecked Sendable {
     /// All signatures in the corpus.
     public var signatures: [CoverageSignature] {
         entries.map(\.signature)
-    }
-
-    // MARK: - Batch State
-
-    /// Get a snapshot of corpus state for batch operations.
-    ///
-    /// This returns all commonly-needed corpus state in a single call,
-    /// avoiding multiple actor boundary crossings during batch generation.
-    public func batchState() -> CorpusBatchState<repeat each Input> {
-        CorpusBatchState(
-            isEmpty: entries.isEmpty,
-            count: entries.count,
-            entries: entries
-        )
     }
 
     // MARK: - Adding Entries
@@ -123,7 +94,6 @@ public final class Corpus<each Input: Codable & Sendable>: @unchecked Sendable {
         )
         entries.append(entry)
         totalCoverage.merge(with: signature)
-        updatedAt = dateClient.now()
         return true
     }
 
@@ -149,55 +119,7 @@ public final class Corpus<each Input: Codable & Sendable>: @unchecked Sendable {
         )
         entries.append(entry)
         totalCoverage.merge(with: signature)
-        updatedAt = dateClient.now()
         return true
-    }
-
-    /// A candidate entry for batch processing.
-    public struct CandidateEntry: Sendable {
-        public let input: (repeat each Input)
-        public let signature: CoverageSignature
-
-        public init(input: (repeat each Input), signature: CoverageSignature) {
-            self.input = input
-            self.signature = signature
-        }
-    }
-
-    /// Batch-add multiple entries, checking each for interesting coverage.
-    ///
-    /// This method processes all candidates in a single actor call, avoiding
-    /// multiple actor boundary crossings. Returns which entries were added.
-    ///
-    /// - Parameter candidates: Array of (input, signature) tuples.
-    /// - Returns: Array of booleans indicating which candidates were added (in order).
-    public func batchAddIfInteresting(_ candidates: [CandidateEntry]) -> [Bool] {
-        var results: [Bool] = []
-        results.reserveCapacity(candidates.count)
-
-        var addedAny = false
-        for candidate in candidates {
-            // Check if this signature adds new coverage
-            guard candidate.signature.hasUniqueCoverage(comparedTo: totalCoverage) else {
-                results.append(false)
-                continue
-            }
-
-            let entry = CorpusEntry(
-                input: repeat each candidate.input,
-                signature: candidate.signature
-            )
-            entries.append(entry)
-            totalCoverage.merge(with: candidate.signature)
-            results.append(true)
-            addedAny = true
-        }
-
-        if addedAny {
-            updatedAt = dateClient.now()
-        }
-
-        return results
     }
 
     /// Add an entry unconditionally.
@@ -229,29 +151,6 @@ public final class Corpus<each Input: Codable & Sendable>: @unchecked Sendable {
         )
         entries.append(entry)
         totalCoverage.merge(with: signature)
-        updatedAt = dateClient.now()
-    }
-
-    // MARK: - Failure Statistics
-
-    /// Number of failure-inducing entries in the corpus.
-    public var failureCount: Int {
-        entries.filter { $0.entryType == .failure }.count
-    }
-
-    /// Number of hang-inducing entries in the corpus.
-    public var hangCount: Int {
-        entries.filter { $0.entryType == .hang }.count
-    }
-
-    /// All failure entries.
-    public var failureEntries: [CorpusEntry<repeat each Input>] {
-        entries.filter { $0.entryType == .failure }
-    }
-
-    /// All hang entries.
-    public var hangEntries: [CorpusEntry<repeat each Input>] {
-        entries.filter { $0.entryType == .hang }
     }
 
     // MARK: - Minimization
@@ -261,7 +160,7 @@ public final class Corpus<each Input: Codable & Sendable>: @unchecked Sendable {
     /// Uses a greedy algorithm: repeatedly select the entry that covers the
     /// most uncovered indices until all indices are covered.
     ///
-    /// **Important:** Failure and hang entries are ALWAYS preserved during minimization
+    /// **Important:** Failure entries are ALWAYS preserved during minimization
     /// to prevent regression of discovered bugs. This follows Elhage 2020's recommendation
     /// that "previously-failing cases must be preserved during minimization."
     ///
@@ -273,13 +172,13 @@ public final class Corpus<each Input: Codable & Sendable>: @unchecked Sendable {
         var minimizedCoverage = CoverageSignature(edges: [])
         var uncovered = totalCoverage.executedIndices
 
-        // First, preserve ALL failure and hang entries - these are never removed
+        // First, preserve ALL failure entries - these are never removed
         // during minimization to prevent regression of discovered bugs.
         var remainingCoverage = entries.enumerated().map { ($0.offset, $0.element) }
         var indicesToRemove: [Int] = []
 
         for (i, (_, entry)) in remainingCoverage.enumerated() {
-            if entry.entryType == .failure || entry.entryType == .hang {
+            if entry.entryType == .failure {
                 minimizedEntries.append(entry)
                 minimizedCoverage.merge(with: entry.signature)
                 entry.signature.subtractIndices(from: &uncovered)
@@ -320,11 +219,8 @@ public final class Corpus<each Input: Codable & Sendable>: @unchecked Sendable {
             bestEntry.signature.subtractIndices(from: &uncovered)
         }
 
-        @Dependency(\.dateClient) var dateClient
         return CorpusSnapshot(
             entries: minimizedEntries,
-            createdAt: createdAt,
-            updatedAt: dateClient.now(),
             totalCoverage: minimizedCoverage
         )
     }
@@ -335,8 +231,6 @@ public final class Corpus<each Input: Codable & Sendable>: @unchecked Sendable {
 /// Note: Must be declared outside the generic struct due to parameter pack limitations.
 private enum CorpusCodingKeys: String, CodingKey {
     case entries
-    case createdAt
-    case updatedAt
     case totalCoverage
 }
 
@@ -347,19 +241,13 @@ private enum CorpusCodingKeys: String, CodingKey {
 /// This struct captures the corpus state for serialization.
 public struct CorpusSnapshot<each Input: Codable & Sendable>: Sendable, Codable {
     public let entries: [CorpusEntry<repeat each Input>]
-    public let createdAt: Date
-    public let updatedAt: Date
     public let totalCoverage: CoverageSignature
 
     public init(
         entries: [CorpusEntry<repeat each Input>],
-        createdAt: Date,
-        updatedAt: Date,
         totalCoverage: CoverageSignature
     ) {
         self.entries = entries
-        self.createdAt = createdAt
-        self.updatedAt = updatedAt
         self.totalCoverage = totalCoverage
     }
 
@@ -369,26 +257,17 @@ public struct CorpusSnapshot<each Input: Codable & Sendable>: Sendable, Codable 
     /// Whether the snapshot is empty.
     public var isEmpty: Bool { entries.isEmpty }
 
-    /// All inputs in the snapshot.
-    public var inputs: [(repeat each Input)] {
-        entries.map(\.input)
-    }
-
     // MARK: - Codable
 
     public func encode(to encoder: any Encoder) throws {
         var container = encoder.container(keyedBy: CorpusCodingKeys.self)
         try container.encode(entries, forKey: .entries)
-        try container.encode(createdAt, forKey: .createdAt)
-        try container.encode(updatedAt, forKey: .updatedAt)
         try container.encode(totalCoverage, forKey: .totalCoverage)
     }
 
     public init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CorpusCodingKeys.self)
         self.entries = try container.decode([CorpusEntry<repeat each Input>].self, forKey: .entries)
-        self.createdAt = try container.decode(Date.self, forKey: .createdAt)
-        self.updatedAt = try container.decode(Date.self, forKey: .updatedAt)
         self.totalCoverage = try container.decode(CoverageSignature.self, forKey: .totalCoverage)
     }
 }
@@ -398,8 +277,6 @@ extension Corpus {
     public convenience init(from snapshot: CorpusSnapshot<repeat each Input>) {
         self.init(
             entries: snapshot.entries,
-            createdAt: snapshot.createdAt,
-            updatedAt: snapshot.updatedAt,
             totalCoverage: snapshot.totalCoverage
         )
     }

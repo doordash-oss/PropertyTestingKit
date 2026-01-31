@@ -344,29 +344,6 @@ targets:
           $(inherited)
           $(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin
 
-  # Channel benchmarks for queue performance analysis
-  ChannelBenchmarks:
-    type: tool
-    platform: macOS
-    sources:
-      - path: Benchmarks/ChannelBenchmarks
-    dependencies:
-      - target: ConcurrentQueues
-      - package: package-benchmark
-        product: Benchmark
-    settings:
-      base:
-        PRODUCT_NAME: ChannelBenchmarks
-        OTHER_SWIFT_FLAGS: >-
-          $(inherited)
-          -g
-        SWIFT_INCLUDE_PATHS:
-          - $(SRCROOT)/Sources/CLLVMSymbolizer/include
-          - $(SRCROOT)/Sources/SanCovHooks/include
-        LD_RUNPATH_SEARCH_PATHS: >-
-          $(inherited)
-          $(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin
-
 schemes:
   ConcurrentQueues:
     build:
@@ -400,11 +377,5 @@ schemes:
     build:
       targets:
         ProfiledBenchmark: all
-    run:
-      config: Debug
-  ChannelBenchmarks:
-    build:
-      targets:
-        ChannelBenchmarks: all
     run:
       config: Debug

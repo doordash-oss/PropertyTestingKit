@@ -1,1 +1,1 @@
-{"createdAt":"2026-01-29T18:04:34Z","entries":[{"discoveredAt":"2026-01-29T18:04:34Z","entryType":"coverage","input":["MA=="],"inputReadable":["0"],"signature":{"edges":[12690]}}],"totalCoverage":{"edges":[12690]},"updatedAt":"2026-01-29T18:04:34Z"}
+{"entries":[{"discoveredAt":"2026-01-31T03:20:42Z","entryType":"coverage","input":["MA=="],"inputReadable":["0"],"signature":{"edges":[12670]}}],"totalCoverage":{"edges":[12670]}}

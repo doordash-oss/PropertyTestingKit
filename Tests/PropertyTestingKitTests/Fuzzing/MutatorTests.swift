@@ -354,7 +354,7 @@ struct MutatorFuzzEngineTests {
 
             let engine = FuzzEngine(mutators: mutator, config: config)
             // Create default plugin processor (MutationPlugin)
-            let processor = SyncPluginProcessor(plugins: (MutationPlugin()))
+            let processor = PluginHandlerProcessor(handlers: [FuzzPluginHandler<String>.mutation()])
             let processSyncPlugins: @Sendable (
                 consuming SyncPluginEvent<String>,
                 (FuzzPluginAction<String>) -> Void
@@ -399,7 +399,7 @@ struct MutatorFuzzEngineTests {
 
             let engine = FuzzEngine(mutators: mutator, config: config)
             // Create default plugin processor (MutationPlugin)
-            let processor = SyncPluginProcessor(plugins: (MutationPlugin()))
+            let processor = PluginHandlerProcessor(handlers: [FuzzPluginHandler<String>.mutation()])
             let processSyncPlugins: @Sendable (
                 consuming SyncPluginEvent<String>,
                 (FuzzPluginAction<String>) -> Void

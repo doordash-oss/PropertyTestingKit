@@ -2,69 +2,11 @@
 //  FuzzPlugin.swift
 //  PropertyTestingKit
 //
-//  Unified plugin system for FuzzEngine.
+//  Plugin events and actions for FuzzEngine.
 //
 
 import Testing
 import Foundation
-
-// MARK: - Plugin Protocol
-
-/// Protocol for FuzzEngine plugins.
-///
-/// Plugins receive events from the fuzz engine and return actions to be executed.
-/// Plugins run in array order - first plugin handles event first.
-///
-/// The protocol has two handler methods:
-/// - `handle(event:)` - Synchronous, called for iteration events (hot path, millions of calls)
-/// - `handleAsync(event:)` - Asynchronous, called for rare events (start, end, failureFound)
-///
-/// Default implementations return empty arrays, so plugins only need to implement
-/// the methods for events they care about.
-public protocol FuzzPlugin: Sendable {
-    /// Unique identifier for this plugin (for logging).
-    var id: String { get }
-
-    /// Handle a synchronous event and return actions to execute.
-    ///
-    /// This is the hot path - called millions of times per fuzz run.
-    /// Must be synchronous to avoid async overhead.
-    ///
-    /// - Parameter event: The sync plugin event to handle (iteration events).
-    /// - Returns: Actions for FuzzEngine to execute.
-    func handle<each T: Sendable>(
-        event: SyncPluginEvent<repeat each T>
-    ) -> [FuzzPluginAction<repeat each T>]
-
-    /// Handle an asynchronous event and return actions to execute.
-    ///
-    /// Called for rare events like start, end, and failureFound.
-    /// Async is acceptable here since these events happen infrequently.
-    ///
-    /// - Parameter event: The async plugin event to handle.
-    /// - Returns: Actions for FuzzEngine to execute.
-    func handleAsync<each T: Sendable>(
-        event: AsyncPluginEvent<repeat each T>
-    ) async throws -> [FuzzPluginAction<repeat each T>]
-}
-
-// MARK: - Default Implementations
-
-extension FuzzPlugin {
-    /// Default implementation: do nothing for sync events.
-    public func handle<each T: Sendable>(
-        event: SyncPluginEvent<repeat each T>
-    ) -> [FuzzPluginAction<repeat each T>] {
-        return []
-    }
-
-    /// Default implementation: do nothing for async events.
-    public func handleAsync<each T: Sendable>(
-        event: AsyncPluginEvent<repeat each T>
-    ) async throws -> [FuzzPluginAction<repeat each T>] {
-        return []
-    }
-}
 
 // MARK: - Sync Plugin Events (Hot Path)
 
@@ -163,17 +105,6 @@ public enum AsyncPluginEvent<each T: Sendable>: Sendable {
             self.coverageSignature = coverageSignature
         }
     }
-}
-
-// MARK: - Legacy PluginEvent (for compatibility during migration)
-
-/// Combined event type - deprecated, use SyncPluginEvent or AsyncPluginEvent instead.
-@available(*, deprecated, message: "Use SyncPluginEvent for iteration events or AsyncPluginEvent for other events")
-public enum PluginEvent<each T: Sendable>: Sendable {
-    case start(AsyncPluginEvent<repeat each T>.StartContext)
-    case end(AsyncPluginEvent<repeat each T>.EndContext)
-    case failureFound(AsyncPluginEvent<repeat each T>.FailureFoundContext)
-    case iteration(SyncPluginEvent<repeat each T>.IterationContext)
 }
 
 // MARK: - Plugin Actions

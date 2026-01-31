@@ -2,43 +2,43 @@
 //  STADSPluginTests.swift
 //  PropertyTestingKitTests
 //
-//  Tests for STADSPlugin.
+//  Tests for the STADS plateau detector handler.
 //
 
 import Testing
 import Foundation
 @testable import PropertyTestingKit
 
-@Suite("STADSPlugin Actions")
-struct STADSPluginActionTests {
+@Suite("STADS Handler Actions")
+struct STADSHandlerActionTests {
 
-    @Test("Plugin has correct ID")
-    func testPluginId() {
-        let plugin = STADSPlugin()
-        #expect(plugin.id == "stads_detector")
+    @Test("Handler has correct ID")
+    func testHandlerId() {
+        let handler: FuzzPluginHandler<Int> = .stadsDetector()
+        #expect(handler.id == "stads_detector")
     }
 
-    @Test("Plugin returns empty for non-iteration events")
-    func testNonIterationEventsReturnEmpty() async throws {
-        let plugin = STADSPlugin()
+    @Test("Handler returns empty for async events")
+    func testAsyncEventsReturnEmpty() async throws {
+        let handler: FuzzPluginHandler<Int> = .stadsDetector()
 
         let endContext = AsyncPluginEvent<Int>.EndContext(
             totalCoveredIndices: Set([1, 2, 3]),
             projectPath: nil,
             sourceLocation: SourceLocation(fileID: #fileID, filePath: #filePath, line: #line, column: 1)
         )
-        let actions = try await plugin.handleAsync(event: AsyncPluginEvent<Int>.end(endContext))
+        let actions = try await handler.handleAsync(AsyncPluginEvent<Int>.end(endContext))
         #expect(actions.isEmpty)
     }
 
-    @Test("Plugin returns stop action when probability drops")
+    @Test("Handler returns stop action when probability drops")
     func testStopWhenProbabilityDrops() {
         let config = STADSPlateauDetector.Config(
             minDiscoveryProbability: 0.5,
             confirmationChecks: 1,
             checkInterval: 10
         )
-        let plugin = STADSPlugin(config: config)
+        let handler: FuzzPluginHandler<Int> = .stadsDetector(config: config)
 
         // Simulate many iterations without discovery to drop probability
         var stoppedAt: Int?
@@ -47,7 +47,7 @@ struct STADSPluginActionTests {
                 discoveredNewCoverage: false,
                 input: i
             )
-            let actions = plugin.handle(event: SyncPluginEvent<Int>.iteration(context))
+            let actions = handler.handleSync(SyncPluginEvent<Int>.iteration(context))
 
             if !actions.isEmpty {
                 if case .stop(let stopAction) = actions[0] {
@@ -58,6 +58,6 @@ struct STADSPluginActionTests {
             }
         }
 
-        #expect(stoppedAt != nil, "Plugin should have triggered stop")
+        #expect(stoppedAt != nil, "Handler should have triggered stop")
     }
 }

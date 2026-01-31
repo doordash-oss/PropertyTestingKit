@@ -46,15 +46,6 @@ public struct CorpusPersistenceClient: Sendable {
         try _save(data, url)
     }
 
-    /// Load a corpus from the given directory.
-    public func load<each Input: Codable & Sendable>(
-        from url: URL
-    ) throws -> Corpus<repeat each Input> {
-        let data = try _load(url)
-        let snapshot = try JSONDecoder.corpusDecoder.decode(CorpusSnapshot<repeat each Input>.self, from: data)
-        return Corpus(from: snapshot)
-    }
-
     /// Load a corpus snapshot from the given directory.
     public func loadSnapshot<each Input: Codable & Sendable>(
         from url: URL

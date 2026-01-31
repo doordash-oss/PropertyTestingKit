@@ -24,28 +24,28 @@ import IssueReporting
 ///     ]
 /// )
 /// ```
-public struct CoverageCountersClient: Sendable {
+struct CoverageCountersClient: Sendable {
     /// Check if coverage instrumentation is available.
-    public var isAvailable: @Sendable () -> Bool
+    var isAvailable: @Sendable () -> Bool
 
     /// Begin a measurement context for the current task.
     /// This creates an isolated coverage map and pre-warms caches for optimal performance.
     /// Must be paired with endMeasurement.
-    public var beginMeasurement: @Sendable () -> SanCovCounters.MeasurementContext
+    var beginMeasurement: @Sendable () -> SanCovCounters.MeasurementContext
 
     /// End a measurement context and clean up resources.
     /// This frees the coverage map slot for reuse by other tasks.
-    public var endMeasurement: @Sendable (SanCovCounters.MeasurementContext) -> Void
+    var endMeasurement: @Sendable (SanCovCounters.MeasurementContext) -> Void
 
     /// Reset coverage for a measurement context.
     /// This is a cheap memset operation - use between iterations instead of end+begin.
-    public var resetCoverage: @Sendable (SanCovCounters.MeasurementContext) -> Void
+    var resetCoverage: @Sendable (SanCovCounters.MeasurementContext) -> Void
 
     /// Get covered indices using a specific measurement context.
     /// This bypasses TLS lookup, providing O(1) performance even after task hops.
-    public var snapshotCoveredArraysWithContext: @Sendable (SanCovCounters.MeasurementContext) throws -> SparseCoverage
+    var snapshotCoveredArraysWithContext: @Sendable (SanCovCounters.MeasurementContext) throws -> SparseCoverage
 
-    public init(
+    init(
         isAvailable: @escaping @Sendable () -> Bool = unimplemented(
             "isAvailable",
             placeholder: false
@@ -76,7 +76,7 @@ public struct CoverageCountersClient: Sendable {
 // MARK: - Dependency Key
 
 extension CoverageCountersClient: DependencyKey {
-    public static let liveValue = CoverageCountersClient(
+    static let liveValue = CoverageCountersClient(
         isAvailable: { SanCovCounters.isAvailable },
         beginMeasurement: { SanCovCounters.beginMeasurement() },
         endMeasurement: { SanCovCounters.endMeasurement($0) },
@@ -90,7 +90,7 @@ extension CoverageCountersClient: DependencyKey {
 }
 
 extension DependencyValues {
-    public var coverageCounters: CoverageCountersClient {
+    var coverageCounters: CoverageCountersClient {
         get { self[CoverageCountersClient.self] }
         set { self[CoverageCountersClient.self] = newValue }
     }

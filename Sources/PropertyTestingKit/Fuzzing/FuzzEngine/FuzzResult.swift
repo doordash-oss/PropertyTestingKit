@@ -111,8 +111,6 @@ extension FuzzResult {
 
         let emptySnapshot = CorpusSnapshot<repeat each Input>(
             entries: [],
-            createdAt: dateClient.now(),
-            updatedAt: dateClient.now(),
             totalCoverage: CoverageSignature(edges: [])
         )
         let emptyStats = FuzzStats(

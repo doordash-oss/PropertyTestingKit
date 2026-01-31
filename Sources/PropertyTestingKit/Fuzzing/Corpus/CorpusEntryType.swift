@@ -12,10 +12,4 @@ public enum CorpusEntryType: String, Codable, Sendable {
 
     /// Entry was added because it caused a test failure.
     case failure
-
-    /// Entry was added because it caused a hang (timeout).
-    case hang
-
-    /// Entry was added because it made value profile progress.
-    case valueProfile
 }

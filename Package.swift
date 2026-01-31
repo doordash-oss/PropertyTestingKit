@@ -202,28 +202,5 @@ package.targets += [
         plugins: [
             .plugin(name: "BenchmarkPlugin", package: "package-benchmark")
         ]
-    ),
-    .executableTarget(
-        name: "ChannelBenchmarks",
-        dependencies: [
-            .product(name: "Benchmark", package: "package-benchmark"),
-            "ConcurrentQueues",
-        ],
-        path: "Benchmarks/ChannelBenchmarks",
-        swiftSettings: [
-            .unsafeFlags([
-                "-O"
-            ])
-        ],
-        linkerSettings: [
-            // Add rpath for Testing.framework from Xcode (needed for local toolchain)
-            .unsafeFlags([
-                "-Xlinker", "-rpath",
-                "-Xlinker", "/Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks"
-            ])
-        ],
-        plugins: [
-            .plugin(name: "BenchmarkPlugin", package: "package-benchmark")
-        ]
     )
 ]

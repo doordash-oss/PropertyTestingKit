@@ -20,31 +20,19 @@ public struct FailureInfo: Codable, Sendable {
     /// Optional stack trace (if available).
     public let stackTrace: String?
 
-    /// When this failure was first discovered.
-    public let discoveredAt: Date
-
     public init(error: Error, stackTrace: String? = nil) {
-        @Dependency(\.dateClient) var dateClient
         self.errorType = String(describing: type(of: error))
         self.message = error.localizedDescription
         self.stackTrace = stackTrace
-        self.discoveredAt = dateClient.now()
     }
 
     public init(
         errorType: String,
         message: String,
-        stackTrace: String? = nil,
-        discoveredAt: Date? = nil
+        stackTrace: String? = nil
     ) {
-        @Dependency(\.dateClient) var dateClient
         self.errorType = errorType
         self.message = message
         self.stackTrace = stackTrace
-        if let discoveredAt = discoveredAt {
-            self.discoveredAt = discoveredAt
-        } else {
-            self.discoveredAt = dateClient.now()
-        }
     }
 }

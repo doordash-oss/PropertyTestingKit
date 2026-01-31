@@ -5,7 +5,6 @@
 
 import Foundation
 import Dependencies
-import DequeModule
 import Testing
 
 /// Manages the fuzzing loop state. Not thread-safe - only used from a single task.
@@ -45,7 +44,7 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
     private var mutationsCount: Int = 0
 
     // Simple loop state (replaces WorkerPool)
-    private var pendingInputs: Deque<(repeat each Input)> = []
+    private var pendingInputs: SimpleRingBuffer<(repeat each Input)>
     private var halted: Bool = false
     private var haltReason: FuzzStats.StopReason = .timeLimit
 
@@ -73,6 +72,7 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
         self.corpus = corpus
         self.mutationGenerator = mutationGenerator
         self.test = test
+        self.pendingInputs = SimpleRingBuffer(minimumCapacity: 16)
     }
 
     private func recordFailure(input: (repeat each Input), error: any Error) {
@@ -91,7 +91,7 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
         }
 
         // Initialize pending inputs with seeds
-        pendingInputs = Deque(seeds)
+        pendingInputs = SimpleRingBuffer(seeds)
 
         // Setup for test execution
         let coverageCountersClient = Self.fetchCoverageCounters()
@@ -138,7 +138,7 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
                 // Get input: from pending queue or generate random
                 let input: (repeat each Input)
                 if !pendingInputs.isEmpty {
-                    input = pendingInputs.removeFirst()
+                    input = pendingInputs.removeFirstUnchecked()
                 } else {
                     input = randomInputGenerator()
                     generatedCount += 1

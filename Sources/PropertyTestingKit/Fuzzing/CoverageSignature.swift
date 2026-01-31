@@ -116,7 +116,6 @@ extension CoverageSignature: CustomStringConvertible {
 extension CoverageSignature: Codable {
     private enum CodingKeys: String, CodingKey {
         case edges
-        case buckets  // Legacy format for backwards compatibility
     }
 
     public init(from decoder: Decoder) throws {
@@ -128,13 +127,6 @@ extension CoverageSignature: Codable {
             return
         }
 
-        // Fall back to legacy buckets format: {"1": 1, "5": 1} -> edges [1, 5]
-        // The bucket values are ignored since we only care about which edges were hit
-        if let buckets = try? container.decode([String: Int].self, forKey: .buckets) {
-            self.edges = Set(buckets.keys.compactMap { UInt32($0) })
-            return
-        }
-
         // If neither format works, default to empty
         self.edges = []
     }
@@ -142,45 +134,5 @@ extension CoverageSignature: Codable {
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(edges, forKey: .edges)
-    }
-}
-
-// MARK: - Signature Collection
-
-/// A collection of coverage signatures with utilities for analysis.
-public struct SignatureSet: Codable, Sendable {
-    /// All unique signatures seen.
-    public private(set) var signatures: Set<CoverageSignature>
-
-    /// The union of all coverage (all indices ever executed).
-    public private(set) var totalCoverage: CoverageSignature
-
-    public init() {
-        self.signatures = []
-        self.totalCoverage = CoverageSignature(edges: Set<UInt32>())
-    }
-
-    /// Add a signature to the set.
-    /// Returns true if this signature was new (not seen before).
-    @discardableResult
-    public mutating func insert(_ signature: CoverageSignature) -> Bool {
-        let isNew = signatures.insert(signature).inserted
-        totalCoverage.merge(with: signature)
-        return isNew
-    }
-
-    /// Check if a signature would add new coverage.
-    public func wouldAddNewCoverage(_ signature: CoverageSignature) -> Bool {
-        signature.hasUniqueCoverage(comparedTo: totalCoverage)
-    }
-
-    /// Number of unique signatures.
-    public var count: Int {
-        signatures.count
-    }
-
-    /// Total number of unique edge indices covered.
-    public var totalCoveredIndices: Int {
-        totalCoverage.executedCount
     }
 }

@@ -296,11 +296,11 @@ struct CoverageGapDetectorTests {
         let expectedLine = 285
 
         try await withKnownIssue("Expected coverage gap in partiallyCoveredFunction") {
-            // MutationPlugin is included by default via defaultBehaviorPlugins
+            // mutation() is included by default via handlers
             _ = try await fuzz(
                 duration: .seconds(0.1),
                 corpusMode: .refuzzReplace,
-                plugins: (CoverageGapPlugin())
+                handlers: [.mutation(), .coverageGap()]
             ) { (input: Int) in
                 partiallyCoveredFunction(input: input)
             }

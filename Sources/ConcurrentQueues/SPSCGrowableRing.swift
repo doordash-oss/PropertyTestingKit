@@ -368,3 +368,11 @@ public final class SPSCGrowableRing<T: Sendable>: @unchecked Sendable {
         dequeue()
     }
 }
+
+extension Int {
+    func nextPowerOf2() -> Int {
+        guard self > 0 else { return 1 }
+        guard self <= (Int.max >> 1) + 1 else { return self }
+        return 1 << (Int.bitWidth - (self - 1).leadingZeroBitCount)
+    }
+}

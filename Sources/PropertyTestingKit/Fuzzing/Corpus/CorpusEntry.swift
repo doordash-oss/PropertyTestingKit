@@ -14,9 +14,6 @@ public struct CorpusEntry<each Input: Codable & Sendable>: Sendable, Codable {
     /// The coverage signature produced by this input.
     public let signature: CoverageSignature
 
-    /// When this entry was discovered.
-    public let discoveredAt: Date
-
     /// The reason this entry was added to the corpus.
     public let entryType: CorpusEntryType
 
@@ -27,18 +24,11 @@ public struct CorpusEntry<each Input: Codable & Sendable>: Sendable, Codable {
     public init(
         input: repeat each Input,
         signature: CoverageSignature,
-        discoveredAt: Date? = nil,
         entryType: CorpusEntryType = .coverage,
         failure: FailureInfo? = nil
     ) {
-        @Dependency(\.dateClient) var dateClient
         self.input = (repeat each input)
         self.signature = signature
-        if let discoveredAt = discoveredAt {
-            self.discoveredAt = discoveredAt
-        } else {
-            self.discoveredAt = dateClient.now()
-        }
         self.entryType = entryType
         self.failure = failure
     }
@@ -56,7 +46,6 @@ public struct CorpusEntry<each Input: Codable & Sendable>: Sendable, Codable {
         try container.encode(readableList, forKey: .inputReadable)
 
         try container.encode(signature, forKey: .signature)
-        try container.encode(discoveredAt, forKey: .discoveredAt)
         try container.encode(entryType, forKey: .entryType)
         try container.encodeIfPresent(failure, forKey: .failure)
     }
@@ -89,7 +78,6 @@ public struct CorpusEntry<each Input: Codable & Sendable>: Sendable, Codable {
         self.input = try (repeat jsonDecoder.decode((each Input).self, from: dataIterator.next()!))
 
         self.signature = try container.decode(CoverageSignature.self, forKey: .signature)
-        self.discoveredAt = try container.decode(Date.self, forKey: .discoveredAt)
         // Default to .coverage for backward compatibility with existing corpus files
         self.entryType = try container.decodeIfPresent(CorpusEntryType.self, forKey: .entryType) ?? .coverage
         self.failure = try container.decodeIfPresent(FailureInfo.self, forKey: .failure)
@@ -100,7 +88,6 @@ public enum CorpusEntryCodingKeys: String, CodingKey {
     case input
     case inputReadable
     case signature
-    case discoveredAt
     case entryType
     case failure
 }

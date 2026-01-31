@@ -69,21 +69,6 @@ struct CoverageSignatureTests {
         #expect(sig.description == "CoverageSignature(3 edges)")
     }
 
-    @Test("SignatureSet count and totalCoveredIndices")
-    func testSignatureSetProperties() {
-        var set = SignatureSet()
-        #expect(set.count == 0)
-        #expect(set.totalCoveredIndices == 0)
-
-        set.insert(CoverageSignature(edges: Set<UInt32>([0, 1])))
-        #expect(set.count == 1)
-        #expect(set.totalCoveredIndices == 2)
-
-        set.insert(CoverageSignature(edges: Set<UInt32>([2])))
-        #expect(set.count == 2)
-        #expect(set.totalCoveredIndices == 3)
-    }
-
     @Test("Signature merge in place")
     func testSignatureMerge() {
         var sig1 = CoverageSignature(edges: Set<UInt32>([0, 1]))

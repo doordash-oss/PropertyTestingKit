@@ -2,37 +2,37 @@
 //  PlateauDetectorPluginTests.swift
 //  PropertyTestingKitTests
 //
-//  Tests for PlateauDetectorPlugin.
+//  Tests for the plateau detector handler.
 //
 
 import Testing
 import Foundation
 @testable import PropertyTestingKit
 
-@Suite("PlateauDetectorPlugin")
-struct PlateauDetectorPluginTests {
+@Suite("Plateau Detector Handler")
+struct PlateauDetectorHandlerTests {
 
-    @Test("Plugin has correct ID")
-    func testPluginId() {
-        let plugin = PlateauDetectorPlugin()
-        #expect(plugin.id == "plateau_detector")
+    @Test("Handler has correct ID")
+    func testHandlerId() {
+        let handler: FuzzPluginHandler<Int> = .plateauDetector()
+        #expect(handler.id == "plateau_detector")
     }
 
-    @Test("Plugin returns empty for non-iteration events")
-    func testNonIterationEventsReturnEmpty() async throws {
-        let plugin = PlateauDetectorPlugin()
+    @Test("Handler returns empty for async events")
+    func testAsyncEventsReturnEmpty() async throws {
+        let handler: FuzzPluginHandler<Int> = .plateauDetector()
 
         let startContext = AsyncPluginEvent<Int>.StartContext(
             maxDuration: .seconds(60),
             corpusMode: .auto
         )
-        let actions = try await plugin.handleAsync(event: AsyncPluginEvent<Int>.start(startContext))
+        let actions = try await handler.handleAsync(AsyncPluginEvent<Int>.start(startContext))
         #expect(actions.isEmpty)
     }
 
-    @Test("Plugin does not stop when coverage is being discovered")
+    @Test("Handler does not stop when coverage is being discovered")
     func testNoStopWithCoverageDiscovery() {
-        let plugin = PlateauDetectorPlugin()
+        let handler: FuzzPluginHandler<Int> = .plateauDetector()
 
         // Simulate iterations with new coverage each time
         for i in 0..<50 {
@@ -40,12 +40,12 @@ struct PlateauDetectorPluginTests {
                 discoveredNewCoverage: true,
                 input: i
             )
-            let actions = plugin.handle(event: SyncPluginEvent<Int>.iteration(context))
+            let actions = handler.handleSync(SyncPluginEvent<Int>.iteration(context))
             #expect(actions.isEmpty, "Should not stop when discovering coverage")
         }
     }
 
-    @Test("Plugin returns stop action after plateau")
+    @Test("Handler returns stop action after plateau")
     func testStopAfterPlateau() {
         // Configure with small window for faster testing
         // minDiscoveryRate: 0.01 means 0 discoveries per 10 iterations is "low"
@@ -55,7 +55,7 @@ struct PlateauDetectorPluginTests {
             minDiscoveryRate: 0.01,   // 0 discoveries < 0.01, so window will be "low"
             confirmationWindows: 2     // Need 2 consecutive low-rate windows
         )
-        let plugin = PlateauDetectorPlugin(config: config)
+        let handler: FuzzPluginHandler<Int> = .plateauDetector(config: config)
 
         // Simulate iterations without new coverage to trigger plateau
         // Need: 10 iterations to fill first window, then 2+ windows of low rate
@@ -65,7 +65,7 @@ struct PlateauDetectorPluginTests {
                 discoveredNewCoverage: false,
                 input: i
             )
-            let actions = plugin.handle(event: SyncPluginEvent<Int>.iteration(context))
+            let actions = handler.handleSync(SyncPluginEvent<Int>.iteration(context))
 
             if !actions.isEmpty {
                 // Should be a stop action
@@ -77,6 +77,6 @@ struct PlateauDetectorPluginTests {
             }
         }
 
-        #expect(stoppedAt != nil, "Plugin should have triggered stop")
+        #expect(stoppedAt != nil, "Handler should have triggered stop")
     }
 }

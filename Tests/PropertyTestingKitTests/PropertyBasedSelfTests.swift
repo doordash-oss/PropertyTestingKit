@@ -112,53 +112,6 @@ struct CoverageSignaturePropertyTests {
     }
 }
 
-// MARK: - SignatureSet Property Tests
-
-@Suite("SignatureSet Properties")
-struct SignatureSetPropertyTests {
-
-    @Test("SignatureSet insert returns correct newness")
-    func testInsertNewness() async throws {
-        var set = SignatureSet()
-
-        let sig1 = CoverageSignature(edges: Set<UInt32>([0]))
-        let sig2 = CoverageSignature(edges: Set<UInt32>([0]))  // Duplicate
-        let sig3 = CoverageSignature(edges: Set<UInt32>([1]))  // New
-
-        #expect(set.insert(sig1) == true, "First insert should be new")
-        #expect(set.insert(sig2) == false, "Duplicate insert should not be new")
-        #expect(set.insert(sig3) == true, "Different signature should be new")
-    }
-
-    @Test("SignatureSet totalCoverage is union of all signatures")
-    func testTotalCoverageIsUnion() async throws {
-        var set = SignatureSet()
-
-        let sig1 = CoverageSignature(edges: Set<UInt32>([0, 1]))
-        let sig2 = CoverageSignature(edges: Set<UInt32>([2, 3]))
-
-        set.insert(sig1)
-        set.insert(sig2)
-
-        let expectedTotal = sig1.union(with: sig2)
-        #expect(set.totalCoverage == expectedTotal, "Total coverage should be union")
-    }
-
-    @Test("wouldAddNewCoverage is consistent with totalCoverage")
-    func testWouldAddNewCoverage() async throws {
-        var set = SignatureSet()
-
-        let sig1 = CoverageSignature(edges: Set<UInt32>([0, 1]))
-        set.insert(sig1)
-
-        let subsetSig = CoverageSignature(edges: Set<UInt32>([0]))
-        let newSig = CoverageSignature(edges: Set<UInt32>([2]))
-
-        #expect(set.wouldAddNewCoverage(subsetSig) == false, "Subset should not add new coverage")
-        #expect(set.wouldAddNewCoverage(newSig) == true, "New index should add coverage")
-    }
-}
-
 // MARK: - MutatorProviding Property Tests
 
 @Suite("MutatorProviding Properties")
@@ -335,22 +288,6 @@ struct CorpusPropertyTests {
         await corpus.add(input: "a", signature: CoverageSignature(edges: Set<UInt32>([0])))
         isEmpty = await corpus.isEmpty
         #expect(!isEmpty, "Corpus with entry should not be empty")
-    }
-
-    @Test("Corpus signatures property")
-    func testCorpusSignatures() async throws {
-        let corpus = Corpus<String>()
-
-        let sig1 = CoverageSignature(edges: Set<UInt32>([0]))
-        let sig2 = CoverageSignature(edges: Set<UInt32>([1]))
-
-        await corpus.add(input: "a", signature: sig1)
-        await corpus.add(input: "b", signature: sig2)
-
-        let signatures = await corpus.signatures
-        #expect(signatures.count == 2, "Should have 2 signatures")
-        #expect(signatures[0] == sig1, "First signature should match")
-        #expect(signatures[1] == sig2, "Second signature should match")
     }
 
     @Test("Corpus inputs property")

@@ -194,24 +194,24 @@ struct SaturationPlateauDetectorTests {
     }
 }
 
-@Suite("SaturationPlugin")
-struct SaturationPluginTests {
+@Suite("Saturation Handler")
+struct SaturationHandlerTests {
 
-    @Test("Plugin has correct ID")
-    func testPluginId() async {
-        let plugin = SaturationPlugin()
-        #expect(await plugin.id == "saturation_detector")
+    @Test("Handler has correct ID")
+    func testHandlerId() {
+        let handler: FuzzPluginHandler<Int> = .saturationDetector()
+        #expect(handler.id == "saturation_detector")
     }
 
-    @Test("Plugin returns stop action when plateaued")
-    func testStopAction() async throws {
+    @Test("Handler returns stop action when plateaued")
+    func testStopAction() {
         let config = SaturationPlateauDetector.Config(
             minGrowthRate: 0.01,
             windowSize: 5,
             confirmationWindows: 2,
             enabled: true
         )
-        let plugin = SaturationPlugin(config: config)
+        let handler: FuzzPluginHandler<Int> = .saturationDetector(config: config)
 
         // Record many non-discoveries via iteration events
         for i in 0..<50 {
@@ -219,7 +219,7 @@ struct SaturationPluginTests {
                 discoveredNewCoverage: false,
                 input: i
             )
-            let actions = plugin.handle(event: SyncPluginEvent<Int>.iteration(iterationContext))
+            let actions = handler.handleSync(SyncPluginEvent<Int>.iteration(iterationContext))
 
             // Check if we got a stop action
             if actions.contains(where: {
@@ -234,15 +234,15 @@ struct SaturationPluginTests {
         Issue.record("Expected stop action after plateau")
     }
 
-    @Test("Convenience constructor creates plugin")
-    func testConvenienceConstructor() async {
-        let plugin: SaturationPlugin = .saturationDetector(
+    @Test("Convenience constructor creates handler")
+    func testConvenienceConstructor() {
+        let handler: FuzzPluginHandler<Int> = .saturationDetector(
             minSaturation: 0.95,
             minGrowthRate: 0.0005,
             windowSize: 100,
             confirmationWindows: 5
         )
 
-        #expect(await plugin.id == "saturation_detector")
+        #expect(handler.id == "saturation_detector")
     }
 }

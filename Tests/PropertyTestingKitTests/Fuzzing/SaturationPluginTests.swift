@@ -2,23 +2,23 @@
 //  SaturationPluginTests.swift
 //  PropertyTestingKitTests
 //
-//  Tests for SaturationPlugin.
+//  Tests for the saturation plateau detector handler.
 //
 
 import Testing
 import Foundation
 @testable import PropertyTestingKit
 
-@Suite("SaturationPlugin Actions")
-struct SaturationPluginActionTests {
+@Suite("Saturation Handler Actions")
+struct SaturationHandlerActionTests {
 
-    @Test("Plugin has correct ID")
-    func testPluginId() {
-        let plugin = SaturationPlugin()
-        #expect(plugin.id == "saturation_detector")
+    @Test("Handler has correct ID")
+    func testHandlerId() {
+        let handler: FuzzPluginHandler<Int> = .saturationDetector()
+        #expect(handler.id == "saturation_detector")
     }
 
-    @Test("Plugin returns stop action when saturated")
+    @Test("Handler returns stop action when saturated")
     func testStopWhenSaturated() {
         let config = SaturationPlateauDetector.Config(
             minSaturation: 0.9,
@@ -26,7 +26,7 @@ struct SaturationPluginActionTests {
             windowSize: 10,
             confirmationWindows: 1
         )
-        let plugin = SaturationPlugin(config: config)
+        let handler: FuzzPluginHandler<Int> = .saturationDetector(config: config)
 
         // Simulate iterations without discovery to reach saturation
         var stoppedAt: Int?
@@ -35,7 +35,7 @@ struct SaturationPluginActionTests {
                 discoveredNewCoverage: false,
                 input: i
             )
-            let actions = plugin.handle(event: SyncPluginEvent<Int>.iteration(context))
+            let actions = handler.handleSync(SyncPluginEvent<Int>.iteration(context))
 
             if !actions.isEmpty {
                 if case .stop(let stopAction) = actions[0] {
@@ -46,6 +46,6 @@ struct SaturationPluginActionTests {
             }
         }
 
-        #expect(stoppedAt != nil, "Plugin should have triggered stop")
+        #expect(stoppedAt != nil, "Handler should have triggered stop")
     }
 }

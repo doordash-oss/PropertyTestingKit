@@ -3,11 +3,10 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 77;
+	objectVersion = 63;
 	objects = {
 
 /* Begin PBXBuildFile section */
-		002C50A912C012C39E2D7131 /* ChannelBenchmarks.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6004EB7893C5A9200F3557E7 /* ChannelBenchmarks.swift */; };
 		005407F178C278DBBF33627C /* Benchmark in Frameworks */ = {isa = PBXBuildFile; productRef = C9649E29ED96CDBD6E529B77 /* Benchmark */; };
 		0154176562021BDA43F938DD /* Atomics in Frameworks */ = {isa = PBXBuildFile; productRef = E7453C229B2EE1685F41B289 /* Atomics */; };
 		0194A2B0922DC21A5E35E179 /* ShrinkingPluginTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9038D6C2FF93F7F004830619 /* ShrinkingPluginTests.swift */; };
@@ -20,7 +19,6 @@
 		10CD010C1188224CE3366698 /* ConcurrentQueues.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 53CAAC0D19F2954667E891FB /* ConcurrentQueues.framework */; };
 		1226F62189C28475B8A01EE4 /* Int+MutatorProviding.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC834389B8A7AF84299B4237 /* Int+MutatorProviding.swift */; };
 		125D3FB66141B63E3542572E /* FuzzResult.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7769DE997855D0C94C1C405F /* FuzzResult.swift */; };
-		1426388F8F61D31CB0AC925C /* PlateauDetectorPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = F5F59F7C0FD59FAD26BADFE6 /* PlateauDetectorPlugin.swift */; };
 		14CE5AF65788D0ED532C423D /* PropertyBasedSelfTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F7B5F39FFCE93451B38B3FBA /* PropertyBasedSelfTests.swift */; };
 		154F79A2EEDDE650511A586D /* CustomFuzzableTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 683A330BCB90F626B21D2422 /* CustomFuzzableTests.swift */; };
 		17D551F0DC9A49573320CBC2 /* ck_ht.c in Sources */ = {isa = PBXBuildFile; fileRef = DF69D0BBA6357FA0A5F78ABC /* ck_ht.c */; };
@@ -36,17 +34,14 @@
 		286622DA029C3AC20D7DA262 /* PropertyTestingKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 2595E9AD80DBFC77F241A7E7 /* PropertyTestingKit.framework */; };
 		2934DF4D2D0A7B2472998876 /* SQLInjectionMutator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E87A51CF22639FAC9BB2577 /* SQLInjectionMutator.swift */; };
 		29AD704E75D749B097C95BAA /* CorpusEntryType.swift in Sources */ = {isa = PBXBuildFile; fileRef = 49412A507ECD93C3E85C649B /* CorpusEntryType.swift */; };
-		2C5DACEE0B44FDB7BE5F8C91 /* PluginCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B70861EBA1D41D0DFD64426 /* PluginCoordinator.swift */; };
 		2DC1B96A3FA7B3578DB69E7F /* PropertyTestingKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 2595E9AD80DBFC77F241A7E7 /* PropertyTestingKit.framework */; };
 		2E6CDCBF7B91A07E9402C82F /* ConcurrentFuzzLoadTest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00EBA13944AF0B757005638A /* ConcurrentFuzzLoadTest.swift */; };
-		3308E8DA9485458FE5DE69A4 /* MutationPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = C07CB963AFB9D07FD0B05E2D /* MutationPlugin.swift */; };
 		35E17C6B02665DCFD28C61CF /* Atomics in Frameworks */ = {isa = PBXBuildFile; productRef = C6C96F00E7EA2EE69BCEDC3A /* Atomics */; };
 		3623AE0B84CB07558F777090 /* PortMutator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5F0A30CF764B199509AB0614 /* PortMutator.swift */; };
 		37A87717B2EB72E8BA3B0DFB /* StringBoundaryMutator.swift in Sources */ = {isa = PBXBuildFile; fileRef = F853A816879F7A6E163BE7B4 /* StringBoundaryMutator.swift */; };
 		3AE90F2D2F5E78080AAB081C /* FuzzAPITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 99DF2D2D7A9C78BEFDA1C9FF /* FuzzAPITests.swift */; };
 		3C0A06D9F8141B7C2EEC9073 /* XSSMutator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 987822C1AE1DD0059B1B19EB /* XSSMutator.swift */; };
 		3D278F94AC182188C4B835AF /* FuzzStateMachine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 248285724DB5F6586AE70506 /* FuzzStateMachine.swift */; };
-		401C94D11E3C69AB9D798E2D /* RCQSQueue.swift in Sources */ = {isa = PBXBuildFile; fileRef = 453149F0A74121DC124CFB20 /* RCQSQueue.swift */; };
 		413720205EA64C2558BD9F04 /* FuzzAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = A18400D950AE2D1D13443E9A /* FuzzAPI.swift */; };
 		432A7C1997D44CD9561448F1 /* CorpusMode.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7F23079959F6B89989AD2EB /* CorpusMode.swift */; };
 		4663EC7618D3511158524207 /* RaceConditionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 797B369A783CF8DA4F7C9190 /* RaceConditionTests.swift */; };
@@ -55,14 +50,11 @@
 		4EB9436B27158A5C6839F9BA /* DWARFSymbolizerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1E97A029218EB361C14F01D /* DWARFSymbolizerTests.swift */; };
 		5118F45702A081DEB42B60AA /* DateClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8DCFCD27F236B21539FDC070 /* DateClient.swift */; };
 		5127D413390D3FE20602F726 /* DequeModule in Frameworks */ = {isa = PBXBuildFile; productRef = ED638EEB32787F0136CC6158 /* DequeModule */; };
-		517D2FA0099DD8F832016CB0 /* RelaxedQueue.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1768557AD57A3460E16861E /* RelaxedQueue.swift */; };
-		52A27FF9B915F4953CBE37C3 /* SPSCQueueTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 67313115F82527F359E6AD42 /* SPSCQueueTests.swift */; };
 		52C260E19A743BA5BCADC703 /* CoverageSignature.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BD8E7DDBFB1256A08DEBE05 /* CoverageSignature.swift */; };
 		534C8AE7D3768059DDAEA18D /* Benchmark in Frameworks */ = {isa = PBXBuildFile; productRef = FD911ACF527827DA331405BD /* Benchmark */; };
 		56BD6A924A8704F7BB65D7CD /* ArrayPositionAwareMutator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E9F5016469E3378725DCE64 /* ArrayPositionAwareMutator.swift */; };
 		56D29B8C49300786D2ACBD1A /* NegativeIntMutator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4091F4EF6449C34BCC32E57C /* NegativeIntMutator.swift */; };
 		589D0164A415C152CDD4B160 /* Benchmark in Frameworks */ = {isa = PBXBuildFile; productRef = E6A87E5EFC33D405ECEDD0E1 /* Benchmark */; };
-		5B7775C68221FE079AE343F9 /* RelaxedBoundedChannel.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1393E951BCEFB24A64C09FD /* RelaxedBoundedChannel.swift */; };
 		5BD7C2E8D9C80257F0AA459D /* FastRNG.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6FCF623F07EE6A39B03A9667 /* FastRNG.swift */; };
 		5CE75ACE29DD3F8860FAA19D /* STADSPlateauDetector.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1733E8C2C5D2FC2BC7394036 /* STADSPlateauDetector.swift */; };
 		5D7BD139A169A1190764B4E8 /* CoverageGapPluginTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3DCC188A42F8F55099B6EC2C /* CoverageGapPluginTests.swift */; };
@@ -70,13 +62,12 @@
 		605B9C253222E341C0385AB9 /* Double+MutatorProviding.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E987090D06715A5F99BEC1A /* Double+MutatorProviding.swift */; };
 		60F4B0B951427866AB7380DC /* CorpusEntry.swift in Sources */ = {isa = PBXBuildFile; fileRef = D708E6A5A1B65DA927AFEA9E /* CorpusEntry.swift */; };
 		61031F0CE3C1B19C1D04DF89 /* PropertyTestingKit.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 2595E9AD80DBFC77F241A7E7 /* PropertyTestingKit.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		62D2901F2F2DCAA1001C6D0B /* SanCovSourceLocation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 62D2901E2F2DCA9B001C6D0B /* SanCovSourceLocation.swift */; };
 		637CEF93972CB8A43732FCB0 /* ArrayDuplicationMutator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 846F2F02B0AA5A040C5EB704 /* ArrayDuplicationMutator.swift */; };
 		6632F732A4FAECE34A80F544 /* ShrinkStats.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C98CB65B3ADE29BB300C7EA /* ShrinkStats.swift */; };
-		6ABC363D4A9E91ABF9E6BBCA /* RCQB.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0D3374389D7DE991009CFC2B /* RCQB.swift */; };
 		6B81F710C9EAE2B9786DFD16 /* TaskResults.swift in Sources */ = {isa = PBXBuildFile; fileRef = B155EAF0286844D09A5709EC /* TaskResults.swift */; };
 		6C92AFA4A8A89008D14C5645 /* SanCovIsolationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 34658F2420967EA35E38058D /* SanCovIsolationTests.swift */; };
 		6FC71167936E2046141EAA6B /* DWARFSymbolizerHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = A179A4CAD0B9C0FC0DF76A85 /* DWARFSymbolizerHelper.swift */; };
-		701CF2B4CCB8B14F8B85CB4A /* SegmentQueue.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3DBF63EB5C024C23AFE63827 /* SegmentQueue.swift */; };
 		7177FDDC6C703BE6ED195B56 /* PhoneNumberMutator.swift in Sources */ = {isa = PBXBuildFile; fileRef = F13B7E4AC8104D85F98B8418 /* PhoneNumberMutator.swift */; };
 		721B918F0C92F521E1CD4FC3 /* TestCaseShrinkerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F58C560D0D81EBCA41AC8282 /* TestCaseShrinkerTests.swift */; };
 		77318276C93EAB250B715AAD /* SaturationPlateauDetectorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B37ED10677A92DC01DD0B289 /* SaturationPlateauDetectorTests.swift */; };
@@ -90,11 +81,8 @@
 		86364D3C2F2DBEA2A9B62EA0 /* PowerOfTwoMutator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 88F5B7FC44F425E39676B1D3 /* PowerOfTwoMutator.swift */; };
 		87CB37DFCDC351E3E53BE7F1 /* TestCaseShrinker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7DA5B74380237260F7E42D71 /* TestCaseShrinker.swift */; };
 		890F51672DF9C141E63233FB /* ArrayLengthTargetedMutator.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF13CC15C322A9D79BD1BD06 /* ArrayLengthTargetedMutator.swift */; };
-		8B1C0E3901406D0F1718A612 /* RelaxedQueueTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3CE03CDB4DC3B26ACCD090E1 /* RelaxedQueueTests.swift */; };
 		8B77076135753B47C626A029 /* FuzzEngine+Config.swift in Sources */ = {isa = PBXBuildFile; fileRef = ACE4D8AA0A411B9988FA7E7C /* FuzzEngine+Config.swift */; };
 		8CBB720CE81E97F2750950E1 /* libSanCovHooks.a in Frameworks */ = {isa = PBXBuildFile; fileRef = FC16934A7D0ADDA3859FDFCA /* libSanCovHooks.a */; };
-		8D27AFB1254FC22918527BA3 /* CoverageGapPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = 112824CF90673942F0DC8528 /* CoverageGapPlugin.swift */; };
-		8F5A64A385E84213403CB65A /* VyukovBoundedChannel.swift in Sources */ = {isa = PBXBuildFile; fileRef = FBED26DF9A41FD069EB28115 /* VyukovBoundedChannel.swift */; };
 		902AD170388F6A40C15ECCA5 /* MutatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C2AB425C1886E9C43DA056F /* MutatorTests.swift */; };
 		92C0A97FA308BAE7318F09BE /* UInt+MutatorProviding.swift in Sources */ = {isa = PBXBuildFile; fileRef = C94A378F579D36D7A0DE6F8D /* UInt+MutatorProviding.swift */; };
 		93A29BA964CA290588A5D762 /* IntMutators.swift in Sources */ = {isa = PBXBuildFile; fileRef = CED4705CAFB71E914729EBE5 /* IntMutators.swift */; };
@@ -111,27 +99,23 @@
 		A11656F32C1DA89DAC5AE4B1 /* EnvironmentClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = F46057CB7F84DA3671178057 /* EnvironmentClient.swift */; };
 		A1B5C9D7B4345854FF5D488A /* PropertyTestingKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 2595E9AD80DBFC77F241A7E7 /* PropertyTestingKit.framework */; };
 		A37D8BF967DDC59F6674C589 /* CartesianProduct.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3DC7247C29C4368A12DBDC7 /* CartesianProduct.swift */; };
-		A6A65D4CE8BA2EC8A2A08E58 /* SPSCQueue.swift in Sources */ = {isa = PBXBuildFile; fileRef = C8F920487E91DCB59E3B530F /* SPSCQueue.swift */; };
 		A791F464FE3BDDB8A76320B5 /* FuzzPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = C46A7E2288E1AE7A59B100CF /* FuzzPlugin.swift */; };
 		A8AB88E38D9F9BBE8CCCD77B /* CorpusCoder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3FFCEA0CB033829BFBAEFA52 /* CorpusCoder.swift */; };
 		AB89E6673C3749E9B3F3A882 /* PlateauDetectorPluginTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BA01B2725BCFE68C918C2336 /* PlateauDetectorPluginTests.swift */; };
 		AC0EB1E931DDE5907D9E63F7 /* Optional+MutatorProviding.swift in Sources */ = {isa = PBXBuildFile; fileRef = E65E1585E4A2E6E29044F7C6 /* Optional+MutatorProviding.swift */; };
-		AD1F49DE9664EE8298A6BAAB /* PluginCoordinatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86DD2CF2668FC6B4D968840C /* PluginCoordinatorTests.swift */; };
 		ADF49AE0B09D08080E515387 /* CoverageCountersTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4C33B33085A4DB5D1981F0A /* CoverageCountersTests.swift */; };
-		AE039F030078D5F9C08C2F70 /* Channel.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2CA4FE137EA1710CABFD789 /* Channel.swift */; };
 		AE4F51213F59E5755867F166 /* Character+MutatorProviding.swift in Sources */ = {isa = PBXBuildFile; fileRef = ED3D3A4715807897A071483B /* Character+MutatorProviding.swift */; };
 		AE8D0DAD754CB02CF85F119C /* ConcurrentQueues.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 53CAAC0D19F2954667E891FB /* ConcurrentQueues.framework */; };
 		AFDDC40C6C111A0C8359403D /* FunctionSizeLookup.swift in Sources */ = {isa = PBXBuildFile; fileRef = D675F3742488937DF00D923F /* FunctionSizeLookup.swift */; };
 		B0B276C037B14EAA3010672E /* FuzzEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4401B1A5DC7E001073C6D2B1 /* FuzzEngine.swift */; };
 		B12BA13984E49118CD620DA9 /* Shrinkable.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A401389A02B82B842F9ED0F /* Shrinkable.swift */; };
-		B20ECE10EBE97455BFB9514C /* VyukovChannel.swift in Sources */ = {isa = PBXBuildFile; fileRef = C58EA6211B00155CCB9207C1 /* VyukovChannel.swift */; };
 		B269AC60201884DB429C947C /* STADSPlateauDetectorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 146B4C7BE9FB4A557084104F /* STADSPlateauDetectorTests.swift */; };
 		B26FDBA1F2F9B6BE116325A2 /* CartesianProductTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 909450826B23F3420A39E22F /* CartesianProductTests.swift */; };
 		B41D8704B0A4CC5534A14E18 /* Array+MutatorProviding.swift in Sources */ = {isa = PBXBuildFile; fileRef = C507F3A635BA3903F890009B /* Array+MutatorProviding.swift */; };
 		B4BDB29EC97DFFA012041961 /* ArrayRepeatedValuesMutator.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5C5882F6BFF2F94A68DD51D /* ArrayRepeatedValuesMutator.swift */; };
 		B589BFFA6C70C0D16C75E1AD /* FuzzableProtocolTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D5B1DD3570EBB6E7D12F912 /* FuzzableProtocolTests.swift */; };
+		B5DE6B566FD9761D9E7A7612 /* FuzzPluginHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9253FA68CDDBAF11AB22959F /* FuzzPluginHandler.swift */; };
 		B658E17CCF942125EF08B2C9 /* ShrinkConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0C4FC87637FA205C20057C9 /* ShrinkConfig.swift */; };
-		B87B6EF259EF22C6CEF5DD74 /* RelaxedBoundedChannelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF93BF0B57DCF8F9FA90AD49 /* RelaxedBoundedChannelTests.swift */; };
 		B9A72FAD1D69FE143AB0F195 /* IssueDetection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8BE38B74CDF1148728314C07 /* IssueDetection.swift */; };
 		BB317568B96C33EA9BBBDC4F /* PropertyTestingKit.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 2595E9AD80DBFC77F241A7E7 /* PropertyTestingKit.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		BD0CC959DAB2216FB5A5AE9E /* ShrinkResult.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A1857217E99772D144C79B7 /* ShrinkResult.swift */; };
@@ -148,14 +132,11 @@
 		CFEE279397531A3509632FAA /* FunctionSpy in Frameworks */ = {isa = PBXBuildFile; productRef = F0BEB91D5B04B84629BA665A /* FunctionSpy */; };
 		D08B5C962956C22E0282A48E /* ArraySequenceInsertionMutator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5150147016EC8550F07948A1 /* ArraySequenceInsertionMutator.swift */; };
 		D0C65F0813EFB9C22E7A24EC /* DWARFSymbolizerError.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2671C4A43D9243DDBC246A9 /* DWARFSymbolizerError.swift */; };
-		D2BC2EE4BA5AE7CADCA65873 /* SpinChannel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09E9C3F6DA4EB6FB4BE3B84B /* SpinChannel.swift */; };
-		D2E3F837D79E6068D622D78D /* ChannelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A29215654D59B4626E5E398 /* ChannelTests.swift */; };
 		D304EFC84705417D212EA91D /* CoverageSignatureTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09F9A66C1671353C4CCF4F16 /* CoverageSignatureTests.swift */; };
 		D3BBDD6471BDB998F4979E48 /* FileManagerClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A5FD30F272F4610F9D0637A /* FileManagerClient.swift */; };
 		D4E4A695B3002B71FE1FAEC4 /* SPSCGrowableRing.swift in Sources */ = {isa = PBXBuildFile; fileRef = D34F3E4EBEAE11696CCEB73B /* SPSCGrowableRing.swift */; };
 		D5304C43DD6EFBF89321404D /* PropertyTestingKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 2595E9AD80DBFC77F241A7E7 /* PropertyTestingKit.framework */; };
 		D5645DFA85C2ABBD0E34ACC2 /* ParallelTimingTest.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6A80CC19DCB4C4527B0777F /* ParallelTimingTest.swift */; };
-		D5983ABABFE63D62EA5C3D51 /* OPTIMIZATION-HISTORY.md in Resources */ = {isa = PBXBuildFile; fileRef = 83153486221ED8E2CA6B4FB1 /* OPTIMIZATION-HISTORY.md */; };
 		D7A5330868F7D3869BA65F92 /* ConcurrentQueues.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 53CAAC0D19F2954667E891FB /* ConcurrentQueues.framework */; };
 		DB3B9AFA08DCD50172E473CB /* CLLVMSymbolizer.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 6B4DC0FA0EFB0DDF25E4C353 /* CLLVMSymbolizer.cpp */; };
 		DE91A730EDEC7C073B4D166F /* ContinuousClockClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4A90F27F22BE17810AE1B6F /* ContinuousClockClient.swift */; };
@@ -163,6 +144,7 @@
 		E05A1921A081B8C834B8A921 /* String+Shrinkable.swift in Sources */ = {isa = PBXBuildFile; fileRef = F9091C3EF601AF281CEC4E3A /* String+Shrinkable.swift */; };
 		E22FD5BA11720007BFEC6E1E /* DWARFSourceLocation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 801978DFD141E3190DC8219D /* DWARFSourceLocation.swift */; };
 		E2ED9AA8879A99B92480A646 /* URLMutator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 233B765E89E5C522C4158B51 /* URLMutator.swift */; };
+		E4970896F2ECFC3E2AD274B5 /* SimpleRingBuffer.swift in Sources */ = {isa = PBXBuildFile; fileRef = F403263325C80307990034DB /* SimpleRingBuffer.swift */; };
 		E5CE85300E9595AE8CF1F398 /* UncoveredRegion.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9DA6786D89438D0199BF0412 /* UncoveredRegion.swift */; };
 		E61304C8BC4F785E82EF8E3D /* StringMutators.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8070E3D26516154F5EEEC862 /* StringMutators.swift */; };
 		E687CB03E2FB5282DDF5EE66 /* BoolMutators.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C0EB12824A02A80F8D4EB77 /* BoolMutators.swift */; };
@@ -171,23 +153,14 @@
 		E84A0D3FEB919703F75C1BA1 /* UnicodeMutator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 920C7E046C3C079B33F40A8F /* UnicodeMutator.swift */; };
 		E8ED514CBE637B3DB6879755 /* IssueDetectionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAE561F78BDA61BB34264F21 /* IssueDetectionTests.swift */; };
 		E914B1D593A03C40C576C93A /* UInt8+MutatorProviding.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2A04C16608308FDC4F6ADE4 /* UInt8+MutatorProviding.swift */; };
-		E94E382B579A8EAEA05F2A12 /* ShrinkingPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = 19A4AA0D8D28393DDC7CDD33 /* ShrinkingPlugin.swift */; };
-		ECBE316A69296E918688FA38 /* RealRCQ.swift in Sources */ = {isa = PBXBuildFile; fileRef = F71FA6525A4595B0EBFA0AE2 /* RealRCQ.swift */; };
 		EED2A378ADF17C64DC50D6C8 /* ArrayMutators.swift in Sources */ = {isa = PBXBuildFile; fileRef = D82933D55EE528E5E866C257 /* ArrayMutators.swift */; };
-		EF353620D890641D543ED36B /* SyncChannel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 368EB0DBC91A07E925144D22 /* SyncChannel.swift */; };
-		F14411F20E91CD1254C4E26C /* MultiQueue.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7FAAAD7A8BE8B69E57D78AC3 /* MultiQueue.swift */; };
 		F175208C6823ED3BC2A92224 /* PropertyTestingKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 2595E9AD80DBFC77F241A7E7 /* PropertyTestingKit.framework */; };
-		F378E6F94947B1B907B89907 /* SPSCRingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 27AC86FB58EB8E2350E7003C /* SPSCRingTests.swift */; };
-		F4E3D1DF382DCAC750307163 /* UserService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5305591133199EC528A0A92D /* UserService.swift */; };
 		F4F5214CABA1CC0BBFD80985 /* IntBoundaryMutator.swift in Sources */ = {isa = PBXBuildFile; fileRef = E88B1563B358C2EE651C20E4 /* IntBoundaryMutator.swift */; };
-		F5E12565A5E3B3F657133645 /* STADSPlateauDetectorPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = 40672CAD432576A4635C1676 /* STADSPlateauDetectorPlugin.swift */; };
-		F7672665536078766B291DE7 /* SPSCRing.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8299E2AE16444773464DA367 /* SPSCRing.swift */; };
 		F854221602A30DC642BC0670 /* SimpleCoveragePlateauDetector.swift in Sources */ = {isa = PBXBuildFile; fileRef = 94EB367A0BBDEA977C219F3A /* SimpleCoveragePlateauDetector.swift */; };
 		F8CA279E1D5C86F49E55C093 /* RandomNumberGeneratorClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = C6B7D375C4052AA3BFE8E32A /* RandomNumberGeneratorClient.swift */; };
 		F90AAA32E041831DC6EEF916 /* CorpusPersistenceClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8FED37BAA14224125F5AD7CA /* CorpusPersistenceClient.swift */; };
 		F997A4DDB225D63D65B476AA /* Corpus.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA3C0B16540F4626B5B88CD7 /* Corpus.swift */; };
 		FAE454D657D928B2962AB47B /* SeededRandomNumberGenerator.swift in Sources */ = {isa = PBXBuildFile; fileRef = CBD2703ECFC03CDB4AF0A1EC /* SeededRandomNumberGenerator.swift */; };
-		FCC9ADA20072098BFAD48EBE /* SaturationPlateauDetectorPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF44990BD642A0A6FBF94C6F /* SaturationPlateauDetectorPlugin.swift */; };
 		FD441F5D3E24D693D0A26B7B /* EmailMutator.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4BDE3BB5DB51115A5922433 /* EmailMutator.swift */; };
 		FD77D76B952C21FFC395E793 /* KFIFOQueue.swift in Sources */ = {isa = PBXBuildFile; fileRef = D491815E0AB84AD49314DF0A /* KFIFOQueue.swift */; };
 /* End PBXBuildFile section */
@@ -316,51 +289,40 @@
 		00C7E57E4C8DFE72AE119BBD /* ck_pr.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ck_pr.h; sourceTree = "<group>"; };
 		00D9A28F92E90B2E82D5DC8C /* ck_cc.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ck_cc.h; sourceTree = "<group>"; };
 		00EBA13944AF0B757005638A /* ConcurrentFuzzLoadTest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConcurrentFuzzLoadTest.swift; sourceTree = "<group>"; };
-		021ACDF8BE3B266FA44EEDBD /* CoverageBenchmarks */ = {isa = PBXFileReference; includeInIndex = 0; path = CoverageBenchmarks; sourceTree = BUILT_PRODUCTS_DIR; };
+		021ACDF8BE3B266FA44EEDBD /* CoverageBenchmarks */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = text; path = CoverageBenchmarks; sourceTree = BUILT_PRODUCTS_DIR; };
 		0968653A4EEE0DAB7906E61C /* ck_f_pr.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ck_f_pr.h; sourceTree = "<group>"; };
-		09E9C3F6DA4EB6FB4BE3B84B /* SpinChannel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpinChannel.swift; sourceTree = "<group>"; };
 		09F9A66C1671353C4CCF4F16 /* CoverageSignatureTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoverageSignatureTests.swift; sourceTree = "<group>"; };
 		0A1857217E99772D144C79B7 /* ShrinkResult.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShrinkResult.swift; sourceTree = "<group>"; };
-		0A29215654D59B4626E5E398 /* ChannelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChannelTests.swift; sourceTree = "<group>"; };
 		0A401389A02B82B842F9ED0F /* Shrinkable.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Shrinkable.swift; sourceTree = "<group>"; };
 		0A5FD30F272F4610F9D0637A /* FileManagerClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileManagerClient.swift; sourceTree = "<group>"; };
 		0BC4138150CDC1ABC2DE7C65 /* FuzzEngineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FuzzEngineTests.swift; sourceTree = "<group>"; };
 		0BF3BAC10EF47D6C57388C35 /* SanCovHooks.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = SanCovHooks.h; sourceTree = "<group>"; };
-		0D3374389D7DE991009CFC2B /* RCQB.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RCQB.swift; sourceTree = "<group>"; };
 		0F9D24C887A6D36D7A6EFDB8 /* ck_pr.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ck_pr.h; sourceTree = "<group>"; };
-		112824CF90673942F0DC8528 /* CoverageGapPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoverageGapPlugin.swift; sourceTree = "<group>"; };
 		13045E2C359AB3AFCD8C3FF9 /* AnyShrinkable.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnyShrinkable.swift; sourceTree = "<group>"; };
 		137A6EE309F1056E3F217831 /* ck_pr.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ck_pr.h; sourceTree = "<group>"; };
 		146B4C7BE9FB4A557084104F /* STADSPlateauDetectorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = STADSPlateauDetectorTests.swift; sourceTree = "<group>"; };
 		1733E8C2C5D2FC2BC7394036 /* STADSPlateauDetector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = STADSPlateauDetector.swift; sourceTree = "<group>"; };
-		19A4AA0D8D28393DDC7CDD33 /* ShrinkingPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShrinkingPlugin.swift; sourceTree = "<group>"; };
 		1B7FA0AAC10E7E2DB5FD6CDE /* TSanTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = TSanTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		207ADDE793917BD26C4770EB /* CLLVMSymbolizer.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = CLLVMSymbolizer.h; sourceTree = "<group>"; };
 		233B765E89E5C522C4158B51 /* URLMutator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = URLMutator.swift; sourceTree = "<group>"; };
 		248285724DB5F6586AE70506 /* FuzzStateMachine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FuzzStateMachine.swift; sourceTree = "<group>"; };
 		2595E9AD80DBFC77F241A7E7 /* PropertyTestingKit.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = PropertyTestingKit.framework; sourceTree = BUILT_PRODUCTS_DIR; };
-		27AC86FB58EB8E2350E7003C /* SPSCRingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SPSCRingTests.swift; sourceTree = "<group>"; };
 		2A865DFA08A7E0DE3F588EDB /* SanCovCounters.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SanCovCounters.swift; sourceTree = "<group>"; };
 		2C2AB425C1886E9C43DA056F /* MutatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MutatorTests.swift; sourceTree = "<group>"; };
 		2C4EFD7D871B0C5BA50C4ED9 /* KFIFOQueueTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KFIFOQueueTests.swift; sourceTree = "<group>"; };
 		2CF3A4D9068E7899D99B8C01 /* FailureInfo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FailureInfo.swift; sourceTree = "<group>"; };
 		2F5D17F7EF3F37D6C60A6EBF /* ck_stdbool.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ck_stdbool.h; sourceTree = "<group>"; };
 		34658F2420967EA35E38058D /* SanCovIsolationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SanCovIsolationTests.swift; sourceTree = "<group>"; };
-		368EB0DBC91A07E925144D22 /* SyncChannel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncChannel.swift; sourceTree = "<group>"; };
 		3B56C4B9B3773FB6734D0821 /* SimpleCoveragePlateauDetectorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SimpleCoveragePlateauDetectorTests.swift; sourceTree = "<group>"; };
 		3B6534DD92D12382387899CD /* ck_f_pr.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ck_f_pr.h; sourceTree = "<group>"; };
 		3C4BEC4C9B5FC9BAEF5F9ECE /* WorkerPoolPatternTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkerPoolPatternTests.swift; sourceTree = "<group>"; };
-		3CE03CDB4DC3B26ACCD090E1 /* RelaxedQueueTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RelaxedQueueTests.swift; sourceTree = "<group>"; };
-		3DBF63EB5C024C23AFE63827 /* SegmentQueue.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SegmentQueue.swift; sourceTree = "<group>"; };
 		3DCC188A42F8F55099B6EC2C /* CoverageGapPluginTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoverageGapPluginTests.swift; sourceTree = "<group>"; };
 		3F1917814603DE56511E5F24 /* DWARFSymbolizer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DWARFSymbolizer.swift; sourceTree = "<group>"; };
 		3FFCEA0CB033829BFBAEFA52 /* CorpusCoder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CorpusCoder.swift; sourceTree = "<group>"; };
-		40672CAD432576A4635C1676 /* STADSPlateauDetectorPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = STADSPlateauDetectorPlugin.swift; sourceTree = "<group>"; };
 		4091F4EF6449C34BCC32E57C /* NegativeIntMutator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NegativeIntMutator.swift; sourceTree = "<group>"; };
 		41D46FE2CA83F10C2DE9B2F1 /* ck_ht.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ck_ht.h; sourceTree = "<group>"; };
-		43943B02E29C5848E574162F /* ChannelBenchmarks */ = {isa = PBXFileReference; includeInIndex = 0; path = ChannelBenchmarks; sourceTree = BUILT_PRODUCTS_DIR; };
+		43943B02E29C5848E574162F /* ChannelBenchmarks */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = text; path = ChannelBenchmarks; sourceTree = BUILT_PRODUCTS_DIR; };
 		4401B1A5DC7E001073C6D2B1 /* FuzzEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FuzzEngine.swift; sourceTree = "<group>"; };
-		453149F0A74121DC124CFB20 /* RCQSQueue.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RCQSQueue.swift; sourceTree = "<group>"; };
 		4549A952C6186904B56C3714 /* DoubleBoundaryMutator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DoubleBoundaryMutator.swift; sourceTree = "<group>"; };
 		4787D3EC4C3D5D95A956AD02 /* PercentageMutator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PercentageMutator.swift; sourceTree = "<group>"; };
 		49412A507ECD93C3E85C649B /* CorpusEntryType.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CorpusEntryType.swift; sourceTree = "<group>"; };
@@ -369,7 +331,6 @@
 		5150147016EC8550F07948A1 /* ArraySequenceInsertionMutator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArraySequenceInsertionMutator.swift; sourceTree = "<group>"; };
 		51F60E9EF9B6498AC00EEBFE /* ck_f_pr.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ck_f_pr.h; sourceTree = "<group>"; };
 		52C1DEE9A4340554236C9F32 /* SparseCoverage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SparseCoverage.swift; sourceTree = "<group>"; };
-		5305591133199EC528A0A92D /* UserService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserService.swift; sourceTree = "<group>"; };
 		5357FB37687D2D3BDA8DABED /* ck_pr.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ck_pr.h; sourceTree = "<group>"; };
 		53CAAC0D19F2954667E891FB /* ConcurrentQueues.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = ConcurrentQueues.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		543E53F7A2745CDD7F2C03DE /* SaturationPluginTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaturationPluginTests.swift; sourceTree = "<group>"; };
@@ -378,15 +339,14 @@
 		57EB1A242BFD17108D7B7C76 /* ck_f_pr.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ck_f_pr.h; sourceTree = "<group>"; };
 		5808442EF808C1EDDA75846C /* ck_cc.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ck_cc.h; sourceTree = "<group>"; };
 		589E8DC0D8B9FB632EF6F8FA /* Xoshiro256PlusPlus.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Xoshiro256PlusPlus.swift; sourceTree = "<group>"; };
-		5B885ACEB672DD762DA0F839 /* ProfiledBenchmark */ = {isa = PBXFileReference; includeInIndex = 0; path = ProfiledBenchmark; sourceTree = BUILT_PRODUCTS_DIR; };
+		5B885ACEB672DD762DA0F839 /* ProfiledBenchmark */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = text; path = ProfiledBenchmark; sourceTree = BUILT_PRODUCTS_DIR; };
 		5DE9A7DAD99528274ED05439 /* DeterministicTimingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeterministicTimingTests.swift; sourceTree = "<group>"; };
 		5DF47986A6DF631A9EB89635 /* ck_f_pr.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ck_f_pr.h; sourceTree = "<group>"; };
 		5E8F9F6F98682A286CF9856A /* ck_f_pr.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ck_f_pr.h; sourceTree = "<group>"; };
 		5F0A30CF764B199509AB0614 /* PortMutator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PortMutator.swift; sourceTree = "<group>"; };
-		6004EB7893C5A9200F3557E7 /* ChannelBenchmarks.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChannelBenchmarks.swift; sourceTree = "<group>"; };
 		6089581A8525B59F997740DA /* ck_pr_lse.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ck_pr_lse.h; sourceTree = "<group>"; };
+		62D2901E2F2DCA9B001C6D0B /* SanCovSourceLocation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SanCovSourceLocation.swift; sourceTree = "<group>"; };
 		66D7438BFF7FE3F52E951148 /* MWC192.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MWC192.swift; sourceTree = "<group>"; };
-		67313115F82527F359E6AD42 /* SPSCQueueTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SPSCQueueTests.swift; sourceTree = "<group>"; };
 		676196E34E9EA63139657323 /* ck_stdint.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ck_stdint.h; sourceTree = "<group>"; };
 		683A330BCB90F626B21D2422 /* CustomFuzzableTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CustomFuzzableTests.swift; sourceTree = "<group>"; };
 		6ADE3EEEF0705F1A7D88FD97 /* ck_stddef.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ck_stddef.h; sourceTree = "<group>"; };
@@ -404,21 +364,16 @@
 		7C237EB63D16AB69083B9010 /* ck_limits.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ck_limits.h; sourceTree = "<group>"; };
 		7C98CB65B3ADE29BB300C7EA /* ShrinkStats.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShrinkStats.swift; sourceTree = "<group>"; };
 		7DA5B74380237260F7E42D71 /* TestCaseShrinker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TestCaseShrinker.swift; sourceTree = "<group>"; };
-		7FAAAD7A8BE8B69E57D78AC3 /* MultiQueue.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MultiQueue.swift; sourceTree = "<group>"; };
 		801978DFD141E3190DC8219D /* DWARFSourceLocation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DWARFSourceLocation.swift; sourceTree = "<group>"; };
 		805D70C5E70888046E92D052 /* SanCovTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = SanCovTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		8070E3D26516154F5EEEC862 /* StringMutators.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StringMutators.swift; sourceTree = "<group>"; };
 		807ED515190705E70EEBD7FE /* SyncBox.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncBox.swift; sourceTree = "<group>"; };
-		8299E2AE16444773464DA367 /* SPSCRing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SPSCRing.swift; sourceTree = "<group>"; };
 		82E302CA79A5FD97C9E37328 /* ck_f_pr.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ck_f_pr.h; sourceTree = "<group>"; };
-		83153486221ED8E2CA6B4FB1 /* OPTIMIZATION-HISTORY.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = "OPTIMIZATION-HISTORY.md"; sourceTree = "<group>"; };
 		846F2F02B0AA5A040C5EB704 /* ArrayDuplicationMutator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArrayDuplicationMutator.swift; sourceTree = "<group>"; };
-		86DD2CF2668FC6B4D968840C /* PluginCoordinatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PluginCoordinatorTests.swift; sourceTree = "<group>"; };
 		87964E15BDAEE902B7B38D6E /* String+MutatorProviding.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "String+MutatorProviding.swift"; sourceTree = "<group>"; };
 		87C13394409DA48E4BE31930 /* corpus.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = corpus.json; sourceTree = "<group>"; };
 		88F5B7FC44F425E39676B1D3 /* PowerOfTwoMutator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PowerOfTwoMutator.swift; sourceTree = "<group>"; };
 		8A0CC115EE184F1E93C3A0E0 /* ck_string.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ck_string.h; sourceTree = "<group>"; };
-		8B70861EBA1D41D0DFD64426 /* PluginCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PluginCoordinator.swift; sourceTree = "<group>"; };
 		8BE38B74CDF1148728314C07 /* IssueDetection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IssueDetection.swift; sourceTree = "<group>"; };
 		8D5B1DD3570EBB6E7D12F912 /* FuzzableProtocolTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FuzzableProtocolTests.swift; sourceTree = "<group>"; };
 		8DCFCD27F236B21539FDC070 /* DateClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DateClient.swift; sourceTree = "<group>"; };
@@ -427,6 +382,7 @@
 		9038D6C2FF93F7F004830619 /* ShrinkingPluginTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShrinkingPluginTests.swift; sourceTree = "<group>"; };
 		909450826B23F3420A39E22F /* CartesianProductTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CartesianProductTests.swift; sourceTree = "<group>"; };
 		920C7E046C3C079B33F40A8F /* UnicodeMutator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UnicodeMutator.swift; sourceTree = "<group>"; };
+		9253FA68CDDBAF11AB22959F /* FuzzPluginHandler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FuzzPluginHandler.swift; sourceTree = "<group>"; };
 		9475EBCF152B8D2EEACB5111 /* STADSPluginTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = STADSPluginTests.swift; sourceTree = "<group>"; };
 		94EB367A0BBDEA977C219F3A /* SimpleCoveragePlateauDetector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SimpleCoveragePlateauDetector.swift; sourceTree = "<group>"; };
 		955C5983D6125F89C2DE0E3E /* DoubleMutators.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DoubleMutators.swift; sourceTree = "<group>"; };
@@ -446,27 +402,22 @@
 		ACE4D8AA0A411B9988FA7E7C /* FuzzEngine+Config.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "FuzzEngine+Config.swift"; sourceTree = "<group>"; };
 		AD73DE80764A2587F59AEEEB /* Bool+MutatorProviding.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Bool+MutatorProviding.swift"; sourceTree = "<group>"; };
 		AF1E91685C6019AA1D8E23F9 /* Synchronized.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Synchronized.swift; sourceTree = "<group>"; };
-		AF93BF0B57DCF8F9FA90AD49 /* RelaxedBoundedChannelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RelaxedBoundedChannelTests.swift; sourceTree = "<group>"; };
 		B155EAF0286844D09A5709EC /* TaskResults.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskResults.swift; sourceTree = "<group>"; };
-		B1768557AD57A3460E16861E /* RelaxedQueue.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RelaxedQueue.swift; sourceTree = "<group>"; };
 		B37ED10677A92DC01DD0B289 /* SaturationPlateauDetectorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaturationPlateauDetectorTests.swift; sourceTree = "<group>"; };
 		B60A0F1AE1DD32B9E72168DE /* Array+Shrinkable.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Array+Shrinkable.swift"; sourceTree = "<group>"; };
 		B64D06718A05E1272E84861D /* MockDatabase.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockDatabase.swift; sourceTree = "<group>"; };
 		B81E2A8952B0656B76631FD3 /* ConcurrentQueuesTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ConcurrentQueuesTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		BA01B2725BCFE68C918C2336 /* PlateauDetectorPluginTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlateauDetectorPluginTests.swift; sourceTree = "<group>"; };
 		C02CEB72860556B925E49CC9 /* ck_pr.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ck_pr.h; sourceTree = "<group>"; };
-		C07CB963AFB9D07FD0B05E2D /* MutationPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MutationPlugin.swift; sourceTree = "<group>"; };
 		C45F1F52B8DBAE4FADF5B5C0 /* ck_md.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ck_md.h; sourceTree = "<group>"; };
 		C46A7E2288E1AE7A59B100CF /* FuzzPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FuzzPlugin.swift; sourceTree = "<group>"; };
 		C4C33B33085A4DB5D1981F0A /* CoverageCountersTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoverageCountersTests.swift; sourceTree = "<group>"; };
 		C507F3A635BA3903F890009B /* Array+MutatorProviding.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Array+MutatorProviding.swift"; sourceTree = "<group>"; };
-		C58EA6211B00155CCB9207C1 /* VyukovChannel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VyukovChannel.swift; sourceTree = "<group>"; };
 		C5A515E40A855C623BC509BC /* CoverageGapDetector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoverageGapDetector.swift; sourceTree = "<group>"; };
 		C6B7D375C4052AA3BFE8E32A /* RandomNumberGeneratorClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RandomNumberGeneratorClient.swift; sourceTree = "<group>"; };
 		C7F23079959F6B89989AD2EB /* CorpusMode.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CorpusMode.swift; sourceTree = "<group>"; };
 		C80829DB919B1E7D80F66C9B /* SpecialDoubleMutator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpecialDoubleMutator.swift; sourceTree = "<group>"; };
 		C8D72A5EBCA28D84F6AECC0B /* Data+Shrinkable.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Data+Shrinkable.swift"; sourceTree = "<group>"; };
-		C8F920487E91DCB59E3B530F /* SPSCQueue.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SPSCQueue.swift; sourceTree = "<group>"; };
 		C94A378F579D36D7A0DE6F8D /* UInt+MutatorProviding.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "UInt+MutatorProviding.swift"; sourceTree = "<group>"; };
 		C9952DEBABC45B57A9A83D8B /* HTTPStatusCodeMutator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HTTPStatusCodeMutator.swift; sourceTree = "<group>"; };
 		CB119BBD24F520783D33BA6F /* SanCovHooks.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = SanCovHooks.c; sourceTree = "<group>"; };
@@ -474,9 +425,7 @@
 		CC834389B8A7AF84299B4237 /* Int+MutatorProviding.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Int+MutatorProviding.swift"; sourceTree = "<group>"; };
 		CED4705CAFB71E914729EBE5 /* IntMutators.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IntMutators.swift; sourceTree = "<group>"; };
 		CEE33D6A37CCAA419FE56BDE /* ck_f_pr.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ck_f_pr.h; sourceTree = "<group>"; };
-		CF44990BD642A0A6FBF94C6F /* SaturationPlateauDetectorPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaturationPlateauDetectorPlugin.swift; sourceTree = "<group>"; };
 		CF7909559B042C15C36EAABE /* PropertyTestingKitTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = PropertyTestingKitTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
-		D1393E951BCEFB24A64C09FD /* RelaxedBoundedChannel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RelaxedBoundedChannel.swift; sourceTree = "<group>"; };
 		D2671C4A43D9243DDBC246A9 /* DWARFSymbolizerError.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DWARFSymbolizerError.swift; sourceTree = "<group>"; };
 		D34F3E4EBEAE11696CCEB73B /* SPSCGrowableRing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SPSCGrowableRing.swift; sourceTree = "<group>"; };
 		D491815E0AB84AD49314DF0A /* KFIFOQueue.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KFIFOQueue.swift; sourceTree = "<group>"; };
@@ -493,7 +442,6 @@
 		DF69D0BBA6357FA0A5F78ABC /* ck_ht.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = ck_ht.c; sourceTree = "<group>"; };
 		E0ABBB2AC9890A3F64DAF698 /* SaturationPlateauDetector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaturationPlateauDetector.swift; sourceTree = "<group>"; };
 		E2A04C16608308FDC4F6ADE4 /* UInt8+MutatorProviding.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "UInt8+MutatorProviding.swift"; sourceTree = "<group>"; };
-		E2CA4FE137EA1710CABFD789 /* Channel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Channel.swift; sourceTree = "<group>"; };
 		E3286F279F14B496AD89F0BE /* MultiComponentShrinker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MultiComponentShrinker.swift; sourceTree = "<group>"; };
 		E5C5882F6BFF2F94A68DD51D /* ArrayRepeatedValuesMutator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArrayRepeatedValuesMutator.swift; sourceTree = "<group>"; };
 		E65E1585E4A2E6E29044F7C6 /* Optional+MutatorProviding.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Optional+MutatorProviding.swift"; sourceTree = "<group>"; };
@@ -510,17 +458,15 @@
 		F13B7E4AC8104D85F98B8418 /* PhoneNumberMutator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhoneNumberMutator.swift; sourceTree = "<group>"; };
 		F1E97A029218EB361C14F01D /* DWARFSymbolizerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DWARFSymbolizerTests.swift; sourceTree = "<group>"; };
 		F3E63606AF341F913872CB76 /* CoverageGapReport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoverageGapReport.swift; sourceTree = "<group>"; };
+		F403263325C80307990034DB /* SimpleRingBuffer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SimpleRingBuffer.swift; sourceTree = "<group>"; };
 		F46057CB7F84DA3671178057 /* EnvironmentClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EnvironmentClient.swift; sourceTree = "<group>"; };
 		F4BDE3BB5DB51115A5922433 /* EmailMutator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmailMutator.swift; sourceTree = "<group>"; };
 		F58C560D0D81EBCA41AC8282 /* TestCaseShrinkerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TestCaseShrinkerTests.swift; sourceTree = "<group>"; };
-		F5F59F7C0FD59FAD26BADFE6 /* PlateauDetectorPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlateauDetectorPlugin.swift; sourceTree = "<group>"; };
 		F5FAD6386630E58099EFA884 /* ck_pr.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ck_pr.h; sourceTree = "<group>"; };
 		F6A80CC19DCB4C4527B0777F /* ParallelTimingTest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ParallelTimingTest.swift; sourceTree = "<group>"; };
-		F71FA6525A4595B0EBFA0AE2 /* RealRCQ.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RealRCQ.swift; sourceTree = "<group>"; };
 		F7B5F39FFCE93451B38B3FBA /* PropertyBasedSelfTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PropertyBasedSelfTests.swift; sourceTree = "<group>"; };
 		F853A816879F7A6E163BE7B4 /* StringBoundaryMutator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StringBoundaryMutator.swift; sourceTree = "<group>"; };
 		F9091C3EF601AF281CEC4E3A /* String+Shrinkable.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "String+Shrinkable.swift"; sourceTree = "<group>"; };
-		FBED26DF9A41FD069EB28115 /* VyukovBoundedChannel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VyukovBoundedChannel.swift; sourceTree = "<group>"; };
 		FC16934A7D0ADDA3859FDFCA /* libSanCovHooks.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = libSanCovHooks.a; sourceTree = BUILT_PRODUCTS_DIR; };
 		FF7EA1B7C028962CAA9A3F56 /* ck_f_pr.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ck_f_pr.h; sourceTree = "<group>"; };
 		FF840C500FFAB067BC638703 /* ck_pr.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ck_pr.h; sourceTree = "<group>"; };
@@ -684,7 +630,6 @@
 		23F43A795965F6FB0B6C1005 = {
 			isa = PBXGroup;
 			children = (
-				FED5BDFA0122BA02FE0C6F5E /* ChannelBenchmarks */,
 				A02618471FF4E5CAE16C036E /* CLLVMSymbolizer */,
 				D7631EEF91D0E91D8E5426E0 /* ConcurrentQueues */,
 				6957BC3FED2E36CD16AC9905 /* ConcurrentQueuesTests */,
@@ -881,12 +826,7 @@
 		6957BC3FED2E36CD16AC9905 /* ConcurrentQueuesTests */ = {
 			isa = PBXGroup;
 			children = (
-				0A29215654D59B4626E5E398 /* ChannelTests.swift */,
 				2C4EFD7D871B0C5BA50C4ED9 /* KFIFOQueueTests.swift */,
-				AF93BF0B57DCF8F9FA90AD49 /* RelaxedBoundedChannelTests.swift */,
-				3CE03CDB4DC3B26ACCD090E1 /* RelaxedQueueTests.swift */,
-				67313115F82527F359E6AD42 /* SPSCQueueTests.swift */,
-				27AC86FB58EB8E2350E7003C /* SPSCRingTests.swift */,
 			);
 			name = ConcurrentQueuesTests;
 			path = Tests/ConcurrentQueuesTests;
@@ -1007,6 +947,7 @@
 		9389B3080515AB75B3627EE4 /* Coverage */ = {
 			isa = PBXGroup;
 			children = (
+				62D2901E2F2DCA9B001C6D0B /* SanCovSourceLocation.swift */,
 				D675F3742488937DF00D923F /* FunctionSizeLookup.swift */,
 				2A865DFA08A7E0DE3F588EDB /* SanCovCounters.swift */,
 				52C1DEE9A4340554236C9F32 /* SparseCoverage.swift */,
@@ -1065,7 +1006,6 @@
 				F6A80CC19DCB4C4527B0777F /* ParallelTimingTest.swift */,
 				F7B5F39FFCE93451B38B3FBA /* PropertyBasedSelfTests.swift */,
 				5694654408A37C1D96C8CCA5 /* TestHelpers.swift */,
-				5305591133199EC528A0A92D /* UserService.swift */,
 				26D6CB1C8AA619AF6EA639F6 /* Coverage */,
 				DC660732E9D43D922568F89E /* Fuzzing */,
 				A77974B787838CD93CE6071A /* Support */,
@@ -1107,23 +1047,8 @@
 		D7631EEF91D0E91D8E5426E0 /* ConcurrentQueues */ = {
 			isa = PBXGroup;
 			children = (
-				E2CA4FE137EA1710CABFD789 /* Channel.swift */,
 				D491815E0AB84AD49314DF0A /* KFIFOQueue.swift */,
-				7FAAAD7A8BE8B69E57D78AC3 /* MultiQueue.swift */,
-				83153486221ED8E2CA6B4FB1 /* OPTIMIZATION-HISTORY.md */,
-				0D3374389D7DE991009CFC2B /* RCQB.swift */,
-				453149F0A74121DC124CFB20 /* RCQSQueue.swift */,
-				F71FA6525A4595B0EBFA0AE2 /* RealRCQ.swift */,
-				D1393E951BCEFB24A64C09FD /* RelaxedBoundedChannel.swift */,
-				B1768557AD57A3460E16861E /* RelaxedQueue.swift */,
-				3DBF63EB5C024C23AFE63827 /* SegmentQueue.swift */,
-				09E9C3F6DA4EB6FB4BE3B84B /* SpinChannel.swift */,
 				D34F3E4EBEAE11696CCEB73B /* SPSCGrowableRing.swift */,
-				C8F920487E91DCB59E3B530F /* SPSCQueue.swift */,
-				8299E2AE16444773464DA367 /* SPSCRing.swift */,
-				368EB0DBC91A07E925144D22 /* SyncChannel.swift */,
-				FBED26DF9A41FD069EB28115 /* VyukovBoundedChannel.swift */,
-				C58EA6211B00155CCB9207C1 /* VyukovChannel.swift */,
 			);
 			name = ConcurrentQueues;
 			path = Sources/ConcurrentQueues;
@@ -1162,7 +1087,6 @@
 				0BC4138150CDC1ABC2DE7C65 /* FuzzEngineTests.swift */,
 				2C2AB425C1886E9C43DA056F /* MutatorTests.swift */,
 				BA01B2725BCFE68C918C2336 /* PlateauDetectorPluginTests.swift */,
-				86DD2CF2668FC6B4D968840C /* PluginCoordinatorTests.swift */,
 				B37ED10677A92DC01DD0B289 /* SaturationPlateauDetectorTests.swift */,
 				543E53F7A2745CDD7F2C03DE /* SaturationPluginTests.swift */,
 				9038D6C2FF93F7F004830619 /* ShrinkingPluginTests.swift */,
@@ -1182,6 +1106,7 @@
 				ACE4D8AA0A411B9988FA7E7C /* FuzzEngine+Config.swift */,
 				7769DE997855D0C94C1C405F /* FuzzResult.swift */,
 				248285724DB5F6586AE70506 /* FuzzStateMachine.swift */,
+				F403263325C80307990034DB /* SimpleRingBuffer.swift */,
 				B155EAF0286844D09A5709EC /* TaskResults.swift */,
 			);
 			path = FuzzEngine;
@@ -1190,25 +1115,10 @@
 		F94CA8BDDC0253B0AA6FF70C /* Plugins */ = {
 			isa = PBXGroup;
 			children = (
-				112824CF90673942F0DC8528 /* CoverageGapPlugin.swift */,
 				C46A7E2288E1AE7A59B100CF /* FuzzPlugin.swift */,
-				C07CB963AFB9D07FD0B05E2D /* MutationPlugin.swift */,
-				F5F59F7C0FD59FAD26BADFE6 /* PlateauDetectorPlugin.swift */,
-				8B70861EBA1D41D0DFD64426 /* PluginCoordinator.swift */,
-				CF44990BD642A0A6FBF94C6F /* SaturationPlateauDetectorPlugin.swift */,
-				19A4AA0D8D28393DDC7CDD33 /* ShrinkingPlugin.swift */,
-				40672CAD432576A4635C1676 /* STADSPlateauDetectorPlugin.swift */,
+				9253FA68CDDBAF11AB22959F /* FuzzPluginHandler.swift */,
 			);
 			path = Plugins;
-			sourceTree = "<group>";
-		};
-		FED5BDFA0122BA02FE0C6F5E /* ChannelBenchmarks */ = {
-			isa = PBXGroup;
-			children = (
-				6004EB7893C5A9200F3557E7 /* ChannelBenchmarks.swift */,
-			);
-			name = ChannelBenchmarks;
-			path = Benchmarks/ChannelBenchmarks;
 			sourceTree = "<group>";
 		};
 		FEFFD97F3AA9B5C3C871FDE0 /* Corpus */ = {
@@ -1468,7 +1378,6 @@
 				43F21DAA57223F47B9FE88F4 /* XCRemoteSwiftPackageReference "swift-collections" */,
 				FE7753DCDC2B738759F3B507 /* XCRemoteSwiftPackageReference "swift-dependencies" */,
 			);
-			preferredProjectObjectVersion = 77;
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
@@ -1492,7 +1401,6 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				D5983ABABFE63D62EA5C3D51 /* OPTIMIZATION-HISTORY.md in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -1511,7 +1419,6 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				002C50A912C012C39E2D7131 /* ChannelBenchmarks.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -1519,12 +1426,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				D2E3F837D79E6068D622D78D /* ChannelTests.swift in Sources */,
 				7C623E3B67803474ABA76955 /* KFIFOQueueTests.swift in Sources */,
-				B87B6EF259EF22C6CEF5DD74 /* RelaxedBoundedChannelTests.swift in Sources */,
-				8B1C0E3901406D0F1718A612 /* RelaxedQueueTests.swift in Sources */,
-				52A27FF9B915F4953CBE37C3 /* SPSCQueueTests.swift in Sources */,
-				F378E6F94947B1B907B89907 /* SPSCRingTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -1567,22 +1469,8 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				AE039F030078D5F9C08C2F70 /* Channel.swift in Sources */,
 				FD77D76B952C21FFC395E793 /* KFIFOQueue.swift in Sources */,
-				F14411F20E91CD1254C4E26C /* MultiQueue.swift in Sources */,
-				6ABC363D4A9E91ABF9E6BBCA /* RCQB.swift in Sources */,
-				401C94D11E3C69AB9D798E2D /* RCQSQueue.swift in Sources */,
-				ECBE316A69296E918688FA38 /* RealRCQ.swift in Sources */,
-				5B7775C68221FE079AE343F9 /* RelaxedBoundedChannel.swift in Sources */,
-				517D2FA0099DD8F832016CB0 /* RelaxedQueue.swift in Sources */,
 				D4E4A695B3002B71FE1FAEC4 /* SPSCGrowableRing.swift in Sources */,
-				A6A65D4CE8BA2EC8A2A08E58 /* SPSCQueue.swift in Sources */,
-				F7672665536078766B291DE7 /* SPSCRing.swift in Sources */,
-				701CF2B4CCB8B14F8B85CB4A /* SegmentQueue.swift in Sources */,
-				D2BC2EE4BA5AE7CADCA65873 /* SpinChannel.swift in Sources */,
-				EF353620D890641D543ED36B /* SyncChannel.swift in Sources */,
-				8F5A64A385E84213403CB65A /* VyukovBoundedChannel.swift in Sources */,
-				B20ECE10EBE97455BFB9514C /* VyukovChannel.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -1624,7 +1512,6 @@
 				902AD170388F6A40C15ECCA5 /* MutatorTests.swift in Sources */,
 				D5645DFA85C2ABBD0E34ACC2 /* ParallelTimingTest.swift in Sources */,
 				AB89E6673C3749E9B3F3A882 /* PlateauDetectorPluginTests.swift in Sources */,
-				AD1F49DE9664EE8298A6BAAB /* PluginCoordinatorTests.swift in Sources */,
 				14CE5AF65788D0ED532C423D /* PropertyBasedSelfTests.swift in Sources */,
 				B269AC60201884DB429C947C /* STADSPlateauDetectorTests.swift in Sources */,
 				073726C59F65CF54C9DB2A9D /* STADSPluginTests.swift in Sources */,
@@ -1636,7 +1523,6 @@
 				9DADB5A1F40BF13558A2BD55 /* Synchronized.swift in Sources */,
 				721B918F0C92F521E1CD4FC3 /* TestCaseShrinkerTests.swift in Sources */,
 				C352BBDC8B2905DE42CD9BDA /* TestHelpers.swift in Sources */,
-				F4E3D1DF382DCAC750307163 /* UserService.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -1668,12 +1554,12 @@
 				0A0B966D3B103DDD9ADC457C /* CoverageCountersClient.swift in Sources */,
 				997046243B39595955A73A07 /* CoverageGap.swift in Sources */,
 				C3CCD2C9B56E9E0FC0574642 /* CoverageGapDetector.swift in Sources */,
-				8D27AFB1254FC22918527BA3 /* CoverageGapPlugin.swift in Sources */,
 				01C409E9A774CE4770B6DC3B /* CoverageGapReport.swift in Sources */,
 				52C260E19A743BA5BCADC703 /* CoverageSignature.swift in Sources */,
 				E22FD5BA11720007BFEC6E1E /* DWARFSourceLocation.swift in Sources */,
 				4B46C972C1518B04075D7EED /* DWARFSymbolizer.swift in Sources */,
 				D0C65F0813EFB9C22E7A24EC /* DWARFSymbolizerError.swift in Sources */,
+				62D2901F2F2DCAA1001C6D0B /* SanCovSourceLocation.swift in Sources */,
 				6FC71167936E2046141EAA6B /* DWARFSymbolizerHelper.swift in Sources */,
 				BE833829B0A29D2730C9A37C /* Data+Shrinkable.swift in Sources */,
 				5118F45702A081DEB42B60AA /* DateClient.swift in Sources */,
@@ -1691,6 +1577,7 @@
 				8B77076135753B47C626A029 /* FuzzEngine+Config.swift in Sources */,
 				B0B276C037B14EAA3010672E /* FuzzEngine.swift in Sources */,
 				A791F464FE3BDDB8A76320B5 /* FuzzPlugin.swift in Sources */,
+				B5DE6B566FD9761D9E7A7612 /* FuzzPluginHandler.swift in Sources */,
 				125D3FB66141B63E3542572E /* FuzzResult.swift in Sources */,
 				3D278F94AC182188C4B835AF /* FuzzStateMachine.swift in Sources */,
 				C6E708A0F04FED6D2E5A5DF0 /* HTTPStatusCodeMutator.swift in Sources */,
@@ -1700,29 +1587,24 @@
 				B9A72FAD1D69FE143AB0F195 /* IssueDetection.swift in Sources */,
 				4BCAFBA11BA1915226FDF13D /* MWC192.swift in Sources */,
 				1F8C42A1E118D08E319AF582 /* MultiComponentShrinker.swift in Sources */,
-				3308E8DA9485458FE5DE69A4 /* MutationPlugin.swift in Sources */,
 				9E681FD7857BB0E8B54236DD /* Mutator.swift in Sources */,
 				56D29B8C49300786D2ACBD1A /* NegativeIntMutator.swift in Sources */,
 				AC0EB1E931DDE5907D9E63F7 /* Optional+MutatorProviding.swift in Sources */,
 				1CEE9C52E71296E5382DD285 /* PercentageMutator.swift in Sources */,
 				7177FDDC6C703BE6ED195B56 /* PhoneNumberMutator.swift in Sources */,
-				1426388F8F61D31CB0AC925C /* PlateauDetectorPlugin.swift in Sources */,
-				2C5DACEE0B44FDB7BE5F8C91 /* PluginCoordinator.swift in Sources */,
 				3623AE0B84CB07558F777090 /* PortMutator.swift in Sources */,
 				86364D3C2F2DBEA2A9B62EA0 /* PowerOfTwoMutator.swift in Sources */,
 				F8CA279E1D5C86F49E55C093 /* RandomNumberGeneratorClient.swift in Sources */,
 				2934DF4D2D0A7B2472998876 /* SQLInjectionMutator.swift in Sources */,
 				5CE75ACE29DD3F8860FAA19D /* STADSPlateauDetector.swift in Sources */,
-				F5E12565A5E3B3F657133645 /* STADSPlateauDetectorPlugin.swift in Sources */,
 				BEBBA20C60FAF1E749C4427D /* SanCovCounters.swift in Sources */,
 				9B7DC07539CBF59272EDCC37 /* SaturationPlateauDetector.swift in Sources */,
-				FCC9ADA20072098BFAD48EBE /* SaturationPlateauDetectorPlugin.swift in Sources */,
 				B658E17CCF942125EF08B2C9 /* ShrinkConfig.swift in Sources */,
 				BD0CC959DAB2216FB5A5AE9E /* ShrinkResult.swift in Sources */,
 				6632F732A4FAECE34A80F544 /* ShrinkStats.swift in Sources */,
 				B12BA13984E49118CD620DA9 /* Shrinkable.swift in Sources */,
-				E94E382B579A8EAEA05F2A12 /* ShrinkingPlugin.swift in Sources */,
 				F854221602A30DC642BC0670 /* SimpleCoveragePlateauDetector.swift in Sources */,
+				E4970896F2ECFC3E2AD274B5 /* SimpleRingBuffer.swift in Sources */,
 				26A3CB5877617786D4DAC208 /* SparseCoverage.swift in Sources */,
 				7CB8AB059E1825789CCB0F93 /* SpecialDoubleMutator.swift in Sources */,
 				93B2E23B1BBADC7F513EC48E /* String+MutatorProviding.swift in Sources */,
@@ -1803,16 +1685,20 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				COMBINE_HIDPI_IMAGES = YES;
-				LD_RUNPATH_SEARCH_PATHS = "$(inherited) $(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin";
-				OTHER_LDFLAGS = "$(inherited) -L$(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin -lclang_rt.ubsan_osx_dynamic";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin",
+				);
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-L$(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin",
+					"-lclang_rt.ubsan_osx_dynamic",
+				);
 				OTHER_SWIFT_FLAGS = "$(inherited) -g -sanitize=undefined -sanitize-coverage=edge,pc-table";
 				PRODUCT_BUNDLE_IDENTIFIER = com.propertytestingkit.ProfiledBenchmark;
 				PRODUCT_NAME = ProfiledBenchmark;
 				SDKROOT = macosx;
-				SWIFT_INCLUDE_PATHS = (
-					"$(SRCROOT)/Sources/CLLVMSymbolizer/include",
-					"$(SRCROOT)/Sources/SanCovHooks/include",
-				);
+				SWIFT_INCLUDE_PATHS = "$(SRCROOT)/Sources/CLLVMSymbolizer/include $(SRCROOT)/Sources/SanCovHooks/include";
 			};
 			name = Debug;
 		};
@@ -1822,18 +1708,20 @@
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				COMBINE_HIDPI_IMAGES = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				LD_RUNPATH_SEARCH_PATHS = "$(inherited) $(TOOLCHAIN_DIR)/usr/lib/swift/macosx";
-				LIBRARY_SEARCH_PATHS = (
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
 					"$(TOOLCHAIN_DIR)/usr/lib/swift/macosx",
 				);
-				OTHER_LDFLAGS = "$(inherited) -lTesting";
+				LIBRARY_SEARCH_PATHS = "$(TOOLCHAIN_DIR)/usr/lib/swift/macosx";
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-lTesting",
+				);
 				OTHER_SWIFT_FLAGS = "$(inherited) -g -plugin-path $(TOOLCHAIN_DIR)/usr/lib/swift/host/plugins/testing";
 				PRODUCT_BUNDLE_IDENTIFIER = com.propertytestingkit.concurrentqueuestests;
 				PRODUCT_NAME = ConcurrentQueuesTests;
 				SDKROOT = macosx;
-				SWIFT_INCLUDE_PATHS = (
-					"$(TOOLCHAIN_DIR)/usr/lib/swift/macosx",
-				);
+				SWIFT_INCLUDE_PATHS = "$(TOOLCHAIN_DIR)/usr/lib/swift/macosx";
 			};
 			name = Debug;
 		};
@@ -1852,9 +1740,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				LIBRARY_SEARCH_PATHS = (
-					/opt/homebrew/opt/llvm/lib,
-				);
+				LIBRARY_SEARCH_PATHS = /opt/homebrew/opt/llvm/lib;
 				MODULEMAP_FILE = "$(SRCROOT)/Sources/CLLVMSymbolizer/include/module.modulemap";
 				PRODUCT_BUNDLE_IDENTIFIER = com.propertytestingkit.CLLVMSymbolizer;
 				PRODUCT_NAME = CLLVMSymbolizer;
@@ -1870,21 +1756,25 @@
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				COMBINE_HIDPI_IMAGES = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				LD_RUNPATH_SEARCH_PATHS = "$(inherited) $(TOOLCHAIN_DIR)/usr/lib/swift/macosx $(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(TOOLCHAIN_DIR)/usr/lib/swift/macosx",
+					"$(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin",
+				);
 				LIBRARY_SEARCH_PATHS = (
 					"$(TOOLCHAIN_DIR)/usr/lib/swift/macosx",
 					"$(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin",
 				);
-				OTHER_LDFLAGS = "$(inherited) -lTesting -lclang_rt.ubsan_osx_dynamic";
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-lTesting",
+					"-lclang_rt.ubsan_osx_dynamic",
+				);
 				OTHER_SWIFT_FLAGS = "$(inherited) -g -sanitize=undefined -sanitize-coverage=edge,pc-table -plugin-path $(TOOLCHAIN_DIR)/usr/lib/swift/host/plugins/testing";
 				PRODUCT_BUNDLE_IDENTIFIER = com.propertytestingkit.sancovtests;
 				PRODUCT_NAME = SanCovTests;
 				SDKROOT = macosx;
-				SWIFT_INCLUDE_PATHS = (
-					"$(SRCROOT)/Sources/CLLVMSymbolizer/include",
-					"$(SRCROOT)/Sources/SanCovHooks/include",
-					"$(TOOLCHAIN_DIR)/usr/lib/swift/macosx",
-				);
+				SWIFT_INCLUDE_PATHS = "$(SRCROOT)/Sources/CLLVMSymbolizer/include $(SRCROOT)/Sources/SanCovHooks/include $(TOOLCHAIN_DIR)/usr/lib/swift/macosx";
 			};
 			name = Release;
 		};
@@ -1894,21 +1784,25 @@
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				COMBINE_HIDPI_IMAGES = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				LD_RUNPATH_SEARCH_PATHS = "$(inherited) $(TOOLCHAIN_DIR)/usr/lib/swift/macosx $(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(TOOLCHAIN_DIR)/usr/lib/swift/macosx",
+					"$(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin",
+				);
 				LIBRARY_SEARCH_PATHS = (
 					"$(TOOLCHAIN_DIR)/usr/lib/swift/macosx",
 					"$(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin",
 				);
-				OTHER_LDFLAGS = "$(inherited) -lTesting -lclang_rt.ubsan_osx_dynamic";
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-lTesting",
+					"-lclang_rt.ubsan_osx_dynamic",
+				);
 				OTHER_SWIFT_FLAGS = "$(inherited) -g -sanitize=undefined -sanitize-coverage=edge,pc-table -plugin-path $(TOOLCHAIN_DIR)/usr/lib/swift/host/plugins/testing";
 				PRODUCT_BUNDLE_IDENTIFIER = com.propertytestingkit.tests;
 				PRODUCT_NAME = PropertyTestingKitTests;
 				SDKROOT = macosx;
-				SWIFT_INCLUDE_PATHS = (
-					"$(SRCROOT)/Sources/CLLVMSymbolizer/include",
-					"$(SRCROOT)/Sources/SanCovHooks/include",
-					"$(TOOLCHAIN_DIR)/usr/lib/swift/macosx",
-				);
+				SWIFT_INCLUDE_PATHS = "$(SRCROOT)/Sources/CLLVMSymbolizer/include $(SRCROOT)/Sources/SanCovHooks/include $(TOOLCHAIN_DIR)/usr/lib/swift/macosx";
 			};
 			name = Debug;
 		};
@@ -1940,9 +1834,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				COMBINE_HIDPI_IMAGES = YES;
-				HEADER_SEARCH_PATHS = (
-					"$(SRCROOT)/Sources/SanCovHooks/include",
-				);
+				HEADER_SEARCH_PATHS = "$(SRCROOT)/Sources/SanCovHooks/include";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
@@ -1975,12 +1867,14 @@
 					"$(SRCROOT)/Sources/SanCovHooks/include",
 				);
 				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
-				LD_RUNPATH_SEARCH_PATHS = "$(inherited) /opt/homebrew/opt/llvm/lib";
-				LIBRARY_SEARCH_PATHS = (
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
 					/opt/homebrew/opt/llvm/lib,
 				);
+				LIBRARY_SEARCH_PATHS = /opt/homebrew/opt/llvm/lib;
 				OTHER_LDFLAGS = (
-					"$(inherited) -lLLVM",
+					"$(inherited)",
+					"-lLLVM",
 					"-ObjC",
 				);
 				OTHER_SWIFT_FLAGS = "$(inherited) -plugin-path $(TOOLCHAIN_DIR)/usr/lib/swift/host/plugins/testing";
@@ -1988,11 +1882,7 @@
 				PRODUCT_NAME = PropertyTestingKit;
 				SDKROOT = macosx;
 				SKIP_INSTALL = YES;
-				SWIFT_INCLUDE_PATHS = (
-					"$(SRCROOT)/Sources/CLLVMSymbolizer/include",
-					"$(SRCROOT)/Sources/SanCovHooks/include",
-					"$(TOOLCHAIN_DIR)/usr/lib/swift/macosx",
-				);
+				SWIFT_INCLUDE_PATHS = "$(SRCROOT)/Sources/CLLVMSymbolizer/include $(SRCROOT)/Sources/SanCovHooks/include $(TOOLCHAIN_DIR)/usr/lib/swift/macosx";
 				VERSIONING_SYSTEM = "apple-generic";
 			};
 			name = Debug;
@@ -2003,18 +1893,20 @@
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				COMBINE_HIDPI_IMAGES = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				LD_RUNPATH_SEARCH_PATHS = "$(inherited) $(TOOLCHAIN_DIR)/usr/lib/swift/macosx";
-				LIBRARY_SEARCH_PATHS = (
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
 					"$(TOOLCHAIN_DIR)/usr/lib/swift/macosx",
 				);
-				OTHER_LDFLAGS = "$(inherited) -lTesting";
+				LIBRARY_SEARCH_PATHS = "$(TOOLCHAIN_DIR)/usr/lib/swift/macosx";
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-lTesting",
+				);
 				OTHER_SWIFT_FLAGS = "$(inherited) -g -plugin-path $(TOOLCHAIN_DIR)/usr/lib/swift/host/plugins/testing";
 				PRODUCT_BUNDLE_IDENTIFIER = com.propertytestingkit.concurrentqueuestests;
 				PRODUCT_NAME = ConcurrentQueuesTests;
 				SDKROOT = macosx;
-				SWIFT_INCLUDE_PATHS = (
-					"$(TOOLCHAIN_DIR)/usr/lib/swift/macosx",
-				);
+				SWIFT_INCLUDE_PATHS = "$(TOOLCHAIN_DIR)/usr/lib/swift/macosx";
 			};
 			name = Release;
 		};
@@ -2037,12 +1929,14 @@
 					"$(SRCROOT)/Sources/SanCovHooks/include",
 				);
 				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
-				LD_RUNPATH_SEARCH_PATHS = "$(inherited) /opt/homebrew/opt/llvm/lib";
-				LIBRARY_SEARCH_PATHS = (
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
 					/opt/homebrew/opt/llvm/lib,
 				);
+				LIBRARY_SEARCH_PATHS = /opt/homebrew/opt/llvm/lib;
 				OTHER_LDFLAGS = (
-					"$(inherited) -lLLVM",
+					"$(inherited)",
+					"-lLLVM",
 					"-ObjC",
 				);
 				OTHER_SWIFT_FLAGS = "$(inherited) -plugin-path $(TOOLCHAIN_DIR)/usr/lib/swift/host/plugins/testing";
@@ -2050,11 +1944,7 @@
 				PRODUCT_NAME = PropertyTestingKit;
 				SDKROOT = macosx;
 				SKIP_INSTALL = YES;
-				SWIFT_INCLUDE_PATHS = (
-					"$(SRCROOT)/Sources/CLLVMSymbolizer/include",
-					"$(SRCROOT)/Sources/SanCovHooks/include",
-					"$(TOOLCHAIN_DIR)/usr/lib/swift/macosx",
-				);
+				SWIFT_INCLUDE_PATHS = "$(SRCROOT)/Sources/CLLVMSymbolizer/include $(SRCROOT)/Sources/SanCovHooks/include $(TOOLCHAIN_DIR)/usr/lib/swift/macosx";
 				VERSIONING_SYSTEM = "apple-generic";
 			};
 			name = Release;
@@ -2074,9 +1964,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				LIBRARY_SEARCH_PATHS = (
-					/opt/homebrew/opt/llvm/lib,
-				);
+				LIBRARY_SEARCH_PATHS = /opt/homebrew/opt/llvm/lib;
 				MODULEMAP_FILE = "$(SRCROOT)/Sources/CLLVMSymbolizer/include/module.modulemap";
 				PRODUCT_BUNDLE_IDENTIFIER = com.propertytestingkit.CLLVMSymbolizer;
 				PRODUCT_NAME = CLLVMSymbolizer;
@@ -2090,16 +1978,20 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				COMBINE_HIDPI_IMAGES = YES;
-				LD_RUNPATH_SEARCH_PATHS = "$(inherited) $(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin";
-				OTHER_LDFLAGS = "$(inherited) -L$(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin -lclang_rt.ubsan_osx_dynamic";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin",
+				);
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-L$(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin",
+					"-lclang_rt.ubsan_osx_dynamic",
+				);
 				OTHER_SWIFT_FLAGS = "$(inherited) -g -sanitize=undefined -sanitize-coverage=edge,pc-table";
 				PRODUCT_BUNDLE_IDENTIFIER = com.propertytestingkit.ProfiledBenchmark;
 				PRODUCT_NAME = ProfiledBenchmark;
 				SDKROOT = macosx;
-				SWIFT_INCLUDE_PATHS = (
-					"$(SRCROOT)/Sources/CLLVMSymbolizer/include",
-					"$(SRCROOT)/Sources/SanCovHooks/include",
-				);
+				SWIFT_INCLUDE_PATHS = "$(SRCROOT)/Sources/CLLVMSymbolizer/include $(SRCROOT)/Sources/SanCovHooks/include";
 			};
 			name = Release;
 		};
@@ -2107,9 +1999,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				COMBINE_HIDPI_IMAGES = YES;
-				HEADER_SEARCH_PATHS = (
-					"$(SRCROOT)/Sources/SanCovHooks/include",
-				);
+				HEADER_SEARCH_PATHS = "$(SRCROOT)/Sources/SanCovHooks/include";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
@@ -2129,21 +2019,25 @@
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				COMBINE_HIDPI_IMAGES = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				LD_RUNPATH_SEARCH_PATHS = "$(inherited) $(TOOLCHAIN_DIR)/usr/lib/swift/macosx $(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(TOOLCHAIN_DIR)/usr/lib/swift/macosx",
+					"$(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin",
+				);
 				LIBRARY_SEARCH_PATHS = (
 					"$(TOOLCHAIN_DIR)/usr/lib/swift/macosx",
 					"$(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin",
 				);
-				OTHER_LDFLAGS = "$(inherited) -lTesting -lclang_rt.tsan_osx_dynamic";
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-lTesting",
+					"-lclang_rt.tsan_osx_dynamic",
+				);
 				OTHER_SWIFT_FLAGS = "$(inherited) -g -sanitize=thread -sanitize-coverage=edge,pc-table -plugin-path $(TOOLCHAIN_DIR)/usr/lib/swift/host/plugins/testing";
 				PRODUCT_BUNDLE_IDENTIFIER = com.propertytestingkit.tsantests;
 				PRODUCT_NAME = TSanTests;
 				SDKROOT = macosx;
-				SWIFT_INCLUDE_PATHS = (
-					"$(SRCROOT)/Sources/CLLVMSymbolizer/include",
-					"$(SRCROOT)/Sources/SanCovHooks/include",
-					"$(TOOLCHAIN_DIR)/usr/lib/swift/macosx",
-				);
+				SWIFT_INCLUDE_PATHS = "$(SRCROOT)/Sources/CLLVMSymbolizer/include $(SRCROOT)/Sources/SanCovHooks/include $(TOOLCHAIN_DIR)/usr/lib/swift/macosx";
 			};
 			name = Debug;
 		};
@@ -2151,15 +2045,15 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				COMBINE_HIDPI_IMAGES = YES;
-				LD_RUNPATH_SEARCH_PATHS = "$(inherited) $(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin",
+				);
 				OTHER_SWIFT_FLAGS = "$(inherited) -g";
 				PRODUCT_BUNDLE_IDENTIFIER = com.propertytestingkit.ChannelBenchmarks;
 				PRODUCT_NAME = ChannelBenchmarks;
 				SDKROOT = macosx;
-				SWIFT_INCLUDE_PATHS = (
-					"$(SRCROOT)/Sources/CLLVMSymbolizer/include",
-					"$(SRCROOT)/Sources/SanCovHooks/include",
-				);
+				SWIFT_INCLUDE_PATHS = "$(SRCROOT)/Sources/CLLVMSymbolizer/include $(SRCROOT)/Sources/SanCovHooks/include";
 			};
 			name = Release;
 		};
@@ -2169,21 +2063,25 @@
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				COMBINE_HIDPI_IMAGES = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				LD_RUNPATH_SEARCH_PATHS = "$(inherited) $(TOOLCHAIN_DIR)/usr/lib/swift/macosx $(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(TOOLCHAIN_DIR)/usr/lib/swift/macosx",
+					"$(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin",
+				);
 				LIBRARY_SEARCH_PATHS = (
 					"$(TOOLCHAIN_DIR)/usr/lib/swift/macosx",
 					"$(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin",
 				);
-				OTHER_LDFLAGS = "$(inherited) -lTesting -lclang_rt.ubsan_osx_dynamic";
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-lTesting",
+					"-lclang_rt.ubsan_osx_dynamic",
+				);
 				OTHER_SWIFT_FLAGS = "$(inherited) -g -sanitize=undefined -sanitize-coverage=edge,pc-table -plugin-path $(TOOLCHAIN_DIR)/usr/lib/swift/host/plugins/testing";
 				PRODUCT_BUNDLE_IDENTIFIER = com.propertytestingkit.sancovtests;
 				PRODUCT_NAME = SanCovTests;
 				SDKROOT = macosx;
-				SWIFT_INCLUDE_PATHS = (
-					"$(SRCROOT)/Sources/CLLVMSymbolizer/include",
-					"$(SRCROOT)/Sources/SanCovHooks/include",
-					"$(TOOLCHAIN_DIR)/usr/lib/swift/macosx",
-				);
+				SWIFT_INCLUDE_PATHS = "$(SRCROOT)/Sources/CLLVMSymbolizer/include $(SRCROOT)/Sources/SanCovHooks/include $(TOOLCHAIN_DIR)/usr/lib/swift/macosx";
 			};
 			name = Debug;
 		};
@@ -2191,16 +2089,20 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				COMBINE_HIDPI_IMAGES = YES;
-				LD_RUNPATH_SEARCH_PATHS = "$(inherited) $(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin";
-				OTHER_LDFLAGS = "$(inherited) -L$(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin -lclang_rt.ubsan_osx_dynamic";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin",
+				);
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-L$(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin",
+					"-lclang_rt.ubsan_osx_dynamic",
+				);
 				OTHER_SWIFT_FLAGS = "$(inherited) -g -sanitize=undefined -sanitize-coverage=edge,pc-table";
 				PRODUCT_BUNDLE_IDENTIFIER = com.propertytestingkit.CoverageBenchmarks;
 				PRODUCT_NAME = CoverageBenchmarks;
 				SDKROOT = macosx;
-				SWIFT_INCLUDE_PATHS = (
-					"$(SRCROOT)/Sources/CLLVMSymbolizer/include",
-					"$(SRCROOT)/Sources/SanCovHooks/include",
-				);
+				SWIFT_INCLUDE_PATHS = "$(SRCROOT)/Sources/CLLVMSymbolizer/include $(SRCROOT)/Sources/SanCovHooks/include";
 			};
 			name = Release;
 		};
@@ -2210,21 +2112,25 @@
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				COMBINE_HIDPI_IMAGES = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				LD_RUNPATH_SEARCH_PATHS = "$(inherited) $(TOOLCHAIN_DIR)/usr/lib/swift/macosx $(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(TOOLCHAIN_DIR)/usr/lib/swift/macosx",
+					"$(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin",
+				);
 				LIBRARY_SEARCH_PATHS = (
 					"$(TOOLCHAIN_DIR)/usr/lib/swift/macosx",
 					"$(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin",
 				);
-				OTHER_LDFLAGS = "$(inherited) -lTesting -lclang_rt.tsan_osx_dynamic";
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-lTesting",
+					"-lclang_rt.tsan_osx_dynamic",
+				);
 				OTHER_SWIFT_FLAGS = "$(inherited) -g -sanitize=thread -sanitize-coverage=edge,pc-table -plugin-path $(TOOLCHAIN_DIR)/usr/lib/swift/host/plugins/testing";
 				PRODUCT_BUNDLE_IDENTIFIER = com.propertytestingkit.tsantests;
 				PRODUCT_NAME = TSanTests;
 				SDKROOT = macosx;
-				SWIFT_INCLUDE_PATHS = (
-					"$(SRCROOT)/Sources/CLLVMSymbolizer/include",
-					"$(SRCROOT)/Sources/SanCovHooks/include",
-					"$(TOOLCHAIN_DIR)/usr/lib/swift/macosx",
-				);
+				SWIFT_INCLUDE_PATHS = "$(SRCROOT)/Sources/CLLVMSymbolizer/include $(SRCROOT)/Sources/SanCovHooks/include $(TOOLCHAIN_DIR)/usr/lib/swift/macosx";
 			};
 			name = Release;
 		};
@@ -2232,16 +2138,20 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				COMBINE_HIDPI_IMAGES = YES;
-				LD_RUNPATH_SEARCH_PATHS = "$(inherited) $(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin";
-				OTHER_LDFLAGS = "$(inherited) -L$(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin -lclang_rt.ubsan_osx_dynamic";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin",
+				);
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-L$(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin",
+					"-lclang_rt.ubsan_osx_dynamic",
+				);
 				OTHER_SWIFT_FLAGS = "$(inherited) -g -sanitize=undefined -sanitize-coverage=edge,pc-table";
 				PRODUCT_BUNDLE_IDENTIFIER = com.propertytestingkit.CoverageBenchmarks;
 				PRODUCT_NAME = CoverageBenchmarks;
 				SDKROOT = macosx;
-				SWIFT_INCLUDE_PATHS = (
-					"$(SRCROOT)/Sources/CLLVMSymbolizer/include",
-					"$(SRCROOT)/Sources/SanCovHooks/include",
-				);
+				SWIFT_INCLUDE_PATHS = "$(SRCROOT)/Sources/CLLVMSymbolizer/include $(SRCROOT)/Sources/SanCovHooks/include";
 			};
 			name = Debug;
 		};
@@ -2249,15 +2159,15 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				COMBINE_HIDPI_IMAGES = YES;
-				LD_RUNPATH_SEARCH_PATHS = "$(inherited) $(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin",
+				);
 				OTHER_SWIFT_FLAGS = "$(inherited) -g";
 				PRODUCT_BUNDLE_IDENTIFIER = com.propertytestingkit.ChannelBenchmarks;
 				PRODUCT_NAME = ChannelBenchmarks;
 				SDKROOT = macosx;
-				SWIFT_INCLUDE_PATHS = (
-					"$(SRCROOT)/Sources/CLLVMSymbolizer/include",
-					"$(SRCROOT)/Sources/SanCovHooks/include",
-				);
+				SWIFT_INCLUDE_PATHS = "$(SRCROOT)/Sources/CLLVMSymbolizer/include $(SRCROOT)/Sources/SanCovHooks/include";
 			};
 			name = Debug;
 		};
@@ -2418,21 +2328,25 @@
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				COMBINE_HIDPI_IMAGES = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				LD_RUNPATH_SEARCH_PATHS = "$(inherited) $(TOOLCHAIN_DIR)/usr/lib/swift/macosx $(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(TOOLCHAIN_DIR)/usr/lib/swift/macosx",
+					"$(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin",
+				);
 				LIBRARY_SEARCH_PATHS = (
 					"$(TOOLCHAIN_DIR)/usr/lib/swift/macosx",
 					"$(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin",
 				);
-				OTHER_LDFLAGS = "$(inherited) -lTesting -lclang_rt.ubsan_osx_dynamic";
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-lTesting",
+					"-lclang_rt.ubsan_osx_dynamic",
+				);
 				OTHER_SWIFT_FLAGS = "$(inherited) -g -sanitize=undefined -sanitize-coverage=edge,pc-table -plugin-path $(TOOLCHAIN_DIR)/usr/lib/swift/host/plugins/testing";
 				PRODUCT_BUNDLE_IDENTIFIER = com.propertytestingkit.tests;
 				PRODUCT_NAME = PropertyTestingKitTests;
 				SDKROOT = macosx;
-				SWIFT_INCLUDE_PATHS = (
-					"$(SRCROOT)/Sources/CLLVMSymbolizer/include",
-					"$(SRCROOT)/Sources/SanCovHooks/include",
-					"$(TOOLCHAIN_DIR)/usr/lib/swift/macosx",
-				);
+				SWIFT_INCLUDE_PATHS = "$(SRCROOT)/Sources/CLLVMSymbolizer/include $(SRCROOT)/Sources/SanCovHooks/include $(TOOLCHAIN_DIR)/usr/lib/swift/macosx";
 			};
 			name = Release;
 		};

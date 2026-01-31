@@ -93,33 +93,21 @@ import Dependencies
 ///
 /// - Throws: Re-throws test failures, or throws if fuzzing finds failures.
 
-/// Helper to concatenate two plugin parameter packs into a single tuple.
-@inlinable
-func concatPlugins<each D: FuzzPlugin, each P: FuzzPlugin>(
-    _ defaults: (repeat each D),
-    _ user: (repeat each P)
-) -> (repeat each D, repeat each P) {
-    return (repeat each defaults, repeat each user)
-}
-
 @discardableResult
 @inlinable
-public func fuzz<each Input: Codable & Sendable, each M: Mutator, each D: FuzzPlugin, each P: FuzzPlugin>(
+public func fuzz<each Input: Codable & Sendable, each M: Mutator>(
     using mutators: repeat each M,
     seeds: [(repeat each Input)] = [],
     duration: Duration = .seconds(60),
     corpusMode: CorpusMode? = nil,
     parallelism: Int = ProcessInfo.processInfo.processorCount,
-    defaultBehaviorPlugins: (repeat each D) = (MutationPlugin()),
-    plugins: (repeat each P) = (),
+    handlers: [FuzzPluginHandler<repeat each Input>] = [.mutation()],
     filePath: StaticString = #filePath,
     function: StaticString = #function,
     line: Int = #line,
     test: @escaping @Sendable ((repeat each Input)) async throws -> Void
 ) async throws -> FuzzResult<repeat each Input> where (repeat (each M).Value) == (repeat each Input) {
-    // Concatenate both plugin packs into a single processor
-    let allPlugins = concatPlugins(defaultBehaviorPlugins, plugins)
-    let processor = SyncPluginProcessor(plugins: allPlugins)
+    let processor = PluginHandlerProcessor(handlers: handlers)
 
     // Sync closure for hot path (iteration events)
     let processSyncPlugins: @Sendable (
@@ -296,15 +284,15 @@ func fuzzInternal<each Input: Codable & Sendable, each M: Mutator>(
 ///   - test: The test closure receiving fuzzed inputs.
 ///
 /// - Throws: Re-throws test failures, or throws if fuzzing finds failures.
+/// Convenience overload that infers mutators from MutatorProviding conformance.
 @discardableResult
 @inlinable
-public func fuzz<each Input: MutatorProviding & Codable & Sendable, each D: FuzzPlugin, each P: FuzzPlugin>(
+public func fuzz<each Input: MutatorProviding & Codable & Sendable>(
     seeds: [(repeat each Input)] = [],
     duration: Duration = .seconds(60),
     corpusMode: CorpusMode? = nil,
     parallelism: Int = ProcessInfo.processInfo.processorCount,
-    defaultBehaviorPlugins: (repeat each D) = (MutationPlugin()),
-    plugins: (repeat each P) = (),
+    handlers: [FuzzPluginHandler<repeat each Input>] = [.mutation()],
     filePath: StaticString = #filePath,
     function: StaticString = #function,
     line: Int = #line,
@@ -316,8 +304,7 @@ public func fuzz<each Input: MutatorProviding & Codable & Sendable, each D: Fuzz
         duration: duration,
         corpusMode: corpusMode,
         parallelism: parallelism,
-        defaultBehaviorPlugins: defaultBehaviorPlugins,
-        plugins: plugins,
+        handlers: handlers,
         filePath: filePath,
         function: function,
         line: line,
@@ -402,8 +389,6 @@ private func mergeCorpusSnapshots<each Input: Codable & Sendable>(
     guard let first = snapshots.first else {
         return CorpusSnapshot<repeat each Input>(
             entries: [],
-            createdAt: dateClient.now(),
-            updatedAt: dateClient.now(),
             totalCoverage: CoverageSignature(edges: [])
         )
     }

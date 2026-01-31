@@ -110,8 +110,8 @@ func fuzzEngineWithMaxIterations<each Input: MutatorProviding & Codable & Sendab
             config: effectiveConfig,
             corpusDirectory: corpusDirectory
         )
-        // Create default plugin processor (MutationPlugin)
-        let processor = SyncPluginProcessor(plugins: (MutationPlugin()))
+        // Create default plugin processor (mutation handler)
+        let processor = PluginHandlerProcessor(handlers: [FuzzPluginHandler<repeat each Input>.mutation()])
         let processSyncPlugins: @Sendable (
             consuming SyncPluginEvent<repeat each Input>,
             (FuzzPluginAction<repeat each Input>) -> Void

@@ -2,31 +2,40 @@
 //  CoverageGapPluginTests.swift
 //  PropertyTestingKitTests
 //
-//  Tests for CoverageGapPlugin.
+//  Tests for the coverage gap handler.
 //
 
 import Testing
 import Foundation
 @testable import PropertyTestingKit
 
-@Suite("CoverageGapPlugin Actions")
-struct CoverageGapPluginActionTests {
+@Suite("Coverage Gap Handler Actions")
+struct CoverageGapHandlerActionTests {
 
-    @Test("Plugin has correct ID")
-    func testPluginId() {
-        let plugin = CoverageGapPlugin()
-        #expect(plugin.id == "coverage_gap")
+    @Test("Handler has correct ID")
+    func testHandlerId() {
+        let handler: FuzzPluginHandler<Int> = .coverageGap()
+        #expect(handler.id == "coverage_gap")
     }
 
-    @Test("Plugin returns empty for non-end events")
+    @Test("Handler returns empty for non-end events")
     func testNonEndEventsReturnEmpty() async throws {
-        let plugin = CoverageGapPlugin()
+        let handler: FuzzPluginHandler<Int> = .coverageGap()
 
+        // Sync events should always return empty
+        let iterationContext = SyncPluginEvent<Int>.IterationContext(
+            discoveredNewCoverage: true,
+            input: 42
+        )
+        let syncActions = handler.handleSync(SyncPluginEvent<Int>.iteration(iterationContext))
+        #expect(syncActions.isEmpty)
+
+        // Start event should pre-warm but return empty actions
         let startContext = AsyncPluginEvent<Int>.StartContext(
             maxDuration: .seconds(60),
             corpusMode: .auto
         )
-        let actions = try await plugin.handleAsync(event: AsyncPluginEvent<Int>.start(startContext))
-        #expect(actions.isEmpty)
+        let startActions = try await handler.handleAsync(AsyncPluginEvent<Int>.start(startContext))
+        #expect(startActions.isEmpty)
     }
 }

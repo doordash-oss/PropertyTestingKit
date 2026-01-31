@@ -171,24 +171,24 @@ struct STADSPlateauDetectorTests {
     }
 }
 
-@Suite("STADSPlugin")
-struct STADSPluginTests {
+@Suite("STADS Handler")
+struct STADSHandlerTests {
 
-    @Test("Plugin has correct ID")
-    func testPluginId() async {
-        let plugin = STADSPlugin()
-        #expect(await plugin.id == "stads_detector")
+    @Test("Handler has correct ID")
+    func testHandlerId() {
+        let handler: FuzzPluginHandler<Int> = .stadsDetector()
+        #expect(handler.id == "stads_detector")
     }
 
-    @Test("Plugin returns stop action when plateaued")
-    func testStopAction() async throws {
+    @Test("Handler returns stop action when plateaued")
+    func testStopAction() {
         let config = STADSPlateauDetector.Config(
             minDiscoveryProbability: 0.01,
             confirmationChecks: 2,
             checkInterval: 5,
             enabled: true
         )
-        let plugin = STADSPlugin(config: config)
+        let handler: FuzzPluginHandler<Int> = .stadsDetector(config: config)
 
         // Record many non-discoveries via iteration events
         for i in 0..<50 {
@@ -196,7 +196,7 @@ struct STADSPluginTests {
                 discoveredNewCoverage: false,
                 input: i
             )
-            let actions = plugin.handle(event: SyncPluginEvent<Int>.iteration(iterationContext))
+            let actions = handler.handleSync(SyncPluginEvent<Int>.iteration(iterationContext))
 
             // Check if we got a stop action
             if actions.contains(where: {
@@ -211,14 +211,14 @@ struct STADSPluginTests {
         Issue.record("Expected stop action after plateau")
     }
 
-    @Test("Convenience constructor creates plugin")
-    func testConvenienceConstructor() async {
-        let plugin: STADSPlugin = .stadsDetector(
+    @Test("Convenience constructor creates handler")
+    func testConvenienceConstructor() {
+        let handler: FuzzPluginHandler<Int> = .stadsDetector(
             minDiscoveryProbability: 0.005,
             confirmationChecks: 5,
             checkInterval: 50
         )
 
-        #expect(await plugin.id == "stads_detector")
+        #expect(handler.id == "stads_detector")
     }
 }
