@@ -7,36 +7,36 @@ import Foundation
 import Testing
 
 /// Configuration for the fuzzing run.
-public struct FuzzEngineConfig: Sendable {
+struct FuzzEngineConfig: Sendable {
     /// Maximum time to spend fuzzing.
-    public var maxDuration: Duration
+    var maxDuration: Duration
 
     /// Whether to minimize the corpus before saving.
-    public let minimizeCorpus: Bool
+    let minimizeCorpus: Bool
 
     /// Verbose logging.
-    public var verbose: Bool
+    var verbose: Bool
 
     /// Controls how the fuzzer handles existing corpus files.
     /// Defaults to checking the `FUZZ_CORPUS_MODE` environment variable,
     /// then falling back to `.auto`.
-    public let corpusMode: CorpusMode
+    let corpusMode: CorpusMode
 
     /// Project root path for filtering coverage gaps to project files only.
     /// When set, only reports gaps in files under this path.
-    public let projectPath: String?
+    let projectPath: String?
 
     /// Source location where the fuzz test was called.
     /// Used for reporting failures and plugin actions.
-    public let sourceLocation: SourceLocation
+    let sourceLocation: SourceLocation
 
     /// How often to check the time limit (in iterations).
     /// Higher values reduce overhead from Date.init() calls but may overshoot the time limit slightly.
     /// Default: 1000 (checks ~10K times/sec at 10M iterations/sec, ~3x faster than per-iteration).
     /// Tests that need precise iteration control should use 1.
-    public let timeLimitCheckInterval: Int
+    let timeLimitCheckInterval: Int
 
-    public init(
+    init(
         maxDuration: Duration = .seconds(60),
         minimizeCorpus: Bool = true,
         verbose: Bool = false,

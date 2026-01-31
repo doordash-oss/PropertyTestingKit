@@ -58,7 +58,7 @@ extension Shrinkable where Self: Sendable {
     ///   - config: Shrinking configuration.
     ///   - test: A function returning `.fail` if the candidate preserves the failure.
     /// - Returns: A minimized value that still triggers the failure.
-    public func shrink(
+    func shrink(
         config: ShrinkConfig = ShrinkConfig(),
         test: @escaping (Self) async -> ShrinkResult
     ) async -> (minimized: Self, stats: ShrinkStats) {

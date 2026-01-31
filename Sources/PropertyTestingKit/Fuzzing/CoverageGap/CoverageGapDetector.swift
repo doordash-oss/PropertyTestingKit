@@ -24,13 +24,13 @@ public struct CoverageGapDetector: Sendable {
     public struct Config: Sendable {
         /// Minimum coverage percentage to report as a gap.
         /// Functions below this threshold are considered "uncovered" rather than "partially covered".
-        public var minCoveragePercentageToReport: Double
+        var minCoveragePercentageToReport: Double
 
         /// Paths to exclude from gap detection (e.g., dependencies, test infrastructure).
-        public var excludedPathPrefixes: [String]
+        var excludedPathPrefixes: [String]
 
         /// Whether to only report significant gaps (multiple uncovered regions or low coverage).
-        public var onlyReportSignificant: Bool
+        var onlyReportSignificant: Bool
 
         public init(
             minCoveragePercentageToReport: Double = 5.0,
@@ -45,7 +45,7 @@ public struct CoverageGapDetector: Sendable {
 
     private let config: Config
 
-    public init(config: Config = Config()) {
+    init(config: Config = Config()) {
         self.config = config
     }
 
@@ -55,7 +55,7 @@ public struct CoverageGapDetector: Sendable {
     ///   - coveredIndices: Set of edge indices that were executed during fuzzing.
     ///   - projectPath: Optional project root path to filter to project files only.
     /// - Returns: A report of detected coverage gaps.
-    public func detect(from coveredIndices: Set<UInt32>, projectPath: String? = nil) async -> CoverageGapReport {
+    func detect(from coveredIndices: Set<UInt32>, projectPath: String? = nil) async -> CoverageGapReport {
         guard SanCovCounters.isAvailable else {
             return CoverageGapReport(
                 gaps: [],

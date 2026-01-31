@@ -6,16 +6,16 @@
 import Foundation
 
 extension Data: Shrinkable {
-    public var shrinkableElementCount: Int { count }
+    var shrinkableElementCount: Int { count }
 
-    public func candidateRemovingRange(_ range: Range<Int>) -> Data? {
+    func candidateRemovingRange(_ range: Range<Int>) -> Data? {
         guard range.lowerBound >= 0, range.upperBound <= count else { return nil }
         var copy = self
         copy.removeSubrange(range)
         return copy
     }
 
-    public func simplifiedCandidates() -> [Data] {
+    func simplifiedCandidates() -> [Data] {
         // Try zeroing out the data
         if self != Data(repeating: 0, count: self.count) {
             return [Data(repeating: 0, count: self.count)]

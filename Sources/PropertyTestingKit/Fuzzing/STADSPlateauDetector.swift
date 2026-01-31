@@ -49,18 +49,18 @@ public struct STADSPlateauDetector: Sendable {
     public struct Config: Sendable {
         /// Minimum discovery probability before declaring plateau.
         /// Default: 0.001 = 0.1% chance of new discovery per iteration
-        public var minDiscoveryProbability: Double
+        var minDiscoveryProbability: Double
 
         /// Number of consecutive checks below threshold required.
         /// Higher values prevent premature stopping.
-        public var confirmationChecks: Int
+        var confirmationChecks: Int
 
         /// How often to recalculate discovery probability.
         /// Default: every 100 iterations
-        public var checkInterval: Int
+        var checkInterval: Int
 
         /// Whether STADS detection is enabled.
-        public var enabled: Bool
+        var enabled: Bool
 
         public init(
             minDiscoveryProbability: Double = 0.001,
@@ -101,7 +101,7 @@ public struct STADSPlateauDetector: Sendable {
     /// Time when first observation was recorded
     private var startTime: Date?
 
-    public init(config: Config = Config()) {
+    init(config: Config = Config()) {
         self.config = config
     }
 
@@ -109,7 +109,7 @@ public struct STADSPlateauDetector: Sendable {
     ///
     /// - Parameter signatureHash: Hash of the coverage signature for this iteration.
     ///   Use 0 or nil to indicate no new coverage (same as previous).
-    public mutating func record(signatureHash: UInt64) {
+    mutating func record(signatureHash: UInt64) {
         if startTime == nil {
             startTime = dateClient.now()
         }
@@ -147,7 +147,7 @@ public struct STADSPlateauDetector: Sendable {
     /// by treating all discoveries as singletons and decaying them periodically
     /// based on the discovery rate. For accurate Good-Turing estimation, use
     /// `record(signatureHash:)` instead.
-    public mutating func record(discoveredNewCoverage: Bool) {
+    mutating func record(discoveredNewCoverage: Bool) {
         if startTime == nil {
             startTime = dateClient.now()
         }
@@ -195,7 +195,7 @@ public struct STADSPlateauDetector: Sendable {
     }
 
     /// Check if coverage has plateaued based on Good-Turing estimate.
-    public var hasPlateaued: Bool {
+    var hasPlateaued: Bool {
         guard config.enabled else { return false }
         guard totalObservations >= config.checkInterval else { return false }
 
@@ -203,17 +203,17 @@ public struct STADSPlateauDetector: Sendable {
     }
 
     /// Current estimated probability of discovering new coverage.
-    public var discoveryProbability: Double {
+    var discoveryProbability: Double {
         currentProbability
     }
 
     /// Number of unique coverage paths discovered.
-    public var uniquePathsDiscovered: Int {
+    var uniquePathsDiscovered: Int {
         totalDiscoveries
     }
 
     /// Statistics about the STADS detector state.
-    public func stats() -> STADSPlateauStats {
+    func stats() -> STADSPlateauStats {
         let now = dateClient.now()
         return STADSPlateauStats(
             totalObservations: totalObservations,
@@ -227,7 +227,7 @@ public struct STADSPlateauDetector: Sendable {
     }
 
     /// Generate a summary string for logging.
-    public func summary(includeDetails: Bool = false) -> String {
+    func summary(includeDetails: Bool = false) -> String {
         let stats = self.stats()
 
         var parts: [String] = []
@@ -249,30 +249,30 @@ public struct STADSPlateauDetector: Sendable {
 }
 
 /// Statistics from the STADS plateau detector.
-public struct STADSPlateauStats: Sendable {
+struct STADSPlateauStats: Sendable {
     /// Total iterations observed.
-    public let totalObservations: Int
+    let totalObservations: Int
 
     /// Total unique coverage paths discovered.
-    public let totalDiscoveries: Int
+    let totalDiscoveries: Int
 
     /// Number of singletons (paths seen exactly once).
-    public let singletonCount: Int
+    let singletonCount: Int
 
     /// Estimated probability of discovering new coverage.
-    public let discoveryProbability: Double
+    let discoveryProbability: Double
 
     /// Number of consecutive low-probability checks.
-    public let lowProbabilityChecks: Int
+    let lowProbabilityChecks: Int
 
     /// Whether plateau has been detected.
-    public let hasPlateaued: Bool
+    let hasPlateaued: Bool
 
     /// Time elapsed since first observation.
-    public let duration: TimeInterval
+    let duration: TimeInterval
 
     /// Discoveries per second.
-    public var discoveriesPerSecond: Double {
+    var discoveriesPerSecond: Double {
         duration > 0 ? Double(totalDiscoveries) / duration : 0
     }
 }

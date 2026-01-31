@@ -4,9 +4,9 @@
 //
 
 extension String: Shrinkable {
-    public var shrinkableElementCount: Int { count }
+    var shrinkableElementCount: Int { count }
 
-    public func candidateRemovingRange(_ range: Range<Int>) -> String? {
+    func candidateRemovingRange(_ range: Range<Int>) -> String? {
         let startIndex = self.index(self.startIndex, offsetBy: range.lowerBound, limitedBy: self.endIndex)
         let endIndex = self.index(self.startIndex, offsetBy: range.upperBound, limitedBy: self.endIndex)
         guard let start = startIndex, let end = endIndex else { return nil }
@@ -16,7 +16,7 @@ extension String: Shrinkable {
         return copy
     }
 
-    public func simplifiedCandidates() -> [String] {
+    func simplifiedCandidates() -> [String] {
         var candidates: [String] = []
 
         // Try replacing uppercase with lowercase

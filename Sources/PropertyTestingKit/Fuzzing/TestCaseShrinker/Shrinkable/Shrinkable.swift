@@ -6,7 +6,7 @@
 /// A type that can be shrunk (reduced to simpler/smaller forms).
 ///
 /// Provides structure-aware shrinking for complex types.
-public protocol Shrinkable {
+protocol Shrinkable {
     /// Number of elements that can potentially be removed.
     var shrinkableElementCount: Int { get }
 

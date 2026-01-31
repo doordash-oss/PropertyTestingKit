@@ -43,20 +43,20 @@ public struct SaturationPlateauDetector: Sendable {
     public struct Config: Sendable {
         /// Minimum saturation level (0-1) to declare plateau.
         /// Default: 0.99 = 99% saturated
-        public var minSaturation: Double
+        var minSaturation: Double
 
         /// Minimum growth rate (new discoveries per iteration) before plateau.
         /// Default: 0.0001 = 1 new path per 10,000 iterations
-        public var minGrowthRate: Double
+        var minGrowthRate: Double
 
         /// Window size for calculating growth rate.
-        public var windowSize: Int
+        var windowSize: Int
 
         /// Number of consecutive windows below threshold required.
-        public var confirmationWindows: Int
+        var confirmationWindows: Int
 
         /// Whether saturation detection is enabled.
-        public var enabled: Bool
+        var enabled: Bool
 
         public init(
             minSaturation: Double = 0.99,
@@ -105,12 +105,12 @@ public struct SaturationPlateauDetector: Sendable {
     /// Time when first observation was recorded
     private var startTime: Date?
 
-    public init(config: Config = Config()) {
+    init(config: Config = Config()) {
         self.config = config
     }
 
     /// Record whether this iteration discovered new coverage.
-    public mutating func record(discoveredNewCoverage: Bool) {
+    mutating func record(discoveredNewCoverage: Bool) {
         if startTime == nil {
             startTime = dateClient.now()
         }
@@ -218,7 +218,7 @@ public struct SaturationPlateauDetector: Sendable {
     }
 
     /// Check if coverage has plateaued based on saturation metrics.
-    public var hasPlateaued: Bool {
+    var hasPlateaued: Bool {
         guard config.enabled else { return false }
         guard totalIterations >= config.windowSize else { return false }
 
@@ -236,17 +236,17 @@ public struct SaturationPlateauDetector: Sendable {
     }
 
     /// Current estimated saturation level (0-1).
-    public var saturationLevel: Double {
+    var saturationLevel: Double {
         currentSaturation
     }
 
     /// Current growth rate (discoveries per iteration).
-    public var growthRate: Double {
+    var growthRate: Double {
         currentGrowthRate
     }
 
     /// Statistics about the saturation detector state.
-    public func stats() -> SaturationPlateauStats {
+    func stats() -> SaturationPlateauStats {
         let now = dateClient.now()
         return SaturationPlateauStats(
             totalIterations: totalIterations,
@@ -261,7 +261,7 @@ public struct SaturationPlateauDetector: Sendable {
     }
 
     /// Generate a summary string for logging.
-    public func summary(includeDetails: Bool = false) -> String {
+    func summary(includeDetails: Bool = false) -> String {
         let stats = self.stats()
 
         var parts: [String] = []
@@ -284,38 +284,38 @@ public struct SaturationPlateauDetector: Sendable {
 }
 
 /// Statistics from the saturation plateau detector.
-public struct SaturationPlateauStats: Sendable {
+struct SaturationPlateauStats: Sendable {
     /// Total iterations processed.
-    public let totalIterations: Int
+    let totalIterations: Int
 
     /// Current cumulative coverage count.
-    public let cumulativeCoverage: Int
+    let cumulativeCoverage: Int
 
     /// Estimated maximum achievable coverage.
-    public let estimatedMaxCoverage: Double
+    let estimatedMaxCoverage: Double
 
     /// Current saturation level (0-1).
-    public let saturationLevel: Double
+    let saturationLevel: Double
 
     /// Current growth rate (discoveries per iteration).
-    public let growthRate: Double
+    let growthRate: Double
 
     /// Number of consecutive low-growth windows.
-    public let lowGrowthWindowCount: Int
+    let lowGrowthWindowCount: Int
 
     /// Whether plateau has been detected.
-    public let hasPlateaued: Bool
+    let hasPlateaued: Bool
 
     /// Time elapsed since first observation.
-    public let duration: TimeInterval
+    let duration: TimeInterval
 
     /// Discoveries per second.
-    public var discoveriesPerSecond: Double {
+    var discoveriesPerSecond: Double {
         duration > 0 ? Double(cumulativeCoverage) / duration : 0
     }
 
     /// Estimated percentage of maximum coverage achieved.
-    public var percentComplete: Double {
+    var percentComplete: Double {
         saturationLevel * 100
     }
 }

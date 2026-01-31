@@ -6,12 +6,12 @@
 import Foundation
 
 /// Errors that can occur during DWARF symbolication.
-public enum DWARFSymbolizerError: Error, LocalizedError {
+enum DWARFSymbolizerError: Error, LocalizedError {
     case initFailed(String)
     case lookupFailed(String)
     case noDWARFInfo
 
-    public var errorDescription: String? {
+    var errorDescription: String? {
         switch self {
         case .initFailed(let msg): return "Failed to initialize DWARF reader: \(msg)"
         case .lookupFailed(let msg): return "DWARF lookup failed: \(msg)"

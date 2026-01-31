@@ -25,7 +25,7 @@ private enum ContinuousClockClientKey: DependencyKey {
 }
 
 extension DependencyValues {
-    public var continuousClockClient: any Clock<Duration> {
+    var continuousClockClient: any Clock<Duration> {
         get { self[ContinuousClockClientKey.self] }
         set { self[ContinuousClockClientKey.self] = newValue }
     }

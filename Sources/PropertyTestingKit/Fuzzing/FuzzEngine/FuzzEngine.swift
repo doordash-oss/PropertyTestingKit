@@ -97,14 +97,14 @@ final class MutatorOps<each Input: Sendable>: @unchecked Sendable {
 /// 6. Stop when: iteration limit, time limit, or coverage plateau
 /// 7. Minimize corpus, save to disk
 ///
-public final class FuzzEngine<each M: Mutator>: @unchecked Sendable where repeat (each M).Value: Codable & Sendable {
+final class FuzzEngine<each M: Mutator>: @unchecked Sendable where repeat (each M).Value: Codable & Sendable {
     @Dependency(\.dateClient) private var dateClient
     @Dependency(\.corpusPersistence) private var corpusPersistenceClient
     @Dependency(\.coverageCounters) private var coverageCounters
     @Dependency(\.corpusRegistry) private var corpusRegistry
 
     // Type alias for the combined input tuple
-    public typealias Input = (repeat (each M).Value)
+    typealias Input = (repeat (each M).Value)
 
     /// Synchronous plugin processor for iteration events (hot path).
     typealias SyncPluginProcessorFn = @Sendable (
@@ -131,7 +131,7 @@ public final class FuzzEngine<each M: Mutator>: @unchecked Sendable where repeat
     ///   - mutators: A tuple of mutators, one for each input type.
     ///   - config: Fuzzing configuration.
     ///   - corpusDirectory: Where to save/load the corpus.
-    public init(
+    init(
         mutators: (repeat each M),
         config: FuzzEngineConfig = FuzzEngineConfig(),
         corpusDirectory: URL? = nil

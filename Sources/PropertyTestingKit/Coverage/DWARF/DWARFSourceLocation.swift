@@ -6,16 +6,16 @@
 import Foundation
 
 /// A source location resolved from DWARF debug information.
-public struct DWARFSourceLocation: Sendable, Equatable {
+struct DWARFSourceLocation: Sendable, Equatable {
     /// The source file path.
-    public let file: String
+    let file: String
 
     /// The line number (1-indexed).
-    public let line: Int
+    let line: Int
 
     /// The column number (1-indexed, 0 if unknown).
-    public let column: Int
+    let column: Int
 
     /// The function name (if available).
-    public let function: String?
+    let function: String?
 }

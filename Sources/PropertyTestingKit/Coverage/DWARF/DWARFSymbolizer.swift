@@ -35,7 +35,7 @@ private final class SymbolizerRef: @unchecked Sendable {
 ///     print("\(location.file):\(location.line)")
 /// }
 /// ```
-public struct DWARFSymbolizer: Sendable {
+struct DWARFSymbolizer: Sendable {
     private let ref: SymbolizerRef
 
     /// Initialize a symbolizer for the given binary path.
@@ -45,7 +45,7 @@ public struct DWARFSymbolizer: Sendable {
     ///
     /// - Parameter path: Path to the binary or dSYM with DWARF debug info.
     /// - Throws: `DWARFSymbolizerError` if initialization fails.
-    public init(path: String) throws {
+    init(path: String) throws {
         // Try paths in order: dSYM first (more likely to have full debug info), then binary
         let pathsToTry = Self.findDebugInfoPaths(for: path)
 
@@ -62,7 +62,7 @@ public struct DWARFSymbolizer: Sendable {
     }
 
     /// Initialize a symbolizer for the current process executable.
-    public init() throws {
+    init() throws {
         let path = ProcessInfo.processInfo.arguments[0]
         try self.init(path: path)
     }
@@ -168,7 +168,7 @@ public struct DWARFSymbolizer: Sendable {
     ///
     /// - Parameter address: The program counter address to look up.
     /// - Returns: The source location, or nil if not found.
-    public func lookup(address: UInt64) -> DWARFSourceLocation? {
+    func lookup(address: UInt64) -> DWARFSourceLocation? {
         var result = llvm_symbolizer_lookup(ref.pointer, address)
         defer { llvm_symbolizer_free_result(&result) }
 
@@ -191,7 +191,7 @@ public struct DWARFSymbolizer: Sendable {
     ///
     /// - Parameter addresses: The addresses to look up.
     /// - Returns: Dictionary mapping addresses to their source locations.
-    public func lookup(addresses: [UInt64]) -> [UInt64: DWARFSourceLocation] {
+    func lookup(addresses: [UInt64]) -> [UInt64: DWARFSourceLocation] {
         var results: [UInt64: DWARFSourceLocation] = [:]
 
         for addr in addresses {

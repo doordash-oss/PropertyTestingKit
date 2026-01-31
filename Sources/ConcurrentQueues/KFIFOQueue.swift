@@ -2,7 +2,8 @@ import Atomics
 import Darwin
 
 // Use Swift Atomics' built-in DoubleWord for 128-bit atomic operations
-public typealias DoubleWord = Atomics.DoubleWord
+@usableFromInline
+typealias DoubleWord = Atomics.DoubleWord
 
 // MARK: - XorShift64 RNG
 
@@ -175,7 +176,7 @@ struct RawSegment {
 
 // MARK: - KFIFOQueue
 
-public final class KFIFOQueue<T>: @unchecked Sendable {
+final class KFIFOQueue<T>: @unchecked Sendable {
 
     @usableFromInline let k: Int
     @usableFromInline let useDirectStorage: Bool

@@ -24,7 +24,7 @@ import Foundation
 ///
 /// - Warning: Using multiple producers or multiple consumers concurrently
 ///   will result in undefined behavior.
-public final class SPSCGrowableRing<T: Sendable>: @unchecked Sendable {
+final class SPSCGrowableRing<T: Sendable>: @unchecked Sendable {
 
     // ============================================================
     // BUFFER STATE (uses seqlock pattern for lock-free reads)

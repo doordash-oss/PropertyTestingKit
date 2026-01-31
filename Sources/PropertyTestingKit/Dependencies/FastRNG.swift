@@ -15,7 +15,7 @@ import Dependencies
 /// Each thread maintains its own state, seeded from the thread ID on first access.
 ///
 /// Performance: ~20ns per call with no allocation or lock overhead.
-public enum ThreadLocalRNG {
+enum ThreadLocalRNG {
     @usableFromInline
     static let _key: pthread_key_t = {
         var key: pthread_key_t = 0
@@ -25,7 +25,7 @@ public enum ThreadLocalRNG {
 
     /// Generate a random UInt64 using thread-local XorShift64.
     @inlinable
-    public static func next() -> UInt64 {
+    static func next() -> UInt64 {
         let rawPtr = pthread_getspecific(_key)
         var state: UInt64
         if rawPtr == nil {
@@ -45,7 +45,7 @@ public enum ThreadLocalRNG {
 
     /// Generate a random integer in [0, upperBound).
     @inlinable
-    public static func random(upperBound: Int) -> Int {
+    static func random(upperBound: Int) -> Int {
         Int(next() % UInt64(upperBound))
     }
 }
@@ -59,12 +59,12 @@ public enum ThreadLocalRNG {
 /// var rng = FastRNG()
 /// let value = Int.random(in: 0..<100, using: &rng)
 /// ```
-public struct FastRNG: RandomNumberGenerator, Sendable {
+struct FastRNG: RandomNumberGenerator, Sendable {
     @inlinable
-    public init() {}
+    init() {}
 
     @inlinable
-    public mutating func next() -> UInt64 {
+    mutating func next() -> UInt64 {
         ThreadLocalRNG.next()
     }
 }
@@ -72,15 +72,15 @@ public struct FastRNG: RandomNumberGenerator, Sendable {
 // MARK: - Dependency Key
 
 extension FastRNG: DependencyKey {
-    public static let liveValue = FastRNG()
-    public static let testValue = FastRNG()
+    static let liveValue = FastRNG()
+    static let testValue = FastRNG()
 }
 
 extension DependencyValues {
     /// Fast random number generator using thread-local XorShift64.
     ///
     /// Zero allocation overhead - suitable for high-throughput fuzzing.
-    public var fastRNG: FastRNG {
+    var fastRNG: FastRNG {
         get { self[FastRNG.self] }
         set { self[FastRNG.self] = newValue }
     }
