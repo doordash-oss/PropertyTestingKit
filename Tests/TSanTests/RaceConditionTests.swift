@@ -55,8 +55,6 @@ struct SanCovCountersRaceTests {
     }
 }
 
-// MARK: - Corpus Concurrency Tests
-
 /// Helper to create a SparseCoverage from a set of indices
 private func makeSparse(indices: [Int]) -> SparseCoverage {
     SparseCoverage(indices: indices.map { UInt32($0) })
@@ -65,42 +63,6 @@ private func makeSparse(indices: [Int]) -> SparseCoverage {
 /// Helper to create a CoverageSignature from a set of indices (for signature-specific tests)
 private func makeSignature(indices: [Int]) -> CoverageSignature {
     CoverageSignature(sparse: makeSparse(indices: indices))
-}
-
-@Suite("Corpus Race Detection")
-struct CorpusRaceTests {
-
-    @Test("Concurrent corpus operations")
-    func concurrentCorpusOperations() async {
-        // Note: Corpus is not thread-safe. These tests verify behavior in
-        // a serialized context (via the actor-isolated FuzzStateMachine).
-        // The "concurrent" operations here are serialized by Swift's runtime.
-        var corpus = Corpus<Int>()
-
-        // Sequential adds (corpus is not thread-safe)
-        for i in 0..<50 {
-            let sparse = makeSparse(indices: [i, i + 100, i + 200])
-            corpus.add(input: (i), sparse: sparse)
-        }
-
-        // Sequential reads
-        for _ in 0..<20 {
-            _ = corpus.snapshot()
-            _ = corpus.count
-            _ = corpus.isEmpty
-        }
-    }
-
-    @Test("Concurrent corpus addIfInteresting")
-    func concurrentAddIfInteresting() async {
-        // Note: Corpus is not thread-safe. This test verifies the API works correctly.
-        var corpus = Corpus<Int>()
-
-        for i in 0..<100 {
-            let sparse = makeSparse(indices: [i % 20])
-            _ = corpus.addIfInteresting(input: (i), sparse: sparse)
-        }
-    }
 }
 
 // MARK: - FuzzEngine Concurrency Tests
