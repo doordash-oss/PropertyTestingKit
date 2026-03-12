@@ -1,0 +1,12 @@
+[project]
+name = "propertytestingkit-mcp"
+version = "0.1.0"
+description = "MCP server for PropertyTestingKit development tools"
+requires-python = ">=3.10"
+dependencies = [
+    "mcp>=1.0.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

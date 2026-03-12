@@ -38,18 +38,6 @@ size_t sancov_get_covered_count(void);
 /// The array contains sancov_get_counter_count() bytes.
 const uint8_t* sancov_get_counters(void);
 
-/// Copy the current counter state into a user-provided buffer.
-/// Returns the number of bytes copied, or 0 if counters unavailable.
-/// If buffer is NULL, returns the required buffer size.
-size_t sancov_snapshot_counters(uint8_t* buffer, size_t buffer_size);
-
-/// Get only the covered (non-zero) counter indices.
-/// Returns the number of entries filled, or if indices is NULL, the count of covered edges.
-/// This is more efficient than snapshot_counters when coverage is sparse.
-/// @param indices Output array of covered edge indices (can be NULL to just get count)
-/// @param max_entries Maximum number of entries to fill
-size_t sancov_snapshot_covered_indices(uint32_t* indices, size_t max_entries);
-
 // MARK: - PC-to-Source Mapping API
 // Maps SanCov edge indices to source locations using dladdr.
 
@@ -135,6 +123,38 @@ size_t sancov_get_covered_count_with_context(SanCovMeasurementContext* context);
 /// Returns NULL if context is NULL or no edges are covered.
 /// Use sancov_get_covered_count_with_context() to get the array size.
 uint32_t* sancov_snapshot_covered_indices_with_context(SanCovMeasurementContext* context);
+
+/// Compute signature hash from coverage data without allocation.
+/// This matches the SparseCoverage.signatureHash algorithm:
+///   hash = XOR of (index * 0x9e3779b97f4a7c15) for each covered index
+///   hash ^= count * 0x517cc1b727220a95
+///
+/// @param context The measurement context to compute hash from
+/// @return The signature hash, or 0 if no coverage
+int64_t sancov_compute_signature_hash(SanCovMeasurementContext* context);
+
+/// Merge coverage from a measurement context directly into a bitmap.
+/// This is the fast path for checking coverage uniqueness - no allocation needed.
+///
+/// For each covered edge in the context:
+/// - Check if the corresponding bit is set in the bitmap
+/// - If not set, set it and return true immediately (new coverage found)
+/// - If all edges are already in the bitmap, return false
+///
+/// If `merge_all` is true, continues merging all edges even after finding new coverage,
+/// and returns true if ANY new coverage was found.
+///
+/// @param context The measurement context to read coverage from
+/// @param bitmap The bitmap to merge into (array of uint64_t words)
+/// @param bitmap_word_count Number of uint64_t words in the bitmap
+/// @param merge_all If true, merge all edges; if false, return early on first new edge
+/// @return true if any new coverage was found, false otherwise
+bool sancov_merge_coverage_into_bitmap(
+    SanCovMeasurementContext* context,
+    uint64_t* bitmap,
+    size_t bitmap_word_count,
+    bool merge_all
+);
 
 #ifdef __cplusplus
 }

@@ -24,13 +24,13 @@ public struct CoverageGapDetector: Sendable {
     public struct Config: Sendable {
         /// Minimum coverage percentage to report as a gap.
         /// Functions below this threshold are considered "uncovered" rather than "partially covered".
-        public var minCoveragePercentageToReport: Double
+        var minCoveragePercentageToReport: Double
 
         /// Paths to exclude from gap detection (e.g., dependencies, test infrastructure).
-        public var excludedPathPrefixes: [String]
+        var excludedPathPrefixes: [String]
 
         /// Whether to only report significant gaps (multiple uncovered regions or low coverage).
-        public var onlyReportSignificant: Bool
+        var onlyReportSignificant: Bool
 
         public init(
             minCoveragePercentageToReport: Double = 5.0,
@@ -45,7 +45,7 @@ public struct CoverageGapDetector: Sendable {
 
     private let config: Config
 
-    public init(config: Config = Config()) {
+    init(config: Config = Config()) {
         self.config = config
     }
 
@@ -55,7 +55,7 @@ public struct CoverageGapDetector: Sendable {
     ///   - coveredIndices: Set of edge indices that were executed during fuzzing.
     ///   - projectPath: Optional project root path to filter to project files only.
     /// - Returns: A report of detected coverage gaps.
-    public func detect(from coveredIndices: Set<UInt32>, projectPath: String? = nil) async -> CoverageGapReport {
+    func detect(from coveredIndices: Set<UInt32>, projectPath: String? = nil) async -> CoverageGapReport {
         guard SanCovCounters.isAvailable else {
             return CoverageGapReport(
                 gaps: [],
@@ -156,7 +156,7 @@ public struct CoverageGapDetector: Sendable {
         // Query symbol table for accurate function sizes (one-time cost)
         // This gives us precise bounds instead of relying on padding
         let functionStartsArray = Array(testedFunctionStarts)
-        let functionSizes = await SanCovCounters.getFunctionSizes(at: functionStartsArray)
+        let functionSizes = SanCovCounters.getFunctionSizes(at: functionStartsArray)
 
         // Build per-function PC ranges using accurate sizes from symbol table
         // Fallback to 64KB padding if symbol lookup fails
@@ -402,4 +402,34 @@ private struct EdgeInfo {
     let line: Int
     let column: Int
     let filePath: String?
+}
+
+/// Check if a function name represents a closure, thunk, or async continuation.
+/// These are compiler-generated and shouldn't be reported as separate coverage gaps.
+fileprivate func isClosureOrContinuation(_ functionName: String) -> Bool {
+    // Mangled Swift names for async continuations (TY0_, TY1_, etc.)
+    // These are compiler-generated suspend/resume points
+    if functionName.contains("TY0_") || functionName.contains("TY1_") ||
+        functionName.contains("TY2_") || functionName.contains("TY3_") {
+        return true
+    }
+
+    // Demangled async continuation names
+    if functionName.contains("suspend resume partial function") ||
+        functionName.contains("await resume partial function") {
+        return true
+    }
+
+    // Closure thunks (fU_, fU0_, etc.) - but only if they're mangled (start with $s)
+    // We want to keep named closures like "partiallyCoveredFunction #1" but skip
+    // anonymous closure thunks
+    if functionName.hasPrefix("$s") && (
+        functionName.contains("fU_") ||
+        functionName.contains("fU0_") ||
+        functionName.contains("fU1_")
+    ) {
+        return true
+    }
+
+    return false
 }

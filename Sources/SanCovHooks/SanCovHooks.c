@@ -419,17 +419,32 @@ uint32_t* sancov_snapshot_covered_indices_with_context(SanCovMeasurementContext*
         uint8x16_t cmp = vcgtq_u8(chunk, zero);
         uint64x2_t cmp64 = vreinterpretq_u64_u8(cmp);
 
+        uint64_t low = vgetq_lane_u64(cmp64, 0);
+        uint64_t high = vgetq_lane_u64(cmp64, 1);
+
         // Skip entirely zero chunks (common case - coverage is sparse)
-        if (vgetq_lane_u64(cmp64, 0) == 0 && vgetq_lane_u64(cmp64, 1) == 0) {
+        if (low == 0 && high == 0) {
             continue;
         }
 
-        // Extract individual non-zero indices from this chunk
-        for (size_t j = 0; j < 16 && filled < count; j++) {
-            if (counters[i + j] != 0) {
-                indices[filled] = (uint32_t)(i + j);
-                filled++;
-            }
+        // Extract non-zero indices using CTZ (count trailing zeros)
+        // Each byte in cmp64 is either 0x00 or 0xFF, so CTZ gives bit position
+        // Divide by 8 to get byte position within the chunk
+
+        // Process low 8 bytes (indices 0-7 within chunk)
+        while (low && filled < count) {
+            int tz = __builtin_ctzll(low);
+            int byte_pos = tz >> 3;  // tz / 8
+            indices[filled++] = (uint32_t)(i + byte_pos);
+            low &= ~(0xFFULL << (byte_pos << 3));  // Clear this byte
+        }
+
+        // Process high 8 bytes (indices 8-15 within chunk)
+        while (high && filled < count) {
+            int tz = __builtin_ctzll(high);
+            int byte_pos = tz >> 3;
+            indices[filled++] = (uint32_t)(i + 8 + byte_pos);
+            high &= ~(0xFFULL << (byte_pos << 3));
         }
     }
 
@@ -452,6 +467,205 @@ uint32_t* sancov_snapshot_covered_indices_with_context(SanCovMeasurementContext*
 #endif
 
     return indices;
+}
+
+// Helper: Check if bit is set in bitmap
+static inline bool bitmap_contains(uint64_t* bitmap, size_t bitmap_word_count, uint32_t index) {
+    size_t word_idx = index >> 6;  // index / 64
+    if (word_idx >= bitmap_word_count) return false;
+    uint64_t bit = 1ULL << (index & 63);  // index % 64
+    return (bitmap[word_idx] & bit) != 0;
+}
+
+// Helper: Set bit in bitmap, return true if it was newly set
+static inline bool bitmap_insert(uint64_t* bitmap, size_t bitmap_word_count, uint32_t index) {
+    size_t word_idx = index >> 6;
+    if (word_idx >= bitmap_word_count) return false;
+    uint64_t bit = 1ULL << (index & 63);
+    uint64_t old = bitmap[word_idx];
+    if ((old & bit) != 0) return false;  // Already set
+    bitmap[word_idx] = old | bit;
+    return true;
+}
+
+// Compute signature hash from coverage data without allocation.
+// This matches the SparseCoverage.signatureHash algorithm:
+//   hash = XOR of (index * 0x9e3779b97f4a7c15) for each covered index
+//   hash ^= count * 0x517cc1b727220a95
+// Uses the same SIMD iteration as other coverage functions.
+int64_t sancov_compute_signature_hash(SanCovMeasurementContext* ctx) {
+    if (!ctx) return 0;
+
+    size_t count = ctx->covered_count;
+    if (count == 0) return 0;
+
+    const uint8_t* counters = get_counters_with_context(ctx);
+    size_t counter_count = sancov_get_counter_count();
+    if (!counters || counter_count == 0) return 0;
+
+    // Golden ratio primes (same as Swift SparseCoverage.signatureHash)
+    const int64_t INDEX_PRIME = 0x9e3779b97f4a7c15LL;
+    const int64_t COUNT_PRIME = 0x517cc1b727220a95LL;
+
+    int64_t hash = 0;
+
+#if USE_NEON_SIMD
+
+    size_t i = 0;
+    uint8x16_t zero = vdupq_n_u8(0);
+
+    for (; i + 16 <= counter_count; i += 16) {
+        uint8x16_t chunk = vld1q_u8(counters + i);
+        uint8x16_t cmp = vcgtq_u8(chunk, zero);
+        uint64x2_t cmp64 = vreinterpretq_u64_u8(cmp);
+
+        uint64_t low = vgetq_lane_u64(cmp64, 0);
+        uint64_t high = vgetq_lane_u64(cmp64, 1);
+
+        // Skip entirely zero chunks (common case - coverage is sparse)
+        if (low == 0 && high == 0) {
+            continue;
+        }
+
+        // Process low 8 bytes using CTZ
+        while (low) {
+            int tz = __builtin_ctzll(low);
+            int byte_pos = tz >> 3;
+            uint32_t index = (uint32_t)(i + byte_pos);
+
+            // Mix the index into the hash
+            int64_t mixed = (int64_t)index * INDEX_PRIME;
+            hash ^= mixed;
+
+            low &= ~(0xFFULL << (byte_pos << 3));
+        }
+
+        // Process high 8 bytes
+        while (high) {
+            int tz = __builtin_ctzll(high);
+            int byte_pos = tz >> 3;
+            uint32_t index = (uint32_t)(i + 8 + byte_pos);
+
+            int64_t mixed = (int64_t)index * INDEX_PRIME;
+            hash ^= mixed;
+
+            high &= ~(0xFFULL << (byte_pos << 3));
+        }
+    }
+
+    // Handle remaining bytes
+    for (; i < counter_count; i++) {
+        if (counters[i] != 0) {
+            int64_t mixed = (int64_t)i * INDEX_PRIME;
+            hash ^= mixed;
+        }
+    }
+
+#else
+    // Scalar fallback
+    for (size_t i = 0; i < counter_count; i++) {
+        if (counters[i] != 0) {
+            int64_t mixed = (int64_t)i * INDEX_PRIME;
+            hash ^= mixed;
+        }
+    }
+#endif
+
+    // Mix in the count to differentiate signatures with same XOR but different counts
+    hash ^= (int64_t)count * COUNT_PRIME;
+
+    return hash;
+}
+
+// Merge coverage from context directly into bitmap.
+// Returns true if any new coverage was found.
+// If merge_all is false, returns immediately on first new coverage.
+// If merge_all is true, merges all coverage and returns whether any was new.
+bool sancov_merge_coverage_into_bitmap(
+    SanCovMeasurementContext* ctx,
+    uint64_t* bitmap,
+    size_t bitmap_word_count,
+    bool merge_all
+) {
+    if (!ctx || !bitmap || bitmap_word_count == 0) return false;
+
+    size_t count = ctx->covered_count;
+    if (count == 0) return false;
+
+    const uint8_t* counters = get_counters_with_context(ctx);
+    size_t counter_count = sancov_get_counter_count();
+    if (!counters || counter_count == 0) return false;
+
+    bool found_new = false;
+
+#if USE_NEON_SIMD
+
+    size_t i = 0;
+    uint8x16_t zero = vdupq_n_u8(0);
+
+    for (; i + 16 <= counter_count; i += 16) {
+        uint8x16_t chunk = vld1q_u8(counters + i);
+        uint8x16_t cmp = vcgtq_u8(chunk, zero);
+        uint64x2_t cmp64 = vreinterpretq_u64_u8(cmp);
+
+        uint64_t low = vgetq_lane_u64(cmp64, 0);
+        uint64_t high = vgetq_lane_u64(cmp64, 1);
+
+        // Skip entirely zero chunks (common case - coverage is sparse)
+        if (low == 0 && high == 0) {
+            continue;
+        }
+
+        // Process low 8 bytes using CTZ
+        while (low) {
+            int tz = __builtin_ctzll(low);
+            int byte_pos = tz >> 3;
+            uint32_t index = (uint32_t)(i + byte_pos);
+
+            if (bitmap_insert(bitmap, bitmap_word_count, index)) {
+                if (!merge_all) return true;
+                found_new = true;
+            }
+            low &= ~(0xFFULL << (byte_pos << 3));
+        }
+
+        // Process high 8 bytes
+        while (high) {
+            int tz = __builtin_ctzll(high);
+            int byte_pos = tz >> 3;
+            uint32_t index = (uint32_t)(i + 8 + byte_pos);
+
+            if (bitmap_insert(bitmap, bitmap_word_count, index)) {
+                if (!merge_all) return true;
+                found_new = true;
+            }
+            high &= ~(0xFFULL << (byte_pos << 3));
+        }
+    }
+
+    // Handle remaining bytes
+    for (; i < counter_count; i++) {
+        if (counters[i] != 0) {
+            if (bitmap_insert(bitmap, bitmap_word_count, (uint32_t)i)) {
+                if (!merge_all) return true;
+                found_new = true;
+            }
+        }
+    }
+
+#else
+    // Scalar fallback
+    for (size_t i = 0; i < counter_count; i++) {
+        if (counters[i] != 0) {
+            if (bitmap_insert(bitmap, bitmap_word_count, (uint32_t)i)) {
+                if (!merge_all) return true;
+                found_new = true;
+            }
+        }
+    }
+#endif
+
+    return found_new;
 }
 
 // Ensure thread-local fallback map is allocated
@@ -612,113 +826,6 @@ size_t sancov_get_covered_count(void) {
 
 const uint8_t* sancov_get_counters(void) {
     return get_current_coverage_map();
-}
-
-size_t sancov_snapshot_counters(uint8_t* buffer, size_t buffer_size) {
-    size_t counter_count = sancov_get_counter_count();
-    if (counter_count == 0) return 0;
-
-    // If buffer is NULL, return required size
-    if (buffer == NULL) return counter_count;
-
-    const uint8_t* counters = sancov_get_counters();
-    if (!counters) return 0;
-
-    // Copy up to buffer_size bytes
-    size_t copy_size = buffer_size < counter_count ? buffer_size : counter_count;
-    memcpy(buffer, counters, copy_size);
-    return copy_size;
-}
-
-size_t sancov_snapshot_covered_indices(uint32_t* indices, size_t max_entries) {
-    const uint8_t* counters = sancov_get_counters();
-    size_t counter_count = sancov_get_counter_count();
-    if (!counters || counter_count == 0) return 0;
-
-#if USE_NEON_SIMD
-    // SIMD-optimized version using ARM NEON
-    // Process 16 bytes at a time, checking for any non-zero values
-
-    if (indices == NULL) {
-        // Count-only mode: use SIMD to quickly count non-zero bytes
-        size_t covered = 0;
-        size_t i = 0;
-
-        // Process 16 bytes at a time
-        uint8x16_t zero = vdupq_n_u8(0);
-        for (; i + 16 <= counter_count; i += 16) {
-            uint8x16_t chunk = vld1q_u8(counters + i);
-            uint8x16_t cmp = vcgtq_u8(chunk, zero);  // Compare: chunk > 0
-
-            // Count non-zero bytes using horizontal add
-            // First reduce to 8-byte counts
-            uint8x8_t sum8 = vadd_u8(vget_low_u8(cmp), vget_high_u8(cmp));
-            // Then sum pairs to get total (each non-zero becomes 0xFF = -1 in signed)
-            // We negate to count: each 0xFF becomes 1
-            uint64_t mask = vget_lane_u64(vreinterpret_u64_u8(sum8), 0);
-            // Count set bytes (each 0xFF byte represents one covered edge)
-            covered += __builtin_popcountll(mask) / 8;
-        }
-
-        // Handle remaining bytes
-        for (; i < counter_count; i++) {
-            if (counters[i] != 0) covered++;
-        }
-        return covered;
-    }
-
-    // Fill mode: use SIMD to find non-zero chunks, then extract indices
-    size_t filled = 0;
-    size_t i = 0;
-
-    uint8x16_t zero = vdupq_n_u8(0);
-    for (; i + 16 <= counter_count && filled < max_entries; i += 16) {
-        uint8x16_t chunk = vld1q_u8(counters + i);
-        uint8x16_t cmp = vcgtq_u8(chunk, zero);
-
-        // Quick check: any non-zero in this 16-byte chunk?
-        uint64x2_t cmp64 = vreinterpretq_u64_u8(cmp);
-        if (vgetq_lane_u64(cmp64, 0) == 0 && vgetq_lane_u64(cmp64, 1) == 0) {
-            continue;  // Skip entirely zero chunk
-        }
-
-        // Extract non-zero indices from this chunk
-        for (size_t j = 0; j < 16 && filled < max_entries; j++) {
-            if (counters[i + j] != 0) {
-                indices[filled] = (uint32_t)(i + j);
-                filled++;
-            }
-        }
-    }
-
-    // Handle remaining bytes
-    for (; i < counter_count && filled < max_entries; i++) {
-        if (counters[i] != 0) {
-            indices[filled] = (uint32_t)i;
-            filled++;
-        }
-    }
-    return filled;
-
-#else
-    // Fallback: scalar implementation for non-ARM platforms
-    if (indices == NULL) {
-        size_t covered = 0;
-        for (size_t i = 0; i < counter_count; i++) {
-            if (counters[i] != 0) covered++;
-        }
-        return covered;
-    }
-
-    size_t filled = 0;
-    for (size_t i = 0; i < counter_count && filled < max_entries; i++) {
-        if (counters[i] != 0) {
-            indices[filled] = (uint32_t)i;
-            filled++;
-        }
-    }
-    return filled;
-#endif
 }
 
 // MARK: - PC-to-Source Mapping Implementation

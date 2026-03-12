@@ -13,32 +13,6 @@ import Foundation
 import SanCovHooks
 import MachO
 
-/// Global instance for DWARF symbolization (lazy to avoid initialization race).
-private nonisolated(unsafe) var _dwarfSymbolizerHelper: DWARFSymbolizerHelper?
-private let symbolizerInitLock = NSLock()
-
-private func getDWARFSymbolizerHelper() -> DWARFSymbolizerHelper {
-    symbolizerInitLock.lock()
-    defer { symbolizerInitLock.unlock() }
-    if _dwarfSymbolizerHelper == nil {
-        _dwarfSymbolizerHelper = DWARFSymbolizerHelper()
-    }
-    return _dwarfSymbolizerHelper!
-}
-
-/// Global actor instance for function size lookup (lazy to avoid initialization race).
-private nonisolated(unsafe) var _functionSizeLookup: FunctionSizeLookupHelper?
-private let functionSizeInitLock = NSLock()
-
-private func getFunctionSizeLookup() -> FunctionSizeLookupHelper {
-    functionSizeInitLock.lock()
-    defer { functionSizeInitLock.unlock() }
-    if _functionSizeLookup == nil {
-        _functionSizeLookup = FunctionSizeLookupHelper()
-    }
-    return _functionSizeLookup!
-}
-
 /// Namespace for SanitizerCoverage APIs with task-level isolation.
 ///
 /// `SanCovCounters` uses SanitizerCoverage's trace_pc_guard callbacks with
@@ -80,12 +54,12 @@ private func getFunctionSizeLookup() -> FunctionSizeLookupHelper {
 ///     ]
 /// )
 /// ```
-public enum SanCovCounters {
+enum SanCovCounters {
     /// Check if SanitizerCoverage counters are available.
     ///
     /// Returns `true` if the binary was compiled with sanitizer coverage flags
     /// and the counters have been initialized.
-    public static var isAvailable: Bool {
+    static var isAvailable: Bool {
         sancov_counters_available()
     }
 
@@ -95,12 +69,12 @@ public enum SanCovCounters {
         }
     }
 
-    public enum Errors: Error {
+    enum Errors: Error {
         case coverageNotAvailable
     }
 
     /// Get the total number of instrumented edges.
-    public static var totalEdgeCount: Int {
+    static var totalEdgeCount: Int {
         sancov_get_counter_count()
     }
 
@@ -139,125 +113,231 @@ func demangle(_ mangledName: String) -> String {
     return String(cString: result)
 }
 
-/// Check if a function name is from the Swift standard library.
-///
-/// When a toolchain instruments specialized stdlib code (e.g., `Array.map`),
-/// those edges should typically be excluded from coverage analysis since
-/// they're not part of the user's code under test.
-///
-/// - Parameter functionName: The demangled function name to check.
-/// - Returns: `true` if this appears to be a stdlib function.
-func isStdlibFunction(_ functionName: String) -> Bool {
-    // Swift stdlib functions
-    functionName.hasPrefix("Swift.") ||
-    functionName.hasPrefix("(extension in Swift)") ||
-    // Default arguments for stdlib functions (e.g., "default argument 1 of Swift.print(...)")
-    (functionName.hasPrefix("default argument") && functionName.contains(" of Swift.")) ||
-    // Swift runtime internals
-    functionName.hasPrefix("__swift_") ||
-    functionName.hasPrefix("_swift_") ||
-    // Compiler-generated helpers
-    functionName.hasPrefix("outlined ") ||
-    functionName.contains("protocol witness table") ||
-    functionName.contains("protocol conformance descriptor") ||
-    // Common specialized stdlib functions that appear in user code
-    functionName.contains("_endMutation") ||
-    functionName.contains("_finalizeUninitializedArray") ||
-    functionName.contains("_makeMutableAndUnique") ||
-    functionName.contains("_bridgeToObjectiveC")
-}
+extension SanCovCounters {
+    // MARK: - Measurement Context API
 
-/// Check if a function name represents a closure, thunk, or async continuation.
-/// These are compiler-generated and shouldn't be reported as separate coverage gaps.
-func isClosureOrContinuation(_ functionName: String) -> Bool {
-    // Mangled Swift names for async continuations (TY0_, TY1_, etc.)
-    // These are compiler-generated suspend/resume points
-    if functionName.contains("TY0_") || functionName.contains("TY1_") ||
-       functionName.contains("TY2_") || functionName.contains("TY3_") {
-        return true
-    }
-
-    // Demangled async continuation names
-    if functionName.contains("suspend resume partial function") ||
-       functionName.contains("await resume partial function") {
-        return true
-    }
-
-    // Closure thunks (fU_, fU0_, etc.) - but only if they're mangled (start with $s)
-    // We want to keep named closures like "partiallyCoveredFunction #1" but skip
-    // anonymous closure thunks
-    if functionName.hasPrefix("$s") && (
-        functionName.contains("fU_") ||
-        functionName.contains("fU0_") ||
-        functionName.contains("fU1_")
-    ) {
-        return true
-    }
-
-    return false
-}
-
-/// Source location information for a covered edge.
-///
-/// Maps a SanCov edge index to its source location using debug symbol info.
-/// When DWARF debug info is available, provides line-level granularity.
-/// Otherwise falls back to function-level info from dladdr.
-public struct SanCovSourceLocation: Sendable {
-    /// The source file path containing this edge.
-    public let filename: String?
-
-    /// The demangled function name containing this edge.
-    public let functionName: String?
-
-    /// The line number (1-indexed), or nil if unavailable.
-    public let line: Int?
-
-    /// The column number (1-indexed), or nil if unavailable.
-    public let column: Int?
-
-    /// The program counter (instruction address) for this edge.
-    public let pc: UInt
-
-    /// The function start address from dladdr (dli_saddr).
-    /// This is the true beginning of the function, useful for computing function bounds.
-    public let functionStart: UInt
-
-    /// The SanCov edge index.
-    public let edgeIndex: UInt32
-
-    /// Whether this location is from the Swift standard library.
+    /// An opaque measurement context for synchronous coverage isolation.
     ///
-    /// Some toolchains instrument specialized stdlib code (e.g., `Array.map`).
-    /// This property helps filter those edges from coverage analysis.
-    public var isStdlib: Bool {
-        guard let name = functionName else { return false }
-        return isStdlibFunction(name)
+    /// Measurement contexts provide per-call isolation for synchronous code.
+    /// When a context is active, coverage is keyed by the context rather than
+    /// the Swift task or thread, enabling parallel sync tests without contamination.
+    ///
+    /// - Important: Measurement contexts are task-bound. You must call
+    ///   `endMeasurement(_:)` from the same task that called `beginMeasurement()`.
+    ///   The context is intentionally non-Sendable to enforce this requirement.
+    struct MeasurementContext {
+        fileprivate let rawContext: UnsafeMutablePointer<SanCovMeasurementContext>
+
+        fileprivate init(_ raw: UnsafeMutablePointer<SanCovMeasurementContext>) {
+            self.rawContext = raw
+        }
+
+        /// Creates a dummy context for testing purposes.
+        /// This context should only be used with mock CoverageCountersClients.
+        static func testInstance() -> MeasurementContext {
+            // Use C function to properly initialize all fields including atomic refcount
+            guard let dummyPtr = sancov_create_dummy_context() else {
+                fatalError("Failed to create dummy measurement context")
+            }
+            return MeasurementContext(dummyPtr)
+        }
     }
 
-    fileprivate init(from cLocation: SanCovSourceLocation_C, dwarfLocation: DWARFSourceLocation? = nil) {
-        // Prefer DWARF info when available
-        if let dwarf = dwarfLocation {
-            self.filename = dwarf.file
-            self.functionName = dwarf.function.map { demangle($0) }
-                ?? cLocation.function_name.map { demangle(String(cString: $0)) }
-            self.line = dwarf.line > 0 ? dwarf.line : nil
-            self.column = dwarf.column > 0 ? dwarf.column : nil
-        } else {
-            self.filename = cLocation.filename.map { String(cString: $0) }
-            self.functionName = cLocation.function_name.map { mangledName in
-                demangle(String(cString: mangledName))
-            }
-            self.line = nil
-            self.column = nil
+    /// Begin a measurement context for synchronous coverage isolation.
+    ///
+    /// Coverage recorded while a context is active will be isolated to that context.
+    /// The context takes priority over Swift task and thread-local coverage maps.
+    ///
+    /// - Important: You must call `endMeasurement(_:)` when done.
+    /// - Returns: A context that must be passed to `endMeasurement(_:)`.
+    static func beginMeasurement() -> MeasurementContext {
+        return MeasurementContext(sancov_begin_measurement())
+    }
+
+    /// End a measurement context and clean up its resources.
+    ///
+    /// - Parameter context: The context returned by `beginMeasurement()`.
+    static func endMeasurement(_ context: MeasurementContext) {
+        sancov_end_measurement(context.rawContext)
+    }
+
+    /// Reset coverage for a measurement context.
+    ///
+    /// This is a cheap operation (memset + counter reset) compared to
+    /// end+begin which involves hash table insert/remove operations.
+    /// Use this between iterations in the fuzz loop.
+    ///
+    /// - Parameter context: The measurement context to reset.
+    static func resetCoverage(_ context: MeasurementContext) {
+        sancov_reset_coverage(context.rawContext)
+    }
+
+    // MARK: - Context-Aware API
+    // These methods operate directly on a measurement context, bypassing TLS lookup.
+    // This is critical for Swift concurrency where tasks can hop between threads.
+
+    /// Get the number of covered edges for a measurement context (O(1)).
+    ///
+    /// - Parameter context: The measurement context to query.
+    /// - Returns: Number of covered edges.
+    private static func getCoveredCount(with context: MeasurementContext) -> Int {
+        sancov_get_covered_count_with_context(context.rawContext)
+    }
+
+    /// Get covered indices for a specific measurement context.
+    ///
+    /// This method uses the context directly, avoiding TLS lookup overhead.
+    /// Much faster than `snapshotCoveredArrays()` when the context is known.
+    ///
+    /// - Parameter context: The measurement context to snapshot.
+    /// - Returns: SparseCoverage with indices array, or nil if unavailable.
+    static func snapshotCoveredArrays(with context: MeasurementContext) throws -> SparseCoverage {
+        try checkAvailabilty()
+
+        let count = getCoveredCount(with: context)
+        guard count > 0 else { return SparseCoverage() }
+
+        guard let ptr = sancov_snapshot_covered_indices_with_context(context.rawContext) else {
+            return SparseCoverage()
         }
-        self.pc = UInt(cLocation.pc)
-        self.functionStart = UInt(cLocation.function_start)
-        self.edgeIndex = cLocation.edge_index
+        defer { free(ptr) }
+
+        let indices = Array(UnsafeBufferPointer(start: ptr, count: count))
+        return SparseCoverage(indices: indices)
+    }
+
+    /// Get raw coverage data without creating a Swift array.
+    ///
+    /// This is useful when you want to check coverage uniqueness before allocating.
+    /// The closure receives the raw pointer and count - do NOT store the pointer
+    /// as it will be freed when the closure returns.
+    ///
+    /// - Parameters:
+    ///   - context: The measurement context.
+    ///   - body: Closure that receives the raw indices pointer and count.
+    /// - Returns: The result of the closure.
+    static func withRawCoverage<T>(
+        context: MeasurementContext,
+        body: @escaping (UnsafePointer<UInt32>?, Int) throws -> T
+    ) throws -> T {
+        try checkAvailabilty()
+
+        let count = getCoveredCount(with: context)
+        guard count > 0 else {
+            return try body(nil, 0)
+        }
+
+        guard let ptr = sancov_snapshot_covered_indices_with_context(context.rawContext) else {
+            return try body(nil, 0)
+        }
+        defer { free(ptr) }
+
+        return try body(ptr, count)
+    }
+
+    /// Merge coverage from a measurement context directly into a bitmap.
+    /// This is the fastest path - no allocation, early exit on first new coverage.
+    ///
+    /// - Parameters:
+    ///   - context: The measurement context to read coverage from.
+    ///   - bitmap: The bitmap storage to merge into.
+    ///   - wordCount: Number of UInt64 words in the bitmap.
+    ///   - mergeAll: If true, merge all edges; if false, return early on first new edge.
+    /// - Returns: true if any new coverage was found, false otherwise.
+    static func mergeCoverageIntoBitmap(
+        context: MeasurementContext,
+        bitmap: UnsafeMutablePointer<UInt64>,
+        wordCount: Int,
+        mergeAll: Bool
+    ) -> Bool {
+        guard isAvailable else { return false }
+        return sancov_merge_coverage_into_bitmap(
+            context.rawContext,
+            bitmap,
+            wordCount,
+            mergeAll
+        )
+    }
+
+    /// Compute signature hash from coverage data without allocation.
+    /// This matches the SparseCoverage.signatureHash algorithm.
+    ///
+    /// - Parameter context: The measurement context.
+    /// - Returns: The signature hash, or 0 if no coverage.
+    static func computeSignatureHash(context: MeasurementContext) -> Int {
+        guard isAvailable else { return 0 }
+        return Int(sancov_compute_signature_hash(context.rawContext))
+    }
+}
+
+// MARK: Coverage Gap Detection
+
+/// Global instance for function size lookup (lazily initialized, thread-safe by Swift).
+private let functionSizeLookup = FunctionSizeLookup()
+
+/// Global instance for DWARF symbolization (lazy to avoid initialization race).
+private nonisolated(unsafe) var _dwarfSymbolizerHelper: DWARFSymbolizerHelper?
+private let symbolizerInitLock = NSLock()
+
+private func getDWARFSymbolizerHelper() -> DWARFSymbolizerHelper {
+    symbolizerInitLock.lock()
+    defer { symbolizerInitLock.unlock() }
+    if _dwarfSymbolizerHelper == nil {
+        _dwarfSymbolizerHelper = DWARFSymbolizerHelper()
+    }
+    return _dwarfSymbolizerHelper!
+}
+
+extension SanCovCounters {
+    /// Get the program counter for a given edge index.
+    ///
+    /// - Parameter edgeIndex: The edge index to look up.
+    /// - Returns: The PC value, or 0 if unavailable.
+    static func getPC(for edgeIndex: Int) -> UInt {
+        UInt(sancov_get_pc(edgeIndex))
+    }
+
+    /// Get source location info with caching (no DWARF).
+    ///
+    /// Uses a shared cache to avoid repeated dladdr calls. When pre-warming
+    /// is active, most lookups will be cache hits.
+    ///
+    /// - Parameter edgeIndex: The edge index to look up.
+    /// - Returns: Source location info, or nil if unavailable.
+    static func getSourceLocation(for edgeIndex: Int) async -> SanCovSourceLocation? {
+        await SourceLocationCache.shared.getOrLoad(edgeIndex)
+    }
+
+    /// Start pre-warming the source location cache in the background.
+    ///
+    /// Call this at the start of a fuzz run to pre-populate the dladdr cache
+    /// asynchronously. By the time gap detection runs at the end, the cache
+    /// will be fully populated, eliminating dladdr latency.
+    ///
+    /// This is safe to call multiple times - subsequent calls are no-ops.
+    static func startPreWarmingSourceLocations() async {
+        await SourceLocationCache.shared.startPreWarming()
+    }
+
+    /// Batch look up DWARF source locations for multiple PC addresses.
+    ///
+    /// Much faster than individual `getSourceLocation` calls when you need line numbers
+    /// for many addresses, as it reduces actor overhead and batches LLVM lookups.
+    ///
+    /// - Parameter pcs: Array of program counter addresses to look up.
+    /// - Returns: Dictionary mapping PCs to their DWARF source locations.
+    static func getDWARFLocations(for pcs: [UInt]) async -> [UInt: DWARFSourceLocation] {
+        await getDWARFSymbolizerHelper().lookupBatch(pcs: pcs)
+    }
+
+    /// Get sizes for multiple function addresses at once.
+    static func getFunctionSizes(at addresses: [UInt]) -> [UInt: UInt] {
+        functionSizeLookup.getSizes(forFunctionsAt: addresses)
     }
 }
 
 // Type alias to avoid ambiguity with C struct
-private typealias SanCovSourceLocation_C = SanCovHooks.SanCovSourceLocation
+typealias SanCovSourceLocation_C = SanCovHooks.SanCovSourceLocation
 
 // MARK: - Source Location Cache
 
@@ -329,164 +409,5 @@ private actor SourceLocationCache {
     /// Mark the cache as fully pre-warmed.
     private func markPreWarmed() {
         isPreWarmed = true
-    }
-
-    /// Wait for pre-warming to complete (with timeout).
-    ///
-    /// - Parameter timeout: Maximum time to wait for pre-warming.
-    func awaitPreWarming(timeout: Duration = .milliseconds(100)) async {
-        guard let task = preWarmTask else { return }
-
-        // Race between task completion and timeout
-        _ = await runWithTimeout(timeout: timeout) {
-            await task.value
-        }
-    }
-}
-
-extension SanCovCounters {
-    /// Get sizes for multiple function addresses at once.
-    public static func getFunctionSizes(at addresses: [UInt]) async -> [UInt: UInt] {
-        await getFunctionSizeLookup().getSizes(forFunctionsAt: addresses)
-    }
-}
-
-extension SanCovCounters {
-    /// Check if PC-to-source mapping is available.
-    public static var pcsAvailable: Bool {
-        sancov_pcs_available()
-    }
-
-    // MARK: - Measurement Context API
-
-    /// An opaque measurement context for synchronous coverage isolation.
-    ///
-    /// Measurement contexts provide per-call isolation for synchronous code.
-    /// When a context is active, coverage is keyed by the context rather than
-    /// the Swift task or thread, enabling parallel sync tests without contamination.
-    ///
-    /// - Important: Measurement contexts are task-bound. You must call
-    ///   `endMeasurement(_:)` from the same task that called `beginMeasurement()`.
-    ///   The context is intentionally non-Sendable to enforce this requirement.
-    public struct MeasurementContext {
-        fileprivate let rawContext: UnsafeMutablePointer<SanCovMeasurementContext>
-
-        fileprivate init(_ raw: UnsafeMutablePointer<SanCovMeasurementContext>) {
-            self.rawContext = raw
-        }
-
-        /// Creates a dummy context for testing purposes.
-        /// This context should only be used with mock CoverageCountersClients.
-        public static func testInstance() -> MeasurementContext {
-            // Use C function to properly initialize all fields including atomic refcount
-            guard let dummyPtr = sancov_create_dummy_context() else {
-                fatalError("Failed to create dummy measurement context")
-            }
-            return MeasurementContext(dummyPtr)
-        }
-    }
-
-    /// Begin a measurement context for synchronous coverage isolation.
-    ///
-    /// Coverage recorded while a context is active will be isolated to that context.
-    /// The context takes priority over Swift task and thread-local coverage maps.
-    ///
-    /// - Important: You must call `endMeasurement(_:)` when done.
-    /// - Returns: A context that must be passed to `endMeasurement(_:)`.
-    public static func beginMeasurement() -> MeasurementContext {
-        return MeasurementContext(sancov_begin_measurement())
-    }
-
-    /// End a measurement context and clean up its resources.
-    ///
-    /// - Parameter context: The context returned by `beginMeasurement()`.
-    public static func endMeasurement(_ context: MeasurementContext) {
-        sancov_end_measurement(context.rawContext)
-    }
-
-    /// Reset coverage for a measurement context.
-    ///
-    /// This is a cheap operation (memset + counter reset) compared to
-    /// end+begin which involves hash table insert/remove operations.
-    /// Use this between iterations in the fuzz loop.
-    ///
-    /// - Parameter context: The measurement context to reset.
-    public static func resetCoverage(_ context: MeasurementContext) {
-        sancov_reset_coverage(context.rawContext)
-    }
-
-    // MARK: - Context-Aware API
-    // These methods operate directly on a measurement context, bypassing TLS lookup.
-    // This is critical for Swift concurrency where tasks can hop between threads.
-
-    /// Get the number of covered edges for a measurement context (O(1)).
-    ///
-    /// - Parameter context: The measurement context to query.
-    /// - Returns: Number of covered edges.
-    static func getCoveredCount(with context: MeasurementContext) -> Int {
-        sancov_get_covered_count_with_context(context.rawContext)
-    }
-
-    /// Get covered indices for a specific measurement context.
-    ///
-    /// This method uses the context directly, avoiding TLS lookup overhead.
-    /// Much faster than `snapshotCoveredArrays()` when the context is known.
-    ///
-    /// - Parameter context: The measurement context to snapshot.
-    /// - Returns: SparseCoverage with indices array, or nil if unavailable.
-    static func snapshotCoveredArrays(with context: MeasurementContext) throws -> SparseCoverage {
-        try checkAvailabilty()
-
-        let count = getCoveredCount(with: context)
-        guard count > 0 else { return SparseCoverage() }
-
-        guard let ptr = sancov_snapshot_covered_indices_with_context(context.rawContext) else {
-            return SparseCoverage()
-        }
-        defer { free(ptr) }
-
-        let indices = Array(UnsafeBufferPointer(start: ptr, count: count))
-        return SparseCoverage(indices: indices)
-    }
-
-    /// Get the program counter for a given edge index.
-    ///
-    /// - Parameter edgeIndex: The edge index to look up.
-    /// - Returns: The PC value, or 0 if unavailable.
-    static func getPC(for edgeIndex: Int) -> UInt {
-        UInt(sancov_get_pc(edgeIndex))
-    }
-
-    /// Get source location info with caching (no DWARF).
-    ///
-    /// Uses a shared cache to avoid repeated dladdr calls. When pre-warming
-    /// is active, most lookups will be cache hits.
-    ///
-    /// - Parameter edgeIndex: The edge index to look up.
-    /// - Returns: Source location info, or nil if unavailable.
-    static func getSourceLocation(for edgeIndex: Int) async -> SanCovSourceLocation? {
-        await SourceLocationCache.shared.getOrLoad(edgeIndex)
-    }
-
-    /// Start pre-warming the source location cache in the background.
-    ///
-    /// Call this at the start of a fuzz run to pre-populate the dladdr cache
-    /// asynchronously. By the time gap detection runs at the end, the cache
-    /// will be fully populated, eliminating dladdr latency.
-    ///
-    /// This is safe to call multiple times - subsequent calls are no-ops.
-    static func startPreWarmingSourceLocations() async {
-        await SourceLocationCache.shared.startPreWarming()
-    }
-
-    /// Batch look up DWARF source locations for multiple PC addresses.
-    ///
-    /// Much faster than individual `getSourceLocation` calls when you need line numbers
-    /// for many addresses, as it reduces actor overhead and batches LLVM lookups.
-    ///
-    /// - Parameter pcs: Array of program counter addresses to look up.
-    /// - Returns: Dictionary mapping PCs to their DWARF source locations.
-    static func getDWARFLocations(for pcs: [UInt]) async -> [UInt: DWARFSourceLocation] {
-        await getDWARFSymbolizerHelper().lookupBatch(pcs: pcs)
     }
 }

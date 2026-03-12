@@ -17,15 +17,18 @@ import Foundation
 public struct CoverageSignature: Hashable, Sendable {
     /// The set of edge indices that were executed.
     /// Only non-zero edges are stored for efficiency.
-    public private(set) var edges: Set<UInt32>
+    @usableFromInline
+    var edges: Set<UInt32>
 
     /// Create directly from edges (for testing/deserialization).
-    public init(edges: Set<UInt32>) {
+    @usableFromInline
+    init(edges: Set<UInt32>) {
         self.edges = edges
     }
 
     /// Create a signature from sparse coverage data.
-    public init(sparse: SparseCoverage) {
+    @usableFromInline
+    init(sparse: consuming SparseCoverage) {
         self.edges = Set(sparse.indices)
     }
 
@@ -47,33 +50,33 @@ public struct CoverageSignature: Hashable, Sendable {
     /// Remove this signature's executed indices from the given set.
     /// More efficient than `set.subtract(executedIndices)` as it avoids
     /// creating an intermediate Set.
-    public func subtractIndices(from set: inout Set<UInt32>) {
+    func subtractIndices(from set: inout Set<UInt32>) {
         set.subtract(edges)
     }
 
     /// Count how many of this signature's indices are in the given set.
     /// More efficient than `executedIndices.intersection(set).count` as it
     /// avoids creating intermediate Sets.
-    public func countIndicesIn(_ set: Set<UInt32>) -> Int {
+    func countIndicesIn(_ set: Set<UInt32>) -> Int {
         edges.intersection(set).count
     }
 
     // MARK: - Comparison
 
     /// Returns the indices covered by this signature but not the other.
-    public func uniqueIndices(comparedTo other: CoverageSignature) -> Set<UInt32> {
+    func uniqueIndices(comparedTo other: CoverageSignature) -> Set<UInt32> {
         edges.subtracting(other.edges)
     }
 
     /// Returns the indices covered by both signatures.
-    public func commonIndices(with other: CoverageSignature) -> Set<UInt32> {
+    func commonIndices(with other: CoverageSignature) -> Set<UInt32> {
         edges.intersection(other.edges)
     }
 
     /// Returns whether this signature covers any indices not in the other.
     ///
     /// Optimized to return early on first unique index found.
-    public func hasUniqueCoverage(comparedTo other: CoverageSignature) -> Bool {
+    func hasUniqueCoverage(comparedTo other: CoverageSignature) -> Bool {
         !edges.isSubset(of: other.edges)
     }
 
@@ -82,7 +85,8 @@ public struct CoverageSignature: Hashable, Sendable {
     /// Optimized to avoid creating an intermediate Set - iterates over the array
     /// and checks each element against this signature's Set.
     /// Returns early on first unique index found.
-    public func hasUniqueCoverage(sparse: SparseCoverage) -> Bool {
+    @usableFromInline
+    func hasUniqueCoverage(sparse: borrowing SparseCoverage) -> Bool {
         for index in sparse.indices {
             if !edges.contains(index) {
                 return true
@@ -92,14 +96,24 @@ public struct CoverageSignature: Hashable, Sendable {
     }
 
     /// Returns the union of this signature with another.
-    public func union(with other: CoverageSignature) -> CoverageSignature {
+    func union(with other: CoverageSignature) -> CoverageSignature {
         CoverageSignature(edges: edges.union(other.edges))
     }
 
     /// Merges another signature into this one in-place.
     /// More efficient than `union(with:)` when accumulating coverage.
-    public mutating func merge(with other: CoverageSignature) {
+    @usableFromInline
+    mutating func merge(with other: CoverageSignature) {
         edges.formUnion(other.edges)
+    }
+
+    /// Merges sparse coverage into this signature in-place.
+    /// Avoids creating an intermediate Set from the sparse coverage.
+    @usableFromInline
+    mutating func mergeSparse(_ sparse: borrowing SparseCoverage) {
+        for index in sparse.indices {
+            edges.insert(index)
+        }
     }
 }
 
@@ -116,7 +130,6 @@ extension CoverageSignature: CustomStringConvertible {
 extension CoverageSignature: Codable {
     private enum CodingKeys: String, CodingKey {
         case edges
-        case buckets  // Legacy format for backwards compatibility
     }
 
     public init(from decoder: Decoder) throws {
@@ -128,13 +141,6 @@ extension CoverageSignature: Codable {
             return
         }
 
-        // Fall back to legacy buckets format: {"1": 1, "5": 1} -> edges [1, 5]
-        // The bucket values are ignored since we only care about which edges were hit
-        if let buckets = try? container.decode([String: Int].self, forKey: .buckets) {
-            self.edges = Set(buckets.keys.compactMap { UInt32($0) })
-            return
-        }
-
         // If neither format works, default to empty
         self.edges = []
     }
@@ -142,45 +148,5 @@ extension CoverageSignature: Codable {
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(edges, forKey: .edges)
-    }
-}
-
-// MARK: - Signature Collection
-
-/// A collection of coverage signatures with utilities for analysis.
-public struct SignatureSet: Codable, Sendable {
-    /// All unique signatures seen.
-    public private(set) var signatures: Set<CoverageSignature>
-
-    /// The union of all coverage (all indices ever executed).
-    public private(set) var totalCoverage: CoverageSignature
-
-    public init() {
-        self.signatures = []
-        self.totalCoverage = CoverageSignature(edges: Set<UInt32>())
-    }
-
-    /// Add a signature to the set.
-    /// Returns true if this signature was new (not seen before).
-    @discardableResult
-    public mutating func insert(_ signature: CoverageSignature) -> Bool {
-        let isNew = signatures.insert(signature).inserted
-        totalCoverage.merge(with: signature)
-        return isNew
-    }
-
-    /// Check if a signature would add new coverage.
-    public func wouldAddNewCoverage(_ signature: CoverageSignature) -> Bool {
-        signature.hasUniqueCoverage(comparedTo: totalCoverage)
-    }
-
-    /// Number of unique signatures.
-    public var count: Int {
-        signatures.count
-    }
-
-    /// Total number of unique edge indices covered.
-    public var totalCoveredIndices: Int {
-        totalCoverage.executedCount
     }
 }

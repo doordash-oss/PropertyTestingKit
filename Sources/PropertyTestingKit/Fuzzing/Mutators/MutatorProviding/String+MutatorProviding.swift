@@ -81,124 +81,115 @@ private func randomString(
     return result
 }
 
-/// Concrete mutator for String values - avoids closure boxing overhead.
-public struct StringMutator: Mutator, Sendable {
-    public let seeds: [String] = _stringSeeds
+private func _stringMutate(_ value: String) -> [String] {
+    // Pre-allocate with estimated capacity to avoid reallocations
+    var mutations: [String] = []
+    mutations.reserveCapacity(20)
 
-    private let fastRNG: FastRNG
+    // Cache count once (O(n) operation for String)
+    let valueCount = value.utf8.count  // Use utf8.count for O(1)
+    let isEmpty = valueCount == 0
 
-    public init() {
-        @Dependency(\.fastRNG) var rng
-        self.fastRNG = rng
+    // Length mutations
+    if !isEmpty {
+        mutations.append(String(value.dropLast()))
+        mutations.append(String(value.dropFirst()))
+    }
+    mutations.append(value + "x")
+    mutations.append("x" + value)
+
+    // Case mutations - only if they would differ
+    let upper = value.uppercased()
+    if upper != value { mutations.append(upper) }
+    let lower = value.lowercased()
+    if lower != value { mutations.append(lower) }
+
+    // Character mutations - only for non-empty strings
+    if !isEmpty, let firstChar = value.first, firstChar != "X" {
+        var result = value
+        let idx = result.startIndex
+        result.replaceSubrange(idx...idx, with: "X")
+        mutations.append(result)
     }
 
-    public func mutate(_ value: String) -> [String] {
-        // Pre-allocate with estimated capacity to avoid reallocations
-        var mutations: [String] = []
-        mutations.reserveCapacity(20)
+    // Whitespace mutations
+    mutations.append(value + " ")
+    mutations.append(" " + value)
+    let trimmed = value.trimmingCharacters(in: .whitespaces)
+    if trimmed != value { mutations.append(trimmed) }
 
-        // Cache count once (O(n) operation for String)
-        let valueCount = value.utf8.count  // Use utf8.count for O(1)
-        let isEmpty = valueCount == 0
-
-        // Length mutations
-        if !isEmpty {
-            mutations.append(String(value.dropLast()))
-            mutations.append(String(value.dropFirst()))
+    // Prefix mutations - use static array to avoid allocations
+    for prefix in _prefixMutations {
+        if !value.hasPrefix(prefix) {
+            mutations.append(prefix + value)
         }
-        mutations.append(value + "x")
-        mutations.append("x" + value)
-
-        // Case mutations - only if they would differ
-        let upper = value.uppercased()
-        if upper != value { mutations.append(upper) }
-        let lower = value.lowercased()
-        if lower != value { mutations.append(lower) }
-
-        // Character mutations - only for non-empty strings
-        if !isEmpty, let firstChar = value.first, firstChar != "X" {
-            var result = value
-            let idx = result.startIndex
-            result.replaceSubrange(idx...idx, with: "X")
-            mutations.append(result)
-        }
-
-        // Whitespace mutations
-        mutations.append(value + " ")
-        mutations.append(" " + value)
-        let trimmed = value.trimmingCharacters(in: .whitespaces)
-        if trimmed != value { mutations.append(trimmed) }
-
-        // Prefix mutations - use static array to avoid allocations
-        for prefix in _prefixMutations {
-            if !value.hasPrefix(prefix) {
-                mutations.append(prefix + value)
-            }
-        }
-
-        // Length-targeted mutations - use cached count
-        for targetLen in _targetLengths {
-            if valueCount < targetLen {
-                mutations.append(value + String(repeating: "x", count: targetLen - valueCount))
-            } else if valueCount > targetLen {
-                mutations.append(String(value.prefix(targetLen)))
-            }
-        }
-
-        return mutations
     }
 
-    public func generate() -> String {
-        var rng = fastRNG
-        // Mix of strategies for interesting random string generation
-        let strategy = Int.random(in: 0..<10, using: &rng)
-        switch strategy {
-        case 0:
-            // Empty string
-            return ""
-        case 1:
-            // Single character
-            return randomString(length: 1, from: _alphanumericChars, using: &rng)
-        case 2:
-            // Short alphanumeric (1-10 chars)
-            let length = Int.random(in: 1...10, using: &rng)
-            return randomString(length: length, from: _alphanumericChars, using: &rng)
-        case 3:
-            // Medium alphanumeric (10-50 chars)
-            let length = Int.random(in: 10...50, using: &rng)
-            return randomString(length: length, from: _alphanumericChars, using: &rng)
-        case 4:
-            // ASCII printable including special chars
-            let length = Int.random(in: 1...30, using: &rng)
-            return randomString(length: length, from: _asciiPrintableChars, using: &rng)
-        case 5:
-            // Whitespace-heavy
-            let base = randomString(length: 5, from: _alphanumericChars, using: &rng)
-            let wsIndex = Int.random(in: 0..<_whitespaceVariants.count, using: &rng)
-            let ws = _whitespaceVariants[wsIndex]
-            return Bool.random(using: &rng) ? ws + base : base + ws
-        case 6:
-            // Numeric string
-            let length = Int.random(in: 1...15, using: &rng)
-            return randomString(length: length, from: _digitChars, using: &rng)
-        case 7:
-            // Unicode (emoji and non-ASCII)
-            let length = Int.random(in: 1...5, using: &rng)
-            return randomString(length: length, from: _emojiChars, using: &rng)
-        case 8:
-            // Long string (reduced max from 500 to 100 for performance)
-            let length = Int.random(in: 50...100, using: &rng)
-            return randomString(length: length, from: _alphanumericChars, using: &rng)
-        default:
-            // Common test patterns
-            let patternIndex = Int.random(in: 0..<_commonPatterns.count, using: &rng)
-            let base = _commonPatterns[patternIndex]
-            let suffix = Int.random(in: 0...999, using: &rng)
-            return "\(base)\(suffix)"
+    // Length-targeted mutations - use cached count
+    for targetLen in _targetLengths {
+        if valueCount < targetLen {
+            mutations.append(value + String(repeating: "x", count: targetLen - valueCount))
+        } else if valueCount > targetLen {
+            mutations.append(String(value.prefix(targetLen)))
         }
+    }
+
+    return mutations
+}
+
+private func _stringGenerate(_ rng: inout FastRNG) -> String {
+    // Mix of strategies for interesting random string generation
+    let strategy = Int.random(in: 0..<10, using: &rng)
+    switch strategy {
+    case 0:
+        // Empty string
+        return ""
+    case 1:
+        // Single character
+        return randomString(length: 1, from: _alphanumericChars, using: &rng)
+    case 2:
+        // Short alphanumeric (1-10 chars)
+        let length = Int.random(in: 1...10, using: &rng)
+        return randomString(length: length, from: _alphanumericChars, using: &rng)
+    case 3:
+        // Medium alphanumeric (10-50 chars)
+        let length = Int.random(in: 10...50, using: &rng)
+        return randomString(length: length, from: _alphanumericChars, using: &rng)
+    case 4:
+        // ASCII printable including special chars
+        let length = Int.random(in: 1...30, using: &rng)
+        return randomString(length: length, from: _asciiPrintableChars, using: &rng)
+    case 5:
+        // Whitespace-heavy
+        let base = randomString(length: 5, from: _alphanumericChars, using: &rng)
+        let wsIndex = Int.random(in: 0..<_whitespaceVariants.count, using: &rng)
+        let ws = _whitespaceVariants[wsIndex]
+        return Bool.random(using: &rng) ? ws + base : base + ws
+    case 6:
+        // Numeric string
+        let length = Int.random(in: 1...15, using: &rng)
+        return randomString(length: length, from: _digitChars, using: &rng)
+    case 7:
+        // Unicode (emoji and non-ASCII)
+        let length = Int.random(in: 1...5, using: &rng)
+        return randomString(length: length, from: _emojiChars, using: &rng)
+    case 8:
+        // Long string (reduced max from 500 to 100 for performance)
+        let length = Int.random(in: 50...100, using: &rng)
+        return randomString(length: length, from: _alphanumericChars, using: &rng)
+    default:
+        // Common test patterns
+        let patternIndex = Int.random(in: 0..<_commonPatterns.count, using: &rng)
+        let base = _commonPatterns[patternIndex]
+        let suffix = Int.random(in: 0...999, using: &rng)
+        return "\(base)\(suffix)"
     }
 }
 
 extension String: MutatorProviding {
-    public static let defaultMutator = StringMutator()
+    public static let defaultMutator = Mutator<String>(
+        seeds: _stringSeeds,
+        mutate: _stringMutate,
+        generate: _stringGenerate
+    )
 }

@@ -56,7 +56,7 @@ struct TestConfig: MutatorProviding, Codable, Equatable, Sendable {
     let timeout: Int
     let retries: Int
 
-    static var defaultMutator: AnyMutator<TestConfig> {
+    static var defaultMutator: Mutator<TestConfig> {
         // Generate a small set of test configurations
         let timeouts = Array(Int.defaultMutator.seeds.prefix(3))
         let retries = [0, 1, 3]
@@ -68,7 +68,7 @@ struct TestConfig: MutatorProviding, Codable, Equatable, Sendable {
             }
         }
 
-        return AnyMutator(seeds: seeds) { value in
+        return Mutator(seeds: seeds, mutate: { value in
             var mutations: [TestConfig] = []
             for t in Int.defaultMutator.mutate(value.timeout).prefix(2) {
                 mutations.append(TestConfig(timeout: t, retries: value.retries))
@@ -77,6 +77,6 @@ struct TestConfig: MutatorProviding, Codable, Equatable, Sendable {
                 mutations.append(TestConfig(timeout: value.timeout, retries: r))
             }
             return mutations
-        }
+        })
     }
 }

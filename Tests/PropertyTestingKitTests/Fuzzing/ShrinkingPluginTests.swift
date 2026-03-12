@@ -2,58 +2,58 @@
 //  ShrinkingPluginTests.swift
 //  PropertyTestingKitTests
 //
-//  Tests for ShrinkingPlugin.
+//  Tests for the shrinking handler.
 //
 
 import Testing
 import Foundation
 @testable import PropertyTestingKit
 
-@Suite("ShrinkingPlugin")
-struct ShrinkingPluginTests {
+@Suite("Shrinking Handler")
+struct ShrinkingHandlerTests {
 
-    @Test("Plugin has correct ID")
-    func testPluginId() {
-        let plugin = ShrinkingPlugin()
-        #expect(plugin.id == "shrinking")
+    @Test("Handler has correct ID")
+    func testHandlerId() {
+        let handler: FuzzPluginHandler<Int> = .shrinking()
+        #expect(handler.id == "shrinking")
     }
 
-    @Test("Plugin returns empty actions for non-failure events")
+    @Test("Handler returns empty actions for non-failure events")
     func testNonFailureEventsReturnEmpty() async throws {
-        let plugin = ShrinkingPlugin()
+        let handler: FuzzPluginHandler<Int> = .shrinking()
 
-        // Test start event
-        let startContext = PluginEvent<Int>.StartContext(
+        // Test start event (async)
+        let startContext = AsyncPluginEvent<Int>.StartContext(
             maxDuration: .seconds(60),
             corpusMode: .auto
         )
-        let startActions = try await plugin.handle(event: PluginEvent<Int>.start(startContext))
+        let startActions = try await handler.handleAsync(AsyncPluginEvent<Int>.start(startContext))
         #expect(startActions.isEmpty)
 
-        // Test iteration event
-        let iterationContext = PluginEvent<Int>.IterationContext(
+        // Test iteration event (sync)
+        let iterationContext = SyncPluginEvent<Int>.IterationContext(
             discoveredNewCoverage: true,
             input: 42
         )
-        let iterationActions = try await plugin.handle(event: PluginEvent<Int>.iteration(iterationContext))
+        let iterationActions = handler.handleSync(SyncPluginEvent<Int>.iteration(iterationContext))
         #expect(iterationActions.isEmpty)
 
-        // Test end event
-        let endContext = PluginEvent<Int>.EndContext(
+        // Test end event (async)
+        let endContext = AsyncPluginEvent<Int>.EndContext(
             totalCoveredIndices: Set([1, 2, 3]),
             projectPath: nil,
             sourceLocation: SourceLocation(fileID: #fileID, filePath: #filePath, line: #line, column: 1)
         )
-        let endActions = try await plugin.handle(event: PluginEvent<Int>.end(endContext))
+        let endActions = try await handler.handleAsync(AsyncPluginEvent<Int>.end(endContext))
         #expect(endActions.isEmpty)
     }
 
-    @Test("Plugin returns actions for failure event")
+    @Test("Handler returns actions for failure event")
     func testFailureEventReturnsActions() async throws {
-        let plugin = ShrinkingPlugin()
+        let handler: FuzzPluginHandler<[Int]> = .shrinking()
 
         // Create a failure context with an array that can be shrunk
-        let failureContext = PluginEvent<[Int]>.FailureFoundContext(
+        let failureContext = AsyncPluginEvent<[Int]>.FailureFoundContext(
             input: [1, 2, 3, 42, 5],
             test: { input in
                 // Fail if array contains 42
@@ -62,10 +62,10 @@ struct ShrinkingPluginTests {
                 }
             },
             sourceLocation: SourceLocation(fileID: #fileID, filePath: #filePath, line: #line, column: 1),
-            coverageSignature: CoverageSignature(edges: Set<UInt32>([]))
+            sparseCoverage: SparseCoverage()
         )
 
-        let actions = try await plugin.handle(event: PluginEvent<[Int]>.failureFound(failureContext))
+        let actions = try await handler.handleAsync(AsyncPluginEvent<[Int]>.failureFound(failureContext))
 
         // Should return 3 actions: selectForMutation, submitToCorpus, recordIssue
         #expect(actions.count == 3)
@@ -93,11 +93,11 @@ struct ShrinkingPluginTests {
         #expect(hasRecordIssue)
     }
 
-    @Test("Plugin shrinks input to minimal failing case")
+    @Test("Handler shrinks input to minimal failing case")
     func testShrinkingMinimizesInput() async throws {
-        let plugin = ShrinkingPlugin()
+        let handler: FuzzPluginHandler<[Int]> = .shrinking()
 
-        let failureContext = PluginEvent<[Int]>.FailureFoundContext(
+        let failureContext = AsyncPluginEvent<[Int]>.FailureFoundContext(
             input: [1, 2, 3, 42, 5, 6, 7],
             test: { input in
                 if input.contains(42) {
@@ -105,10 +105,10 @@ struct ShrinkingPluginTests {
                 }
             },
             sourceLocation: SourceLocation(fileID: #fileID, filePath: #filePath, line: #line, column: 1),
-            coverageSignature: CoverageSignature(edges: Set<UInt32>([]))
+            sparseCoverage: SparseCoverage()
         )
 
-        let actions = try await plugin.handle(event: PluginEvent<[Int]>.failureFound(failureContext))
+        let actions = try await handler.handleAsync(AsyncPluginEvent<[Int]>.failureFound(failureContext))
 
         // Find the selectForMutation action and check the shrunk input
         for action in actions {

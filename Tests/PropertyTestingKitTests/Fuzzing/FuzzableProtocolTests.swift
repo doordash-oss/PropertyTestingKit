@@ -12,10 +12,10 @@ enum TestDirection: MutatorProviding, Equatable, Sendable {
 
     private static let _seeds: [TestDirection] = [.north, .south, .east, .west]
 
-    static var defaultMutator: AnyMutator<TestDirection> {
-        AnyMutator(seeds: _seeds) { value in
+    static var defaultMutator: Mutator<TestDirection> {
+        Mutator(seeds: _seeds, mutate: { value in
             _seeds.filter { $0 != value }
-        }
+        })
     }
 }
 

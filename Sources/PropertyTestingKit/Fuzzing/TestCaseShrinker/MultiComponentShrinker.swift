@@ -16,7 +16,7 @@ struct MultiComponentShrinker: Sendable {
 
     private let config: ShrinkConfig
 
-    public init(config: ShrinkConfig = ShrinkConfig()) {
+    init(config: ShrinkConfig = ShrinkConfig()) {
         self.config = config
     }
 
@@ -27,7 +27,7 @@ struct MultiComponentShrinker: Sendable {
     /// (possibly already shrunk) values. This ensures the failure condition is
     /// preserved throughout the shrinking process.
     // TODO: make this use parameter packs like we did in FuzzEngine
-    public func shrink<each T: Sendable>(
+    func shrink<each T: Sendable>(
         input: (repeat each T),
         test: @escaping ((repeat each T)) async -> ShrinkResult
     ) async -> (minimized: (repeat each T), stats: ShrinkStats) {
@@ -85,7 +85,7 @@ struct MultiComponentShrinker: Sendable {
     ///   - input: The failing input tuple to minimize.
     ///   - test: A void-returning test function that throws or records issues on failure.
     /// - Returns: A tuple of (minimized input, statistics).
-    public func shrink<each T: Sendable>(
+    func shrink<each T: Sendable>(
         input: (repeat each T),
         test: @escaping ((repeat each T)) async throws -> Void
     ) async -> (minimized: (repeat each T), stats: ShrinkStats) {

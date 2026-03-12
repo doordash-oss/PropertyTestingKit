@@ -44,7 +44,7 @@ struct TestCaseShrinker<T: Shrinkable & Sendable>: Sendable {
     @Dependency(\.dateClient) var dateClient
     private let config: ShrinkConfig
 
-    public init(config: ShrinkConfig = ShrinkConfig()) {
+    init(config: ShrinkConfig = ShrinkConfig()) {
         self.config = config
     }
 
@@ -54,7 +54,7 @@ struct TestCaseShrinker<T: Shrinkable & Sendable>: Sendable {
     ///   - input: The failing input to minimize.
     ///   - test: A function that returns `.fail` if the candidate preserves the failure.
     /// - Returns: A tuple of (minimized input, statistics).
-    public func shrink(
+    func shrink(
         input: T,
         test: @escaping (T) async -> ShrinkResult
     ) async -> (minimized: T, stats: ShrinkStats) {
@@ -167,7 +167,7 @@ struct TestCaseShrinker<T: Shrinkable & Sendable>: Sendable {
     ///   - input: The failing input to minimize.
     ///   - test: A void-returning test function that throws or records issues on failure.
     /// - Returns: A tuple of (minimized input, statistics).
-    public func shrink(
+    func shrink(
         input: T,
         test: @escaping (T) async throws -> Void
     ) async -> (minimized: T, stats: ShrinkStats) {

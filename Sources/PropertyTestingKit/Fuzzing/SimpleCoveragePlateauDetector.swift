@@ -30,19 +30,19 @@ public struct SimpleCoveragePlateauDetector: Sendable {
     /// Configuration for plateau detection.
     public struct Config: Sendable {
         /// Size of sliding window for rate calculation.
-        public var windowSize: Int
+        var windowSize: Int
 
         /// Minimum discovery rate before declaring plateau (discoveries per iteration).
         /// Default: 0.001 = 1 discovery per 1000 iterations
-        public var minDiscoveryRate: Double
+        var minDiscoveryRate: Double
 
         /// Number of consecutive low-rate windows required to confirm plateau.
         /// Higher values prevent false positives but delay detection.
-        public var confirmationWindows: Int
+        var confirmationWindows: Int
 
         /// Whether plateau detection is enabled.
         /// When disabled, the detector never reports plateau.
-        public var enabled: Bool
+        var enabled: Bool
 
         public init(
             windowSize: Int = 500,
@@ -95,7 +95,7 @@ public struct SimpleCoveragePlateauDetector: Sendable {
     /// EMA smoothing factor (lower = more smoothing).
     private let emaSmoothingFactor: Double = 0.1
 
-    public init(config: Config = Config()) {
+    init(config: Config = Config()) {
         self.config = config
         // Ensure windowSize is at least 1 to prevent empty array access
         self.effectiveWindowSize = max(1, config.windowSize)
@@ -105,7 +105,7 @@ public struct SimpleCoveragePlateauDetector: Sendable {
     /// Record an iteration and whether it discovered new coverage.
     ///
     /// - Parameter discoveredNewCoverage: true if this iteration found new paths.
-    public mutating func record(discoveredNewCoverage: Bool) {
+    mutating func record(discoveredNewCoverage: Bool) {
         if startTime == nil {
             startTime = dateClient.now()
         }
@@ -151,7 +151,7 @@ public struct SimpleCoveragePlateauDetector: Sendable {
     /// Check if coverage has plateaued.
     ///
     /// - Returns: true if fuzzing should stop due to plateau.
-    public var hasPlateaued: Bool {
+    var hasPlateaued: Bool {
         guard config.enabled else { return false }
         guard windowCount >= effectiveWindowSize else { return false }
 
@@ -175,19 +175,19 @@ public struct SimpleCoveragePlateauDetector: Sendable {
     }
 
     /// Current discovery rate (discoveries per iteration).
-    public var currentRate: Double {
+    var currentRate: Double {
         guard windowCount > 0 else { return 0 }
         return Double(discoveriesInWindow) / Double(windowCount)
     }
 
     /// Overall discovery rate since start.
-    public var overallRate: Double {
+    var overallRate: Double {
         guard totalIterations > 0 else { return 0 }
         return Double(totalDiscoveries) / Double(totalIterations)
     }
 
     /// Statistics about the plateau detector state.
-    public func stats() -> PlateauStats {
+    func stats() -> PlateauStats {
         let now = dateClient.now()
         return PlateauStats(
             totalIterations: totalIterations,
@@ -202,7 +202,7 @@ public struct SimpleCoveragePlateauDetector: Sendable {
     }
 
     /// Generate a summary string for logging.
-    public func summary(includeDetails: Bool = false) -> String {
+    func summary(includeDetails: Bool = false) -> String {
         let stats = self.stats()
 
         var parts: [String] = []
@@ -224,33 +224,33 @@ public struct SimpleCoveragePlateauDetector: Sendable {
 }
 
 /// Statistics from the plateau detector.
-public struct PlateauStats: Sendable {
+struct PlateauStats: Sendable {
     /// Total iterations processed.
-    public let totalIterations: Int
+    let totalIterations: Int
 
     /// Total coverage discoveries.
-    public let totalDiscoveries: Int
+    let totalDiscoveries: Int
 
     /// Discovery rate in current window.
-    public let windowRate: Double
+    let windowRate: Double
 
     /// Overall discovery rate since start.
-    public let overallRate: Double
+    let overallRate: Double
 
     /// Exponential moving average of discovery rate.
-    public let rateEMA: Double
+    let rateEMA: Double
 
     /// Number of consecutive windows with low discovery rate.
-    public let lowRateWindowCount: Int
+    let lowRateWindowCount: Int
 
     /// Whether plateau has been detected.
-    public let hasPlateaued: Bool
+    let hasPlateaued: Bool
 
     /// Time elapsed since first iteration.
-    public let duration: TimeInterval
+    let duration: TimeInterval
 
     /// Discoveries per second.
-    public var discoveriesPerSecond: Double {
+    var discoveriesPerSecond: Double {
         duration > 0 ? Double(totalDiscoveries) / duration : 0
     }
 }

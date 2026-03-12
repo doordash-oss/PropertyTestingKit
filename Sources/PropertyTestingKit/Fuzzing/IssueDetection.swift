@@ -9,11 +9,11 @@
 @_spi(ForToolsIntegrationOnly) import Testing
 
 /// Error thrown when an issue is recorded during test execution.
-public struct IssueRecordedError: Error {
+struct IssueRecordedError: Error {
     /// The underlying error from the issue, if available.
-    public let underlyingError: (any Error)?
+    let underlyingError: (any Error)?
 
-    public init(underlyingError: (any Error)? = nil) {
+    init(underlyingError: (any Error)? = nil) {
         self.underlyingError = underlyingError
     }
 }
@@ -74,7 +74,7 @@ private func ensureCallbackRegistered() {
 /// - Parameter body: The test body to execute.
 /// - Returns: `true` if any issues were recorded, `false` otherwise.
 /// - Throws: Re-throws if the body throws an error.
-public func hasIssues(
+func hasIssues(
     in body: () async throws -> Void
 ) async throws -> Bool {
     ensureCallbackRegistered()
@@ -96,7 +96,7 @@ public func hasIssues(
 ///
 /// - Parameter body: The test body to execute.
 /// - Throws: The error thrown by the body, or `IssueRecordedError` if an issue was recorded.
-public func captureIssue(
+func captureIssue(
     in body: () async throws -> Void
 ) async throws {
     ensureCallbackRegistered()
@@ -135,7 +135,7 @@ public func captureIssue(
 ///     }
 /// }
 /// ```
-public final class IssueCaptureContext: @unchecked Sendable {
+final class IssueCaptureContext: @unchecked Sendable {
     private let capture: IssueCapture
 
     fileprivate init(capture: IssueCapture) {
@@ -148,7 +148,7 @@ public final class IssueCaptureContext: @unchecked Sendable {
     /// - Parameter body: The test body to execute.
     /// - Throws: The error thrown by the body, or `IssueRecordedError` if an issue was recorded.
     @inline(__always)
-    public func captureIssue(
+    func captureIssue(
         in body: () async throws -> Void
     ) async throws {
         // Reset capture state for this iteration
@@ -186,7 +186,7 @@ public final class IssueCaptureContext: @unchecked Sendable {
 ///
 /// - Parameter body: The body to execute with the capture context.
 /// - Returns: The result of the body.
-public func withIssueCaptureContext<T, Isolation: Actor>(
+func withIssueCaptureContext<T, Isolation: Actor>(
     isolation: isolated Isolation,
     _ body: (IssueCaptureContext) async throws -> T
 ) async rethrows -> T {
@@ -201,7 +201,7 @@ public func withIssueCaptureContext<T, Isolation: Actor>(
 }
 
 /// Non-isolated version for use outside of actor contexts.
-public func withIssueCaptureContext<T>(
+func withIssueCaptureContext<T>(
     _ body: (IssueCaptureContext) async throws -> T
 ) async rethrows -> T {
     ensureCallbackRegistered()

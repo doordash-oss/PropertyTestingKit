@@ -21,7 +21,6 @@ import Dependencies
 ///   - seeds: Initial seed values for fuzzing.
 ///   - duration: The virtual duration (defaults to 60 seconds, but clock is advanced to complete in maxIterations).
 ///   - corpusMode: How to handle existing corpus files.
-///   - plugins: Additional plugins to use during fuzzing.
 ///   - filePath: Source file path for error reporting.
 ///   - function: Function name for error reporting.
 ///   - line: Line number for error reporting.
@@ -33,7 +32,6 @@ func fuzzWithMaxIterations<each Input: MutatorProviding & Codable & Sendable>(
     duration: Duration = .seconds(60),
     corpusMode: CorpusMode? = nil,
     parallelism: Int = 1,
-    plugins: [any FuzzPlugin] = [],
     filePath: StaticString = #filePath,
     function: StaticString = #function,
     line: Int = #line,
@@ -57,7 +55,6 @@ func fuzzWithMaxIterations<each Input: MutatorProviding & Codable & Sendable>(
             duration: .seconds(10),
             corpusMode: corpusMode,
             parallelism: parallelism,
-            plugins: plugins,
             filePath: filePath,
             function: function,
             line: line,
@@ -113,7 +110,22 @@ func fuzzEngineWithMaxIterations<each Input: MutatorProviding & Codable & Sendab
             config: effectiveConfig,
             corpusDirectory: corpusDirectory
         )
-        return await engine.run(additionalSeeds: additionalSeeds) { input in
+        // Create default plugin processor (mutation handler)
+        let processor = PluginHandlerProcessor(handlers: [FuzzPluginHandler<repeat each Input>.mutation()])
+        let processSyncPlugins: @Sendable (
+            consuming SyncPluginEvent<repeat each Input>,
+            (FuzzPluginAction<repeat each Input>) -> Void
+        ) -> Void = { event, execute in
+            processor.processSync(event: event, execute: execute)
+        }
+        let processAsyncPlugins: @Sendable (
+            isolated (any Actor)?,
+            consuming AsyncPluginEvent<repeat each Input>,
+            (FuzzPluginAction<repeat each Input>) -> Void
+        ) async -> Void = { isolation, event, execute in
+            await processor.processAsync(isolation: isolation, event: event, execute: execute)
+        }
+        return await engine.run(additionalSeeds: additionalSeeds, processSyncPlugins: processSyncPlugins, processAsyncPlugins: processAsyncPlugins) { input in
             defer {
                 virtualTime.update { $0 += advancement }
             }
@@ -131,24 +143,22 @@ func fuzzEngineWithMaxIterations<each Input: MutatorProviding & Codable & Sendab
 ///   - mutators: The custom mutators to use for fuzzing.
 ///   - seeds: Initial seed values for fuzzing.
 ///   - corpusMode: How to handle existing corpus files.
-///   - plugins: Additional plugins to use during fuzzing.
 ///   - filePath: Source file path for error reporting.
 ///   - function: Function name for error reporting.
 ///   - line: Line number for error reporting.
 ///   - test: The test closure to run for each input.
 /// - Returns: The fuzz result containing corpus, failures, and stats.
-func fuzzWithMaxIterations<each Input: Codable & Sendable, each M: Mutator>(
+func fuzzWithMaxIterations<each Input: Codable & Sendable>(
     maxIterations: Int,
-    using mutators: repeat each M,
+    using mutators: repeat Mutator<each Input>,
     seeds: [(repeat each Input)] = [],
     corpusMode: CorpusMode? = nil,
     parallelism: Int = 1,
-    plugins: [any FuzzPlugin] = [],
     filePath: StaticString = #filePath,
     function: StaticString = #function,
     line: Int = #line,
     test: @escaping @Sendable ((repeat each Input)) async throws -> Void
-) async throws -> FuzzResult<repeat each Input> where (repeat (each M).Value) == (repeat each Input) {
+) async throws -> FuzzResult<repeat each Input> {
     let advancement = 10.0 / Double(maxIterations)
     let testClock = TestClock()
     // Track virtual time for DateClient (SyncBox for sync access from @Sendable closure)
@@ -168,7 +178,6 @@ func fuzzWithMaxIterations<each Input: Codable & Sendable, each M: Mutator>(
             duration: .seconds(10),
             corpusMode: corpusMode,
             parallelism: parallelism,
-            plugins: plugins,
             filePath: filePath,
             function: function,
             line: line,

@@ -5,6 +5,7 @@
 - Force unwrapping should not be used.
 - If you believe something about the development environment (OS, tools, compiler, etc.) is blocking you, then double check that assumption. Explain what the issue is and why you believe that to be the case.
 - Our eventual goal is to have a functioning library that developers can use to write property-based tests. Anything that prevents us from achieving this goal should be addressed. We are not satisfied when things block us from achieving this goal. The project needs to be operational from both the command line and Xcode.
+- Backwards compatibility is not important.
 
 ## Building
 - Do not build this project with system swift. Use the build script found in the scripts directory. It builds this project using a patched swift toolchain that fixes issues with parameter packs.
@@ -32,3 +33,6 @@
 ## Scripts
 - If you find yourself performing operations frequently, add a script to the `scripts` directory.
 - If one of those scripts stops working, fix it.
+
+## Plugin Architecture
+- Do not skip plugin events as an optimization. Plugins like plateau detectors need to see every iteration to track statistics correctly.

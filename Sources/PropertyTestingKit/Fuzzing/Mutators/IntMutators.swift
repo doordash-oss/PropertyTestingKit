@@ -7,17 +7,17 @@
 
 // MARK: - Int Mutator Static Properties
 
-extension AnyMutator where Value == Int {
-    public static let boundaries = AnyMutator(IntBoundaryMutator())
-    public static let ports = AnyMutator(PortMutator())
-    public static let httpStatusCodes = AnyMutator(HTTPStatusCodeMutator())
-    public static let negative = AnyMutator(NegativeIntMutator())
-    public static let powers = AnyMutator(PowerOfTwoMutator())
+extension Mutator where Value == Int {
+    public static let boundaries = intBoundaryMutator
+    public static let ports = portMutator
+    public static let httpStatusCodes = httpStatusCodeMutator
+    public static let negative = negativeIntMutator
+    public static let powers = powerOfTwoMutator
 }
 
 extension Int {
     /// Create a composed mutator from multiple strategies.
-    public static func mutators(_ mutators: AnyMutator<Int>...) -> AnyMutator<Int> {
-        AnyMutator(ComposedMutator(mutators))
+    public static func mutators(_ mutators: Mutator<Int>...) -> Mutator<Int> {
+        Mutator.compose(mutators)
     }
 }

@@ -54,7 +54,7 @@ import Dependencies
 ///
 /// @Test func testWithGapDetection() throws {
 ///     // Enable coverage gap detection
-///     try fuzz(analysisPlugins: [.coverageGaps()]) { (input: String) in
+///     try fuzz(plugins: CoverageGapPlugin()) { (input: String) in
 ///         parse(input)
 ///     }
 /// }
@@ -85,26 +85,84 @@ import Dependencies
 ///   - parallelism: Number of parallel fuzz engines to run. Each engine runs
 ///     independently with its portion of seeds distributed round-robin.
 ///     Results are merged at the end. Defaults to the number of available processors.
-///   - plugins: Plugins for stopping conditions, analysis, and shrinking.
-///     Default: empty (only iteration/time limits apply).
+///   - defaultBehaviorPlugins: Core plugins that define fuzzing behavior. Defaults to `MutationPlugin()`.
+///   - plugins: Additional plugins to run alongside default behavior (e.g., `CoverageGapPlugin()`).
 ///   - filePath: Source file path (auto-filled).
 ///   - function: Test function name (auto-filled).
 ///   - test: The test closure receiving fuzzed inputs.
 ///
 /// - Throws: Re-throws test failures, or throws if fuzzing finds failures.
+
 @discardableResult
-public func fuzz<each Input: Codable & Sendable, each M: Mutator>(
-    using mutators: repeat each M,
+@inlinable
+public func fuzz<each Input: Codable & Sendable>(
+    using mutators: repeat Mutator<each Input>,
     seeds: [(repeat each Input)] = [],
     duration: Duration = .seconds(60),
     corpusMode: CorpusMode? = nil,
     parallelism: Int = ProcessInfo.processInfo.processorCount,
-    plugins: [any FuzzPlugin] = [],
+    handlers: [FuzzPluginHandler<repeat each Input>] = [.mutation()],
     filePath: StaticString = #filePath,
     function: StaticString = #function,
     line: Int = #line,
     test: @escaping @Sendable ((repeat each Input)) async throws -> Void
-) async throws -> FuzzResult<repeat each Input> where (repeat (each M).Value) == (repeat each Input) {
+) async throws -> FuzzResult<repeat each Input> {
+    let processor = PluginHandlerProcessor(handlers: handlers)
+
+    // Sync closure for hot path (iteration events)
+    let processSyncPlugins: @Sendable (
+        consuming SyncPluginEvent<repeat each Input>,
+        (FuzzPluginAction<repeat each Input>) -> Void
+    ) -> Void = { event, execute in
+        processor.processSync(event: event, execute: execute)
+    }
+
+    // Async closure for cold path (start/end/failureFound events)
+    let processAsyncPlugins: @Sendable (
+        isolated (any Actor)?,
+        consuming AsyncPluginEvent<repeat each Input>,
+        (FuzzPluginAction<repeat each Input>) -> Void
+    ) async -> Void = { isolation, event, execute in
+        await processor.processAsync(isolation: isolation, event: event, execute: execute)
+    }
+
+    return try await fuzzInternal(
+        mutators: (repeat each mutators),
+        seeds: seeds,
+        duration: duration,
+        corpusMode: corpusMode,
+        parallelism: parallelism,
+        processSyncPlugins: processSyncPlugins,
+        processAsyncPlugins: processAsyncPlugins,
+        filePath: filePath,
+        function: function,
+        line: line,
+        test: test
+    )
+}
+
+/// Internal implementation shared by all fuzz overloads.
+@usableFromInline
+func fuzzInternal<each Input: Codable & Sendable>(
+    mutators: (repeat Mutator<each Input>),
+    seeds: [(repeat each Input)],
+    duration: Duration,
+    corpusMode: CorpusMode?,
+    parallelism: Int,
+    processSyncPlugins: @Sendable @escaping (
+        consuming SyncPluginEvent<repeat each Input>,
+        (FuzzPluginAction<repeat each Input>) -> Void
+    ) -> Void,
+    processAsyncPlugins: @Sendable @escaping (
+        isolated (any Actor)?,
+        consuming AsyncPluginEvent<repeat each Input>,
+        (FuzzPluginAction<repeat each Input>) -> Void
+    ) async -> Void,
+    filePath: StaticString,
+    function: StaticString,
+    line: Int,
+    test: @escaping @Sendable ((repeat each Input)) async throws -> Void
+) async throws -> FuzzResult<repeat each Input> {
     @Dependency(\.environment) var environment
     @Dependency(\.corpusPersistence) var corpusPersistence
 
@@ -121,31 +179,6 @@ public func fuzz<each Input: Codable & Sendable, each M: Mutator>(
 
     if shouldRunRegression || effectiveParallelism == 1 {
         // Single engine mode: handles regression and corpus loading
-        let sourceLocation = SourceLocation(fileID: testFilePath, filePath: testFilePath, line: line, column: 1)
-        let coordinator = PluginCoordinator<repeat each Input>(plugins: plugins)
-        coordinator.start()
-
-        // Start action consumer task for lifecycle plugin actions
-        let actionConsumerTask = Task {
-            while !coordinator.actionChannel.isClosed {
-                if let action = coordinator.actionChannel.dequeue() {
-                    if case .recordIssue(let issueAction) = action {
-                        Issue.record(issueAction.comment, sourceLocation: issueAction.sourceLocation)
-                    }
-                } else {
-                    await Task.yield()
-                }
-            }
-            while let action = coordinator.actionChannel.dequeue() {
-                if case .recordIssue(let issueAction) = action {
-                    Issue.record(issueAction.comment, sourceLocation: issueAction.sourceLocation)
-                }
-            }
-        }
-
-        // Send start event
-        coordinator.send(event: .start(.init(maxDuration: duration, corpusMode: effectiveCorpusMode)))
-
         let config = FuzzEngineConfig(
             maxDuration: duration,
             verbose: verbose,
@@ -154,28 +187,16 @@ public func fuzz<each Input: Codable & Sendable, each M: Mutator>(
             fileID: testFilePath,
             filePath: testFilePath,
             line: line,
-            column: 1,
-            plugins: plugins
+            column: 1
         )
 
-        let engine = FuzzEngine<repeat each M>(
-            mutators: (repeat each mutators),
+        let engine = FuzzEngine<repeat each Input>(
+            mutators: mutators,
             config: config,
             corpusDirectory: corpusDir
         )
 
-        let result = await engine.run(additionalSeeds: seeds, test: test)
-
-        // Send end event
-        let totalCoveredIndices = result.corpus.totalCoverage.executedIndices
-        coordinator.send(event: .end(.init(
-            totalCoveredIndices: totalCoveredIndices,
-            projectPath: projectPath(from: filePath),
-            sourceLocation: sourceLocation
-        )))
-
-        await coordinator.closeAndAwaitCompletion()
-        await actionConsumerTask.value
+        let result = await engine.run(additionalSeeds: seeds, processSyncPlugins: processSyncPlugins, processAsyncPlugins: processAsyncPlugins, test: test)
 
         return try reportFuzzResult(result, filePath: filePath, line: line)
     }
@@ -184,34 +205,6 @@ public func fuzz<each Input: Codable & Sendable, each M: Mutator>(
     if verbose {
         print("[Fuzz] Running \(effectiveParallelism) parallel fuzz engines")
     }
-
-    // Create coordinator for lifecycle events (start/end)
-    let sourceLocation = SourceLocation(fileID: testFilePath, filePath: testFilePath, line: line, column: 1)
-    let coordinator = PluginCoordinator<repeat each Input>(plugins: plugins)
-    coordinator.start()
-
-    // Start action consumer task for lifecycle plugin actions
-    let actionConsumerTask = Task {
-        while !coordinator.actionChannel.isClosed {
-            if let action = coordinator.actionChannel.dequeue() {
-                // Only handle recordIssue actions at the API level
-                if case .recordIssue(let issueAction) = action {
-                    Issue.record(issueAction.comment, sourceLocation: issueAction.sourceLocation)
-                }
-            } else {
-                await Task.yield()
-            }
-        }
-        // Drain remaining actions
-        while let action = coordinator.actionChannel.dequeue() {
-            if case .recordIssue(let issueAction) = action {
-                Issue.record(issueAction.comment, sourceLocation: issueAction.sourceLocation)
-            }
-        }
-    }
-
-    // Send start event
-    coordinator.send(event: .start(.init(maxDuration: duration, corpusMode: effectiveCorpusMode)))
 
     // Distribute seeds round-robin across engines
     var distributedSeeds: [[(repeat each Input)]] = Array(repeating: [], count: effectiveParallelism)
@@ -232,17 +225,16 @@ public func fuzz<each Input: Codable & Sendable, each M: Mutator>(
                     fileID: testFilePath,
                     filePath: testFilePath,
                     line: line,
-                    column: 1,
-                    plugins: plugins
+                    column: 1
                 )
 
-                let engine = FuzzEngine<repeat each M>(
-                    mutators: (repeat each mutators),
+                let engine = FuzzEngine<repeat each Input>(
+                    mutators: mutators,
                     config: config,
                     corpusDirectory: nil // Don't save individual engine corpora
                 )
 
-                return await engine.run(additionalSeeds: engineSeeds, test: test)
+                return await engine.run(additionalSeeds: engineSeeds, processSyncPlugins: processSyncPlugins, processAsyncPlugins: processAsyncPlugins, test: test)
             }
         }
 
@@ -255,18 +247,6 @@ public func fuzz<each Input: Codable & Sendable, each M: Mutator>(
 
     // Merge results from all engines
     let mergedResult = await mergeResults(results, verbose: verbose)
-
-    // Send end event with merged coverage
-    let totalCoveredIndices = mergedResult.corpus.totalCoverage.executedIndices
-    coordinator.send(event: .end(.init(
-        totalCoveredIndices: totalCoveredIndices,
-        projectPath: projectPath(from: filePath),
-        sourceLocation: sourceLocation
-    )))
-
-    // Wait for all lifecycle events to be processed
-    await coordinator.closeAndAwaitCompletion()
-    await actionConsumerTask.value
 
     // Save merged corpus
     if !mergedResult.corpus.entries.isEmpty {
@@ -297,20 +277,22 @@ public func fuzz<each Input: Codable & Sendable, each M: Mutator>(
 ///     `.refuzzExtend` to add to existing corpus, or `.auto` for default behavior.
 ///     Can also be set via `FUZZ_CORPUS_MODE` environment variable.
 ///   - parallelism: Number of parallel fuzz engines to run. Defaults to processor count.
-///   - plugins: Plugins for stopping conditions, analysis, and shrinking.
-///     Default: empty (only iteration/time limits apply).
+///   - defaultBehaviorPlugins: Core plugins that define fuzzing behavior. Defaults to `MutationPlugin()`.
+///   - plugins: Additional plugins to run alongside default behavior (e.g., `CoverageGapPlugin()`).
 ///   - filePath: Source file path (auto-filled).
 ///   - function: Test function name (auto-filled).
 ///   - test: The test closure receiving fuzzed inputs.
 ///
 /// - Throws: Re-throws test failures, or throws if fuzzing finds failures.
+/// Convenience overload that infers mutators from MutatorProviding conformance.
 @discardableResult
+@inlinable
 public func fuzz<each Input: MutatorProviding & Codable & Sendable>(
     seeds: [(repeat each Input)] = [],
     duration: Duration = .seconds(60),
     corpusMode: CorpusMode? = nil,
     parallelism: Int = ProcessInfo.processInfo.processorCount,
-    plugins: [any FuzzPlugin] = [],
+    handlers: [FuzzPluginHandler<repeat each Input>] = [.mutation()],
     filePath: StaticString = #filePath,
     function: StaticString = #function,
     line: Int = #line,
@@ -322,7 +304,7 @@ public func fuzz<each Input: MutatorProviding & Codable & Sendable>(
         duration: duration,
         corpusMode: corpusMode,
         parallelism: parallelism,
-        plugins: plugins,
+        handlers: handlers,
         filePath: filePath,
         function: function,
         line: line,
@@ -352,7 +334,7 @@ private func mergeResults<each Input: Codable & Sendable>(
     }
 
     // Merge all coverage changes
-    var allCoverageChanges: [(input: (repeat each Input), expected: CoverageSignature, actual: CoverageSignature)] = []
+    var allCoverageChanges: [(input: (repeat each Input), expected: SparseCoverage, actual: SparseCoverage)] = []
     for result in results {
         allCoverageChanges.append(contentsOf: result.coverageChanges)
     }
@@ -401,15 +383,12 @@ private func mergeResults<each Input: Codable & Sendable>(
 private func mergeCorpusSnapshots<each Input: Codable & Sendable>(
     _ snapshots: [CorpusSnapshot<repeat each Input>]
 ) -> CorpusSnapshot<repeat each Input> {
-    @Dependency(\.dateClient) var dateClient
     @Dependency(\.corpusRegistry) var corpusRegistry
 
     guard let first = snapshots.first else {
         return CorpusSnapshot<repeat each Input>(
             entries: [],
-            createdAt: dateClient.now(),
-            updatedAt: dateClient.now(),
-            totalCoverage: CoverageSignature(edges: [])
+            coveredIndices: []
         )
     }
 
@@ -418,12 +397,12 @@ private func mergeCorpusSnapshots<each Input: Codable & Sendable>(
     }
 
     // Create a temporary corpus to deduplicate entries
-    let mergedCorpus: CorpusClient<repeat each Input> = corpusRegistry.get()
+    let mergedCorpus: Corpus<repeat each Input> = corpusRegistry.getCorpus()
 
     // Add all entries - addIfInteresting handles deduplication by coverage
     for snapshot in snapshots {
         for entry in snapshot.entries {
-            _ = mergedCorpus.addIfInteresting(entry.input, entry.signature)
+            _ = mergedCorpus.addIfInteresting(input: entry.input, sparse: entry.sparseCoverage)
         }
     }
 

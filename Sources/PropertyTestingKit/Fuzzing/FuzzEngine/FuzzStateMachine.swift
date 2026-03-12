@@ -5,20 +5,32 @@
 
 import Foundation
 import Dependencies
-import DequeModule
 import Testing
 
-actor FuzzStateMachine<each Input: Codable & Sendable> {
-    /// Type-erased mutator functions for input mutation and generation.
-    typealias MutatorMutate = @Sendable ((repeat each Input)) -> [(repeat each Input)]
-    typealias MutatorGenerate = @Sendable () -> (repeat each Input)
+/// Manages the fuzzing loop state. Not thread-safe - only used from a single task.
+final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendable {
+    /// Synchronous plugin processor for iteration events (hot path).
+    /// Captures concrete plugin types via closure; signature only mentions Input types.
+    typealias SyncPluginProcessorFn = @Sendable (
+        consuming SyncPluginEvent<repeat each Input>,
+        (FuzzPluginAction<repeat each Input>) -> Void
+    ) -> Void
 
-    private let plugins: [any FuzzPlugin]
-    private var pluginCoordinator: PluginCoordinator<repeat each Input>?
+    /// Asynchronous plugin processor for rare events (cold path).
+    typealias AsyncPluginProcessorFn = @Sendable (
+        isolated (any Actor)?,
+        consuming AsyncPluginEvent<repeat each Input>,
+        (FuzzPluginAction<repeat each Input>) -> Void
+    ) async -> Void
+
+    /// Sync plugin processor closure for iteration events.
+    private let processSyncPlugins: SyncPluginProcessorFn
+    /// Async plugin processor closure for rare events.
+    private let processAsyncPlugins: AsyncPluginProcessorFn
     private let config: FuzzEngineConfig
-    private let corpus: CorpusClient<repeat each Input>
-    private let mutationGenerator: MutatorMutate
-    private let randomInputGenerator: MutatorGenerate
+    private var corpus: Corpus<repeat each Input>
+    private let mutators: (repeat Mutator<each Input>)
+    private let inputSize: Int
     private let seeds: [(repeat each Input)]
     private let startTime: Date
     private let dateClient: DateClient
@@ -28,32 +40,34 @@ actor FuzzStateMachine<each Input: Codable & Sendable> {
     private var mutationsCount: Int = 0
 
     // Simple loop state (replaces WorkerPool)
-    private var pendingInputs: Deque<(repeat each Input)> = []
+    private var pendingInputs: SimpleRingBuffer<(repeat each Input)>
     private var halted: Bool = false
     private var haltReason: FuzzStats.StopReason = .timeLimit
 
     init(
         seeds: [(repeat each Input)],
-        plugins: [any FuzzPlugin],
+        mutators: (repeat Mutator<each Input>),
+        inputSize: Int,
+        corpus: Corpus<repeat each Input>,
+        processSyncPlugins: @escaping SyncPluginProcessorFn,
+        processAsyncPlugins: @escaping AsyncPluginProcessorFn,
         config: FuzzEngineConfig,
         startTime: Date,
-        randomInputGenerator: @escaping MutatorGenerate,
-        mutationGenerator: @escaping MutatorMutate,
-        test: @escaping @Sendable ((repeat each Input)) async throws -> Void,
+        test: @escaping @Sendable ((repeat each Input)) async throws -> Void
     ) {
-        let corpus = Self.fetchCorpus()
-
         // Caching the dateclient
         @Dependency(\.dateClient) var dateClient: DateClient
         self.dateClient = dateClient
         self.startTime = startTime
         self.seeds = seeds
-        self.randomInputGenerator = randomInputGenerator
-        self.plugins = plugins
+        self.mutators = mutators
+        self.inputSize = inputSize
+        self.processSyncPlugins = processSyncPlugins
+        self.processAsyncPlugins = processAsyncPlugins
         self.config = config
         self.corpus = corpus
-        self.mutationGenerator = mutationGenerator
         self.test = test
+        self.pendingInputs = SimpleRingBuffer(minimumCapacity: 16)
     }
 
     private func recordFailure(input: (repeat each Input), error: any Error) {
@@ -62,7 +76,7 @@ actor FuzzStateMachine<each Input: Codable & Sendable> {
 
     struct FuzzStateMachineResult {
         let stats: FuzzStats
-        let corpus: CorpusClient<repeat each Input>
+        let corpus: Corpus<repeat each Input>
         let failures: [(input: (repeat each Input), error: Error)]
     }
 
@@ -71,35 +85,16 @@ actor FuzzStateMachine<each Input: Codable & Sendable> {
             print("[FUZZ] FuzzStateMachine.start() called, maxDuration=\(config.maxDuration)")
         }
 
-        // Create and start the plugin coordinator with bidirectional messaging
-        let coordinator = PluginCoordinator<repeat each Input>(
-            plugins: plugins
-        )
-        pluginCoordinator = coordinator
-        coordinator.start()
-
-        // Start a task to consume actions from the coordinator
-        let actionConsumerTask = Task { [self] in
-            // Use dequeue with yield to avoid blocking the cooperative pool
-            while !coordinator.actionChannel.isClosed {
-                if let action = coordinator.actionChannel.dequeue() {
-                    await self.executeAction(action)
-                } else {
-                    await Task.yield()
-                }
-            }
-            // Drain any remaining actions
-            while let action = coordinator.actionChannel.dequeue() {
-                await self.executeAction(action)
-            }
-        }
-
         // Initialize pending inputs with seeds
-        pendingInputs = Deque(seeds)
+        pendingInputs = SimpleRingBuffer(seeds)
 
         // Setup for test execution
         let coverageCountersClient = Self.fetchCoverageCounters()
         let sourceLocation = config.sourceLocation
+
+        // Cache RNG once here - passed to generate functions to avoid
+        // dependency injection overhead per call (millions of calls).
+        var rng = FastRNG()
 
         // Simple fuzz loop - no workers, just iterate
         var iterationCount = 0
@@ -107,7 +102,7 @@ actor FuzzStateMachine<each Input: Codable & Sendable> {
 
         // Wrap entire loop in issue capture context to avoid per-iteration TaskLocal overhead.
         // This saves ~12s over millions of iterations by doing one TaskLocal push/pop instead of millions.
-        await withIssueCaptureContext(isolation: self) { issueCaptureContext in
+        await withIssueCaptureContext { issueCaptureContext in
             let testWithIssueCapture = Self.captureIssues(
                 context: issueCaptureContext,
                 sourceLocation: config.sourceLocation,
@@ -130,6 +125,8 @@ actor FuzzStateMachine<each Input: Codable & Sendable> {
                 iterationsSinceTimeCheck += 1
                 if iterationsSinceTimeCheck >= timeLimitCheckInterval {
                     iterationsSinceTimeCheck = 0
+                    // Yield to allow other tasks to run (enables parallel fuzz runs)
+                    await Task.yield()
                     let elapsed = Duration.seconds(dateClient.now().timeIntervalSince(startTime))
                     if elapsed >= config.maxDuration {
                         haltReason = .timeLimit
@@ -140,9 +137,10 @@ actor FuzzStateMachine<each Input: Codable & Sendable> {
                 // Get input: from pending queue or generate random
                 let input: (repeat each Input)
                 if !pendingInputs.isEmpty {
-                    input = pendingInputs.removeFirst()
+                    input = pendingInputs.removeFirstUnchecked()
                 } else {
-                    input = randomInputGenerator()
+                    // Generate directly - no closure indirection
+                    input = (repeat (each mutators).generate(&rng))
                     generatedCount += 1
                 }
 
@@ -154,38 +152,46 @@ actor FuzzStateMachine<each Input: Codable & Sendable> {
                     // Will throw if either the test throws or if it logs an Issue
                     try await testWithIssueCapture(input)
 
-                    // Coverage snapshot may throw if coverage is unavailable
-                    // Use addIfInterestingSparse to avoid creating a Set when coverage isn't interesting
-                    var didAdd = false
-                    if let sparse = try? coverageCountersClient.snapshotCoveredArraysWithContext(coverageContext) {
-                        didAdd = corpus.addIfInterestingSparse(input, sparse)
-                    }
+                    // Fast path: C merges coverage directly into corpus bitmap
+                    // No Swift allocation when coverage isn't interesting
+                    let didAdd = corpus.addIfInterestingWithBitmapMerge(
+                        input: input,
+                        context: coverageContext,
+                        coverageClient: coverageCountersClient
+                    )
 
-                    // Fire-and-forget: submit event without blocking (no actor hop)
-                    coordinator.send(event: .iteration(
-                        .init(discoveredNewCoverage: didAdd, input: input)
-                    ))
+                    // Process iteration event synchronously (hot path - no async)
+                    processSyncPlugins(
+                        .iteration(.init(discoveredNewCoverage: didAdd, input: input))
+                    ) { action in
+                        self.executeAction(action)
+                    }
                 } catch is CancellationError {
                     // Allow clean exit on cancellation
                     break
                 } catch {
-                    // On failure, we need the full signature for recording
-                    let coverageSignature: CoverageSignature
+                    // On failure, we need the sparse coverage for recording
+                    let sparseCoverage: SparseCoverage
                     if let sparse = try? coverageCountersClient.snapshotCoveredArraysWithContext(coverageContext) {
-                        coverageSignature = CoverageSignature(sparse: sparse)
+                        sparseCoverage = sparse
                     } else {
-                        coverageSignature = CoverageSignature(edges: Set())
+                        sparseCoverage = SparseCoverage()
                     }
                     recordFailure(input: input, error: error)
-                    // Fire-and-forget: submit event without blocking (no actor hop)
-                    coordinator.send(event: .failureFound(
-                        .init(
-                            input: input,
-                            test: testWithIssueCapture,
-                            sourceLocation: sourceLocation,
-                            coverageSignature: coverageSignature
+                    // Process failure event asynchronously (cold path - async OK)
+                    await processAsyncPlugins(
+                        nil,
+                        .failureFound(
+                            .init(
+                                input: input,
+                                test: testWithIssueCapture,
+                                sourceLocation: sourceLocation,
+                                sparseCoverage: sparseCoverage
+                            )
                         )
-                    ))
+                    ) { action in
+                        self.executeAction(action)
+                    }
                 }
                 iterationCount += 1
             }
@@ -194,11 +200,6 @@ actor FuzzStateMachine<each Input: Codable & Sendable> {
         if config.verbose {
             print("[FUZZ] Fuzz loop finished: iterations=\(iterationCount), generated=\(generatedCount), halted=\(halted)")
         }
-
-        // Wait for all plugin events to be processed and actions to be produced
-        await coordinator.closeAndAwaitCompletion()
-        // Wait for all actions to be executed
-        await actionConsumerTask.value
 
         let stats = FuzzStats(
             totalInputs: iterationCount,
@@ -237,18 +238,13 @@ actor FuzzStateMachine<each Input: Codable & Sendable> {
         }
     }
 
-    private static func fetchCorpus() -> CorpusClient<repeat each Input> {
-        @Dependency(\.corpusRegistry) var corpusRegistry
-        return corpusRegistry.get()
-    }
-
     private static func fetchCoverageCounters() -> CoverageCountersClient {
         @Dependency(\.coverageCounters) var coverageCounters
         return coverageCounters
     }
 
     /// Executes a single plugin action.
-    private func executeAction(_ action: FuzzPluginAction<repeat each Input>) async {
+    private func executeAction(_ action: FuzzPluginAction<repeat each Input>) {
         switch action {
         case .stop(let stopAction):
             halt(reason: stopAction.reason)
@@ -260,14 +256,15 @@ actor FuzzStateMachine<each Input: Codable & Sendable> {
             pendingInputs.append(contentsOf: queueAction.inputs)
 
         case .selectForMutation(let mutationAction):
-            let mutations = mutationGenerator(mutationAction.input)
+            // Generate mutations directly - no closure indirection
+            let mutations = generateMutations(mutationAction.input)
             pendingInputs.append(contentsOf: mutations)
             mutationsCount += 1
 
         case .submitToCorpus(let corpusAction):
             addToCorpus(
                 corpusAction.input,
-                signature: corpusAction.coverageSignature,
+                sparse: corpusAction.sparseCoverage,
                 type: corpusAction.entryType,
                 failureInfo: corpusAction.failureInfo
             )
@@ -279,8 +276,25 @@ actor FuzzStateMachine<each Input: Codable & Sendable> {
         haltReason = reason
     }
 
-    private func addToCorpus(_ input: (repeat each Input), signature: CoverageSignature, type: CorpusEntryType, failureInfo: FailureInfo?) {
-        corpus.add(input, signature, type, failureInfo)
+    private func addToCorpus(_ input: (repeat each Input), sparse: SparseCoverage, type: CorpusEntryType, failureInfo: FailureInfo?) {
+        corpus.add(input: input, sparse: sparse, entryType: type, failure: failureInfo)
+    }
+
+    /// Generate mutations for an input by mutating one position at a time.
+    /// Returns the cartesian product of mutations across all positions.
+    private func generateMutations(_ input: (repeat each Input)) -> [(repeat each Input)] {
+        let positionsMutated: [(repeat [each Input])] = (0..<inputSize).map { replacementIndex in
+            var currentIndex = 0
+            return (repeat {
+                defer { currentIndex += 1 }
+                if currentIndex == replacementIndex {
+                    return (each mutators).mutate(each input)
+                } else {
+                    return [(each input)]
+                }
+            }())
+        }
+        return positionsMutated.flatMap(cartesianProduct)
     }
 }
 

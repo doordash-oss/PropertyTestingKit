@@ -9,14 +9,14 @@ import Dependencies
 
 // MARK: - Bool Mutator Static Properties
 
-extension AnyMutator where Value == Bool {
+extension Mutator where Value == Bool {
     /// Standard bool mutator (alias for defaultMutator).
-    public static var standard: AnyMutator<Bool> { AnyMutator(Bool.defaultMutator) }
+    public static var standard: Mutator<Bool> { Bool.defaultMutator }
 }
 
 extension Bool {
     /// Create a bool mutator.
-    public static func mutator() -> AnyMutator<Bool> {
+    public static func mutator() -> Mutator<Bool> {
         .standard
     }
 }

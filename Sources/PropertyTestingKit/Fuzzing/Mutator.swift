@@ -19,25 +19,23 @@ import Foundation
 ///
 /// ```swift
 /// extension MyType: MutatorProviding {
-///     public static var defaultMutator: MyTypeMutator {
-///         MyTypeMutator()
+///     public static var defaultMutator: Mutator<MyType> {
+///         Mutator(
+///             seeds: [...],
+///             mutate: { ... },
+///             generate: { ... }
+///         )
 ///     }
 /// }
 /// ```
-///
-/// Using an associated type allows concrete mutator types (structs) to be
-/// returned directly, avoiding type erasure overhead in the hot path.
 public protocol MutatorProviding: Sendable {
-    /// The concrete mutator type for this type.
-    associatedtype DefaultMutator: Mutator where DefaultMutator.Value == Self
-
     /// The default mutator for this type.
-    static var defaultMutator: DefaultMutator { get }
+    static var defaultMutator: Mutator<Self> { get }
 }
 
-// MARK: - Mutator Protocol
+// MARK: - Mutator (Concrete Type)
 
-/// A type that can generate seed values, mutations, and random values for fuzzing.
+/// A concrete mutator that generates seed values, mutations, and random values for fuzzing.
 ///
 /// Mutators are composable mutation strategies that can be combined
 /// and customized for domain-specific testing.
@@ -50,163 +48,85 @@ public protocol MutatorProviding: Sendable {
 ///     validateInput(input)
 /// }
 ///
-/// // Combine multiple strategies
-/// try fuzz(using: Int.mutators(.boundaries, .ports)) { (port: Int) in
-///     testConnection(port: port)
-/// }
+/// // Create custom mutators
+/// let customMutator = Mutator<Int>(
+///     seeds: [0, 1, -1, Int.max],
+///     mutate: { [$0 + 1, $0 - 1] },
+///     generate: { rng in Int.random(in: Int.min...Int.max, using: &rng) }
+/// )
 /// ```
-public protocol Mutator<Value>: Sendable {
-    associatedtype Value: Sendable
-
+public struct Mutator<Value: Sendable>: Sendable {
     /// Seed values to start fuzzing with.
-    var seeds: [Value] { get }
+    public let seeds: [Value]
 
     /// Generate mutations of a value.
-    func mutate(_ value: Value) -> [Value]
+    public let mutate: @Sendable (Value) -> [Value]
 
-    /// Generate a random value.
+    /// Generate a random value using the provided RNG.
     ///
     /// This is used when the seed queue is exhausted and fresh random
     /// inputs are needed to continue exploration.
     ///
-    /// Uses the `@Dependency(\.random)` client for random number generation,
-    /// which can be overridden in tests for determinism.
-    func generate() -> Value
-}
+    /// The RNG is passed in to avoid the overhead of fetching it via
+    /// dependency injection on every call (millions of times per fuzz run).
+    public let generate: @Sendable (inout FastRNG) -> Value
 
-// MARK: - AnyMutator (Type Erasure)
-
-// Base class for type erasure - uses virtual dispatch instead of closure boxing
-private class _AnyMutatorBoxBase<Value: Sendable>: @unchecked Sendable {
-    var seeds: [Value] { fatalError("abstract") }
-    func mutate(_ value: Value) -> [Value] { fatalError("abstract") }
-    func generate() -> Value { fatalError("abstract") }
-}
-
-// Concrete box holding an actual Mutator
-private final class _MutatorBox<M: Mutator>: _AnyMutatorBoxBase<M.Value>, @unchecked Sendable where M: Sendable {
-    let base: M
-
-    init(_ base: M) { self.base = base }
-
-    override var seeds: [M.Value] { base.seeds }
-    override func mutate(_ value: M.Value) -> [M.Value] { base.mutate(value) }
-    override func generate() -> M.Value { base.generate() }
-}
-
-/// A type-erased mutator.
-///
-/// Uses class-based type erasure with virtual dispatch for better performance.
-/// This avoids per-call retain/release overhead that closure boxing incurs.
-public struct AnyMutator<Value: Sendable>: Mutator, Sendable {
-    private let box: _AnyMutatorBoxBase<Value>
-
-    public var seeds: [Value] { box.seeds }
-
-    public func mutate(_ value: Value) -> [Value] {
-        box.mutate(value)
-    }
-
-    public func generate() -> Value {
-        box.generate()
-    }
-
-    /// Initialize with a concrete Mutator type.
-    public init<M: Mutator>(_ mutator: M) where M.Value == Value {
-        self.box = _MutatorBox(mutator)
-    }
-
-    /// Convenience initializer with seeds and mutation closure.
-    /// Creates a SingleMutator internally for backward compatibility.
-    public init(seeds: [Value], mutate: @escaping @Sendable (Value) -> [Value]) {
-        self.init(SingleMutator(seeds: seeds, mutate: mutate))
-    }
-
-    /// Convenience initializer with seeds, mutation closure, and generate closure.
-    /// Creates a SingleMutator internally for backward compatibility.
+    /// Create a mutator with seeds, mutation function, and generation function.
     public init(
         seeds: [Value],
         mutate: @escaping @Sendable (Value) -> [Value],
-        generate: @escaping @Sendable () -> Value
+        generate: @escaping @Sendable (inout FastRNG) -> Value
     ) {
-        self.init(SingleMutator(seeds: seeds, mutate: mutate, generate: generate))
-    }
-}
-
-// MARK: - ComposedMutator
-
-/// A mutator that combines multiple mutation strategies.
-public struct ComposedMutator<Value: Sendable>: Mutator, Sendable {
-    @Dependency(\.random) private var random
-
-    private let mutators: [AnyMutator<Value>]
-
-    public var seeds: [Value] {
-        mutators.flatMap(\.seeds)
+        self.seeds = seeds
+        self.mutate = mutate
+        self.generate = generate
     }
 
-    public func mutate(_ value: Value) -> [Value] {
-        mutators.flatMap { $0.mutate(value) }
-    }
-
-    public func generate() -> Value {
-        // Pick a random mutator and use its generator
-        guard !mutators.isEmpty else {
-            fatalError("Cannot generate from empty ComposedMutator")
-        }
-        let index = random { rng in
-            Int.random(in: 0..<mutators.count, using: &rng)
-        }
-        return mutators[index].generate()
-    }
-
-    public init(_ mutators: [AnyMutator<Value>]) {
-        self.mutators = mutators
-    }
-}
-
-// MARK: - SingleMutator
-
-/// A mutator with a single strategy.
-public struct SingleMutator<Value: Sendable>: Mutator, Sendable {
-    @Dependency(\.random) private var random
-
-    public let seeds: [Value]
-    private let _mutate: @Sendable (Value) -> [Value]
-    private let _generate: (@Sendable () -> Value)?
-
-    public func mutate(_ value: Value) -> [Value] {
-        _mutate(value)
-    }
-
-    public func generate() -> Value {
-        if let customGenerate = _generate {
-            return customGenerate()
-        } else {
-            // Default: pick a random seed
+    /// Create a mutator with seeds and mutation function.
+    /// Generation will pick a random seed.
+    public init(
+        seeds: [Value],
+        mutate: @escaping @Sendable (Value) -> [Value]
+    ) {
+        self.seeds = seeds
+        self.mutate = mutate
+        // Default generate: pick a random seed
+        self.generate = { rng in
             guard !seeds.isEmpty else {
                 fatalError("Cannot generate from empty seeds")
             }
-            return random { rng in
-                let index = Int.random(in: 0..<seeds.count, using: &rng)
-                return seeds[index]
-            }
+            let index = Int.random(in: 0..<seeds.count, using: &rng)
+            return seeds[index]
         }
     }
+}
 
-    public init(seeds: [Value], mutate: @escaping @Sendable (Value) -> [Value]) {
-        self.seeds = seeds
-        self._mutate = mutate
-        self._generate = nil
+// MARK: - Mutator Composition
+
+extension Mutator {
+    /// Combine multiple mutators into one.
+    ///
+    /// Seeds are concatenated, mutations are combined, and generation
+    /// picks randomly from the component mutators.
+    public static func compose(_ mutators: [Mutator<Value>]) -> Mutator<Value> {
+        guard !mutators.isEmpty else {
+            fatalError("Cannot compose empty mutator list")
+        }
+
+        return Mutator(
+            seeds: mutators.flatMap(\.seeds),
+            mutate: { value in
+                mutators.flatMap { $0.mutate(value) }
+            },
+            generate: { rng in
+                let index = Int.random(in: 0..<mutators.count, using: &rng)
+                return mutators[index].generate(&rng)
+            }
+        )
     }
 
-    public init(
-        seeds: [Value],
-        mutate: @escaping @Sendable (Value) -> [Value],
-        generate: @escaping @Sendable () -> Value
-    ) {
-        self.seeds = seeds
-        self._mutate = mutate
-        self._generate = generate
+    /// Combine this mutator with another.
+    public func combined(with other: Mutator<Value>) -> Mutator<Value> {
+        Mutator.compose([self, other])
     }
 }

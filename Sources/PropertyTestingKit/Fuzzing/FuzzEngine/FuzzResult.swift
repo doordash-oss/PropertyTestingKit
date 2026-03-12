@@ -20,14 +20,14 @@ public struct FuzzResult<each Input: Codable & Sendable>: Sendable {
     public let wasRegression: Bool
 
     /// Inputs that had different coverage than expected (regression only).
-    public let coverageChanges: [(input: (repeat each Input), expected: CoverageSignature, actual: CoverageSignature)]
+    public let coverageChanges: [(input: (repeat each Input), expected: SparseCoverage, actual: SparseCoverage)]
 
     public init(
         corpus: CorpusSnapshot<repeat each Input>,
         failures: [(input: (repeat each Input), error: Error)],
         stats: FuzzStats,
         wasRegression: Bool,
-        coverageChanges: [(input: (repeat each Input), expected: CoverageSignature, actual: CoverageSignature)]
+        coverageChanges: [(input: (repeat each Input), expected: SparseCoverage, actual: SparseCoverage)]
     ) {
         self.corpus = corpus
         self.failures = failures
@@ -111,9 +111,7 @@ extension FuzzResult {
 
         let emptySnapshot = CorpusSnapshot<repeat each Input>(
             entries: [],
-            createdAt: dateClient.now(),
-            updatedAt: dateClient.now(),
-            totalCoverage: CoverageSignature(edges: [])
+            coveredIndices: []
         )
         let emptyStats = FuzzStats(
             totalInputs: 0,

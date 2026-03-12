@@ -112,53 +112,6 @@ struct CoverageSignaturePropertyTests {
     }
 }
 
-// MARK: - SignatureSet Property Tests
-
-@Suite("SignatureSet Properties")
-struct SignatureSetPropertyTests {
-
-    @Test("SignatureSet insert returns correct newness")
-    func testInsertNewness() async throws {
-        var set = SignatureSet()
-
-        let sig1 = CoverageSignature(edges: Set<UInt32>([0]))
-        let sig2 = CoverageSignature(edges: Set<UInt32>([0]))  // Duplicate
-        let sig3 = CoverageSignature(edges: Set<UInt32>([1]))  // New
-
-        #expect(set.insert(sig1) == true, "First insert should be new")
-        #expect(set.insert(sig2) == false, "Duplicate insert should not be new")
-        #expect(set.insert(sig3) == true, "Different signature should be new")
-    }
-
-    @Test("SignatureSet totalCoverage is union of all signatures")
-    func testTotalCoverageIsUnion() async throws {
-        var set = SignatureSet()
-
-        let sig1 = CoverageSignature(edges: Set<UInt32>([0, 1]))
-        let sig2 = CoverageSignature(edges: Set<UInt32>([2, 3]))
-
-        set.insert(sig1)
-        set.insert(sig2)
-
-        let expectedTotal = sig1.union(with: sig2)
-        #expect(set.totalCoverage == expectedTotal, "Total coverage should be union")
-    }
-
-    @Test("wouldAddNewCoverage is consistent with totalCoverage")
-    func testWouldAddNewCoverage() async throws {
-        var set = SignatureSet()
-
-        let sig1 = CoverageSignature(edges: Set<UInt32>([0, 1]))
-        set.insert(sig1)
-
-        let subsetSig = CoverageSignature(edges: Set<UInt32>([0]))
-        let newSig = CoverageSignature(edges: Set<UInt32>([2]))
-
-        #expect(set.wouldAddNewCoverage(subsetSig) == false, "Subset should not add new coverage")
-        #expect(set.wouldAddNewCoverage(newSig) == true, "New index should add coverage")
-    }
-}
-
 // MARK: - MutatorProviding Property Tests
 
 @Suite("MutatorProviding Properties")
@@ -274,44 +227,49 @@ struct MutatorProvidingPropertyTests {
 @Suite("Corpus Properties")
 struct CorpusPropertyTests {
 
-    @Test("Corpus addIfInteresting rejects redundant coverage")
-    func testAddIfInterestingRejectsRedundant() async throws {
-        let corpus = Corpus<String>()
+    @Test("Corpus addIfInteresting uses signature-based uniqueness")
+    func testAddIfInterestingSignatureBasedUniqueness() throws {
+        var corpus = Corpus<String>()
 
-        let sig1 = CoverageSignature(edges: Set<UInt32>([0, 1, 2]))
+        let sparse1 = SparseCoverage(indices: [0, 1, 2])
 
         // First add should succeed
-        let added1 = await corpus.addIfInteresting(input: "first", signature: sig1)
+        let added1 = corpus.addIfInteresting(input: ("first"), sparse: sparse1)
         #expect(added1 == true, "First entry should be added")
 
-        // Subset signature should be rejected
-        let sigSubset = CoverageSignature(edges: Set<UInt32>([0, 1]))
-        let added2 = await corpus.addIfInteresting(input: "subset", signature: sigSubset)
-        #expect(added2 == false, "Subset coverage should be rejected")
+        // Different signature (subset) IS interesting - represents a different code path
+        let sparseSubset = SparseCoverage(indices: [0, 1])
+        let added2 = corpus.addIfInteresting(input: ("subset"), sparse: sparseSubset)
+        #expect(added2 == true, "Different signature should be accepted (unique code path)")
 
-        // New coverage should be accepted
-        let sigNew = CoverageSignature(edges: Set<UInt32>([3]))
-        let added3 = await corpus.addIfInteresting(input: "new", signature: sigNew)
-        #expect(added3 == true, "New coverage should be accepted")
+        // Same signature as first should be rejected
+        let sparseSame = SparseCoverage(indices: [0, 1, 2])
+        let added3 = corpus.addIfInteresting(input: ("same"), sparse: sparseSame)
+        #expect(added3 == false, "Identical signature should be rejected")
+
+        // Different signature with new edges should be accepted
+        let sparseNew = SparseCoverage(indices: [3])
+        let added4 = corpus.addIfInteresting(input: ("new"), sparse: sparseNew)
+        #expect(added4 == true, "New signature should be accepted")
     }
 
     @Test("Corpus minimization preserves total coverage")
-    func testMinimizationPreservesCoverage() async throws {
-        let corpus = Corpus<String>()
+    func testMinimizationPreservesCoverage() throws {
+        var corpus = Corpus<String>()
 
         // Add entries with overlapping coverage
-        await corpus.add(input: "a", signature: CoverageSignature(edges: Set<UInt32>([0, 1])))
-        await corpus.add(input: "b", signature: CoverageSignature(edges: Set<UInt32>([1, 2])))
-        await corpus.add(input: "c", signature: CoverageSignature(edges: Set<UInt32>([2, 3])))
-        await corpus.add(input: "d", signature: CoverageSignature(edges: Set<UInt32>([0, 1])))  // Redundant
+        corpus.add(input: ("a"), sparse: SparseCoverage(indices: [0, 1]))
+        corpus.add(input: ("b"), sparse: SparseCoverage(indices: [1, 2]))
+        corpus.add(input: ("c"), sparse: SparseCoverage(indices: [2, 3]))
+        corpus.add(input: ("d"), sparse: SparseCoverage(indices: [0, 1]))  // Redundant
 
-        let originalCoverage = await corpus.totalCoverage
-        let minimized = await corpus.minimized()
-        let count = await corpus.count
+        let originalCoverage = corpus.coveredIndices
+        let minimized = corpus.minimized()
+        let count = corpus.count
 
         // Property: minimized coverage equals original coverage
         #expect(
-            minimized.totalCoverage.executedIndices == originalCoverage.executedIndices,
+            minimized.coveredIndices == originalCoverage,
             "Minimization should preserve coverage indices"
         )
 
@@ -320,70 +278,54 @@ struct CorpusPropertyTests {
     }
 
     @Test("Corpus handles empty minimization")
-    func testEmptyMinimization() async throws {
-        let corpus = Corpus<String>()
-        let minimized = await corpus.minimized()
+    func testEmptyMinimization() throws {
+        var corpus = Corpus<String>()
+        let minimized = corpus.minimized()
         #expect(minimized.isEmpty, "Minimized empty corpus should be empty")
     }
 
     @Test("Corpus isEmpty property")
-    func testCorpusIsEmpty() async throws {
-        let corpus = Corpus<String>()
-        var isEmpty = await corpus.isEmpty
+    func testCorpusIsEmpty() throws {
+        var corpus = Corpus<String>()
+        var isEmpty = corpus.isEmpty
         #expect(isEmpty, "New corpus should be empty")
 
-        await corpus.add(input: "a", signature: CoverageSignature(edges: Set<UInt32>([0])))
-        isEmpty = await corpus.isEmpty
+        corpus.add(input: ("a"), sparse: SparseCoverage(indices: [0]))
+        isEmpty = corpus.isEmpty
         #expect(!isEmpty, "Corpus with entry should not be empty")
     }
 
-    @Test("Corpus signatures property")
-    func testCorpusSignatures() async throws {
-        let corpus = Corpus<String>()
-
-        let sig1 = CoverageSignature(edges: Set<UInt32>([0]))
-        let sig2 = CoverageSignature(edges: Set<UInt32>([1]))
-
-        await corpus.add(input: "a", signature: sig1)
-        await corpus.add(input: "b", signature: sig2)
-
-        let signatures = await corpus.signatures
-        #expect(signatures.count == 2, "Should have 2 signatures")
-        #expect(signatures[0] == sig1, "First signature should match")
-        #expect(signatures[1] == sig2, "Second signature should match")
-    }
-
     @Test("Corpus inputs property")
-    func testCorpusInputs() async throws {
-        let corpus = Corpus<String>()
+    func testCorpusInputs() throws {
+        var corpus = Corpus<String>()
 
-        await corpus.add(input: "hello", signature: CoverageSignature(edges: Set<UInt32>([0])))
-        await corpus.add(input: "world", signature: CoverageSignature(edges: Set<UInt32>([1])))
+        corpus.add(input: ("hello"), sparse: SparseCoverage(indices: [0]))
+        corpus.add(input: ("world"), sparse: SparseCoverage(indices: [1]))
 
-        let inputs = await corpus.inputs
+        let inputs = corpus.inputs
         #expect(inputs.count == 2, "Should have 2 inputs")
         #expect(inputs[0] == "hello", "First input should match")
         #expect(inputs[1] == "world", "Second input should match")
     }
 
     @Test("Corpus minimization with no new coverage")
-    func testMinimizationNoNewCoverage() async throws {
-        let corpus = Corpus<String>()
+    func testMinimizationNoNewCoverage() throws {
+        var corpus = Corpus<String>()
 
         // Add one entry that covers everything
-        await corpus.add(input: "all", signature: CoverageSignature(edges: Set<UInt32>([0, 1, 2])))
+        corpus.add(input: ("all"), sparse: SparseCoverage(indices: [0, 1, 2]))
 
         // Add more entries that cover subsets (will have bestCoverage = 0 after first)
-        await corpus.add(input: "sub1", signature: CoverageSignature(edges: Set<UInt32>([0])))
-        await corpus.add(input: "sub2", signature: CoverageSignature(edges: Set<UInt32>([1])))
+        corpus.add(input: ("sub1"), sparse: SparseCoverage(indices: [0]))
+        corpus.add(input: ("sub2"), sparse: SparseCoverage(indices: [1]))
 
-        let minimized = await corpus.minimized()
-        let totalCoverage = await corpus.totalCoverage
+        let minimized = corpus.minimized()
+        let totalCoverage = corpus.coveredIndices
 
         // The first entry should cover everything, so minimization should pick just that one
         #expect(minimized.count >= 1, "Should have at least one entry")
         #expect(
-            minimized.totalCoverage.executedIndices == totalCoverage.executedIndices,
+            minimized.coveredIndices == totalCoverage,
             "Coverage should be preserved"
         )
     }
@@ -398,24 +340,21 @@ struct CorpusEntryPropertyTests {
     func testCorpusEntryCodable() async throws {
         let entry = CorpusEntry(
             input: "test input",
-            signature: CoverageSignature(edges: Set<UInt32>([0, 5])),
-            discoveredAt: Date()
+            sparseCoverage: SparseCoverage(indices: [0, 5]),
+            entryType: .coverage,
+            failure: nil
         )
 
-        let encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .iso8601
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
+        let encoder = JSONEncoder.corpusEncoder
+        let decoder = JSONDecoder.corpusDecoder
 
         let data = try encoder.encode(entry)
         let decoded = try decoder.decode(CorpusEntry<String>.self, from: data)
 
         #expect(decoded.input == entry.input)
-        #expect(decoded.signature == entry.signature)
-        // Date comparison with some tolerance due to serialization
-        let timeDiff: Double = decoded.discoveredAt.timeIntervalSince(entry.discoveredAt)
-        let withinTolerance: Bool = Swift.abs(timeDiff) < Double(1.0)
-        #expect(withinTolerance, "Date should be within 1 second")
+        #expect(decoded.sparseCoverage == entry.sparseCoverage)
+        #expect(decoded.entryType == entry.entryType)
+        #expect(decoded.failure == nil)
     }
 }
 
@@ -486,27 +425,27 @@ struct EdgeCaseTests {
     }
 
     @Test("Corpus with complex input types")
-    func testCorpusComplexTypes() async throws {
-        let corpus = Corpus<[String]>()
+    func testCorpusComplexTypes() throws {
+        var corpus = Corpus<[String]>()
 
-        await corpus.add(
-            input: ["a", "b", "c"],
-            signature: CoverageSignature(edges: Set<UInt32>([0]))
+        corpus.add(
+            input: (["a", "b", "c"]),
+            sparse: SparseCoverage(indices: [0])
         )
-        await corpus.add(
-            input: [],
-            signature: CoverageSignature(edges: Set<UInt32>([1]))
+        corpus.add(
+            input: ([]),
+            sparse: SparseCoverage(indices: [1])
         )
-        await corpus.add(
-            input: ["single"],
-            signature: CoverageSignature(edges: Set<UInt32>([2]))
+        corpus.add(
+            input: (["single"]),
+            sparse: SparseCoverage(indices: [2])
         )
 
-        let count = await corpus.count
+        let count = corpus.count
         #expect(count == 3)
 
         // Test minimization
-        let minimized = await corpus.minimized()
+        let minimized = corpus.minimized()
         #expect(minimized.count <= count)
     }
 

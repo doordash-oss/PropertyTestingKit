@@ -36,10 +36,10 @@ private func makeMockCoverageClient(
 private struct SingleSeedInt: MutatorProviding, Codable, Sendable, Equatable {
     let value: Int
 
-    static var defaultMutator: AnyMutator<SingleSeedInt> {
-        AnyMutator(seeds: [SingleSeedInt(value: 0)]) { current in
+    static var defaultMutator: Mutator<SingleSeedInt> {
+        Mutator(seeds: [SingleSeedInt(value: 0)], mutate: { current in
             [SingleSeedInt(value: current.value + 1)]
-        }
+        })
     }
 }
 
@@ -71,7 +71,22 @@ struct DeterministicTimingTests {
                 )
 
                 let engine = FuzzEngine(mutators: SingleSeedInt.defaultMutator, config: config, corpusDirectory: nil)
-                return await engine.run { _ in
+                // Create default plugin processor (MutationPlugin)
+                let processor = PluginHandlerProcessor(handlers: [FuzzPluginHandler<SingleSeedInt>.mutation()])
+                let processSyncPlugins: @Sendable (
+                    consuming SyncPluginEvent<SingleSeedInt>,
+                    (FuzzPluginAction<SingleSeedInt>) -> Void
+                ) -> Void = { event, execute in
+                    processor.processSync(event: event, execute: execute)
+                }
+                let processAsyncPlugins: @Sendable (
+                    isolated (any Actor)?,
+                    consuming AsyncPluginEvent<SingleSeedInt>,
+                    (FuzzPluginAction<SingleSeedInt>) -> Void
+                ) async -> Void = { isolation, event, execute in
+                    await processor.processAsync(isolation: isolation, event: event, execute: execute)
+                }
+                return await engine.run(processSyncPlugins: processSyncPlugins, processAsyncPlugins: processAsyncPlugins) { _ in
                     // Advance time by 11 seconds each test (exceeds 10s limit after first test)
                     currentTime.update { $0 = $0.addingTimeInterval(11) }
                 }
@@ -104,7 +119,22 @@ struct DeterministicTimingTests {
                 )
 
                 let engine = FuzzEngine(mutators: SingleSeedInt.defaultMutator, config: config, corpusDirectory: nil)
-                return await engine.run { _ in
+                // Create default plugin processor (MutationPlugin)
+                let processor = PluginHandlerProcessor(handlers: [FuzzPluginHandler<SingleSeedInt>.mutation()])
+                let processSyncPlugins: @Sendable (
+                    consuming SyncPluginEvent<SingleSeedInt>,
+                    (FuzzPluginAction<SingleSeedInt>) -> Void
+                ) -> Void = { event, execute in
+                    processor.processSync(event: event, execute: execute)
+                }
+                let processAsyncPlugins: @Sendable (
+                    isolated (any Actor)?,
+                    consuming AsyncPluginEvent<SingleSeedInt>,
+                    (FuzzPluginAction<SingleSeedInt>) -> Void
+                ) async -> Void = { isolation, event, execute in
+                    await processor.processAsync(isolation: isolation, event: event, execute: execute)
+                }
+                return await engine.run(processSyncPlugins: processSyncPlugins, processAsyncPlugins: processAsyncPlugins) { _ in
                     // Advance time by exactly 2.5 seconds each test
                     testCount.update { $0 += 1 }
                     currentTime.update { $0 = $0.addingTimeInterval(2.5) }

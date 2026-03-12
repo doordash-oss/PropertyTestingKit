@@ -6,26 +6,26 @@
 import Foundation
 
 /// Report of all coverage gaps found during fuzzing.
-public struct CoverageGapReport: Sendable, Equatable {
+struct CoverageGapReport: Sendable, Equatable {
     /// Functions with partial coverage (some edges hit, some not).
-    public let gaps: [CoverageGap]
+    let gaps: [CoverageGap]
 
     /// Total functions analyzed.
-    public let totalFunctionsAnalyzed: Int
+    let totalFunctionsAnalyzed: Int
 
     /// Functions with complete coverage (100%).
-    public let fullyCoveredFunctionCount: Int
+    let fullyCoveredFunctionCount: Int
 
     /// Functions with no coverage (0%).
-    public let uncoveredFunctionCount: Int
+    let uncoveredFunctionCount: Int
 
     /// Whether any significant gaps were found.
-    public var hasSignificantGaps: Bool {
+    var hasSignificantGaps: Bool {
         gaps.contains { $0.isSignificant }
     }
 
     /// Summary for display.
-    public var summary: String {
+    var summary: String {
         if gaps.isEmpty {
             return "No coverage gaps detected in \(totalFunctionsAnalyzed) functions"
         }
@@ -39,7 +39,7 @@ public struct CoverageGapReport: Sendable, Equatable {
     }
 
     /// Detailed report for verbose output.
-    public var detailedSummary: String {
+    var detailedSummary: String {
         guard !gaps.isEmpty else {
             return summary
         }
@@ -66,7 +66,7 @@ public struct CoverageGapReport: Sendable, Equatable {
         return lines.joined(separator: "\n")
     }
 
-    public init(
+    init(
         gaps: [CoverageGap],
         totalFunctionsAnalyzed: Int,
         fullyCoveredFunctionCount: Int,

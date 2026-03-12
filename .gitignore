@@ -1,4 +1,3 @@
-scripts
 .DS_Store
 /.build
 /Packages
@@ -14,3 +13,5 @@ DerivedData/
 .claude
 traces
 call_trees
+__BenchmarkBoilerplate*
+__pycache__/

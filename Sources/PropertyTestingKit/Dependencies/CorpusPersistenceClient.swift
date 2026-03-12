@@ -16,14 +16,14 @@ private let corpusFilename = "corpus.json"
 ///
 /// This abstracts file operations for corpus storage, allowing tests to mock
 /// persistence without setting up actual files.
-public struct CorpusPersistenceClient: Sendable {
+struct CorpusPersistenceClient: Sendable {
     // Internal data-level operations (mockable in tests)
     private var _save: @Sendable (Data, URL) throws -> Void
     private var _load: @Sendable (URL) throws -> Data
-    public var exists: @Sendable (URL) -> Bool
-    public var delete: @Sendable (URL) throws -> Void
+    var exists: @Sendable (URL) -> Bool
+    var delete: @Sendable (URL) throws -> Void
 
-    public init(
+    init(
         save: @escaping @Sendable (Data, URL) throws -> Void,
         load: @escaping @Sendable (URL) throws -> Data,
         exists: @escaping @Sendable (URL) -> Bool,
@@ -35,10 +35,10 @@ public struct CorpusPersistenceClient: Sendable {
         self.delete = delete
     }
 
-    // Generic public API - specializes at call site
+    // Generic API - specializes at call site
 
     /// Save a corpus snapshot to the given directory.
-    public func save<each Input: Codable & Sendable>(
+    func save<each Input: Codable & Sendable>(
         _ snapshot: CorpusSnapshot<repeat each Input>,
         to url: URL
     ) throws {
@@ -46,17 +46,8 @@ public struct CorpusPersistenceClient: Sendable {
         try _save(data, url)
     }
 
-    /// Load a corpus from the given directory.
-    public func load<each Input: Codable & Sendable>(
-        from url: URL
-    ) throws -> Corpus<repeat each Input> {
-        let data = try _load(url)
-        let snapshot = try JSONDecoder.corpusDecoder.decode(CorpusSnapshot<repeat each Input>.self, from: data)
-        return Corpus(from: snapshot)
-    }
-
     /// Load a corpus snapshot from the given directory.
-    public func loadSnapshot<each Input: Codable & Sendable>(
+    func loadSnapshot<each Input: Codable & Sendable>(
         from url: URL
     ) throws -> CorpusSnapshot<repeat each Input> {
         let data = try _load(url)
@@ -67,7 +58,7 @@ public struct CorpusPersistenceClient: Sendable {
 // MARK: - Dependency Key
 
 struct CorpusPersistenceClientKey: DependencyKey {
-    public static var liveValue: CorpusPersistenceClient {
+    static var liveValue: CorpusPersistenceClient {
         @Dependency(\.fileManager) var fileManager
 
         return CorpusPersistenceClient(
@@ -93,11 +84,11 @@ struct CorpusPersistenceClientKey: DependencyKey {
         )
     }
 
-    public static let testValue = liveValue
+    static let testValue = liveValue
 }
 
 extension DependencyValues {
-    public var corpusPersistence: CorpusPersistenceClient {
+    var corpusPersistence: CorpusPersistenceClient {
         get { self[CorpusPersistenceClientKey.self] }
         set { self[CorpusPersistenceClientKey.self] = newValue }
     }

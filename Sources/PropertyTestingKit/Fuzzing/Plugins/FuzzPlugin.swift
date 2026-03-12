@@ -2,35 +2,42 @@
 //  FuzzPlugin.swift
 //  PropertyTestingKit
 //
-//  Unified plugin system for FuzzEngine.
+//  Plugin events and actions for FuzzEngine.
 //
 
 import Testing
 import Foundation
 
-// MARK: - Plugin Protocol
+// MARK: - Sync Plugin Events (Hot Path)
 
-/// Protocol for FuzzEngine plugins.
-///
-/// Plugins receive events from the fuzz engine and return actions to be executed.
-/// Plugins run in array order - first plugin handles event first.
-public protocol FuzzPlugin: Sendable {
-    /// Unique identifier for this plugin (for logging).
-    var id: String { get }
+/// Synchronous events dispatched to plugins during fuzzing.
+/// These are called millions of times and must be handled synchronously.
+public enum SyncPluginEvent<each T: Sendable>: Sendable {
+    /// An iteration completed.
+    case iteration(IterationContext)
 
-    /// Handle an event and return actions to execute.
-    ///
-    /// - Parameter event: The plugin event to handle.
-    /// - Returns: Actions for FuzzEngine to execute.
-    func handle<each T: Sendable>(
-        event: consuming PluginEvent<repeat each T>
-    ) async throws -> [FuzzPluginAction<repeat each T>]
+    /// Context provided after each iteration.
+    public struct IterationContext: Sendable {
+        /// Whether this iteration discovered new coverage.
+        public let discoveredNewCoverage: Bool
+        /// The input that was tested in this iteration.
+        public let input: (repeat each T)
+
+        public init(
+            discoveredNewCoverage: Bool,
+            input: consuming (repeat each T)
+        ) {
+            self.discoveredNewCoverage = discoveredNewCoverage
+            self.input = input
+        }
+    }
 }
 
-// MARK: - Plugin Events
+// MARK: - Async Plugin Events (Cold Path)
 
-/// Events dispatched to plugins during fuzzing.
-public enum PluginEvent<each T: Sendable>: Sendable {
+/// Asynchronous events dispatched to plugins during fuzzing.
+/// These are called rarely and can be handled asynchronously.
+public enum AsyncPluginEvent<each T: Sendable>: Sendable {
     /// Fuzzing is starting.
     case start(StartContext)
 
@@ -39,11 +46,6 @@ public enum PluginEvent<each T: Sendable>: Sendable {
 
     /// A test failure was found.
     case failureFound(FailureFoundContext)
-
-    /// An iteration completed.
-    case iteration(IterationContext)
-
-    // MARK: - Context Types
 
     /// Context provided when fuzzing starts.
     public struct StartContext: Sendable {
@@ -89,34 +91,18 @@ public enum PluginEvent<each T: Sendable>: Sendable {
         public let test: @Sendable ((repeat each T)) async throws -> Void
         /// Source location where the fuzz test was called.
         public let sourceLocation: SourceLocation
-        public let coverageSignature: CoverageSignature
+        public let sparseCoverage: SparseCoverage
 
         public init(
             input: consuming (repeat each T),
             test: @Sendable @escaping ((repeat each T)) async throws -> Void,
             sourceLocation: SourceLocation,
-            coverageSignature: CoverageSignature
+            sparseCoverage: SparseCoverage
         ) {
             self.input = input
             self.test = test
             self.sourceLocation = sourceLocation
-            self.coverageSignature = coverageSignature
-        }
-    }
-
-    /// Context provided after each iteration.
-    public struct IterationContext: Sendable {
-        /// Whether this iteration discovered new coverage.
-        public let discoveredNewCoverage: Bool
-        /// The input that was tested in this iteration.
-        public let input: (repeat each T)
-
-        public init(
-            discoveredNewCoverage: Bool,
-            input: consuming (repeat each T)
-        ) {
-            self.discoveredNewCoverage = discoveredNewCoverage
-            self.input = input
+            self.sparseCoverage = sparseCoverage
         }
     }
 }
@@ -183,18 +169,18 @@ public enum FuzzPluginAction<each T: Sendable>: Sendable {
     public struct SubmitToCorpusAction: Sendable {
         /// The input to submit to the corpus.
         public let input: (repeat each T)
-        public let coverageSignature: CoverageSignature
+        public let sparseCoverage: SparseCoverage
         public let entryType: CorpusEntryType
         public let failureInfo: FailureInfo?
 
         public init(
             input: consuming (repeat each T),
-            coverageSignature: CoverageSignature,
+            sparseCoverage: SparseCoverage,
             entryType: CorpusEntryType,
             failureInfo: FailureInfo? = nil
         ) {
             self.input = input
-            self.coverageSignature = coverageSignature
+            self.sparseCoverage = sparseCoverage
             self.entryType = entryType
             self.failureInfo = failureInfo
         }
