@@ -5,53 +5,50 @@
 
 import Dependencies
 
-/// Duplicates elements within arrays to create repeated values.
-struct ArrayDuplicationMutator<Element: MutatorProviding & Sendable>: Mutator, Sendable {
-    @Dependency(\.fastRNG) private var fastRNG
+/// Creates an array duplication mutator that duplicates elements within arrays.
+public func arrayDuplicationMutator<Element: MutatorProviding & Sendable>() -> Mutator<[Element]> {
+    let elementMutator = Element.defaultMutator
 
-    var seeds: [[Element]] {
-        // Include arrays with duplicated elements
-        var result: [[Element]] = []
-        for element in Element.defaultMutator.seeds.prefix(5) {
-            result.append([element, element])
-            result.append([element, element, element])
-            result.append(Array(repeating: element, count: 5))
-        }
-        return result
+    // Include arrays with duplicated elements
+    var seeds: [[Element]] = []
+    for element in elementMutator.seeds.prefix(5) {
+        seeds.append([element, element])
+        seeds.append([element, element, element])
+        seeds.append(Array(repeating: element, count: 5))
     }
 
-    func mutate(_ value: [Element]) -> [[Element]] {
-        var results: [[Element]] = []
+    return Mutator<[Element]>(
+        seeds: seeds,
+        mutate: { value in
+            var results: [[Element]] = []
 
-        // Duplicate each element in place
-        for i in value.indices {
-            var copy = value
-            copy.insert(value[i], at: i)
-            results.append(copy)
+            // Duplicate each element in place
+            for i in value.indices {
+                var copy = value
+                copy.insert(value[i], at: i)
+                results.append(copy)
+            }
+
+            // Duplicate entire array
+            if !value.isEmpty && value.count < 20 {
+                results.append(value + value)
+            }
+
+            // Triple an element
+            for i in value.indices where value.count < 15 {
+                var copy = value
+                copy.insert(value[i], at: i)
+                copy.insert(value[i], at: i)
+                results.append(copy)
+            }
+
+            return results
+        },
+        generate: { rng in
+            // Generate arrays with duplicated elements
+            let element = elementMutator.generate(&rng)
+            let count = Int.random(in: 2...5, using: &rng)
+            return Array(repeating: element, count: count)
         }
-
-        // Duplicate entire array
-        if !value.isEmpty && value.count < 20 {
-            results.append(value + value)
-        }
-
-        // Triple an element
-        for i in value.indices where value.count < 15 {
-            var copy = value
-            copy.insert(value[i], at: i)
-            copy.insert(value[i], at: i)
-            results.append(copy)
-        }
-
-        return results
-    }
-
-    func generate() -> [Element] {
-        // Generate arrays with duplicated elements
-        let elementMutator = Element.defaultMutator
-        let element = elementMutator.generate()
-        var rng = fastRNG
-        let count = Int.random(in: 2...5, using: &rng)
-        return Array(repeating: element, count: count)
-    }
+    )
 }

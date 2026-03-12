@@ -148,9 +148,9 @@ func fuzzEngineWithMaxIterations<each Input: MutatorProviding & Codable & Sendab
 ///   - line: Line number for error reporting.
 ///   - test: The test closure to run for each input.
 /// - Returns: The fuzz result containing corpus, failures, and stats.
-func fuzzWithMaxIterations<each Input: Codable & Sendable, each M: Mutator>(
+func fuzzWithMaxIterations<each Input: Codable & Sendable>(
     maxIterations: Int,
-    using mutators: repeat each M,
+    using mutators: repeat Mutator<each Input>,
     seeds: [(repeat each Input)] = [],
     corpusMode: CorpusMode? = nil,
     parallelism: Int = 1,
@@ -158,7 +158,7 @@ func fuzzWithMaxIterations<each Input: Codable & Sendable, each M: Mutator>(
     function: StaticString = #function,
     line: Int = #line,
     test: @escaping @Sendable ((repeat each Input)) async throws -> Void
-) async throws -> FuzzResult<repeat each Input> where (repeat (each M).Value) == (repeat each Input) {
+) async throws -> FuzzResult<repeat each Input> {
     let advancement = 10.0 / Double(maxIterations)
     let testClock = TestClock()
     // Track virtual time for DateClient (SyncBox for sync access from @Sendable closure)

@@ -95,8 +95,8 @@ import Dependencies
 
 @discardableResult
 @inlinable
-public func fuzz<each Input: Codable & Sendable, each M: Mutator>(
-    using mutators: repeat each M,
+public func fuzz<each Input: Codable & Sendable>(
+    using mutators: repeat Mutator<each Input>,
     seeds: [(repeat each Input)] = [],
     duration: Duration = .seconds(60),
     corpusMode: CorpusMode? = nil,
@@ -106,7 +106,7 @@ public func fuzz<each Input: Codable & Sendable, each M: Mutator>(
     function: StaticString = #function,
     line: Int = #line,
     test: @escaping @Sendable ((repeat each Input)) async throws -> Void
-) async throws -> FuzzResult<repeat each Input> where (repeat (each M).Value) == (repeat each Input) {
+) async throws -> FuzzResult<repeat each Input> {
     let processor = PluginHandlerProcessor(handlers: handlers)
 
     // Sync closure for hot path (iteration events)
@@ -143,8 +143,8 @@ public func fuzz<each Input: Codable & Sendable, each M: Mutator>(
 
 /// Internal implementation shared by all fuzz overloads.
 @usableFromInline
-func fuzzInternal<each Input: Codable & Sendable, each M: Mutator>(
-    mutators: (repeat each M),
+func fuzzInternal<each Input: Codable & Sendable>(
+    mutators: (repeat Mutator<each Input>),
     seeds: [(repeat each Input)],
     duration: Duration,
     corpusMode: CorpusMode?,
@@ -162,7 +162,7 @@ func fuzzInternal<each Input: Codable & Sendable, each M: Mutator>(
     function: StaticString,
     line: Int,
     test: @escaping @Sendable ((repeat each Input)) async throws -> Void
-) async throws -> FuzzResult<repeat each Input> where (repeat (each M).Value) == (repeat each Input) {
+) async throws -> FuzzResult<repeat each Input> {
     @Dependency(\.environment) var environment
     @Dependency(\.corpusPersistence) var corpusPersistence
 
@@ -190,7 +190,7 @@ func fuzzInternal<each Input: Codable & Sendable, each M: Mutator>(
             column: 1
         )
 
-        let engine = FuzzEngine<repeat each M>(
+        let engine = FuzzEngine<repeat each Input>(
             mutators: mutators,
             config: config,
             corpusDirectory: corpusDir
@@ -228,7 +228,7 @@ func fuzzInternal<each Input: Codable & Sendable, each M: Mutator>(
                     column: 1
                 )
 
-                let engine = FuzzEngine<repeat each M>(
+                let engine = FuzzEngine<repeat each Input>(
                     mutators: mutators,
                     config: config,
                     corpusDirectory: nil // Don't save individual engine corpora
@@ -334,7 +334,7 @@ private func mergeResults<each Input: Codable & Sendable>(
     }
 
     // Merge all coverage changes
-    var allCoverageChanges: [(input: (repeat each Input), expected: CoverageSignature, actual: CoverageSignature)] = []
+    var allCoverageChanges: [(input: (repeat each Input), expected: SparseCoverage, actual: SparseCoverage)] = []
     for result in results {
         allCoverageChanges.append(contentsOf: result.coverageChanges)
     }
@@ -383,13 +383,12 @@ private func mergeResults<each Input: Codable & Sendable>(
 private func mergeCorpusSnapshots<each Input: Codable & Sendable>(
     _ snapshots: [CorpusSnapshot<repeat each Input>]
 ) -> CorpusSnapshot<repeat each Input> {
-    @Dependency(\.dateClient) var dateClient
     @Dependency(\.corpusRegistry) var corpusRegistry
 
     guard let first = snapshots.first else {
         return CorpusSnapshot<repeat each Input>(
             entries: [],
-            totalCoverage: CoverageSignature(edges: [])
+            coveredIndices: []
         )
     }
 
@@ -398,12 +397,12 @@ private func mergeCorpusSnapshots<each Input: Codable & Sendable>(
     }
 
     // Create a temporary corpus to deduplicate entries
-    let mergedCorpus: CorpusClient<repeat each Input> = corpusRegistry.get()
+    let mergedCorpus: Corpus<repeat each Input> = corpusRegistry.getCorpus()
 
     // Add all entries - addIfInteresting handles deduplication by coverage
     for snapshot in snapshots {
         for entry in snapshot.entries {
-            _ = mergedCorpus.addIfInteresting(entry.input, entry.signature)
+            _ = mergedCorpus.addIfInteresting(input: entry.input, sparse: entry.sparseCoverage)
         }
     }
 

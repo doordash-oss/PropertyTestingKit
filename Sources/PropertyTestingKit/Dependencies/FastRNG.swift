@@ -15,6 +15,7 @@ import Dependencies
 /// Each thread maintains its own state, seeded from the thread ID on first access.
 ///
 /// Performance: ~20ns per call with no allocation or lock overhead.
+@usableFromInline
 enum ThreadLocalRNG {
     @usableFromInline
     static let _key: pthread_key_t = {
@@ -59,12 +60,12 @@ enum ThreadLocalRNG {
 /// var rng = FastRNG()
 /// let value = Int.random(in: 0..<100, using: &rng)
 /// ```
-struct FastRNG: RandomNumberGenerator, Sendable {
+public struct FastRNG: RandomNumberGenerator, Sendable {
     @inlinable
-    init() {}
+    public init() {}
 
     @inlinable
-    mutating func next() -> UInt64 {
+    public mutating func next() -> UInt64 {
         ThreadLocalRNG.next()
     }
 }
@@ -72,8 +73,8 @@ struct FastRNG: RandomNumberGenerator, Sendable {
 // MARK: - Dependency Key
 
 extension FastRNG: DependencyKey {
-    static let liveValue = FastRNG()
-    static let testValue = FastRNG()
+    public static let liveValue = FastRNG()
+    public static let testValue = FastRNG()
 }
 
 extension DependencyValues {

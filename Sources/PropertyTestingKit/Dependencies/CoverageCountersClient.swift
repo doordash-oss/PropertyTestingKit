@@ -45,6 +45,18 @@ struct CoverageCountersClient: Sendable {
     /// This bypasses TLS lookup, providing O(1) performance even after task hops.
     var snapshotCoveredArraysWithContext: @Sendable (SanCovCounters.MeasurementContext) throws -> SparseCoverage
 
+    /// Access raw coverage data without creating a Swift array.
+    /// Use this with Corpus.addIfInterestingRaw to avoid allocation when coverage isn't interesting.
+    var withRawCoverage: @Sendable (SanCovCounters.MeasurementContext, @escaping (UnsafePointer<UInt32>?, Int) throws -> Bool) throws -> Bool
+
+    /// Merge coverage directly into a bitmap. This is the fastest path - no allocation.
+    /// Returns true if any new coverage was found.
+    var mergeCoverageIntoBitmap: @Sendable (SanCovCounters.MeasurementContext, UnsafeMutablePointer<UInt64>, Int, Bool) -> Bool
+
+    /// Compute signature hash from coverage data without allocation.
+    /// This matches the SparseCoverage.signatureHash algorithm.
+    var computeSignatureHash: @Sendable (SanCovCounters.MeasurementContext) -> Int
+
     init(
         isAvailable: @escaping @Sendable () -> Bool = unimplemented(
             "isAvailable",
@@ -63,6 +75,18 @@ struct CoverageCountersClient: Sendable {
         snapshotCoveredArraysWithContext: @escaping @Sendable (SanCovCounters.MeasurementContext) throws -> SparseCoverage = unimplemented(
             "snapshotCoveredArraysWithContext",
             placeholder: SparseCoverage()
+        ),
+        withRawCoverage: @escaping @Sendable (SanCovCounters.MeasurementContext, @escaping (UnsafePointer<UInt32>?, Int) throws -> Bool) throws -> Bool = unimplemented(
+            "withRawCoverage",
+            placeholder: false
+        ),
+        mergeCoverageIntoBitmap: @escaping @Sendable (SanCovCounters.MeasurementContext, UnsafeMutablePointer<UInt64>, Int, Bool) -> Bool = unimplemented(
+            "mergeCoverageIntoBitmap",
+            placeholder: false
+        ),
+        computeSignatureHash: @escaping @Sendable (SanCovCounters.MeasurementContext) -> Int = unimplemented(
+            "computeSignatureHash",
+            placeholder: 0
         )
     ) {
         self.isAvailable = isAvailable
@@ -70,6 +94,9 @@ struct CoverageCountersClient: Sendable {
         self.endMeasurement = endMeasurement
         self.resetCoverage = resetCoverage
         self.snapshotCoveredArraysWithContext = snapshotCoveredArraysWithContext
+        self.withRawCoverage = withRawCoverage
+        self.mergeCoverageIntoBitmap = mergeCoverageIntoBitmap
+        self.computeSignatureHash = computeSignatureHash
     }
 }
 
@@ -81,7 +108,12 @@ extension CoverageCountersClient: DependencyKey {
         beginMeasurement: { SanCovCounters.beginMeasurement() },
         endMeasurement: { SanCovCounters.endMeasurement($0) },
         resetCoverage: { SanCovCounters.resetCoverage($0) },
-        snapshotCoveredArraysWithContext: { try SanCovCounters.snapshotCoveredArrays(with: $0) }
+        snapshotCoveredArraysWithContext: { try SanCovCounters.snapshotCoveredArrays(with: $0) },
+        withRawCoverage: { context, body in try SanCovCounters.withRawCoverage(context: context, body: body) },
+        mergeCoverageIntoBitmap: { context, bitmap, wordCount, mergeAll in
+            SanCovCounters.mergeCoverageIntoBitmap(context: context, bitmap: bitmap, wordCount: wordCount, mergeAll: mergeAll)
+        },
+        computeSignatureHash: { SanCovCounters.computeSignatureHash(context: $0) }
     )
 
     /// Test value uses live coverage counters since they're read-only and safe.

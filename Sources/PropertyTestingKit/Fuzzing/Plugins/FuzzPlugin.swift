@@ -91,18 +91,18 @@ public enum AsyncPluginEvent<each T: Sendable>: Sendable {
         public let test: @Sendable ((repeat each T)) async throws -> Void
         /// Source location where the fuzz test was called.
         public let sourceLocation: SourceLocation
-        public let coverageSignature: CoverageSignature
+        public let sparseCoverage: SparseCoverage
 
         public init(
             input: consuming (repeat each T),
             test: @Sendable @escaping ((repeat each T)) async throws -> Void,
             sourceLocation: SourceLocation,
-            coverageSignature: CoverageSignature
+            sparseCoverage: SparseCoverage
         ) {
             self.input = input
             self.test = test
             self.sourceLocation = sourceLocation
-            self.coverageSignature = coverageSignature
+            self.sparseCoverage = sparseCoverage
         }
     }
 }
@@ -169,18 +169,18 @@ public enum FuzzPluginAction<each T: Sendable>: Sendable {
     public struct SubmitToCorpusAction: Sendable {
         /// The input to submit to the corpus.
         public let input: (repeat each T)
-        public let coverageSignature: CoverageSignature
+        public let sparseCoverage: SparseCoverage
         public let entryType: CorpusEntryType
         public let failureInfo: FailureInfo?
 
         public init(
             input: consuming (repeat each T),
-            coverageSignature: CoverageSignature,
+            sparseCoverage: SparseCoverage,
             entryType: CorpusEntryType,
             failureInfo: FailureInfo? = nil
         ) {
             self.input = input
-            self.coverageSignature = coverageSignature
+            self.sparseCoverage = sparseCoverage
             self.entryType = entryType
             self.failureInfo = failureInfo
         }

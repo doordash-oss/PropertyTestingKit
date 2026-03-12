@@ -9,10 +9,6 @@ import Testing
 
 /// Manages the fuzzing loop state. Not thread-safe - only used from a single task.
 final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendable {
-    /// Type-erased mutator functions for input mutation and generation.
-    typealias MutatorMutate = @Sendable ((repeat each Input)) -> [(repeat each Input)]
-    typealias MutatorGenerate = @Sendable () -> (repeat each Input)
-
     /// Synchronous plugin processor for iteration events (hot path).
     /// Captures concrete plugin types via closure; signature only mentions Input types.
     typealias SyncPluginProcessorFn = @Sendable (
@@ -32,9 +28,9 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
     /// Async plugin processor closure for rare events.
     private let processAsyncPlugins: AsyncPluginProcessorFn
     private let config: FuzzEngineConfig
-    private let corpus: CorpusClient<repeat each Input>
-    private let mutationGenerator: MutatorMutate
-    private let randomInputGenerator: MutatorGenerate
+    private var corpus: Corpus<repeat each Input>
+    private let mutators: (repeat Mutator<each Input>)
+    private let inputSize: Int
     private let seeds: [(repeat each Input)]
     private let startTime: Date
     private let dateClient: DateClient
@@ -50,27 +46,26 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
 
     init(
         seeds: [(repeat each Input)],
+        mutators: (repeat Mutator<each Input>),
+        inputSize: Int,
+        corpus: Corpus<repeat each Input>,
         processSyncPlugins: @escaping SyncPluginProcessorFn,
         processAsyncPlugins: @escaping AsyncPluginProcessorFn,
         config: FuzzEngineConfig,
         startTime: Date,
-        randomInputGenerator: @escaping MutatorGenerate,
-        mutationGenerator: @escaping MutatorMutate,
         test: @escaping @Sendable ((repeat each Input)) async throws -> Void
     ) {
-        let corpus = Self.fetchCorpus()
-
         // Caching the dateclient
         @Dependency(\.dateClient) var dateClient: DateClient
         self.dateClient = dateClient
         self.startTime = startTime
         self.seeds = seeds
-        self.randomInputGenerator = randomInputGenerator
+        self.mutators = mutators
+        self.inputSize = inputSize
         self.processSyncPlugins = processSyncPlugins
         self.processAsyncPlugins = processAsyncPlugins
         self.config = config
         self.corpus = corpus
-        self.mutationGenerator = mutationGenerator
         self.test = test
         self.pendingInputs = SimpleRingBuffer(minimumCapacity: 16)
     }
@@ -81,7 +76,7 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
 
     struct FuzzStateMachineResult {
         let stats: FuzzStats
-        let corpus: CorpusClient<repeat each Input>
+        let corpus: Corpus<repeat each Input>
         let failures: [(input: (repeat each Input), error: Error)]
     }
 
@@ -96,6 +91,10 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
         // Setup for test execution
         let coverageCountersClient = Self.fetchCoverageCounters()
         let sourceLocation = config.sourceLocation
+
+        // Cache RNG once here - passed to generate functions to avoid
+        // dependency injection overhead per call (millions of calls).
+        var rng = FastRNG()
 
         // Simple fuzz loop - no workers, just iterate
         var iterationCount = 0
@@ -140,7 +139,8 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
                 if !pendingInputs.isEmpty {
                     input = pendingInputs.removeFirstUnchecked()
                 } else {
-                    input = randomInputGenerator()
+                    // Generate directly - no closure indirection
+                    input = (repeat (each mutators).generate(&rng))
                     generatedCount += 1
                 }
 
@@ -152,12 +152,13 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
                     // Will throw if either the test throws or if it logs an Issue
                     try await testWithIssueCapture(input)
 
-                    // Coverage snapshot may throw if coverage is unavailable
-                    // Use addIfInterestingSparse to avoid creating a Set when coverage isn't interesting
-                    var didAdd = false
-                    if let sparse = try? coverageCountersClient.snapshotCoveredArraysWithContext(coverageContext) {
-                        didAdd = corpus.addIfInterestingSparse(input, sparse)
-                    }
+                    // Fast path: C merges coverage directly into corpus bitmap
+                    // No Swift allocation when coverage isn't interesting
+                    let didAdd = corpus.addIfInterestingWithBitmapMerge(
+                        input: input,
+                        context: coverageContext,
+                        coverageClient: coverageCountersClient
+                    )
 
                     // Process iteration event synchronously (hot path - no async)
                     processSyncPlugins(
@@ -169,12 +170,12 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
                     // Allow clean exit on cancellation
                     break
                 } catch {
-                    // On failure, we need the full signature for recording
-                    let coverageSignature: CoverageSignature
+                    // On failure, we need the sparse coverage for recording
+                    let sparseCoverage: SparseCoverage
                     if let sparse = try? coverageCountersClient.snapshotCoveredArraysWithContext(coverageContext) {
-                        coverageSignature = CoverageSignature(sparse: sparse)
+                        sparseCoverage = sparse
                     } else {
-                        coverageSignature = CoverageSignature(edges: Set())
+                        sparseCoverage = SparseCoverage()
                     }
                     recordFailure(input: input, error: error)
                     // Process failure event asynchronously (cold path - async OK)
@@ -185,7 +186,7 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
                                 input: input,
                                 test: testWithIssueCapture,
                                 sourceLocation: sourceLocation,
-                                coverageSignature: coverageSignature
+                                sparseCoverage: sparseCoverage
                             )
                         )
                     ) { action in
@@ -237,11 +238,6 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
         }
     }
 
-    private static func fetchCorpus() -> CorpusClient<repeat each Input> {
-        @Dependency(\.corpusRegistry) var corpusRegistry
-        return corpusRegistry.get()
-    }
-
     private static func fetchCoverageCounters() -> CoverageCountersClient {
         @Dependency(\.coverageCounters) var coverageCounters
         return coverageCounters
@@ -260,14 +256,15 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
             pendingInputs.append(contentsOf: queueAction.inputs)
 
         case .selectForMutation(let mutationAction):
-            let mutations = mutationGenerator(mutationAction.input)
+            // Generate mutations directly - no closure indirection
+            let mutations = generateMutations(mutationAction.input)
             pendingInputs.append(contentsOf: mutations)
             mutationsCount += 1
 
         case .submitToCorpus(let corpusAction):
             addToCorpus(
                 corpusAction.input,
-                signature: corpusAction.coverageSignature,
+                sparse: corpusAction.sparseCoverage,
                 type: corpusAction.entryType,
                 failureInfo: corpusAction.failureInfo
             )
@@ -279,8 +276,25 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
         haltReason = reason
     }
 
-    private func addToCorpus(_ input: (repeat each Input), signature: CoverageSignature, type: CorpusEntryType, failureInfo: FailureInfo?) {
-        corpus.add(input, signature, type, failureInfo)
+    private func addToCorpus(_ input: (repeat each Input), sparse: SparseCoverage, type: CorpusEntryType, failureInfo: FailureInfo?) {
+        corpus.add(input: input, sparse: sparse, entryType: type, failure: failureInfo)
+    }
+
+    /// Generate mutations for an input by mutating one position at a time.
+    /// Returns the cartesian product of mutations across all positions.
+    private func generateMutations(_ input: (repeat each Input)) -> [(repeat each Input)] {
+        let positionsMutated: [(repeat [each Input])] = (0..<inputSize).map { replacementIndex in
+            var currentIndex = 0
+            return (repeat {
+                defer { currentIndex += 1 }
+                if currentIndex == replacementIndex {
+                    return (each mutators).mutate(each input)
+                } else {
+                    return [(each input)]
+                }
+            }())
+        }
+        return positionsMutated.flatMap(cartesianProduct)
     }
 }
 

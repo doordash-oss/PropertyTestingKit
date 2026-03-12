@@ -13,40 +13,39 @@ import FunctionSpy
 struct CorpusTests {
 
     @Test("Corpus adds interesting entries")
-    func testCorpusAddsInteresting() async {
-        let corpus = Corpus<Int>()
+    func testCorpusAddsInteresting() {
+        var corpus = Corpus<Int>()
 
-        let sig1 = CoverageSignature(edges: Set<UInt32>([0]))
-        let sig2 = CoverageSignature(edges: Set<UInt32>([1]))
-        let sig3 = CoverageSignature(edges: Set<UInt32>([0]))  // Duplicate coverage
+        let sparse1 = SparseCoverage(indices: [0])
+        let sparse2 = SparseCoverage(indices: [1])
+        let sparse3 = SparseCoverage(indices: [0])  // Duplicate coverage
 
-        let added1 = await corpus.addIfInteresting(input: 1, signature: sig1)
-        let added2 = await corpus.addIfInteresting(input: 2, signature: sig2)
-        let added3 = await corpus.addIfInteresting(input: 3, signature: sig3)
+        let added1 = corpus.addIfInteresting(input: (1), sparse: sparse1)
+        let added2 = corpus.addIfInteresting(input: (2), sparse: sparse2)
+        let added3 = corpus.addIfInteresting(input: (3), sparse: sparse3)
 
         #expect(added1)
         #expect(added2)
         #expect(!added3)  // Redundant
 
-        let count = await corpus.count
-        #expect(count == 2)
+        #expect(corpus.count == 2)
     }
 
     @Test("Corpus minimization keeps essential entries")
-    func testCorpusMinimization() async {
-        let corpus = Corpus<Int>()
+    func testCorpusMinimization() {
+        var corpus = Corpus<Int>()
 
         // Entry 1 covers indices 0, 1
-        await corpus.add(input: 1, signature: CoverageSignature(edges: Set<UInt32>([0, 1])))
+        corpus.add(input: (1), sparse: SparseCoverage(indices: [0, 1]))
         // Entry 2 covers indices 1, 2
-        await corpus.add(input: 2, signature: CoverageSignature(edges: Set<UInt32>([1, 2])))
+        corpus.add(input: (2), sparse: SparseCoverage(indices: [1, 2]))
         // Entry 3 covers indices 0, 2 (makes 1 and 2 redundant together)
-        await corpus.add(input: 3, signature: CoverageSignature(edges: Set<UInt32>([0, 2])))
+        corpus.add(input: (3), sparse: SparseCoverage(indices: [0, 2]))
 
-        let minimized = await corpus.minimized()
+        let minimized = corpus.minimized()
 
         // Should need at most 2 entries to cover all 3 indices
         #expect(minimized.count <= 2)
-        #expect(minimized.totalCoverage.executedIndices == Set([0, 1, 2]))
+        #expect(minimized.coveredIndices == Set([0, 1, 2]))
     }
 }

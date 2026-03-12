@@ -118,7 +118,7 @@ extension FuzzPluginHandler {
                         .selectForMutation(.init(input: minimized)),
                         .submitToCorpus(.init(
                             input: minimized,
-                            coverageSignature: context.coverageSignature,
+                            sparseCoverage: context.sparseCoverage,
                             entryType: .failure
                         )),
                         .recordIssue(.init(

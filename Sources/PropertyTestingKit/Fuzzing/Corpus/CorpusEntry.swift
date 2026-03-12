@@ -6,13 +6,13 @@
 import Foundation
 import Dependencies
 
-/// A single entry in the corpus: an input and its coverage signature.
+/// A single entry in the corpus: an input and its coverage data.
 public struct CorpusEntry<each Input: Codable & Sendable>: Sendable, Codable {
     /// The test input.
     public let input: (repeat each Input)
 
-    /// The coverage signature produced by this input.
-    public let signature: CoverageSignature
+    /// The sparse coverage data.
+    public let sparseCoverage: SparseCoverage
 
     /// The reason this entry was added to the corpus.
     public let entryType: CorpusEntryType
@@ -23,12 +23,12 @@ public struct CorpusEntry<each Input: Codable & Sendable>: Sendable, Codable {
 
     public init(
         input: repeat each Input,
-        signature: CoverageSignature,
+        sparseCoverage: consuming SparseCoverage,
         entryType: CorpusEntryType = .coverage,
         failure: FailureInfo? = nil
     ) {
         self.input = (repeat each input)
-        self.signature = signature
+        self.sparseCoverage = sparseCoverage
         self.entryType = entryType
         self.failure = failure
     }
@@ -45,7 +45,7 @@ public struct CorpusEntry<each Input: Codable & Sendable>: Sendable, Codable {
         try container.encode(dataList, forKey: .input)
         try container.encode(readableList, forKey: .inputReadable)
 
-        try container.encode(signature, forKey: .signature)
+        try container.encode(sparseCoverage, forKey: .signature)
         try container.encode(entryType, forKey: .entryType)
         try container.encodeIfPresent(failure, forKey: .failure)
     }
@@ -77,7 +77,7 @@ public struct CorpusEntry<each Input: Codable & Sendable>: Sendable, Codable {
 
         self.input = try (repeat jsonDecoder.decode((each Input).self, from: dataIterator.next()!))
 
-        self.signature = try container.decode(CoverageSignature.self, forKey: .signature)
+        self.sparseCoverage = try container.decode(SparseCoverage.self, forKey: .signature)
         // Default to .coverage for backward compatibility with existing corpus files
         self.entryType = try container.decodeIfPresent(CorpusEntryType.self, forKey: .entryType) ?? .coverage
         self.failure = try container.decodeIfPresent(FailureInfo.self, forKey: .failure)

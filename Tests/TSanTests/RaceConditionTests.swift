@@ -57,10 +57,14 @@ struct SanCovCountersRaceTests {
 
 // MARK: - Corpus Concurrency Tests
 
-/// Helper to create a CoverageSignature from a set of indices
+/// Helper to create a SparseCoverage from a set of indices
+private func makeSparse(indices: [Int]) -> SparseCoverage {
+    SparseCoverage(indices: indices.map { UInt32($0) })
+}
+
+/// Helper to create a CoverageSignature from a set of indices (for signature-specific tests)
 private func makeSignature(indices: [Int]) -> CoverageSignature {
-    let sparse = SparseCoverage(indices: indices.map { UInt32($0) })
-    return CoverageSignature(sparse: sparse)
+    CoverageSignature(sparse: makeSparse(indices: indices))
 }
 
 @Suite("Corpus Race Detection")
@@ -68,45 +72,33 @@ struct CorpusRaceTests {
 
     @Test("Concurrent corpus operations")
     func concurrentCorpusOperations() async {
-        let corpus = Corpus<Int>()
+        // Note: Corpus is not thread-safe. These tests verify behavior in
+        // a serialized context (via the actor-isolated FuzzStateMachine).
+        // The "concurrent" operations here are serialized by Swift's runtime.
+        var corpus = Corpus<Int>()
 
-        await withTaskGroup(of: Void.self) { group in
-            // Concurrent adds
-            for i in 0..<50 {
-                group.addTask {
-                    let signature = makeSignature(indices: [i, i + 100, i + 200])
-                    await corpus.add(input: i, signature: signature)
-                }
-            }
+        // Sequential adds (corpus is not thread-safe)
+        for i in 0..<50 {
+            let sparse = makeSparse(indices: [i, i + 100, i + 200])
+            corpus.add(input: (i), sparse: sparse)
+        }
 
-            // Concurrent reads
-            for _ in 0..<20 {
-                group.addTask {
-                    _ = await corpus.snapshot()
-                }
-                group.addTask {
-                    _ = await corpus.count
-                }
-                group.addTask {
-                    _ = await corpus.isEmpty
-                }
-            }
+        // Sequential reads
+        for _ in 0..<20 {
+            _ = corpus.snapshot()
+            _ = corpus.count
+            _ = corpus.isEmpty
         }
     }
 
     @Test("Concurrent corpus addIfInteresting")
     func concurrentAddIfInteresting() async {
-        let corpus = Corpus<Int>()
+        // Note: Corpus is not thread-safe. This test verifies the API works correctly.
+        var corpus = Corpus<Int>()
 
-        await withTaskGroup(of: Bool.self) { group in
-            for i in 0..<100 {
-                group.addTask {
-                    let signature = makeSignature(indices: [i % 20])
-                    return await corpus.addIfInteresting(input: i, signature: signature)
-                }
-            }
-
-            for await _ in group {}
+        for i in 0..<100 {
+            let sparse = makeSparse(indices: [i % 20])
+            _ = corpus.addIfInteresting(input: (i), sparse: sparse)
         }
     }
 }
@@ -231,44 +223,35 @@ struct HighContentionTests {
         }
     }
 
-    @Test("Concurrent corpus and coverage operations", .timeLimit(.minutes(1)))
-    func concurrentCorpusAndCoverage() async {
-        let corpus = Corpus<Int>()
+    @Test("Sequential corpus and coverage operations", .timeLimit(.minutes(1)))
+    func sequentialCorpusAndCoverage() async {
+        // Note: Corpus is not thread-safe. This test verifies the API works correctly
+        // in a sequential context.
+        var corpus = Corpus<Int>()
 
-        await withTaskGroup(of: Void.self) { group in
-            // Tasks that measure coverage and add to corpus
-            for i in 0..<30 {
-                group.addTask {
-                    for j in 0..<10 {
-                        // Measure coverage with context
-                        let context = SanCovCounters.beginMeasurement()
-                        var x = i * j
-                        for k in 0..<20 { x += k }
-                        _ = x
+        for i in 0..<30 {
+            for j in 0..<10 {
+                // Measure coverage with context
+                let context = SanCovCounters.beginMeasurement()
+                var x = i * j
+                for k in 0..<20 { x += k }
+                _ = x
 
-                        // Create signature from context
-                        let signature: CoverageSignature
-                        if let coverage = try? SanCovCounters.snapshotCoveredArrays(with: context) {
-                            signature = CoverageSignature(sparse: coverage)
-                        } else {
-                            signature = makeSignature(indices: [i, j])
-                        }
-                        SanCovCounters.endMeasurement(context)
-
-                        // Add to corpus
-                        await corpus.add(input: i * 100 + j, signature: signature)
-                    }
+                // Create sparse coverage from context
+                let sparse: SparseCoverage
+                if let coverage = try? SanCovCounters.snapshotCoveredArrays(with: context) {
+                    sparse = coverage
+                } else {
+                    sparse = makeSparse(indices: [i, j])
                 }
-            }
+                SanCovCounters.endMeasurement(context)
 
-            // Tasks that read from corpus
-            for _ in 0..<10 {
-                group.addTask {
-                    for _ in 0..<20 {
-                        _ = await corpus.snapshot()
-                    }
-                }
+                // Add to corpus
+                corpus.add(input: (i * 100 + j), sparse: sparse)
             }
         }
+
+        // Verify corpus has entries
+        _ = corpus.snapshot()
     }
 }

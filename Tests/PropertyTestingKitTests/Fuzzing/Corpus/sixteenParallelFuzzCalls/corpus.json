@@ -1,1 +1,1 @@
-{"createdAt":"2026-01-27T22:10:17Z","entries":[{"discoveredAt":"2026-01-27T22:10:17Z","entryType":"coverage","input":["MA=="],"inputReadable":["0"],"signature":{"edges":[12743]}}],"totalCoverage":{"edges":[12743]},"updatedAt":"2026-01-27T22:10:17Z"}
+{"createdAt":"2026-01-27T22:10:17Z","entries":[{"discoveredAt":"2026-01-27T22:10:17Z","entryType":"coverage","input":["MA=="],"inputReadable":["0"],"signature":{"edges":[12743]}}],"updatedAt":"2026-01-27T22:10:17Z","coveredIndices":[12743]}

@@ -2,7 +2,7 @@
 //  MutatorTests.swift
 //  PropertyTestingKit
 //
-//  Tests for the Mutator protocol and built-in mutators.
+//  Tests for the Mutator struct and built-in mutators.
 //
 
 import Testing
@@ -11,22 +11,27 @@ import Dependencies
 import FunctionSpy
 @testable import PropertyTestingKit
 
-// MARK: - Mutator Protocol Tests
+// MARK: - Mutator Struct Tests
 
-@Suite("Mutator Protocol")
-struct MutatorProtocolTests {
-    @Test("AnyMutator type erases correctly")
-    func anyMutatorTypeErases() async {
-        let stringMutator = String.mutators(.empty)
-        let erased = AnyMutator(stringMutator)
+@Suite("Mutator Struct")
+struct MutatorStructTests {
+    @Test("Mutator stores seeds and closures correctly")
+    func mutatorStoresSeedsAndClosures() async {
+        let mutator = Mutator<String>(
+            seeds: ["test1", "test2"],
+            mutate: { [$0.uppercased()] },
+            generate: { _ in "generated" }
+        )
 
-        #expect(!erased.seeds.isEmpty)
-        #expect(erased.seeds.contains(""))
+        #expect(mutator.seeds == ["test1", "test2"])
+        #expect(mutator.mutate("hello") == ["HELLO"])
+        var rng = FastRNG()
+        #expect(mutator.generate(&rng) == "generated")
     }
 
-    @Test("ComposedMutator combines seeds from all mutators")
-    func composedMutatorCombinesSeeds() async {
-        let composed = String.mutators(.empty, .whitespace)
+    @Test("Mutator.compose combines seeds from all mutators")
+    func composeCommbinesSeeds() async {
+        let composed = Mutator.compose([emptyStringMutator, whitespaceMutator])
 
         // Should have seeds from both strategies
         #expect(composed.seeds.contains(""))
@@ -34,9 +39,9 @@ struct MutatorProtocolTests {
         #expect(composed.seeds.contains("\t"))
     }
 
-    @Test("ComposedMutator combines mutations from all mutators")
-    func composedMutatorCombinesMutations() async {
-        let composed = String.mutators(.empty, .whitespace)
+    @Test("Mutator.compose combines mutations from all mutators")
+    func composeCombinesMutations() async {
+        let composed = Mutator.compose([emptyStringMutator, whitespaceMutator])
         let mutations = composed.mutate("test")
 
         // Should have mutations from both strategies
@@ -51,9 +56,9 @@ struct MutatorProtocolTests {
         #expect(!mutator.mutate(5).isEmpty)
     }
 
-    @Test("SingleMutator works with custom seeds and mutate")
-    func singleMutatorWorks() async {
-        let mutator = SingleMutator<Int>(
+    @Test("Mutator works with custom seeds and mutate")
+    func mutatorWorksWithCustomSeedsAndMutate() async {
+        let mutator = Mutator<Int>(
             seeds: [1, 2, 3],
             mutate: { [$0 * 2] }
         )
@@ -69,7 +74,7 @@ struct MutatorProtocolTests {
 struct StringMutatorTests {
     @Test("PhoneNumber mutator has valid seeds")
     func phoneNumberSeeds() async {
-        let mutator = String.mutators(.phoneNumbers)
+        let mutator = phoneNumberMutator
 
         #expect(!mutator.seeds.isEmpty)
         #expect(mutator.seeds.contains(where: { $0.contains("555") }))
@@ -78,7 +83,7 @@ struct StringMutatorTests {
 
     @Test("PhoneNumber mutator generates mutations")
     func phoneNumberMutations() async {
-        let mutator = String.mutators(.phoneNumbers)
+        let mutator = phoneNumberMutator
         let mutations = mutator.mutate("555-1234")
 
         #expect(!mutations.isEmpty)
@@ -88,7 +93,7 @@ struct StringMutatorTests {
 
     @Test("Email mutator has valid seeds")
     func emailSeeds() async {
-        let mutator = String.mutators(.emails)
+        let mutator = emailMutator
 
         #expect(!mutator.seeds.isEmpty)
         #expect(mutator.seeds.contains(where: { $0.contains("@") }))
@@ -96,7 +101,7 @@ struct StringMutatorTests {
 
     @Test("Email mutator generates mutations")
     func emailMutations() async {
-        let mutator = String.mutators(.emails)
+        let mutator = emailMutator
         let mutations = mutator.mutate("test@example.com")
 
         #expect(!mutations.isEmpty)
@@ -106,7 +111,7 @@ struct StringMutatorTests {
 
     @Test("URL mutator has valid seeds")
     func urlSeeds() async {
-        let mutator = String.mutators(.urls)
+        let mutator = urlMutator
 
         #expect(!mutator.seeds.isEmpty)
         #expect(mutator.seeds.contains(where: { $0.hasPrefix("http") }))
@@ -115,7 +120,7 @@ struct StringMutatorTests {
 
     @Test("SQL injection mutator has dangerous seeds")
     func sqlSeeds() async {
-        let mutator = String.mutators(.sql)
+        let mutator = sqlInjectionMutator
 
         #expect(!mutator.seeds.isEmpty)
         #expect(mutator.seeds.contains(where: { $0.contains("DROP TABLE") }))
@@ -124,7 +129,7 @@ struct StringMutatorTests {
 
     @Test("SQL injection mutator generates attacks")
     func sqlMutations() async {
-        let mutator = String.mutators(.sql)
+        let mutator = sqlInjectionMutator
         let mutations = mutator.mutate("admin")
 
         #expect(!mutations.isEmpty)
@@ -133,7 +138,7 @@ struct StringMutatorTests {
 
     @Test("XSS mutator has script tags")
     func xssSeeds() async {
-        let mutator = String.mutators(.xss)
+        let mutator = xssMutator
 
         #expect(!mutator.seeds.isEmpty)
         #expect(mutator.seeds.contains(where: { $0.contains("<script>") }))
@@ -142,7 +147,7 @@ struct StringMutatorTests {
 
     @Test("Unicode mutator has diverse characters")
     func unicodeSeeds() async {
-        let mutator = String.mutators(.unicode)
+        let mutator = unicodeMutator
 
         #expect(!mutator.seeds.isEmpty)
         #expect(mutator.seeds.contains(where: { $0.contains("😀") || $0.contains("Ω") }))
@@ -150,7 +155,7 @@ struct StringMutatorTests {
 
     @Test("Whitespace mutator has various whitespace")
     func whitespaceSeeds() async {
-        let mutator = String.mutators(.whitespace)
+        let mutator = whitespaceMutator
 
         #expect(mutator.seeds.contains(" "))
         #expect(mutator.seeds.contains("\t"))
@@ -159,14 +164,14 @@ struct StringMutatorTests {
 
     @Test("Empty string mutator includes empty")
     func emptySeeds() async {
-        let mutator = String.mutators(.empty)
+        let mutator = emptyStringMutator
 
         #expect(mutator.seeds.contains(""))
     }
 
     @Test("Boundary mutator has length extremes")
     func boundarySeeds() async {
-        let mutator = String.mutators(.boundaries)
+        let mutator = stringBoundaryMutator
 
         #expect(mutator.seeds.contains(""))
         #expect(mutator.seeds.contains("a"))
@@ -175,7 +180,7 @@ struct StringMutatorTests {
 
     @Test("Multiple strategies combine correctly")
     func multipleStrategies() async {
-        let mutator = String.mutators(.sql, .xss)
+        let mutator = Mutator.compose([sqlInjectionMutator, xssMutator])
 
         #expect(mutator.seeds.contains(where: { $0.contains("DROP") }))
         #expect(mutator.seeds.contains(where: { $0.contains("<script>") }))
@@ -188,7 +193,7 @@ struct StringMutatorTests {
 struct IntMutatorTests {
     @Test("Boundary mutator has extremes")
     func boundarySeeds() async {
-        let mutator = Int.mutators(.boundaries)
+        let mutator = intBoundaryMutator
 
         #expect(mutator.seeds.contains(0))
         #expect(mutator.seeds.contains(1))
@@ -199,7 +204,7 @@ struct IntMutatorTests {
 
     @Test("Boundary mutator generates useful mutations")
     func boundaryMutations() async {
-        let mutator = Int.mutators(.boundaries)
+        let mutator = intBoundaryMutator
         let mutations = mutator.mutate(100)
 
         #expect(mutations.contains(101)) // +1
@@ -211,7 +216,7 @@ struct IntMutatorTests {
 
     @Test("Port mutator has common ports")
     func portSeeds() async {
-        let mutator = Int.mutators(.ports)
+        let mutator = portMutator
 
         #expect(mutator.seeds.contains(80))
         #expect(mutator.seeds.contains(443))
@@ -222,7 +227,7 @@ struct IntMutatorTests {
 
     @Test("HTTP status code mutator has all classes")
     func httpStatusSeeds() async {
-        let mutator = Int.mutators(.httpStatusCodes)
+        let mutator = httpStatusCodeMutator
 
         // 1xx informational
         #expect(mutator.seeds.contains(where: { $0 >= 100 && $0 < 200 }))
@@ -238,7 +243,7 @@ struct IntMutatorTests {
 
     @Test("Negative mutator has negative values")
     func negativeSeeds() async {
-        let mutator = Int.mutators(.negative)
+        let mutator = negativeIntMutator
 
         #expect(mutator.seeds.allSatisfy { $0 < 0 })
         #expect(mutator.seeds.contains(-1))
@@ -247,7 +252,7 @@ struct IntMutatorTests {
 
     @Test("Powers mutator has powers of two")
     func powersSeeds() async {
-        let mutator = Int.mutators(.powers)
+        let mutator = powerOfTwoMutator
 
         #expect(mutator.seeds.contains(1))
         #expect(mutator.seeds.contains(2))
@@ -257,7 +262,7 @@ struct IntMutatorTests {
 
     @Test("Multiple strategies combine correctly")
     func multipleStrategies() async {
-        let mutator = Int.mutators(.boundaries, .ports)
+        let mutator = Mutator.compose([intBoundaryMutator, portMutator])
 
         #expect(mutator.seeds.contains(Int.max))
         #expect(mutator.seeds.contains(443))
@@ -270,7 +275,7 @@ struct IntMutatorTests {
 struct BoolMutatorTests {
     @Test("Bool mutator has both values")
     func boolSeeds() async {
-        let mutator = Bool.mutator()
+        let mutator = Bool.defaultMutator
 
         #expect(mutator.seeds.contains(true))
         #expect(mutator.seeds.contains(false))
@@ -278,7 +283,7 @@ struct BoolMutatorTests {
 
     @Test("Bool mutator flips value")
     func boolMutations() async {
-        let mutator = Bool.mutator()
+        let mutator = Bool.defaultMutator
 
         #expect(mutator.mutate(true) == [false])
         #expect(mutator.mutate(false) == [true])
@@ -291,7 +296,7 @@ struct BoolMutatorTests {
 struct DoubleMutatorTests {
     @Test("Boundary mutator has extremes")
     func boundarySeeds() async {
-        let mutator = Double.mutators(.boundaries)
+        let mutator = doubleBoundaryMutator
 
         #expect(mutator.seeds.contains(0.0))
         #expect(mutator.seeds.contains(1.0))
@@ -301,7 +306,7 @@ struct DoubleMutatorTests {
 
     @Test("Special mutator has special values")
     func specialSeeds() async {
-        let mutator = Double.mutators(.special)
+        let mutator = specialDoubleMutator
 
         #expect(mutator.seeds.contains(where: { $0.isNaN }))
         #expect(mutator.seeds.contains(Double.infinity))
@@ -311,7 +316,7 @@ struct DoubleMutatorTests {
 
     @Test("Percentage mutator has 0-1 range values")
     func percentageSeeds() async {
-        let mutator = Double.mutators(.percentages)
+        let mutator = percentageMutator
 
         #expect(mutator.seeds.contains(0.0))
         #expect(mutator.seeds.contains(0.5))
@@ -322,7 +327,7 @@ struct DoubleMutatorTests {
 
     @Test("Multiple strategies combine correctly")
     func multipleStrategies() async {
-        let mutator = Double.mutators(.boundaries, .special)
+        let mutator = Mutator.compose([doubleBoundaryMutator, specialDoubleMutator])
 
         #expect(mutator.seeds.contains(0.0))
         #expect(mutator.seeds.contains(where: { $0.isNaN }))
@@ -344,7 +349,7 @@ struct MutatorFuzzEngineTests {
         await withDependencies {
             $0.corpusRegistry = alwaysInterestingRegistry
         } operation: {
-            let mutator = SingleMutator<String>(
+            let mutator = Mutator<String>(
                 seeds: ["custom1", "custom2"],
                 mutate: { _ in [] }
             )
@@ -388,8 +393,7 @@ struct MutatorFuzzEngineTests {
         await withDependencies {
             $0.corpusRegistry = alwaysInterestingRegistry
         } operation: {
-            // Use AnyMutator to test with multiple seeds
-            let mutator = AnyMutator<String>(
+            let mutator = Mutator<String>(
                 seeds: ["first", "second", "third"],
                 mutate: { [$0 + "-mutated"] }
             )
@@ -450,7 +454,7 @@ struct MutatorPublicAPITests {
                 readData: { _ in Data() }
             )
         } operation: {
-            let mutator = SingleMutator<String>(
+            let mutator = Mutator<String>(
                 seeds: ["test1", "test2"],
                 mutate: { _ in [] }
             )
@@ -489,7 +493,7 @@ struct MutatorPublicAPITests {
         } operation: {
             _ = try await fuzzWithMaxIterations(
                 maxIterations: 50,
-                using: String.mutators(.empty)
+                using: emptyStringMutator
             ) { (input: String) in
                 await testedInputs.update { $0.append(input) }
             }
@@ -517,11 +521,11 @@ struct MutatorPublicAPITests {
                 readData: { _ in Data() }
             )
         } operation: {
-            let stringMutator = SingleMutator<String>(
+            let stringMutator = Mutator<String>(
                 seeds: ["hello", "world"],
                 mutate: { [$0.uppercased()] }
             )
-            let intMutator = SingleMutator<Int>(
+            let intMutator = Mutator<Int>(
                 seeds: [1, 2, 3],
                 mutate: { [$0 + 1] }
             )
@@ -566,7 +570,7 @@ struct MutatorPublicAPITests {
         } operation: {
             _ = try await fuzzWithMaxIterations(
                 maxIterations: 50,
-                using: String.mutators(.empty), Int.mutators(.boundaries)
+                using: emptyStringMutator, intBoundaryMutator
             ) { (str: String, num: Int) in
                 await testedInputs.update { $0.append((str, num)) }
             }

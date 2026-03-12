@@ -62,7 +62,7 @@ struct ShrinkingHandlerTests {
                 }
             },
             sourceLocation: SourceLocation(fileID: #fileID, filePath: #filePath, line: #line, column: 1),
-            coverageSignature: CoverageSignature(edges: Set<UInt32>([]))
+            sparseCoverage: SparseCoverage()
         )
 
         let actions = try await handler.handleAsync(AsyncPluginEvent<[Int]>.failureFound(failureContext))
@@ -105,7 +105,7 @@ struct ShrinkingHandlerTests {
                 }
             },
             sourceLocation: SourceLocation(fileID: #fileID, filePath: #filePath, line: #line, column: 1),
-            coverageSignature: CoverageSignature(edges: Set<UInt32>([]))
+            sparseCoverage: SparseCoverage()
         )
 
         let actions = try await handler.handleAsync(AsyncPluginEvent<[Int]>.failureFound(failureContext))

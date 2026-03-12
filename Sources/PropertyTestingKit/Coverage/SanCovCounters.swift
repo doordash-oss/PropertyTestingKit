@@ -205,6 +205,69 @@ extension SanCovCounters {
         let indices = Array(UnsafeBufferPointer(start: ptr, count: count))
         return SparseCoverage(indices: indices)
     }
+
+    /// Get raw coverage data without creating a Swift array.
+    ///
+    /// This is useful when you want to check coverage uniqueness before allocating.
+    /// The closure receives the raw pointer and count - do NOT store the pointer
+    /// as it will be freed when the closure returns.
+    ///
+    /// - Parameters:
+    ///   - context: The measurement context.
+    ///   - body: Closure that receives the raw indices pointer and count.
+    /// - Returns: The result of the closure.
+    static func withRawCoverage<T>(
+        context: MeasurementContext,
+        body: @escaping (UnsafePointer<UInt32>?, Int) throws -> T
+    ) throws -> T {
+        try checkAvailabilty()
+
+        let count = getCoveredCount(with: context)
+        guard count > 0 else {
+            return try body(nil, 0)
+        }
+
+        guard let ptr = sancov_snapshot_covered_indices_with_context(context.rawContext) else {
+            return try body(nil, 0)
+        }
+        defer { free(ptr) }
+
+        return try body(ptr, count)
+    }
+
+    /// Merge coverage from a measurement context directly into a bitmap.
+    /// This is the fastest path - no allocation, early exit on first new coverage.
+    ///
+    /// - Parameters:
+    ///   - context: The measurement context to read coverage from.
+    ///   - bitmap: The bitmap storage to merge into.
+    ///   - wordCount: Number of UInt64 words in the bitmap.
+    ///   - mergeAll: If true, merge all edges; if false, return early on first new edge.
+    /// - Returns: true if any new coverage was found, false otherwise.
+    static func mergeCoverageIntoBitmap(
+        context: MeasurementContext,
+        bitmap: UnsafeMutablePointer<UInt64>,
+        wordCount: Int,
+        mergeAll: Bool
+    ) -> Bool {
+        guard isAvailable else { return false }
+        return sancov_merge_coverage_into_bitmap(
+            context.rawContext,
+            bitmap,
+            wordCount,
+            mergeAll
+        )
+    }
+
+    /// Compute signature hash from coverage data without allocation.
+    /// This matches the SparseCoverage.signatureHash algorithm.
+    ///
+    /// - Parameter context: The measurement context.
+    /// - Returns: The signature hash, or 0 if no coverage.
+    static func computeSignatureHash(context: MeasurementContext) -> Int {
+        guard isAvailable else { return 0 }
+        return Int(sancov_compute_signature_hash(context.rawContext))
+    }
 }
 
 // MARK: Coverage Gap Detection

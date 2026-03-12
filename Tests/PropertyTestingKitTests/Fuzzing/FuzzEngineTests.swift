@@ -49,8 +49,8 @@ private func makeThrowingCoverageClient() -> CoverageCountersClient {
 struct EmptyFuzzable: MutatorProviding, Codable, Sendable, Equatable {
     let value: Int
 
-    static var defaultMutator: AnyMutator<EmptyFuzzable> {
-        AnyMutator(seeds: []) { _ in [] }
+    static var defaultMutator: Mutator<EmptyFuzzable> {
+        Mutator(seeds: [], mutate: { _ in [] })
     }
 }
 
@@ -58,8 +58,8 @@ struct EmptyFuzzable: MutatorProviding, Codable, Sendable, Equatable {
 struct EmptyMutationsFuzzable: MutatorProviding, Codable, Sendable, Equatable {
     let value: Int
 
-    static var defaultMutator: AnyMutator<EmptyMutationsFuzzable> {
-        AnyMutator(seeds: [EmptyMutationsFuzzable(value: 1)]) { _ in [] }
+    static var defaultMutator: Mutator<EmptyMutationsFuzzable> {
+        Mutator(seeds: [EmptyMutationsFuzzable(value: 1)], mutate: { _ in [] })
     }
 }
 
@@ -238,28 +238,28 @@ struct FuzzEngineTests {
         let sigTest = CoverageSignature(sparse: SparseCoverage(indices: [1]))
         print("DEBUG: Test signature edges=\(sigTest.edges)")
 
-        // Create corpus with matching signature
+        // Create corpus with matching sparse coverage
         // Note: InputContainer encodes Int 42 as base64 of "42" = "NDI="
         let corpusJSON = """
         {
             "entries": [
                 {
                     "input": ["NDI="],
-                    "signature": {"edges": [1]},
+                    "signature": {"indices": [1]},
                     "discoveredAt": "2025-01-01T00:00:00Z"
                 }
             ],
             "createdAt": "2025-01-01T00:00:00Z",
             "updatedAt": "2025-01-01T00:00:00Z",
-            "totalCoverage": {"edges": [1]}
+            "coveredIndices": [1]
         }
         """
         let corpusData = Data(corpusJSON.utf8)
 
-        // Parse corpus to verify the signature
+        // Parse corpus to verify the coverage
         let parsedCorpusSnapshot = try JSONDecoder.corpusDecoder.decode(CorpusSnapshot<Int>.self, from: corpusData)
-        print("DEBUG: Parsed corpus signature edges=\(parsedCorpusSnapshot.entries[0].signature.edges)")
-        print("DEBUG: Signatures equal? \(sigTest == parsedCorpusSnapshot.entries[0].signature)")
+        print("DEBUG: Parsed corpus sparse coverage=\(parsedCorpusSnapshot.entries[0].sparseCoverage.indices)")
+        print("DEBUG: Coverage matches? \(parsedCorpusSnapshot.entries[0].sparseCoverage.indices == [1])")
 
         let (loadSpy, loadFn) = spy { (_: URL) -> Data in corpusData }
         let (existsSpy, existsFn) = spy { (_: URL) -> Bool in true }
@@ -383,7 +383,7 @@ struct FuzzEngineTests {
             "entries": [],
             "createdAt": "2025-01-01T00:00:00Z",
             "updatedAt": "2025-01-01T00:00:00Z",
-            "totalCoverage": {"edges": []}
+            "coveredIndices": []
         }
         """
         let corpusData = Data(corpusJSON.utf8)
@@ -483,7 +483,7 @@ struct FuzzEngineTests {
             ],
             "createdAt": "2025-01-01T00:00:00Z",
             "updatedAt": "2025-01-01T00:00:00Z",
-            "totalCoverage": {"edges": [5]}
+            "coveredIndices": [5]
         }
         """
         let corpusData = Data(corpusJSON.utf8)
@@ -552,20 +552,20 @@ struct FuzzEngineTests {
             SparseCoverage(indices: [1])  // Always return matching coverage
         }
 
-        // Corpus with signature containing edge 1
+        // Corpus with sparse coverage containing edge 1
         // Note: InputContainer encodes Int 42 as base64 of "42" = "NDI="
         let corpusJSON = """
         {
             "entries": [
                 {
                     "input": ["NDI="],
-                    "signature": {"edges": [1]},
+                    "signature": {"indices": [1]},
                     "discoveredAt": "2025-01-01T00:00:00Z"
                 }
             ],
             "createdAt": "2025-01-01T00:00:00Z",
             "updatedAt": "2025-01-01T00:00:00Z",
-            "totalCoverage": {"edges": [1]}
+            "coveredIndices": [1]
         }
         """
         let corpusData = Data(corpusJSON.utf8)
@@ -673,7 +673,7 @@ struct FuzzEngineTests {
     @Test("FuzzEngine resetCoverage is called between iterations")
     func testResetCoverageCalledBetweenIterations() async {
         let resetCount = SyncBox(0)
-        let snapshotCount = SyncBox(0)
+        let signatureHashCount = SyncBox(0)
 
         let result = await withDependencies {
             $0.coverageCounters = CoverageCountersClient(
@@ -684,8 +684,13 @@ struct FuzzEngineTests {
                     resetCount.update { $0 += 1 }
                 },
                 snapshotCoveredArraysWithContext: { _ in
-                    snapshotCount.update { $0 += 1 }
-                    return SparseCoverage(indices: [1])
+                    // Return sparse coverage with a unique index each time
+                    SparseCoverage(indices: [UInt32(signatureHashCount.value)])
+                },
+                computeSignatureHash: { _ in
+                    signatureHashCount.update { $0 += 1 }
+                    // Return unique hash each time so corpus accepts it
+                    return signatureHashCount.value
                 }
             )
         } operation: {
@@ -693,11 +698,11 @@ struct FuzzEngineTests {
         }
 
         // Reset should be called once per iteration
-        // Snapshot should be called once per iteration
+        // computeSignatureHash should be called once per iteration
         #expect(resetCount.value == result.stats.totalInputs,
                 "resetCoverage should be called once per iteration: got \(resetCount.value), expected \(result.stats.totalInputs)")
-        #expect(snapshotCount.value == result.stats.totalInputs,
-                "snapshotCoveredArrays should be called once per iteration")
+        #expect(signatureHashCount.value == result.stats.totalInputs,
+                "computeSignatureHash should be called once per iteration")
     }
 
     @Test("FuzzEngine beginMeasurement called only once")
@@ -736,14 +741,15 @@ struct FuzzEngineTests {
     @Test("FuzzEngine coverage isolation - each iteration sees fresh coverage")
     func testCoverageIsolationPerIteration() async {
         // This test verifies that each iteration starts with fresh (reset) coverage
-        // by tracking the sequence of reset -> run -> snapshot
+        // by tracking the sequence of reset -> run -> signatureHash
 
         enum CoverageEvent: Equatable {
             case reset
-            case snapshot
+            case signatureHash
         }
 
         let events = SyncBox<[CoverageEvent]>([])
+        let hashCounter = SyncBox(0)
 
         _ = await withDependencies {
             $0.coverageCounters = CoverageCountersClient(
@@ -754,8 +760,14 @@ struct FuzzEngineTests {
                     events.update { $0.append(.reset) }
                 },
                 snapshotCoveredArraysWithContext: { _ in
-                    events.update { $0.append(.snapshot) }
-                    return SparseCoverage(indices: [1])
+                    // Return sparse coverage with a unique index
+                    SparseCoverage(indices: [UInt32(hashCounter.value)])
+                },
+                computeSignatureHash: { _ in
+                    events.update { $0.append(.signatureHash) }
+                    hashCounter.update { $0 += 1 }
+                    // Return unique hash each time
+                    return hashCounter.value
                 }
             )
         } operation: {
@@ -764,16 +776,16 @@ struct FuzzEngineTests {
 
         let recordedEvents = events.value
 
-        // Should have 5 reset-snapshot pairs
-        #expect(recordedEvents.count == 10, "Should have 5 pairs of reset+snapshot events")
+        // Should have 5 reset-signatureHash pairs
+        #expect(recordedEvents.count == 10, "Should have 5 pairs of reset+signatureHash events")
 
-        // Verify the pattern: reset, snapshot, reset, snapshot, ...
+        // Verify the pattern: reset, signatureHash, reset, signatureHash, ...
         for i in stride(from: 0, to: recordedEvents.count, by: 2) {
             if i < recordedEvents.count {
                 #expect(recordedEvents[i] == .reset, "Event \(i) should be reset")
             }
             if i + 1 < recordedEvents.count {
-                #expect(recordedEvents[i + 1] == .snapshot, "Event \(i+1) should be snapshot")
+                #expect(recordedEvents[i + 1] == .signatureHash, "Event \(i+1) should be signatureHash")
             }
         }
     }

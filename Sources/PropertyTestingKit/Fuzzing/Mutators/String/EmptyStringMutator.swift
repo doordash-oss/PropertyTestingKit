@@ -5,26 +5,30 @@
 
 import Dependencies
 
-struct EmptyStringMutator: Mutator, Sendable {
-    @Dependency(\.fastRNG) private var fastRNG
+private let _emptyStringSeeds: [String] = ["", " ", "\t", "\n", "\0"]
 
-    var seeds: [String] {
-        ["", " ", "\t", "\n", "\0"]
-    }
-
-    func mutate(_ value: String) -> [String] {
-        var results: [String] = []
-        if !value.isEmpty {
-            results.append("")
-            results.append(String(value.first!))
-            results.append(String(value.last!))
+private func _emptyStringMutate(_ value: String) -> [String] {
+    var results: [String] = []
+    if !value.isEmpty {
+        results.append("")
+        if let first = value.first {
+            results.append(String(first))
         }
-        results.append(value + value)
-        return results
+        if let last = value.last {
+            results.append(String(last))
+        }
     }
-
-    func generate() -> String {
-        var rng = fastRNG
-        return seeds.randomElement(using: &rng) ?? ""
-    }
+    results.append(value + value)
+    return results
 }
+
+private func _emptyStringGenerate(_ rng: inout FastRNG) -> String {
+    _emptyStringSeeds.randomElement(using: &rng) ?? ""
+}
+
+/// Empty string mutator for testing empty/whitespace string handling.
+public let emptyStringMutator = Mutator<String>(
+    seeds: _emptyStringSeeds,
+    mutate: _emptyStringMutate,
+    generate: _emptyStringGenerate
+)

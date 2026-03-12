@@ -17,15 +17,18 @@ import Foundation
 public struct CoverageSignature: Hashable, Sendable {
     /// The set of edge indices that were executed.
     /// Only non-zero edges are stored for efficiency.
-    public private(set) var edges: Set<UInt32>
+    @usableFromInline
+    var edges: Set<UInt32>
 
     /// Create directly from edges (for testing/deserialization).
+    @usableFromInline
     init(edges: Set<UInt32>) {
         self.edges = edges
     }
 
     /// Create a signature from sparse coverage data.
-    init(sparse: SparseCoverage) {
+    @usableFromInline
+    init(sparse: consuming SparseCoverage) {
         self.edges = Set(sparse.indices)
     }
 
@@ -82,7 +85,8 @@ public struct CoverageSignature: Hashable, Sendable {
     /// Optimized to avoid creating an intermediate Set - iterates over the array
     /// and checks each element against this signature's Set.
     /// Returns early on first unique index found.
-    func hasUniqueCoverage(sparse: SparseCoverage) -> Bool {
+    @usableFromInline
+    func hasUniqueCoverage(sparse: borrowing SparseCoverage) -> Bool {
         for index in sparse.indices {
             if !edges.contains(index) {
                 return true
@@ -98,8 +102,18 @@ public struct CoverageSignature: Hashable, Sendable {
 
     /// Merges another signature into this one in-place.
     /// More efficient than `union(with:)` when accumulating coverage.
+    @usableFromInline
     mutating func merge(with other: CoverageSignature) {
         edges.formUnion(other.edges)
+    }
+
+    /// Merges sparse coverage into this signature in-place.
+    /// Avoids creating an intermediate Set from the sparse coverage.
+    @usableFromInline
+    mutating func mergeSparse(_ sparse: borrowing SparseCoverage) {
+        for index in sparse.indices {
+            edges.insert(index)
+        }
     }
 }
 
