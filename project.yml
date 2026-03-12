@@ -35,21 +35,6 @@ packages:
     url: https://github.com/ordo-one/package-benchmark.git
     version: 1.27.3
 targets:
-  # Concurrent queue implementations
-  ConcurrentQueues:
-    type: framework
-    platform: macOS
-    sources:
-      - path: Sources/ConcurrentQueues
-    dependencies:
-      - package: swift-atomics
-        product: Atomics
-    settings:
-      base:
-        GENERATE_INFOPLIST_FILE: YES
-        PRODUCT_NAME: ConcurrentQueues
-        PRODUCT_BUNDLE_IDENTIFIER: com.propertytestingkit.concurrentqueues
-
   # C target for value profile hooks
   SanCovHooks:
     type: library.static
@@ -102,8 +87,6 @@ targets:
       - target: SanCovHooks
         link: true
       - target: CLLVMSymbolizer
-        link: true
-      - target: ConcurrentQueues
         link: true
       - package: swift-dependencies
         product: Dependencies
@@ -254,34 +237,6 @@ targets:
         PRODUCT_NAME: TSanTests
         PRODUCT_BUNDLE_IDENTIFIER: com.propertytestingkit.tsantests
 
-  # Concurrent queue tests
-  ConcurrentQueuesTests:
-    type: bundle.unit-test
-    platform: macOS
-    sources:
-      - path: Tests/ConcurrentQueuesTests
-    dependencies:
-      - target: ConcurrentQueues
-    settings:
-      base:
-        GENERATE_INFOPLIST_FILE: YES
-        OTHER_SWIFT_FLAGS: >-
-          $(inherited)
-          -g
-          -plugin-path $(TOOLCHAIN_DIR)/usr/lib/swift/host/plugins/testing
-        SWIFT_INCLUDE_PATHS:
-          - $(TOOLCHAIN_DIR)/usr/lib/swift/macosx
-        LIBRARY_SEARCH_PATHS:
-          - $(TOOLCHAIN_DIR)/usr/lib/swift/macosx
-        OTHER_LDFLAGS: >-
-          $(inherited)
-          -lTesting
-        LD_RUNPATH_SEARCH_PATHS: >-
-          $(inherited)
-          $(TOOLCHAIN_DIR)/usr/lib/swift/macosx
-        PRODUCT_NAME: ConcurrentQueuesTests
-        PRODUCT_BUNDLE_IDENTIFIER: com.propertytestingkit.concurrentqueuestests
-
   # Coverage benchmarks
   CoverageBenchmarks:
     type: tool
@@ -345,15 +300,6 @@ targets:
           $(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin
 
 schemes:
-  ConcurrentQueues:
-    build:
-      targets:
-        ConcurrentQueues: all
-        ConcurrentQueuesTests: [test]
-    test:
-      targets:
-        - ConcurrentQueuesTests
-      gatherCoverageData: false
   PropertyTestingKit:
     build:
       targets:

@@ -11,7 +11,6 @@
 import Benchmark
 import Darwin
 import Foundation
-import ConcurrentQueues
 import PropertyTestingKit
 
 // MARK: - CPU Time Measurement

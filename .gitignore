@@ -14,3 +14,4 @@ DerivedData/
 traces
 call_trees
 __BenchmarkBoilerplate*
+__pycache__/
