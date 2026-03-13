@@ -277,6 +277,7 @@ static void ctx_release(SanCovMeasurementContext* ctx) {
         if (old_count == 1) {
             // Refcount dropped to zero, free the context
             cleanup_task_map(ctx);
+            free(ctx->covered_indices);
             free(ctx);
         }
     }
@@ -296,6 +297,10 @@ SanCovMeasurementContext* sancov_begin_measurement(void) {
     SanCovMeasurementContext* ctx = (SanCovMeasurementContext*)xmalloc(sizeof(SanCovMeasurementContext));
     ctx->coverage_map = NULL;
     ctx->covered_count = 0;
+    // Pre-allocate covered index buffer (typical coverage is sparse, 64 is plenty for most iterations)
+    ctx->covered_indices_capacity = 64;
+    ctx->covered_indices = (uint32_t*)xmalloc(ctx->covered_indices_capacity * sizeof(uint32_t));
+    ctx->path_trie = NULL;
     atomic_init(&ctx->refcount, 1);  // Start with refcount of 1 (owner reference)
 
     // Associate this measurement context with the current task
@@ -326,6 +331,9 @@ SanCovMeasurementContext* sancov_create_dummy_context(void) {
     SanCovMeasurementContext* ctx = (SanCovMeasurementContext*)xmalloc(sizeof(SanCovMeasurementContext));
     ctx->coverage_map = NULL;
     ctx->covered_count = 0;
+    ctx->covered_indices_capacity = 0;
+    ctx->covered_indices = NULL;
+    ctx->path_trie = NULL;
     atomic_init(&ctx->refcount, 1);
     return ctx;
 }
@@ -339,6 +347,7 @@ void sancov_reset_coverage(SanCovMeasurementContext* ctx) {
         memset(ctx->coverage_map, 0, g_guard_count);
     }
     ctx->covered_count = 0;
+    // covered_indices buffer is reused — just reset the count (capacity stays)
 }
 
 /// Cleanup caches, etc
@@ -386,6 +395,17 @@ size_t sancov_get_covered_count_with_context(SanCovMeasurementContext* ctx) {
 
 // Allocate and fill an array of covered edge indices.
 //
+const uint32_t* sancov_get_covered_indices(SanCovMeasurementContext* ctx, size_t* out_count) {
+    if (!ctx || !out_count) {
+        if (out_count) *out_count = 0;
+        return NULL;
+    }
+    size_t count = ctx->covered_count;
+    *out_count = count;
+    if (count == 0 || !ctx->covered_indices) return NULL;
+    return ctx->covered_indices;
+}
+
 // Scans the coverage map and returns indices of edges that were hit (counter != 0).
 // The caller is responsible for freeing the returned array.
 // Use sancov_get_covered_count_with_context() to get the array size.
@@ -394,13 +414,20 @@ size_t sancov_get_covered_count_with_context(SanCovMeasurementContext* ctx) {
 //   Newly allocated array of covered indices, or NULL if none covered.
 //   Caller must free() the returned pointer.
 //
-// The SIMD path processes 16 counters at a time, skipping zero chunks entirely.
 uint32_t* sancov_snapshot_covered_indices_with_context(SanCovMeasurementContext* ctx) {
     if (!ctx) return NULL;
 
     size_t count = ctx->covered_count;
     if (count == 0) return NULL;
 
+    // Fast path: copy from covered indices buffer — O(covered_edges)
+    if (ctx->covered_indices && count <= ctx->covered_indices_capacity) {
+        uint32_t* indices = (uint32_t*)xmalloc(count * sizeof(uint32_t));
+        memcpy(indices, ctx->covered_indices, count * sizeof(uint32_t));
+        return indices;
+    }
+
+    // Fallback: scan counters
     const uint8_t* counters = get_counters_with_context(ctx);
     size_t counter_count = sancov_get_counter_count();
     if (!counters || counter_count == 0) return NULL;
@@ -493,87 +520,50 @@ static inline bool bitmap_insert(uint64_t* bitmap, size_t bitmap_word_count, uin
 //   hash = XOR of (index * 0x9e3779b97f4a7c15) for each covered index
 //   hash ^= count * 0x517cc1b727220a95
 // Uses the same SIMD iteration as other coverage functions.
+int64_t sancov_compute_hash_from_indices(const uint32_t* indices, size_t count) {
+    if (!indices || count == 0) return 0;
+
+    const int64_t INDEX_PRIME = 0x9e3779b97f4a7c15LL;
+    const int64_t COUNT_PRIME = 0x517cc1b727220a95LL;
+
+    int64_t hash = 0;
+    for (size_t i = 0; i < count; i++) {
+        int64_t mixed = (int64_t)indices[i] * INDEX_PRIME;
+        hash ^= mixed;
+    }
+    hash ^= (int64_t)count * COUNT_PRIME;
+    return hash;
+}
+
 int64_t sancov_compute_signature_hash(SanCovMeasurementContext* ctx) {
     if (!ctx) return 0;
 
     size_t count = ctx->covered_count;
     if (count == 0) return 0;
 
+    // Fast path: use the covered indices buffer — O(covered_edges) not O(total_edges)
+    if (ctx->covered_indices && count <= ctx->covered_indices_capacity) {
+        return sancov_compute_hash_from_indices(ctx->covered_indices, count);
+    }
+
+    // Fallback: buffer overflow, scan counters (should be rare)
     const uint8_t* counters = get_counters_with_context(ctx);
     size_t counter_count = sancov_get_counter_count();
     if (!counters || counter_count == 0) return 0;
 
-    // Golden ratio primes (same as Swift SparseCoverage.signatureHash)
     const int64_t INDEX_PRIME = 0x9e3779b97f4a7c15LL;
     const int64_t COUNT_PRIME = 0x517cc1b727220a95LL;
 
     int64_t hash = 0;
 
-#if USE_NEON_SIMD
-
-    size_t i = 0;
-    uint8x16_t zero = vdupq_n_u8(0);
-
-    for (; i + 16 <= counter_count; i += 16) {
-        uint8x16_t chunk = vld1q_u8(counters + i);
-        uint8x16_t cmp = vcgtq_u8(chunk, zero);
-        uint64x2_t cmp64 = vreinterpretq_u64_u8(cmp);
-
-        uint64_t low = vgetq_lane_u64(cmp64, 0);
-        uint64_t high = vgetq_lane_u64(cmp64, 1);
-
-        // Skip entirely zero chunks (common case - coverage is sparse)
-        if (low == 0 && high == 0) {
-            continue;
-        }
-
-        // Process low 8 bytes using CTZ
-        while (low) {
-            int tz = __builtin_ctzll(low);
-            int byte_pos = tz >> 3;
-            uint32_t index = (uint32_t)(i + byte_pos);
-
-            // Mix the index into the hash
-            int64_t mixed = (int64_t)index * INDEX_PRIME;
-            hash ^= mixed;
-
-            low &= ~(0xFFULL << (byte_pos << 3));
-        }
-
-        // Process high 8 bytes
-        while (high) {
-            int tz = __builtin_ctzll(high);
-            int byte_pos = tz >> 3;
-            uint32_t index = (uint32_t)(i + 8 + byte_pos);
-
-            int64_t mixed = (int64_t)index * INDEX_PRIME;
-            hash ^= mixed;
-
-            high &= ~(0xFFULL << (byte_pos << 3));
-        }
-    }
-
-    // Handle remaining bytes
-    for (; i < counter_count; i++) {
-        if (counters[i] != 0) {
-            int64_t mixed = (int64_t)i * INDEX_PRIME;
-            hash ^= mixed;
-        }
-    }
-
-#else
-    // Scalar fallback
     for (size_t i = 0; i < counter_count; i++) {
         if (counters[i] != 0) {
             int64_t mixed = (int64_t)i * INDEX_PRIME;
             hash ^= mixed;
         }
     }
-#endif
 
-    // Mix in the count to differentiate signatures with same XOR but different counts
     hash ^= (int64_t)count * COUNT_PRIME;
-
     return hash;
 }
 
@@ -774,15 +764,203 @@ void __sanitizer_cov_trace_pc_guard_init(uint32_t *start, uint32_t *stop) {
     // else: Same section passed again (harmless, can happen during re-initialization)
 }
 
-void __sanitizer_cov_trace_pc_guard(uint32_t *guard) {
+__attribute__((noinline))
+void sancov_record_edge(uint32_t *guard) {
     uint8_t* map = get_current_coverage_map();
     if (map && *guard < g_guard_count) {
         if (map[*guard] == 0) {
             map[*guard] = 1;
-            if (tls_cached_measurement_context) {
-                tls_cached_measurement_context->covered_count++;
+            SanCovMeasurementContext* ctx = tls_cached_measurement_context;
+            if (ctx) {
+                size_t idx = ctx->covered_count;
+                ctx->covered_count = idx + 1;
+                // Append to covered indices buffer (grow if needed)
+                if (idx < ctx->covered_indices_capacity) {
+                    ctx->covered_indices[idx] = *guard;
+                } else if (ctx->covered_indices) {
+                    size_t new_cap = ctx->covered_indices_capacity * 2;
+                    uint32_t* new_buf = (uint32_t*)realloc(ctx->covered_indices, new_cap * sizeof(uint32_t));
+                    if (new_buf) {
+                        ctx->covered_indices = new_buf;
+                        ctx->covered_indices_capacity = new_cap;
+                        new_buf[idx] = *guard;
+                    }
+                }
             }
         }
+    }
+}
+
+__attribute__((noinline))
+void sancov_record_edge_counting(uint32_t *guard) {
+    uint8_t* map = get_current_coverage_map();
+    if (map && *guard < g_guard_count) {
+        uint8_t prev = map[*guard];
+        if (prev == 0) {
+            // First hit: record the edge index, same as binary
+            map[*guard] = 1;
+            SanCovMeasurementContext* ctx = tls_cached_measurement_context;
+            if (ctx) {
+                size_t idx = ctx->covered_count;
+                ctx->covered_count = idx + 1;
+                if (idx < ctx->covered_indices_capacity) {
+                    ctx->covered_indices[idx] = *guard;
+                } else if (ctx->covered_indices) {
+                    size_t new_cap = ctx->covered_indices_capacity * 2;
+                    uint32_t* new_buf = (uint32_t*)realloc(ctx->covered_indices, new_cap * sizeof(uint32_t));
+                    if (new_buf) {
+                        ctx->covered_indices = new_buf;
+                        ctx->covered_indices_capacity = new_cap;
+                        new_buf[idx] = *guard;
+                    }
+                }
+            }
+        } else if (prev < 255) {
+            // Subsequent hit: saturating 8-bit increment
+            map[*guard] = prev + 1;
+        }
+    }
+}
+
+// MARK: - Trie Edge Hook
+
+// Trie node: children stored as a sorted array of (edge_index, child_pointer) pairs.
+// For typical coverage (~10-50 unique edges per node), linear scan is faster than hash table.
+typedef struct TrieNode {
+    uint32_t *child_edges;          // Sorted array of edge indices
+    struct TrieNode **child_nodes;  // Parallel array of child pointers
+    uint16_t child_count;
+    uint16_t child_capacity;
+    bool is_terminal;
+} TrieNode;
+
+static TrieNode* trie_node_create(void) {
+    TrieNode* node = (TrieNode*)xmalloc(sizeof(TrieNode));
+    node->child_edges = NULL;
+    node->child_nodes = NULL;
+    node->child_count = 0;
+    node->child_capacity = 0;
+    node->is_terminal = false;
+    return node;
+}
+
+static void trie_node_destroy(TrieNode* node) {
+    if (!node) return;
+    for (uint16_t i = 0; i < node->child_count; i++) {
+        trie_node_destroy(node->child_nodes[i]);
+    }
+    free(node->child_edges);
+    free(node->child_nodes);
+    free(node);
+}
+
+// Find child for edge_index. Returns the child node or NULL.
+static inline TrieNode* trie_node_find_child(TrieNode* node, uint32_t edge_index) {
+    // Linear scan — fast for small child counts (typical: 1-5 children per node)
+    for (uint16_t i = 0; i < node->child_count; i++) {
+        if (node->child_edges[i] == edge_index) {
+            return node->child_nodes[i];
+        }
+    }
+    return NULL;
+}
+
+// Add a child for edge_index. Returns the new child node.
+static TrieNode* trie_node_add_child(TrieNode* node, uint32_t edge_index) {
+    if (node->child_count == node->child_capacity) {
+        uint16_t new_cap = node->child_capacity == 0 ? 4 : node->child_capacity * 2;
+        node->child_edges = (uint32_t*)realloc(node->child_edges, new_cap * sizeof(uint32_t));
+        node->child_nodes = (TrieNode**)realloc(node->child_nodes, new_cap * sizeof(TrieNode*));
+        node->child_capacity = new_cap;
+    }
+    TrieNode* child = trie_node_create();
+    node->child_edges[node->child_count] = edge_index;
+    node->child_nodes[node->child_count] = child;
+    node->child_count++;
+    return child;
+}
+
+// Path trie state
+struct SanCovPathTrie {
+    TrieNode* root;
+    TrieNode* current;
+    bool is_novel;
+};
+
+void sancov_context_set_trie(SanCovMeasurementContext* context, SanCovPathTrie* trie) {
+    if (context) context->path_trie = trie;
+}
+
+SanCovPathTrie* sancov_trie_create(void) {
+    SanCovPathTrie* trie = (SanCovPathTrie*)xmalloc(sizeof(SanCovPathTrie));
+    trie->root = trie_node_create();
+    trie->current = trie->root;
+    trie->is_novel = false;
+    return trie;
+}
+
+void sancov_trie_destroy(SanCovPathTrie* trie) {
+    if (!trie) return;
+    trie_node_destroy(trie->root);
+    free(trie);
+}
+
+
+bool sancov_trie_is_unique_path(SanCovPathTrie* trie) {
+    if (!trie) return false;
+    if (trie->is_novel) return true;
+    return !trie->current->is_terminal;
+}
+
+void sancov_trie_mark_terminal(SanCovPathTrie* trie) {
+    if (trie) trie->current->is_terminal = true;
+}
+
+void sancov_trie_reset(SanCovPathTrie* trie) {
+    if (!trie) return;
+    trie->current = trie->root;
+    trie->is_novel = false;
+}
+
+__attribute__((noinline))
+void sancov_record_edge_trie(uint32_t *guard) {
+    uint8_t* map = get_current_coverage_map();
+    if (!map || *guard >= g_guard_count) return;
+
+    // Check first-hit and mark the map. Skip covered_indices bookkeeping —
+    // the trie strategy doesn't need it (uniqueness comes from the trie, not post-hoc).
+    if (map[*guard]) return;
+    map[*guard] = 1;
+
+    // Advance the trie on first hit only — loop-immune.
+    SanCovMeasurementContext* ctx = tls_cached_measurement_context;
+    if (!ctx) return;
+    SanCovPathTrie* trie = ctx->path_trie;
+    if (!trie) return;
+
+    uint32_t edge_index = *guard;
+    TrieNode* child = trie_node_find_child(trie->current, edge_index);
+    if (child) {
+        trie->current = child;
+    } else {
+        trie->current = trie_node_add_child(trie->current, edge_index);
+        trie->is_novel = true;
+    }
+}
+
+// Edge hook function pointer — set by Swift via sancov_install_swift_hook().
+// Before Swift init, falls back to sancov_record_edge directly.
+static void (*g_edge_hook)(uint32_t*) = NULL;
+
+void sancov_install_swift_hook(void (*hook)(uint32_t*)) {
+    g_edge_hook = hook;
+}
+
+void __sanitizer_cov_trace_pc_guard(uint32_t *guard) {
+    if (g_edge_hook) {
+        g_edge_hook(guard);
+    } else {
+        sancov_record_edge(guard);
     }
 }
 

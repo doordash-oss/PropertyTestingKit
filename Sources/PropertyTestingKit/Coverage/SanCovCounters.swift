@@ -11,6 +11,7 @@
 
 import Foundation
 import SanCovHooks
+@_exported import EdgeHooks
 import MachO
 
 /// Namespace for SanitizerCoverage APIs with task-level isolation.
@@ -84,6 +85,28 @@ enum SanCovCounters {
     /// Coverage from other concurrent tasks is not included.
     static var currentCoveredCount: Int {
         sancov_get_covered_count()
+    }
+}
+
+// MARK: - Edge Hook
+
+extension SanCovCounters {
+    /// Install a custom edge hook that will be called on every edge hit.
+    ///
+    /// The hook receives the guard pointer — dereference it to get the edge index.
+    /// Call `sancov_record_edge(guardPtr)` from your hook for default behavior.
+    ///
+    /// Pass `nil` to restore the default.
+    ///
+    /// - Important: Must be called before fuzzing starts. Not safe to call during fuzzing.
+    public static func setEdgeHook(_ hook: EdgeHook?) {
+        sancov_install_swift_hook(hook ?? defaultEdgeHook)
+    }
+
+    /// Attach a path trie to a measurement context.
+    /// The trie edge hook reads the trie from the context on every edge hit.
+    static func attachTrie(_ trie: PathTrie, to context: MeasurementContext) {
+        trie.attach(to: context.rawContext)
     }
 }
 
@@ -267,6 +290,31 @@ extension SanCovCounters {
     static func computeSignatureHash(context: MeasurementContext) -> Int {
         guard isAvailable else { return 0 }
         return Int(sancov_compute_signature_hash(context.rawContext))
+    }
+
+    /// Compute signature hash from an explicit array of edge indices.
+    /// Pure function — no dependency on live coverage counters.
+    /// Uses the same algorithm as `computeSignatureHash(context:)`.
+    static func computeSignatureHash(indices: [UInt32]) -> Int {
+        indices.withUnsafeBufferPointer { buffer in
+            Int(sancov_compute_hash_from_indices(buffer.baseAddress, buffer.count))
+        }
+    }
+
+    /// Access the covered indices buffer directly (zero-copy).
+    /// The pointer is valid until the next `resetCoverage` or `endMeasurement` call.
+    ///
+    /// - Returns: A buffer pointer to the covered indices, or nil if no coverage.
+    static func withCoveredIndices<R>(
+        context: MeasurementContext,
+        body: (UnsafeBufferPointer<UInt32>) -> R
+    ) -> R {
+        var count: Int = 0
+        let ptr = sancov_get_covered_indices(context.rawContext, &count)
+        if let ptr, count > 0 {
+            return body(UnsafeBufferPointer(start: ptr, count: count))
+        }
+        return body(UnsafeBufferPointer(start: nil, count: 0))
     }
 }
 

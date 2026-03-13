@@ -100,6 +100,8 @@ public func fuzz<each Input: Codable & Sendable>(
     seeds: [(repeat each Input)] = [],
     duration: Duration = .seconds(60),
     corpusMode: CorpusMode? = nil,
+    coverageStrategy: CoverageStrategyKind = .signatureMatch,
+    edgeHook: EdgeHook? = nil,
     parallelism: Int = ProcessInfo.processInfo.processorCount,
     handlers: [FuzzPluginHandler<repeat each Input>] = [.mutation()],
     filePath: StaticString = #filePath,
@@ -131,6 +133,8 @@ public func fuzz<each Input: Codable & Sendable>(
         seeds: seeds,
         duration: duration,
         corpusMode: corpusMode,
+        coverageStrategy: coverageStrategy,
+        edgeHook: edgeHook,
         parallelism: parallelism,
         processSyncPlugins: processSyncPlugins,
         processAsyncPlugins: processAsyncPlugins,
@@ -148,6 +152,8 @@ func fuzzInternal<each Input: Codable & Sendable>(
     seeds: [(repeat each Input)],
     duration: Duration,
     corpusMode: CorpusMode?,
+    coverageStrategy: CoverageStrategyKind,
+    edgeHook: EdgeHook?,
     parallelism: Int,
     processSyncPlugins: @Sendable @escaping (
         consuming SyncPluginEvent<repeat each Input>,
@@ -184,6 +190,8 @@ func fuzzInternal<each Input: Codable & Sendable>(
             verbose: verbose,
             corpusMode: corpusMode,
             projectPath: projectPath(from: filePath),
+            coverageStrategy: coverageStrategy,
+            edgeHook: edgeHook,
             fileID: testFilePath,
             filePath: testFilePath,
             line: line,
@@ -222,6 +230,8 @@ func fuzzInternal<each Input: Codable & Sendable>(
                     verbose: verbose,
                     corpusMode: .refuzzReplace, // Each engine fuzzes fresh
                     projectPath: projectPath(from: filePath),
+                    coverageStrategy: coverageStrategy,
+                    edgeHook: edgeHook,
                     fileID: testFilePath,
                     filePath: testFilePath,
                     line: line,
@@ -291,6 +301,8 @@ public func fuzz<each Input: MutatorProviding & Codable & Sendable>(
     seeds: [(repeat each Input)] = [],
     duration: Duration = .seconds(60),
     corpusMode: CorpusMode? = nil,
+    coverageStrategy: CoverageStrategyKind = .signatureMatch,
+    edgeHook: EdgeHook? = nil,
     parallelism: Int = ProcessInfo.processInfo.processorCount,
     handlers: [FuzzPluginHandler<repeat each Input>] = [.mutation()],
     filePath: StaticString = #filePath,
@@ -303,6 +315,8 @@ public func fuzz<each Input: MutatorProviding & Codable & Sendable>(
         seeds: seeds,
         duration: duration,
         corpusMode: corpusMode,
+        coverageStrategy: coverageStrategy,
+        edgeHook: edgeHook,
         parallelism: parallelism,
         handlers: handlers,
         filePath: filePath,
@@ -399,10 +413,13 @@ private func mergeCorpusSnapshots<each Input: Codable & Sendable>(
     // Create a temporary corpus to deduplicate entries
     let mergedCorpus: Corpus<repeat each Input> = corpusRegistry.getCorpus()
 
+    // Use a local signature hash set for deduplication
+    var signatureHashes = Set<Int>()
+
     // Add all entries - addIfInteresting handles deduplication by coverage
     for snapshot in snapshots {
         for entry in snapshot.entries {
-            _ = mergedCorpus.addIfInteresting(input: entry.input, sparse: entry.sparseCoverage)
+            _ = mergedCorpus.addIfInteresting(input: entry.input, sparse: entry.sparseCoverage, signatureHashes: &signatureHashes)
         }
     }
 

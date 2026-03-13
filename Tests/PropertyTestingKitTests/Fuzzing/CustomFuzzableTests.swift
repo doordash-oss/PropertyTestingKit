@@ -1,6 +1,5 @@
 import Testing
 import Foundation
-import Dependencies
 import FunctionSpy
 @testable import PropertyTestingKit
 
@@ -28,16 +27,12 @@ struct CustomMutatorProvidingTests {
         let seenTimeouts = Synchronized(Set<Int>())
         let seenRetries = Synchronized(Set<Int>())
 
-        // Use AlwaysInterestingCorpusRegistry to bypass coverage data requirements
-        let alwaysInterestingRegistry = AlwaysInterestingCorpusRegistry()
-
-        let result = await withDependencies {
-            $0.corpusRegistry = alwaysInterestingRegistry
-        } operation: {
-            await fuzzEngineWithMaxIterations(maxIterations: 50) { (input: TestConfig) in
-                await seenTimeouts.update { $0.insert(input.timeout) }
-                await seenRetries.update { $0.insert(input.retries) }
-            }
+        let result = await fuzzEngineWithMaxIterations(
+            maxIterations: 50,
+            coverageStrategy: .alwaysInteresting
+        ) { (input: TestConfig) in
+            await seenTimeouts.update { $0.insert(input.timeout) }
+            await seenRetries.update { $0.insert(input.retries) }
         }
 
         let timeoutCount = await seenTimeouts.value.count

@@ -343,39 +343,34 @@ struct MutatorFuzzEngineTests {
     func engineUsesMutatorSeeds() async {
         let testedInputs = Synchronized([String]())
 
-        // Use AlwaysInterestingCorpusRegistry to bypass coverage data requirements
-        let alwaysInterestingRegistry = AlwaysInterestingCorpusRegistry()
+        let mutator = Mutator<String>(
+            seeds: ["custom1", "custom2"],
+            mutate: { _ in [] }
+        )
 
-        await withDependencies {
-            $0.corpusRegistry = alwaysInterestingRegistry
-        } operation: {
-            let mutator = Mutator<String>(
-                seeds: ["custom1", "custom2"],
-                mutate: { _ in [] }
-            )
+        let config = FuzzEngineConfig(
+            maxDuration: .seconds(1),
+            coverageStrategy: .alwaysInteresting
+        )
 
-            let config = FuzzEngineConfig(
-                maxDuration: .seconds(1)            )
-
-            let engine = FuzzEngine(mutators: mutator, config: config)
-            // Create default plugin processor (MutationPlugin)
-            let processor = PluginHandlerProcessor(handlers: [FuzzPluginHandler<String>.mutation()])
-            let processSyncPlugins: @Sendable (
-                consuming SyncPluginEvent<String>,
-                (FuzzPluginAction<String>) -> Void
-            ) -> Void = { event, execute in
-                processor.processSync(event: event, execute: execute)
-            }
-            let processAsyncPlugins: @Sendable (
-                isolated (any Actor)?,
-                consuming AsyncPluginEvent<String>,
-                (FuzzPluginAction<String>) -> Void
-            ) async -> Void = { isolation, event, execute in
-                await processor.processAsync(isolation: isolation, event: event, execute: execute)
-            }
-            _ = await engine.run(processSyncPlugins: processSyncPlugins, processAsyncPlugins: processAsyncPlugins) { input in
-                await testedInputs.update { $0.append(input) }
-            }
+        let engine = FuzzEngine(mutators: mutator, config: config)
+        // Create default plugin processor (MutationPlugin)
+        let processor = PluginHandlerProcessor(handlers: [FuzzPluginHandler<String>.mutation()])
+        let processSyncPlugins: @Sendable (
+            consuming SyncPluginEvent<String>,
+            (FuzzPluginAction<String>) -> Void
+        ) -> Void = { event, execute in
+            processor.processSync(event: event, execute: execute)
+        }
+        let processAsyncPlugins: @Sendable (
+            isolated (any Actor)?,
+            consuming AsyncPluginEvent<String>,
+            (FuzzPluginAction<String>) -> Void
+        ) async -> Void = { isolation, event, execute in
+            await processor.processAsync(isolation: isolation, event: event, execute: execute)
+        }
+        _ = await engine.run(processSyncPlugins: processSyncPlugins, processAsyncPlugins: processAsyncPlugins) { input in
+            await testedInputs.update { $0.append(input) }
         }
 
         let inputs = await testedInputs.value
@@ -387,39 +382,34 @@ struct MutatorFuzzEngineTests {
     func engineUsesMutatorWithMultipleSeeds() async {
         let testedInputs = Synchronized([String]())
 
-        // Use AlwaysInterestingCorpusRegistry to bypass coverage data requirements
-        let alwaysInterestingRegistry = AlwaysInterestingCorpusRegistry()
+        let mutator = Mutator<String>(
+            seeds: ["first", "second", "third"],
+            mutate: { [$0 + "-mutated"] }
+        )
 
-        await withDependencies {
-            $0.corpusRegistry = alwaysInterestingRegistry
-        } operation: {
-            let mutator = Mutator<String>(
-                seeds: ["first", "second", "third"],
-                mutate: { [$0 + "-mutated"] }
-            )
+        let config = FuzzEngineConfig(
+            maxDuration: .seconds(2),
+            coverageStrategy: .alwaysInteresting
+        )
 
-            let config = FuzzEngineConfig(
-                maxDuration: .seconds(2)            )
-
-            let engine = FuzzEngine(mutators: mutator, config: config)
-            // Create default plugin processor (MutationPlugin)
-            let processor = PluginHandlerProcessor(handlers: [FuzzPluginHandler<String>.mutation()])
-            let processSyncPlugins: @Sendable (
-                consuming SyncPluginEvent<String>,
-                (FuzzPluginAction<String>) -> Void
-            ) -> Void = { event, execute in
-                processor.processSync(event: event, execute: execute)
-            }
-            let processAsyncPlugins: @Sendable (
-                isolated (any Actor)?,
-                consuming AsyncPluginEvent<String>,
-                (FuzzPluginAction<String>) -> Void
-            ) async -> Void = { isolation, event, execute in
-                await processor.processAsync(isolation: isolation, event: event, execute: execute)
-            }
-            _ = await engine.run(processSyncPlugins: processSyncPlugins, processAsyncPlugins: processAsyncPlugins) { input in
-                await testedInputs.update { $0.append(input) }
-            }
+        let engine = FuzzEngine(mutators: mutator, config: config)
+        // Create default plugin processor (MutationPlugin)
+        let processor = PluginHandlerProcessor(handlers: [FuzzPluginHandler<String>.mutation()])
+        let processSyncPlugins: @Sendable (
+            consuming SyncPluginEvent<String>,
+            (FuzzPluginAction<String>) -> Void
+        ) -> Void = { event, execute in
+            processor.processSync(event: event, execute: execute)
+        }
+        let processAsyncPlugins: @Sendable (
+            isolated (any Actor)?,
+            consuming AsyncPluginEvent<String>,
+            (FuzzPluginAction<String>) -> Void
+        ) async -> Void = { isolation, event, execute in
+            await processor.processAsync(isolation: isolation, event: event, execute: execute)
+        }
+        _ = await engine.run(processSyncPlugins: processSyncPlugins, processAsyncPlugins: processAsyncPlugins) { input in
+            await testedInputs.update { $0.append(input) }
         }
 
         // Should have tested all seeds
@@ -439,11 +429,7 @@ struct MutatorPublicAPITests {
     func fuzzWithSingleMutator() async throws {
         let testedInputs = Synchronized([String]())
 
-        // Use AlwaysInterestingCorpusRegistry to bypass coverage data requirements
-        let alwaysInterestingRegistry = AlwaysInterestingCorpusRegistry()
-
         try await withDependencies {
-            $0.corpusRegistry = alwaysInterestingRegistry
             // Use no-op file manager to avoid writing corpus to disk
             $0.fileManager = FileManagerClient(
                 currentDirectoryPath: { "/test" },
@@ -461,7 +447,8 @@ struct MutatorPublicAPITests {
 
             _ = try await fuzzWithMaxIterations(
                 maxIterations: 50,
-                using: mutator
+                using: mutator,
+                coverageStrategy: .alwaysInteresting
             ) { (input: String) in
                 await testedInputs.update { $0.append(input) }
             }
@@ -476,11 +463,7 @@ struct MutatorPublicAPITests {
     func fuzzWithBuiltInMutators() async throws {
         let testedInputs = Synchronized([String]())
 
-        // Use AlwaysInterestingCorpusRegistry to bypass coverage data requirements
-        let alwaysInterestingRegistry = AlwaysInterestingCorpusRegistry()
-
         try await withDependencies {
-            $0.corpusRegistry = alwaysInterestingRegistry
             // Use no-op file manager to avoid writing corpus to disk
             $0.fileManager = FileManagerClient(
                 currentDirectoryPath: { "/test" },
@@ -493,7 +476,8 @@ struct MutatorPublicAPITests {
         } operation: {
             _ = try await fuzzWithMaxIterations(
                 maxIterations: 50,
-                using: emptyStringMutator
+                using: emptyStringMutator,
+                coverageStrategy: .alwaysInteresting
             ) { (input: String) in
                 await testedInputs.update { $0.append(input) }
             }
@@ -507,11 +491,7 @@ struct MutatorPublicAPITests {
     func fuzzWithMultipleMutators() async throws {
         let testedInputs = Synchronized([(String, Int)]())
 
-        // Use AlwaysInterestingCorpusRegistry to bypass coverage data requirements
-        let alwaysInterestingRegistry = AlwaysInterestingCorpusRegistry()
-
         try await withDependencies {
-            $0.corpusRegistry = alwaysInterestingRegistry
             $0.fileManager = FileManagerClient(
                 currentDirectoryPath: { "/test" },
                 fileExists: { _ in false },
@@ -532,7 +512,8 @@ struct MutatorPublicAPITests {
 
             _ = try await fuzzWithMaxIterations(
                 maxIterations: 50,
-                using: stringMutator, intMutator
+                using: stringMutator, intMutator,
+                coverageStrategy: .alwaysInteresting
             ) { (str: String, num: Int) in
                 await testedInputs.update { $0.append((str, num)) }
             }
@@ -554,11 +535,7 @@ struct MutatorPublicAPITests {
     func fuzzWithMultipleBuiltInMutators() async throws {
         let testedInputs = Synchronized([(String, Int)]())
 
-        // Use AlwaysInterestingCorpusRegistry to bypass coverage data requirements
-        let alwaysInterestingRegistry = AlwaysInterestingCorpusRegistry()
-
         try await withDependencies {
-            $0.corpusRegistry = alwaysInterestingRegistry
             $0.fileManager = FileManagerClient(
                 currentDirectoryPath: { "/test" },
                 fileExists: { _ in false },
@@ -570,7 +547,8 @@ struct MutatorPublicAPITests {
         } operation: {
             _ = try await fuzzWithMaxIterations(
                 maxIterations: 50,
-                using: emptyStringMutator, intBoundaryMutator
+                using: emptyStringMutator, intBoundaryMutator,
+                coverageStrategy: .alwaysInteresting
             ) { (str: String, num: Int) in
                 await testedInputs.update { $0.append((str, num)) }
             }

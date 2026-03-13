@@ -70,24 +70,18 @@ struct FuzzEngineTests {
 
     @Test("FuzzEngine runs and builds corpus")
     func testFuzzEngineDiscoversPaths() async {
-        // Use AlwaysInterestingCorpusRegistry to bypass coverage data requirements
-        let alwaysInterestingRegistry = AlwaysInterestingCorpusRegistry()
+        let config = FuzzEngineConfig(
+            maxDuration: .seconds(10),
+            minimizeCorpus: false,
+            verbose: false,
+            coverageStrategy: .alwaysInteresting
+        )
 
-        let result = await withDependencies {
-            $0.corpusRegistry = alwaysInterestingRegistry
-        } operation: {
-            let config = FuzzEngineConfig(
-                maxDuration: .seconds(10),
-                minimizeCorpus: false,
-                verbose: false
-            )
-
-            return await fuzzEngineWithMaxIterations(
-                maxIterations: 100,
-                config: config,
-                additionalSeeds: [0, 1, -1, 42]
-            ) { (_: Int) in }
-        }
+        let result = await fuzzEngineWithMaxIterations(
+            maxIterations: 100,
+            config: config,
+            additionalSeeds: [0, 1, -1, 42]
+        ) { (_: Int) in }
 
         #expect(result.corpus.count >= 1, "Should have corpus entries")
         #expect(result.failures.isEmpty)
@@ -97,26 +91,20 @@ struct FuzzEngineTests {
     func testFuzzEngineDetectsFailures() async {
         struct TestError: Error {}
 
-        // Use AlwaysInterestingCorpusRegistry to bypass coverage data requirements
-        let alwaysInterestingRegistry = AlwaysInterestingCorpusRegistry()
+        let config = FuzzEngineConfig(
+            maxDuration: .seconds(10),
+            verbose: false,
+            coverageStrategy: .alwaysInteresting
+        )
 
-        let result = await withDependencies {
-            $0.corpusRegistry = alwaysInterestingRegistry
-        } operation: {
-            let config = FuzzEngineConfig(
-                maxDuration: .seconds(10),
-                verbose: false
-            )
-
-            // Include 42 in seeds to guarantee we hit the failure case
-            return await fuzzEngineWithMaxIterations(
-                maxIterations: 100,
-                config: config,
-                additionalSeeds: [0, 1, 42, -1]
-            ) { (input: Int) in
-                if input == 42 {
-                    throw TestError()
-                }
+        // Include 42 in seeds to guarantee we hit the failure case
+        let result = await fuzzEngineWithMaxIterations(
+            maxIterations: 100,
+            config: config,
+            additionalSeeds: [0, 1, 42, -1]
+        ) { (input: Int) in
+            if input == 42 {
+                throw TestError()
             }
         }
 
@@ -126,23 +114,17 @@ struct FuzzEngineTests {
 
     @Test("FuzzEngine verbose mode logs messages")
     func testVerboseMode() async {
-        // Use AlwaysInterestingCorpusRegistry to bypass coverage data requirements
-        let alwaysInterestingRegistry = AlwaysInterestingCorpusRegistry()
+        let config = FuzzEngineConfig(
+            maxDuration: .seconds(10),
+            verbose: true,
+            coverageStrategy: .alwaysInteresting
+        )
 
-        let result = await withDependencies {
-            $0.corpusRegistry = alwaysInterestingRegistry
-        } operation: {
-            let config = FuzzEngineConfig(
-                maxDuration: .seconds(10),
-                verbose: true
-            )
-
-            return await fuzzEngineWithMaxIterations(
-                maxIterations: 100,
-                config: config,
-                additionalSeeds: [0, 1, -1, 42]
-            ) { (_: Int) in }
-        }
+        let result = await fuzzEngineWithMaxIterations(
+            maxIterations: 100,
+            config: config,
+            additionalSeeds: [0, 1, -1, 42]
+        ) { (_: Int) in }
 
         #expect(result.stats.totalInputs > 0)
     }
@@ -151,26 +133,20 @@ struct FuzzEngineTests {
     func testErrorsDuringFuzzing() async {
         struct FuzzError: Error {}
 
-        // Use AlwaysInterestingCorpusRegistry to bypass coverage data requirements
-        let alwaysInterestingRegistry = AlwaysInterestingCorpusRegistry()
+        let config = FuzzEngineConfig(
+            maxDuration: .seconds(10),
+            verbose: false,
+            coverageStrategy: .alwaysInteresting
+        )
 
-        let result = await withDependencies {
-            $0.corpusRegistry = alwaysInterestingRegistry
-        } operation: {
-            let config = FuzzEngineConfig(
-                maxDuration: .seconds(10),
-                verbose: false
-            )
-
-            // Include multiples of 10 in seeds to guarantee failures
-            return await fuzzEngineWithMaxIterations(
-                maxIterations: 100,
-                config: config,
-                additionalSeeds: [0, 10, 20, 1, 2]
-            ) { (input: Int) in
-                if input % 10 == 0 {
-                    throw FuzzError()
-                }
+        // Include multiples of 10 in seeds to guarantee failures
+        let result = await fuzzEngineWithMaxIterations(
+            maxIterations: 100,
+            config: config,
+            additionalSeeds: [0, 10, 20, 1, 2]
+        ) { (input: Int) in
+            if input % 10 == 0 {
+                throw FuzzError()
             }
         }
 
@@ -181,12 +157,9 @@ struct FuzzEngineTests {
     func testCorpusSaveToDirectory() async throws {
         let corpusDir = URL(fileURLWithPath: "/test/fuzz-corpus")
 
-        // Use AlwaysInterestingCorpusRegistry to bypass coverage data requirements
-        let alwaysInterestingRegistry = AlwaysInterestingCorpusRegistry()
         let (saveSpy, saveFn) = spy { (_: Data, _: URL) in }
 
         let result = await withDependencies {
-            $0.corpusRegistry = alwaysInterestingRegistry
             // Explicitly set live coverage to prevent mock leakage from parallel tests
             $0.coverageCounters = .liveValue
             $0.corpusPersistence = CorpusPersistenceClient(
@@ -199,7 +172,8 @@ struct FuzzEngineTests {
             let config = FuzzEngineConfig(
                 maxDuration: .seconds(10),
                 minimizeCorpus: true,
-                verbose: true
+                verbose: true,
+                coverageStrategy: .alwaysInteresting
             )
 
             return await fuzzEngineWithMaxIterations(
@@ -296,13 +270,10 @@ struct FuzzEngineTests {
         let corpusDir = URL(fileURLWithPath: "/test/fuzz-loadfail")
         let invalidJSON = Data("{ invalid json }".utf8)
 
-        // Use AlwaysInterestingCorpusRegistry to bypass coverage data requirements
-        let alwaysInterestingRegistry = AlwaysInterestingCorpusRegistry()
         let (loadSpy, loadFn) = spy { (_: URL) -> Data in invalidJSON }
         let (existsSpy, existsFn) = spy { (_: URL) -> Bool in true }
 
         let result = await withDependencies {
-            $0.corpusRegistry = alwaysInterestingRegistry
             $0.corpusPersistence = CorpusPersistenceClient(
                 save: { _, _ in },
                 load: loadFn,
@@ -312,6 +283,7 @@ struct FuzzEngineTests {
         } operation: {
             await fuzzEngineWithMaxIterations(
                 maxIterations: 50,
+                coverageStrategy: .alwaysInteresting,
                 corpusDirectory: corpusDir
             ) { (_: Int) in }
         }
@@ -323,15 +295,14 @@ struct FuzzEngineTests {
 
     @Test("FuzzEngine discovers new coverage during iteration")
     func testNewCoverageDuringIteration() async {
-        // Use AlwaysInterestingCorpusRegistry to bypass coverage data requirements
-        let alwaysInterestingRegistry = AlwaysInterestingCorpusRegistry()
-
         let result = await withDependencies {
-            $0.corpusRegistry = alwaysInterestingRegistry
             // Explicitly set live coverage to prevent mock leakage from parallel tests
             $0.coverageCounters = .liveValue
         } operation: {
-            await fuzzEngineWithMaxIterations(maxIterations: 50) { (_: Int) in }
+            await fuzzEngineWithMaxIterations(
+                maxIterations: 50,
+                coverageStrategy: .alwaysInteresting
+            ) { (_: Int) in }
         }
 
         #expect(result.corpus.count >= 1)
@@ -343,14 +314,11 @@ struct FuzzEngineTests {
 
         struct SaveError: Error {}
 
-        // Use AlwaysInterestingCorpusRegistry to bypass coverage data requirements
-        let alwaysInterestingRegistry = AlwaysInterestingCorpusRegistry()
         let (saveSpy, saveFn) = spy { (_: Data, _: URL) throws -> Void in
             throw SaveError()
         }
 
         let result = await withDependencies {
-            $0.corpusRegistry = alwaysInterestingRegistry
             $0.corpusPersistence = CorpusPersistenceClient(
                 save: saveFn,
                 load: { _ in Data() },
@@ -360,6 +328,7 @@ struct FuzzEngineTests {
         } operation: {
             await fuzzEngineWithMaxIterations(
                 maxIterations: 50,
+                coverageStrategy: .alwaysInteresting,
                 corpusDirectory: corpusDir
             ) { (_: Int) in }
         }
@@ -519,24 +488,17 @@ struct FuzzEngineTests {
 
     @Test("FuzzEngine verbose logs new coverage during iterations")
     func testNewCoverageVerboseInIterations() async {
-        // This test covers the "New coverage!" verbose path
-        // Use AlwaysInterestingCorpusRegistry to bypass coverage data requirements
-        let alwaysInterestingRegistry = AlwaysInterestingCorpusRegistry()
+        let config = FuzzEngineConfig(
+            maxDuration: .seconds(10),
+            minimizeCorpus: false,
+            verbose: true,
+            coverageStrategy: .alwaysInteresting
+        )
 
-        let result = await withDependencies {
-            $0.corpusRegistry = alwaysInterestingRegistry
-        } operation: {
-            let config = FuzzEngineConfig(
-                maxDuration: .seconds(10),
-                minimizeCorpus: false,
-                verbose: true
-            )
-
-            return await fuzzEngineWithMaxIterations(
-                maxIterations: 50,
-                config: config
-            ) { (_: Int) in }
-        }
+        let result = await fuzzEngineWithMaxIterations(
+            maxIterations: 50,
+            config: config
+        ) { (_: Int) in }
 
         #expect(result.corpus.count >= 1, "Should have corpus entries")
         #expect(result.stats.totalInputs > 5, "Should test more than just seeds")
@@ -606,14 +568,10 @@ struct FuzzEngineTests {
 
     @Test("FuzzEngine handles empty fuzz array gracefully")
     func testEmptyFuzzArray() async {
-        // Use AlwaysInterestingCorpusRegistry to bypass coverage data requirements
-        let alwaysInterestingRegistry = AlwaysInterestingCorpusRegistry()
-
-        let result = await withDependencies {
-            $0.corpusRegistry = alwaysInterestingRegistry
-        } operation: {
-            await fuzzEngineWithMaxIterations(maxIterations: 20) { (_: EmptyFuzzable) in }
-        }
+        let result = await fuzzEngineWithMaxIterations(
+            maxIterations: 20,
+            coverageStrategy: .alwaysInteresting
+        ) { (_: EmptyFuzzable) in }
 
         // With empty seeds, no seeds are processed and iterations skip via guard
         #expect(result.corpus.count == 0, "Empty seeds should produce empty corpus")
@@ -623,14 +581,10 @@ struct FuzzEngineTests {
 
     @Test("FuzzEngine handles empty mutations array gracefully")
     func testEmptyMutationsArray() async {
-        // Use AlwaysInterestingCorpusRegistry to bypass coverage data requirements
-        let alwaysInterestingRegistry = AlwaysInterestingCorpusRegistry()
-
-        let result = await withDependencies {
-            $0.corpusRegistry = alwaysInterestingRegistry
-        } operation: {
-            await fuzzEngineWithMaxIterations(maxIterations: 20) { (_: EmptyMutationsFuzzable) in }
-        }
+        let result = await fuzzEngineWithMaxIterations(
+            maxIterations: 20,
+            coverageStrategy: .alwaysInteresting
+        ) { (_: EmptyMutationsFuzzable) in }
 
         // With one seed value, corpus gets one entry, then mutations fail
         #expect(result.corpus.count >= 0)  // May have seed entry
@@ -673,7 +627,7 @@ struct FuzzEngineTests {
     @Test("FuzzEngine resetCoverage is called between iterations")
     func testResetCoverageCalledBetweenIterations() async {
         let resetCount = SyncBox(0)
-        let signatureHashCount = SyncBox(0)
+        let coveredIndicesCheckCount = SyncBox(0)
 
         let result = await withDependencies {
             $0.coverageCounters = CoverageCountersClient(
@@ -685,12 +639,13 @@ struct FuzzEngineTests {
                 },
                 snapshotCoveredArraysWithContext: { _ in
                     // Return sparse coverage with a unique index each time
-                    SparseCoverage(indices: [UInt32(signatureHashCount.value)])
+                    SparseCoverage(indices: [UInt32(coveredIndicesCheckCount.value)])
                 },
-                computeSignatureHash: { _ in
-                    signatureHashCount.update { $0 += 1 }
-                    // Return unique hash each time so corpus accepts it
-                    return signatureHashCount.value
+                withCoveredIndices: { _, body in
+                    coveredIndicesCheckCount.update { $0 += 1 }
+                    // Return unique index each time so corpus accepts it
+                    let index = UInt32(coveredIndicesCheckCount.value)
+                    return [index].withUnsafeBufferPointer { body($0) }
                 }
             )
         } operation: {
@@ -698,11 +653,11 @@ struct FuzzEngineTests {
         }
 
         // Reset should be called once per iteration
-        // computeSignatureHash should be called once per iteration
+        // withCoveredIndices should be called once per iteration (for signature match check)
         #expect(resetCount.value == result.stats.totalInputs,
                 "resetCoverage should be called once per iteration: got \(resetCount.value), expected \(result.stats.totalInputs)")
-        #expect(signatureHashCount.value == result.stats.totalInputs,
-                "computeSignatureHash should be called once per iteration")
+        #expect(coveredIndicesCheckCount.value == result.stats.totalInputs,
+                "withCoveredIndices should be called once per iteration")
     }
 
     @Test("FuzzEngine beginMeasurement called only once")
@@ -741,15 +696,15 @@ struct FuzzEngineTests {
     @Test("FuzzEngine coverage isolation - each iteration sees fresh coverage")
     func testCoverageIsolationPerIteration() async {
         // This test verifies that each iteration starts with fresh (reset) coverage
-        // by tracking the sequence of reset -> run -> signatureHash
+        // by tracking the sequence of reset -> run -> coverageCheck
 
         enum CoverageEvent: Equatable {
             case reset
-            case signatureHash
+            case coverageCheck
         }
 
         let events = SyncBox<[CoverageEvent]>([])
-        let hashCounter = SyncBox(0)
+        let checkCounter = SyncBox(0)
 
         _ = await withDependencies {
             $0.coverageCounters = CoverageCountersClient(
@@ -760,14 +715,13 @@ struct FuzzEngineTests {
                     events.update { $0.append(.reset) }
                 },
                 snapshotCoveredArraysWithContext: { _ in
-                    // Return sparse coverage with a unique index
-                    SparseCoverage(indices: [UInt32(hashCounter.value)])
+                    SparseCoverage(indices: [UInt32(checkCounter.value)])
                 },
-                computeSignatureHash: { _ in
-                    events.update { $0.append(.signatureHash) }
-                    hashCounter.update { $0 += 1 }
-                    // Return unique hash each time
-                    return hashCounter.value
+                withCoveredIndices: { _, body in
+                    events.update { $0.append(.coverageCheck) }
+                    checkCounter.update { $0 += 1 }
+                    let index = UInt32(checkCounter.value)
+                    return [index].withUnsafeBufferPointer { body($0) }
                 }
             )
         } operation: {
@@ -776,16 +730,16 @@ struct FuzzEngineTests {
 
         let recordedEvents = events.value
 
-        // Should have 5 reset-signatureHash pairs
-        #expect(recordedEvents.count == 10, "Should have 5 pairs of reset+signatureHash events")
+        // Should have 5 reset-coverageCheck pairs
+        #expect(recordedEvents.count == 10, "Should have 5 pairs of reset+coverageCheck events")
 
-        // Verify the pattern: reset, signatureHash, reset, signatureHash, ...
+        // Verify the pattern: reset, coverageCheck, reset, coverageCheck, ...
         for i in stride(from: 0, to: recordedEvents.count, by: 2) {
             if i < recordedEvents.count {
                 #expect(recordedEvents[i] == .reset, "Event \(i) should be reset")
             }
             if i + 1 < recordedEvents.count {
-                #expect(recordedEvents[i + 1] == .signatureHash, "Event \(i+1) should be signatureHash")
+                #expect(recordedEvents[i + 1] == .coverageCheck, "Event \(i+1) should be coverageCheck")
             }
         }
     }
@@ -834,4 +788,3 @@ struct FuzzEngineTests {
         // Note: corpus size depends on whether coverage is available at runtime
     }
 }
-

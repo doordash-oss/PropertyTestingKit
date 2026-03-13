@@ -92,10 +92,20 @@ size_t sancov_get_covered_locations(SanCovSourceLocation* locations, size_t max_
 /// Measurement context for coverage isolation.
 /// Uses atomic reference counting to prevent use-after-free when TLS caches
 /// hold references across thread hops in the worker pool model.
+/// Forward declaration for path trie (defined in SanCovHooks.c).
+typedef struct SanCovPathTrie SanCovPathTrie;
+
 typedef struct {
     uint8_t* coverage_map;
     size_t covered_count;
     _Atomic int refcount;
+    /// Ring buffer of covered edge indices, appended on first-hit.
+    /// Enables O(covered_edges) hash/snapshot instead of O(total_edges) scan.
+    uint32_t* covered_indices;
+    size_t covered_indices_capacity;
+    /// Optional path trie for the trie edge hook. Set by the strategy, read by the hook.
+    /// NULL when trie tracking is not active.
+    SanCovPathTrie* path_trie;
 } SanCovMeasurementContext;
 
 /// Begin a measurement context for coverage isolation.
@@ -133,6 +143,21 @@ uint32_t* sancov_snapshot_covered_indices_with_context(SanCovMeasurementContext*
 /// @return The signature hash, or 0 if no coverage
 int64_t sancov_compute_signature_hash(SanCovMeasurementContext* context);
 
+/// Compute signature hash from an explicit array of edge indices.
+/// Pure function — no dependency on live coverage counters.
+/// Uses the same algorithm as sancov_compute_signature_hash.
+///
+/// @param indices Array of edge indices
+/// @param count Number of indices
+/// @return The signature hash, or 0 if count is 0
+int64_t sancov_compute_hash_from_indices(const uint32_t* indices, size_t count);
+
+/// Get a pointer to the covered indices buffer (zero-copy).
+/// Valid until the next resetCoverage or endMeasurement call.
+/// Returns NULL if no coverage or no buffer.
+/// Sets *out_count to the number of covered indices.
+const uint32_t* sancov_get_covered_indices(SanCovMeasurementContext* context, size_t* out_count);
+
 /// Merge coverage from a measurement context directly into a bitmap.
 /// This is the fast path for checking coverage uniqueness - no allocation needed.
 ///
@@ -155,6 +180,54 @@ bool sancov_merge_coverage_into_bitmap(
     size_t bitmap_word_count,
     bool merge_all
 );
+
+/// The default edge recording implementation.
+/// Records a binary hit (first-hit writes 1, subsequent skipped) and
+/// appends to the covered indices buffer.
+void sancov_record_edge(uint32_t *guard);
+
+/// Counting edge recording implementation.
+/// Uses 8-bit saturating counters: first hit records the edge index (same as binary),
+/// subsequent hits increment the counter up to 255. Enables hit-count bucketing
+/// strategies (libFuzzer-style).
+void sancov_record_edge_counting(uint32_t *guard);
+
+// MARK: - Trie Edge Hook
+//
+// O(1)-per-hit path tracking using a trie of edge sequences.
+// Each unique execution path (ordered sequence of edge hits) is a path in the trie.
+// On each edge hit, the current pointer advances to the child for that edge index.
+// If no child exists, a new node is created and a "novel" flag is set.
+
+/// Set the path trie on a measurement context.
+/// The trie hook will read from this context's trie pointer.
+void sancov_context_set_trie(SanCovMeasurementContext* context, SanCovPathTrie* trie);
+
+/// Create a new path trie.
+SanCovPathTrie* sancov_trie_create(void);
+
+/// Destroy a path trie and free all nodes.
+void sancov_trie_destroy(SanCovPathTrie* trie);
+
+/// Check if the current path in the trie is unique.
+/// Returns true if: the novel flag is set, OR the current node is not terminal.
+bool sancov_trie_is_unique_path(SanCovPathTrie* trie);
+
+/// Mark the current node as terminal (end of a complete run).
+void sancov_trie_mark_terminal(SanCovPathTrie* trie);
+
+/// Reset the trie pointer to root and clear the novel flag.
+void sancov_trie_reset(SanCovPathTrie* trie);
+
+/// Trie edge hook. Records binary coverage AND advances the trie pointer.
+/// On each edge hit: if child exists, advance; if not, create child and set novel flag.
+/// Both operations are O(1).
+void sancov_record_edge_trie(uint32_t *guard);
+
+/// Install a custom hook function that overrides the default Swift trampoline.
+/// The hook is a C function pointer called on every edge hit.
+/// Pass NULL to restore the default (sancov_swift_trampoline → sancov_record_edge).
+void sancov_install_swift_hook(void (*hook)(uint32_t*));
 
 #ifdef __cplusplus
 }
