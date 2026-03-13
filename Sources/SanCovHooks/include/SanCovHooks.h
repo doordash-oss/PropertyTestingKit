@@ -178,8 +178,13 @@ bool sancov_merge_coverage_into_bitmap(
 /// The default edge recording implementation.
 /// Records a binary hit (first-hit writes 1, subsequent skipped) and
 /// appends to the covered indices buffer.
-/// Exposed so Swift can call it from a hook trampoline.
 void sancov_record_edge(uint32_t *guard);
+
+/// Counting edge recording implementation.
+/// Uses 8-bit saturating counters: first hit records the edge index (same as binary),
+/// subsequent hits increment the counter up to 255. Enables hit-count bucketing
+/// strategies (libFuzzer-style).
+void sancov_record_edge_counting(uint32_t *guard);
 
 /// Install a custom hook function that overrides the default Swift trampoline.
 /// The hook is a C function pointer called on every edge hit.

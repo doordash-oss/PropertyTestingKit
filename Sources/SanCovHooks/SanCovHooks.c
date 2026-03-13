@@ -789,6 +789,37 @@ void sancov_record_edge(uint32_t *guard) {
     }
 }
 
+__attribute__((noinline))
+void sancov_record_edge_counting(uint32_t *guard) {
+    uint8_t* map = get_current_coverage_map();
+    if (map && *guard < g_guard_count) {
+        uint8_t prev = map[*guard];
+        if (prev == 0) {
+            // First hit: record the edge index, same as binary
+            map[*guard] = 1;
+            SanCovMeasurementContext* ctx = tls_cached_measurement_context;
+            if (ctx) {
+                size_t idx = ctx->covered_count;
+                ctx->covered_count = idx + 1;
+                if (idx < ctx->covered_indices_capacity) {
+                    ctx->covered_indices[idx] = *guard;
+                } else if (ctx->covered_indices) {
+                    size_t new_cap = ctx->covered_indices_capacity * 2;
+                    uint32_t* new_buf = (uint32_t*)realloc(ctx->covered_indices, new_cap * sizeof(uint32_t));
+                    if (new_buf) {
+                        ctx->covered_indices = new_buf;
+                        ctx->covered_indices_capacity = new_cap;
+                        new_buf[idx] = *guard;
+                    }
+                }
+            }
+        } else if (prev < 255) {
+            // Subsequent hit: saturating 8-bit increment
+            map[*guard] = prev + 1;
+        }
+    }
+}
+
 // Edge hook function pointer — set by Swift via sancov_install_swift_hook().
 // Before Swift init, falls back to sancov_record_edge directly.
 static void (*g_edge_hook)(uint32_t*) = NULL;

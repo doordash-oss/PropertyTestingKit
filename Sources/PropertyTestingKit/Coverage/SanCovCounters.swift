@@ -104,6 +104,13 @@ public func sancovDefaultEdgeHook(_ guardPtr: UnsafeMutablePointer<UInt32>?) {
     sancov_record_edge(guardPtr)
 }
 
+/// Counting edge hook. Uses 8-bit saturating counters for hit-count bucketing.
+/// Must be `public` so the linker marks it `no_dead_strip`.
+@_cdecl("sancov_counting_edge_hook")
+public func sancovCountingEdgeHook(_ guardPtr: UnsafeMutablePointer<UInt32>?) {
+    sancov_record_edge_counting(guardPtr)
+}
+
 extension SanCovCounters {
     /// Install a custom edge hook that will be called on every edge hit.
     ///
