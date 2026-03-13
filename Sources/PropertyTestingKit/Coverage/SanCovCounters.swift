@@ -102,6 +102,12 @@ extension SanCovCounters {
     public static func setEdgeHook(_ hook: EdgeHook?) {
         sancov_install_swift_hook(hook ?? defaultEdgeHook)
     }
+
+    /// Attach a path trie to a measurement context.
+    /// The trie edge hook reads the trie from the context on every edge hit.
+    static func attachTrie(_ trie: PathTrie, to context: MeasurementContext) {
+        trie.attach(to: context.rawContext)
+    }
 }
 
 // MARK: - Source Location Mapping

@@ -300,6 +300,7 @@ SanCovMeasurementContext* sancov_begin_measurement(void) {
     // Pre-allocate covered index buffer (typical coverage is sparse, 64 is plenty for most iterations)
     ctx->covered_indices_capacity = 64;
     ctx->covered_indices = (uint32_t*)xmalloc(ctx->covered_indices_capacity * sizeof(uint32_t));
+    ctx->path_trie = NULL;
     atomic_init(&ctx->refcount, 1);  // Start with refcount of 1 (owner reference)
 
     // Associate this measurement context with the current task
@@ -332,6 +333,7 @@ SanCovMeasurementContext* sancov_create_dummy_context(void) {
     ctx->covered_count = 0;
     ctx->covered_indices_capacity = 0;
     ctx->covered_indices = NULL;
+    ctx->path_trie = NULL;
     atomic_init(&ctx->refcount, 1);
     return ctx;
 }
@@ -817,6 +819,132 @@ void sancov_record_edge_counting(uint32_t *guard) {
             // Subsequent hit: saturating 8-bit increment
             map[*guard] = prev + 1;
         }
+    }
+}
+
+// MARK: - Trie Edge Hook
+
+// Trie node: children stored as a sorted array of (edge_index, child_pointer) pairs.
+// For typical coverage (~10-50 unique edges per node), linear scan is faster than hash table.
+typedef struct TrieNode {
+    uint32_t *child_edges;          // Sorted array of edge indices
+    struct TrieNode **child_nodes;  // Parallel array of child pointers
+    uint16_t child_count;
+    uint16_t child_capacity;
+    bool is_terminal;
+} TrieNode;
+
+static TrieNode* trie_node_create(void) {
+    TrieNode* node = (TrieNode*)xmalloc(sizeof(TrieNode));
+    node->child_edges = NULL;
+    node->child_nodes = NULL;
+    node->child_count = 0;
+    node->child_capacity = 0;
+    node->is_terminal = false;
+    return node;
+}
+
+static void trie_node_destroy(TrieNode* node) {
+    if (!node) return;
+    for (uint16_t i = 0; i < node->child_count; i++) {
+        trie_node_destroy(node->child_nodes[i]);
+    }
+    free(node->child_edges);
+    free(node->child_nodes);
+    free(node);
+}
+
+// Find child for edge_index. Returns the child node or NULL.
+static inline TrieNode* trie_node_find_child(TrieNode* node, uint32_t edge_index) {
+    // Linear scan — fast for small child counts (typical: 1-5 children per node)
+    for (uint16_t i = 0; i < node->child_count; i++) {
+        if (node->child_edges[i] == edge_index) {
+            return node->child_nodes[i];
+        }
+    }
+    return NULL;
+}
+
+// Add a child for edge_index. Returns the new child node.
+static TrieNode* trie_node_add_child(TrieNode* node, uint32_t edge_index) {
+    if (node->child_count == node->child_capacity) {
+        uint16_t new_cap = node->child_capacity == 0 ? 4 : node->child_capacity * 2;
+        node->child_edges = (uint32_t*)realloc(node->child_edges, new_cap * sizeof(uint32_t));
+        node->child_nodes = (TrieNode**)realloc(node->child_nodes, new_cap * sizeof(TrieNode*));
+        node->child_capacity = new_cap;
+    }
+    TrieNode* child = trie_node_create();
+    node->child_edges[node->child_count] = edge_index;
+    node->child_nodes[node->child_count] = child;
+    node->child_count++;
+    return child;
+}
+
+// Path trie state
+struct SanCovPathTrie {
+    TrieNode* root;
+    TrieNode* current;
+    bool is_novel;
+};
+
+void sancov_context_set_trie(SanCovMeasurementContext* context, SanCovPathTrie* trie) {
+    if (context) context->path_trie = trie;
+}
+
+SanCovPathTrie* sancov_trie_create(void) {
+    SanCovPathTrie* trie = (SanCovPathTrie*)xmalloc(sizeof(SanCovPathTrie));
+    trie->root = trie_node_create();
+    trie->current = trie->root;
+    trie->is_novel = false;
+    return trie;
+}
+
+void sancov_trie_destroy(SanCovPathTrie* trie) {
+    if (!trie) return;
+    trie_node_destroy(trie->root);
+    free(trie);
+}
+
+
+bool sancov_trie_is_unique_path(SanCovPathTrie* trie) {
+    if (!trie) return false;
+    if (trie->is_novel) return true;
+    return !trie->current->is_terminal;
+}
+
+void sancov_trie_mark_terminal(SanCovPathTrie* trie) {
+    if (trie) trie->current->is_terminal = true;
+}
+
+void sancov_trie_reset(SanCovPathTrie* trie) {
+    if (!trie) return;
+    trie->current = trie->root;
+    trie->is_novel = false;
+}
+
+__attribute__((noinline))
+void sancov_record_edge_trie(uint32_t *guard) {
+    uint8_t* map = get_current_coverage_map();
+    if (!map || *guard >= g_guard_count) return;
+
+    // Check first-hit and mark the map. Skip covered_indices bookkeeping —
+    // the trie strategy doesn't need it (uniqueness comes from the trie, not post-hoc).
+    if (map[*guard]) return;
+    map[*guard] = 1;
+
+    // Advance the trie on first hit only — loop-immune.
+    SanCovMeasurementContext* ctx = tls_cached_measurement_context;
+    if (!ctx) return;
+    SanCovPathTrie* trie = ctx->path_trie;
+    if (!trie) return;
+
+    uint32_t edge_index = *guard;
+    TrieNode* child = trie_node_find_child(trie->current, edge_index);
+    if (child) {
+        trie->current = child;
+    } else {
+        trie->current = trie_node_add_child(trie->current, edge_index);
+        trie->is_novel = true;
     }
 }
 

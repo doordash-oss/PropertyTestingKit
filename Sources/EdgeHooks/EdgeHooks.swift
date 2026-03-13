@@ -44,3 +44,61 @@ public let defaultEdgeHook: EdgeHook = sancov_record_edge
 /// Counting edge hook. Uses 8-bit saturating counters for hit-count bucketing.
 /// On first hit records the edge index; subsequent hits increment up to 255.
 public let countingEdgeHook: EdgeHook = sancov_record_edge_counting
+
+/// Trie edge hook. Records binary coverage AND tracks execution paths in a trie.
+/// O(1) per edge hit, O(1) uniqueness check at end of run.
+public let trieEdgeHook: EdgeHook = sancov_record_edge_trie
+
+// MARK: - Path Trie
+
+/// A trie that stores all previously-seen execution paths (ordered edge sequences).
+///
+/// Usage with the trie edge hook:
+/// ```swift
+/// let trie = PathTrie()
+/// trie.activate()
+/// SanCovCounters.setEdgeHook(trieEdgeHook)
+///
+/// // After each test execution:
+/// if trie.isUniquePath {
+///     trie.markTerminal()
+///     // Add to corpus...
+/// }
+/// trie.reset()
+/// ```
+public final class PathTrie {
+    private let raw: OpaquePointer
+
+    public init() {
+        raw = sancov_trie_create()
+    }
+
+    deinit {
+        sancov_trie_destroy(raw)
+    }
+
+    /// The opaque pointer to the underlying C trie.
+    /// Used by the coverage strategy to attach this trie to a measurement context.
+    public var rawPointer: OpaquePointer { raw }
+
+    /// Attach this trie to a measurement context.
+    /// The trie hook will read the trie from the context on every edge hit.
+    public func attach(to context: UnsafeMutablePointer<SanCovMeasurementContext>) {
+        sancov_context_set_trie(context, raw)
+    }
+
+    /// Whether the current path is unique (not seen before).
+    public var isUniquePath: Bool {
+        sancov_trie_is_unique_path(raw)
+    }
+
+    /// Mark the current path as complete (a terminal node in the trie).
+    public func markTerminal() {
+        sancov_trie_mark_terminal(raw)
+    }
+
+    /// Reset to root for the next iteration.
+    public func reset() {
+        sancov_trie_reset(raw)
+    }
+}

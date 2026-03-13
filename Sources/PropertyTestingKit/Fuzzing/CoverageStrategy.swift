@@ -10,6 +10,7 @@
 /// Different strategies trade off between precision and performance:
 /// - `.signatureMatch`: Exact edge-set matching via inverted index. Zero false positives. Default.
 /// - `.newEdge`: Bitmap merge — any previously-unseen edge is interesting. Matches AFL/libFuzzer.
+/// - `.pathTrie`: Trie-based path tracking. O(1) per edge hit and O(1) uniqueness check.
 /// - `.alwaysInteresting`: Every input is added. Useful for testing without coverage.
 public enum CoverageStrategyKind: Sendable {
     /// Signature match strategy (default).
@@ -27,6 +28,14 @@ public enum CoverageStrategyKind: Sendable {
     /// Uses `mergeCoverageIntoBitmap` to check if any previously-unseen edge
     /// was hit. Aligns with the AFL/libFuzzer model where any new edge is interesting.
     case newEdge
+
+    /// Path trie strategy.
+    ///
+    /// Tracks every unique execution path (ordered edge sequence) in a trie.
+    /// O(1) per edge hit (advance trie pointer), O(1) uniqueness check at end of run.
+    /// Installs the `trieEdgeHook` automatically — no need to set `edgeHook` separately.
+    /// Order-sensitive: A→B→C is different from A→C→B.
+    case pathTrie
 
     /// Always interesting (for testing).
     ///
@@ -57,6 +66,8 @@ func makeCoverageStrategy<each Input: Codable & Sendable>(
         return makeSignatureMatchStrategy()
     case .newEdge:
         return makeNewEdgeStrategy()
+    case .pathTrie:
+        return makePathTrieStrategy()
     case .alwaysInteresting:
         return makeAlwaysInterestingStrategy()
     }
@@ -198,6 +209,45 @@ private func makeNewEdgeStrategy<each Input: Codable & Sendable>(
         }
 
         corpus.addEntry(input: input, sparse: sparse)
+        return true
+    }
+}
+
+// MARK: - Path Trie Strategy
+
+/// Path trie strategy: O(1) per-hit path tracking, O(1) uniqueness check.
+///
+/// Creates a PathTrie, installs the trie edge hook, and checks uniqueness
+/// via `trie.isUniquePath` after each run. The trie is attached to the
+/// measurement context so each parallel engine gets its own trie.
+private func makePathTrieStrategy<each Input: Codable & Sendable>(
+) -> CoverageStrategyFn<repeat each Input> {
+    let trie = PathTrie()
+    var attached = false
+
+    return { input, context, coverageClient, corpus in
+        // Attach the trie to the measurement context on first call.
+        // This binds it to the per-task context so the hook reads it
+        // from tls_cached_measurement_context — safe across task hops.
+        if !attached {
+            SanCovCounters.setEdgeHook(trieEdgeHook)
+            SanCovCounters.attachTrie(trie, to: context)
+            attached = true
+        }
+
+        defer {
+            trie.reset()
+        }
+
+        guard trie.isUniquePath else {
+            return false
+        }
+
+        trie.markTerminal()
+
+        // The trie handles uniqueness — no need for SparseCoverage data.
+        // Store the input with empty coverage; the trie is the source of truth.
+        corpus.addEntry(input: input, sparse: SparseCoverage())
         return true
     }
 }

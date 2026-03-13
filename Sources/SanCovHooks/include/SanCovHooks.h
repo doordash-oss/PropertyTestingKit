@@ -92,6 +92,9 @@ size_t sancov_get_covered_locations(SanCovSourceLocation* locations, size_t max_
 /// Measurement context for coverage isolation.
 /// Uses atomic reference counting to prevent use-after-free when TLS caches
 /// hold references across thread hops in the worker pool model.
+/// Forward declaration for path trie (defined in SanCovHooks.c).
+typedef struct SanCovPathTrie SanCovPathTrie;
+
 typedef struct {
     uint8_t* coverage_map;
     size_t covered_count;
@@ -100,6 +103,9 @@ typedef struct {
     /// Enables O(covered_edges) hash/snapshot instead of O(total_edges) scan.
     uint32_t* covered_indices;
     size_t covered_indices_capacity;
+    /// Optional path trie for the trie edge hook. Set by the strategy, read by the hook.
+    /// NULL when trie tracking is not active.
+    SanCovPathTrie* path_trie;
 } SanCovMeasurementContext;
 
 /// Begin a measurement context for coverage isolation.
@@ -185,6 +191,38 @@ void sancov_record_edge(uint32_t *guard);
 /// subsequent hits increment the counter up to 255. Enables hit-count bucketing
 /// strategies (libFuzzer-style).
 void sancov_record_edge_counting(uint32_t *guard);
+
+// MARK: - Trie Edge Hook
+//
+// O(1)-per-hit path tracking using a trie of edge sequences.
+// Each unique execution path (ordered sequence of edge hits) is a path in the trie.
+// On each edge hit, the current pointer advances to the child for that edge index.
+// If no child exists, a new node is created and a "novel" flag is set.
+
+/// Set the path trie on a measurement context.
+/// The trie hook will read from this context's trie pointer.
+void sancov_context_set_trie(SanCovMeasurementContext* context, SanCovPathTrie* trie);
+
+/// Create a new path trie.
+SanCovPathTrie* sancov_trie_create(void);
+
+/// Destroy a path trie and free all nodes.
+void sancov_trie_destroy(SanCovPathTrie* trie);
+
+/// Check if the current path in the trie is unique.
+/// Returns true if: the novel flag is set, OR the current node is not terminal.
+bool sancov_trie_is_unique_path(SanCovPathTrie* trie);
+
+/// Mark the current node as terminal (end of a complete run).
+void sancov_trie_mark_terminal(SanCovPathTrie* trie);
+
+/// Reset the trie pointer to root and clear the novel flag.
+void sancov_trie_reset(SanCovPathTrie* trie);
+
+/// Trie edge hook. Records binary coverage AND advances the trie pointer.
+/// On each edge hit: if child exists, advance; if not, create child and set novel flag.
+/// Both operations are O(1).
+void sancov_record_edge_trie(uint32_t *guard);
 
 /// Install a custom hook function that overrides the default Swift trampoline.
 /// The hook is a C function pointer called on every edge hit.
