@@ -87,6 +87,37 @@ enum SanCovCounters {
     }
 }
 
+// MARK: - Edge Hook
+
+/// A C-compatible function pointer called on every edge hit from
+/// `__sanitizer_cov_trace_pc_guard`. The guard pointer contains the edge index.
+/// Call `sancov_record_edge(guardPtr)` for the default binary hit behavior,
+/// or implement custom recording (e.g., counting, path hashing).
+///
+/// - Important: This runs millions of times per second. Keep it fast.
+public typealias EdgeHook = @convention(c) (UnsafeMutablePointer<UInt32>?) -> Void
+
+/// The default edge hook. Calls `sancov_record_edge` for binary hit recording.
+/// Must be `public` so the linker marks it `no_dead_strip`.
+@_cdecl("sancov_default_edge_hook")
+public func sancovDefaultEdgeHook(_ guardPtr: UnsafeMutablePointer<UInt32>?) {
+    sancov_record_edge(guardPtr)
+}
+
+extension SanCovCounters {
+    /// Install a custom edge hook that will be called on every edge hit.
+    ///
+    /// The hook receives the guard pointer — dereference it to get the edge index.
+    /// Call `sancov_record_edge(guardPtr)` from your hook for default behavior.
+    ///
+    /// Pass `nil` to restore the default.
+    ///
+    /// - Important: Must be called before fuzzing starts. Not safe to call during fuzzing.
+    public static func setEdgeHook(_ hook: EdgeHook?) {
+        sancov_install_swift_hook(hook ?? sancovDefaultEdgeHook)
+    }
+}
+
 // MARK: - Source Location Mapping
 
 // Swift runtime demangling function

@@ -220,6 +220,9 @@ final class FuzzEngine<each Input: Codable & Sendable>: @unchecked Sendable {
     ) async -> FuzzResult<repeat each Input> {
         let startTime = dateClient.now()
 
+        // Install custom edge hook if configured
+        SanCovCounters.setEdgeHook(config.edgeHook)
+
         let allSeeds = additionalSeeds + seeds
 
         // Early exit if no seeds and no way to generate inputs
@@ -327,6 +330,9 @@ final class FuzzEngine<each Input: Codable & Sendable>: @unchecked Sendable {
         if config.verbose {
             print("[Regression] Running \(snapshot.count) saved inputs...")
         }
+
+        // Install custom edge hook if configured
+        SanCovCounters.setEdgeHook(config.edgeHook)
 
         // Hoist measurement context creation outside the loop for performance.
         // This avoids hash table insert/remove operations per entry.

@@ -762,7 +762,8 @@ void __sanitizer_cov_trace_pc_guard_init(uint32_t *start, uint32_t *stop) {
     // else: Same section passed again (harmless, can happen during re-initialization)
 }
 
-void __sanitizer_cov_trace_pc_guard(uint32_t *guard) {
+__attribute__((noinline))
+void sancov_record_edge(uint32_t *guard) {
     uint8_t* map = get_current_coverage_map();
     if (map && *guard < g_guard_count) {
         if (map[*guard] == 0) {
@@ -785,6 +786,22 @@ void __sanitizer_cov_trace_pc_guard(uint32_t *guard) {
                 }
             }
         }
+    }
+}
+
+// Edge hook function pointer — set by Swift via sancov_install_swift_hook().
+// Before Swift init, falls back to sancov_record_edge directly.
+static void (*g_edge_hook)(uint32_t*) = NULL;
+
+void sancov_install_swift_hook(void (*hook)(uint32_t*)) {
+    g_edge_hook = hook;
+}
+
+void __sanitizer_cov_trace_pc_guard(uint32_t *guard) {
+    if (g_edge_hook) {
+        g_edge_hook(guard);
+    } else {
+        sancov_record_edge(guard);
     }
 }
 
