@@ -58,9 +58,18 @@ let package = Package(
         ),
 
         .target(
+            name: "EdgeHooks",
+            dependencies: [
+                "SanCovHooks",
+            ]
+            // No -sanitize-coverage: functions here are safe to use as edge hooks
+        ),
+
+        .target(
             name: "PropertyTestingKit",
             dependencies: [
                 "SanCovHooks",
+                "EdgeHooks",
                 "CLLVMSymbolizer",
                 .product(name: "Dependencies", package: "swift-dependencies"),
                 .product(name: "DequeModule", package: "swift-collections"),

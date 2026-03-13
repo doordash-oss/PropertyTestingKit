@@ -11,6 +11,7 @@
 
 import Foundation
 import SanCovHooks
+@_exported import EdgeHooks
 import MachO
 
 /// Namespace for SanitizerCoverage APIs with task-level isolation.
@@ -89,28 +90,6 @@ enum SanCovCounters {
 
 // MARK: - Edge Hook
 
-/// A C-compatible function pointer called on every edge hit from
-/// `__sanitizer_cov_trace_pc_guard`. The guard pointer contains the edge index.
-/// Call `sancov_record_edge(guardPtr)` for the default binary hit behavior,
-/// or implement custom recording (e.g., counting, path hashing).
-///
-/// - Important: This runs millions of times per second. Keep it fast.
-public typealias EdgeHook = @convention(c) (UnsafeMutablePointer<UInt32>?) -> Void
-
-/// The default edge hook. Calls `sancov_record_edge` for binary hit recording.
-/// Must be `public` so the linker marks it `no_dead_strip`.
-@_cdecl("sancov_default_edge_hook")
-public func sancovDefaultEdgeHook(_ guardPtr: UnsafeMutablePointer<UInt32>?) {
-    sancov_record_edge(guardPtr)
-}
-
-/// Counting edge hook. Uses 8-bit saturating counters for hit-count bucketing.
-/// Must be `public` so the linker marks it `no_dead_strip`.
-@_cdecl("sancov_counting_edge_hook")
-public func sancovCountingEdgeHook(_ guardPtr: UnsafeMutablePointer<UInt32>?) {
-    sancov_record_edge_counting(guardPtr)
-}
-
 extension SanCovCounters {
     /// Install a custom edge hook that will be called on every edge hit.
     ///
@@ -121,7 +100,7 @@ extension SanCovCounters {
     ///
     /// - Important: Must be called before fuzzing starts. Not safe to call during fuzzing.
     public static func setEdgeHook(_ hook: EdgeHook?) {
-        sancov_install_swift_hook(hook ?? sancovDefaultEdgeHook)
+        sancov_install_swift_hook(hook ?? defaultEdgeHook)
     }
 }
 

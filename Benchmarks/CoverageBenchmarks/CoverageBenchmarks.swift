@@ -117,6 +117,49 @@ let benchmarks: @Sendable () -> Void = {
     }
 
     Benchmark(
+        "fuzz(Int) counting hook - iterations/sec",
+        configuration: .init(
+            metrics: [
+                .custom("Iterations/sec (K)", polarity: .prefersLarger, useScalingFactor: false),
+                .custom("Effective Parallelism (x100)", polarity: .prefersLarger, useScalingFactor: false),
+                .custom("Elapsed (ms)", polarity: .prefersSmaller, useScalingFactor: false),
+            ],
+            warmupIterations: 0,
+            scalingFactor: .one,
+            maxDuration: .seconds(120),
+            maxIterations: 25
+        )
+    ) { benchmark in
+        for _ in benchmark.scaledIterations {
+            let startCPU = getCPUTimeNanos()
+            let startWall = DispatchTime.now().uptimeNanoseconds
+
+            let result = try await fuzz(
+                duration: .seconds(0.1),
+                corpusMode: .refuzzReplace,
+                edgeHook: countingEdgeHook,
+                parallelism: 16
+            ) { (input: Int) in
+                blackHole(input)
+            }
+
+            let endCPU = getCPUTimeNanos()
+            let endWall = DispatchTime.now().uptimeNanoseconds
+
+            let cpuDelta = endCPU - startCPU
+            let wallDelta = endWall - startWall
+            let effectiveParallelism = wallDelta > 0 ? Int((Double(cpuDelta) / Double(wallDelta)) * 100) : 100
+            let wallSeconds = Double(wallDelta) / 1_000_000_000.0
+            let iterationsPerSec = wallSeconds > 0 ? Int(Double(result.stats.totalInputs) / wallSeconds / 1000.0) : 0
+            let elapsedMs = Int(wallDelta / 1_000_000)
+
+            benchmark.measurement(.custom("Iterations/sec (K)", polarity: .prefersLarger, useScalingFactor: false), iterationsPerSec)
+            benchmark.measurement(.custom("Effective Parallelism (x100)", polarity: .prefersLarger, useScalingFactor: false), effectiveParallelism)
+            benchmark.measurement(.custom("Elapsed (ms)", polarity: .prefersSmaller, useScalingFactor: false), elapsedMs)
+        }
+    }
+
+    Benchmark(
         "fuzz(Int) - 8 parallel runs, iterations/sec",
         configuration: .init(
             metrics: [
