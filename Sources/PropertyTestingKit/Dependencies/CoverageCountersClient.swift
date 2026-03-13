@@ -56,6 +56,10 @@ struct CoverageCountersClient: Sendable {
     /// This matches the SparseCoverage.signatureHash algorithm.
     var computeSignatureHash: @Sendable (SanCovCounters.MeasurementContext) -> Int
 
+    /// Access covered indices buffer directly (zero-copy).
+    /// The buffer pointer is valid only within the closure body.
+    var withCoveredIndices: @Sendable (SanCovCounters.MeasurementContext, @escaping (UnsafeBufferPointer<UInt32>) -> Bool) -> Bool
+
     init(
         isAvailable: @escaping @Sendable () -> Bool = unimplemented(
             "isAvailable",
@@ -86,6 +90,10 @@ struct CoverageCountersClient: Sendable {
         computeSignatureHash: @escaping @Sendable (SanCovCounters.MeasurementContext) -> Int = unimplemented(
             "computeSignatureHash",
             placeholder: 0
+        ),
+        withCoveredIndices: @escaping @Sendable (SanCovCounters.MeasurementContext, @escaping (UnsafeBufferPointer<UInt32>) -> Bool) -> Bool = unimplemented(
+            "withCoveredIndices",
+            placeholder: false
         )
     ) {
         self.isAvailable = isAvailable
@@ -96,6 +104,7 @@ struct CoverageCountersClient: Sendable {
         self.withRawCoverage = withRawCoverage
         self.mergeCoverageIntoBitmap = mergeCoverageIntoBitmap
         self.computeSignatureHash = computeSignatureHash
+        self.withCoveredIndices = withCoveredIndices
     }
 }
 
@@ -112,7 +121,8 @@ extension CoverageCountersClient: DependencyKey {
         mergeCoverageIntoBitmap: { context, bitmap, wordCount, mergeAll in
             SanCovCounters.mergeCoverageIntoBitmap(context: context, bitmap: bitmap, wordCount: wordCount, mergeAll: mergeAll)
         },
-        computeSignatureHash: { SanCovCounters.computeSignatureHash(context: $0) }
+        computeSignatureHash: { SanCovCounters.computeSignatureHash(context: $0) },
+        withCoveredIndices: { context, body in SanCovCounters.withCoveredIndices(context: context, body: body) }
     )
 
     /// Test value uses live coverage counters since they're read-only and safe.

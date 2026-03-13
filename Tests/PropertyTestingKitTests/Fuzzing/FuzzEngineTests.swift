@@ -627,7 +627,7 @@ struct FuzzEngineTests {
     @Test("FuzzEngine resetCoverage is called between iterations")
     func testResetCoverageCalledBetweenIterations() async {
         let resetCount = SyncBox(0)
-        let signatureHashCount = SyncBox(0)
+        let coveredIndicesCheckCount = SyncBox(0)
 
         let result = await withDependencies {
             $0.coverageCounters = CoverageCountersClient(
@@ -639,12 +639,13 @@ struct FuzzEngineTests {
                 },
                 snapshotCoveredArraysWithContext: { _ in
                     // Return sparse coverage with a unique index each time
-                    SparseCoverage(indices: [UInt32(signatureHashCount.value)])
+                    SparseCoverage(indices: [UInt32(coveredIndicesCheckCount.value)])
                 },
-                computeSignatureHash: { _ in
-                    signatureHashCount.update { $0 += 1 }
-                    // Return unique hash each time so corpus accepts it
-                    return signatureHashCount.value
+                withCoveredIndices: { _, body in
+                    coveredIndicesCheckCount.update { $0 += 1 }
+                    // Return unique index each time so corpus accepts it
+                    let index = UInt32(coveredIndicesCheckCount.value)
+                    return [index].withUnsafeBufferPointer { body($0) }
                 }
             )
         } operation: {
@@ -652,11 +653,11 @@ struct FuzzEngineTests {
         }
 
         // Reset should be called once per iteration
-        // computeSignatureHash should be called once per iteration
+        // withCoveredIndices should be called once per iteration (for signature match check)
         #expect(resetCount.value == result.stats.totalInputs,
                 "resetCoverage should be called once per iteration: got \(resetCount.value), expected \(result.stats.totalInputs)")
-        #expect(signatureHashCount.value == result.stats.totalInputs,
-                "computeSignatureHash should be called once per iteration")
+        #expect(coveredIndicesCheckCount.value == result.stats.totalInputs,
+                "withCoveredIndices should be called once per iteration")
     }
 
     @Test("FuzzEngine beginMeasurement called only once")
@@ -695,15 +696,15 @@ struct FuzzEngineTests {
     @Test("FuzzEngine coverage isolation - each iteration sees fresh coverage")
     func testCoverageIsolationPerIteration() async {
         // This test verifies that each iteration starts with fresh (reset) coverage
-        // by tracking the sequence of reset -> run -> signatureHash
+        // by tracking the sequence of reset -> run -> coverageCheck
 
         enum CoverageEvent: Equatable {
             case reset
-            case signatureHash
+            case coverageCheck
         }
 
         let events = SyncBox<[CoverageEvent]>([])
-        let hashCounter = SyncBox(0)
+        let checkCounter = SyncBox(0)
 
         _ = await withDependencies {
             $0.coverageCounters = CoverageCountersClient(
@@ -714,14 +715,13 @@ struct FuzzEngineTests {
                     events.update { $0.append(.reset) }
                 },
                 snapshotCoveredArraysWithContext: { _ in
-                    // Return sparse coverage with a unique index
-                    SparseCoverage(indices: [UInt32(hashCounter.value)])
+                    SparseCoverage(indices: [UInt32(checkCounter.value)])
                 },
-                computeSignatureHash: { _ in
-                    events.update { $0.append(.signatureHash) }
-                    hashCounter.update { $0 += 1 }
-                    // Return unique hash each time
-                    return hashCounter.value
+                withCoveredIndices: { _, body in
+                    events.update { $0.append(.coverageCheck) }
+                    checkCounter.update { $0 += 1 }
+                    let index = UInt32(checkCounter.value)
+                    return [index].withUnsafeBufferPointer { body($0) }
                 }
             )
         } operation: {
@@ -730,16 +730,16 @@ struct FuzzEngineTests {
 
         let recordedEvents = events.value
 
-        // Should have 5 reset-signatureHash pairs
-        #expect(recordedEvents.count == 10, "Should have 5 pairs of reset+signatureHash events")
+        // Should have 5 reset-coverageCheck pairs
+        #expect(recordedEvents.count == 10, "Should have 5 pairs of reset+coverageCheck events")
 
-        // Verify the pattern: reset, signatureHash, reset, signatureHash, ...
+        // Verify the pattern: reset, coverageCheck, reset, coverageCheck, ...
         for i in stride(from: 0, to: recordedEvents.count, by: 2) {
             if i < recordedEvents.count {
                 #expect(recordedEvents[i] == .reset, "Event \(i) should be reset")
             }
             if i + 1 < recordedEvents.count {
-                #expect(recordedEvents[i + 1] == .signatureHash, "Event \(i+1) should be signatureHash")
+                #expect(recordedEvents[i + 1] == .coverageCheck, "Event \(i+1) should be coverageCheck")
             }
         }
     }

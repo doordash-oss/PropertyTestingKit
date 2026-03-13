@@ -37,7 +37,7 @@ struct FuzzEngineConfig: Sendable {
     let timeLimitCheckInterval: Int
 
     /// The coverage strategy that determines when an input is "interesting."
-    /// Default: `.signatureHash` — hash-based uniqueness check.
+    /// Default: `.signatureMatch` — exact edge-set matching via inverted index.
     let coverageStrategy: CoverageStrategyKind
 
     init(
@@ -47,7 +47,7 @@ struct FuzzEngineConfig: Sendable {
         corpusMode: CorpusMode? = nil,
         projectPath: String? = nil,
         timeLimitCheckInterval: Int = 1000,
-        coverageStrategy: CoverageStrategyKind = .signatureHash,
+        coverageStrategy: CoverageStrategyKind = .signatureMatch,
         fileID: String = #fileID,
         filePath: String = #filePath,
         line: Int = #line,

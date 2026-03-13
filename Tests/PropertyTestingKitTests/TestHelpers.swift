@@ -31,7 +31,7 @@ func fuzzWithMaxIterations<each Input: MutatorProviding & Codable & Sendable>(
     seeds: [(repeat each Input)] = [],
     duration: Duration = .seconds(60),
     corpusMode: CorpusMode? = nil,
-    coverageStrategy: CoverageStrategyKind = .signatureHash,
+    coverageStrategy: CoverageStrategyKind = .signatureMatch,
     parallelism: Int = 1,
     filePath: StaticString = #filePath,
     function: StaticString = #function,
@@ -104,7 +104,7 @@ func fuzzEngineWithMaxIterations<each Input: MutatorProviding & Codable & Sendab
         })
     }, operation: {
         // Use timeLimitCheckInterval: 1 for precise iteration control in tests
-        let effectiveStrategy = coverageStrategy ?? config?.coverageStrategy ?? .signatureHash
+        let effectiveStrategy = coverageStrategy ?? config?.coverageStrategy ?? .signatureMatch
         let effectiveConfig = config.map {
             FuzzEngineConfig(
                 maxDuration: $0.maxDuration,
@@ -167,7 +167,7 @@ func fuzzWithMaxIterations<each Input: Codable & Sendable>(
     using mutators: repeat Mutator<each Input>,
     seeds: [(repeat each Input)] = [],
     corpusMode: CorpusMode? = nil,
-    coverageStrategy: CoverageStrategyKind = .signatureHash,
+    coverageStrategy: CoverageStrategyKind = .signatureMatch,
     parallelism: Int = 1,
     filePath: StaticString = #filePath,
     function: StaticString = #function,

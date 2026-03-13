@@ -96,6 +96,10 @@ typedef struct {
     uint8_t* coverage_map;
     size_t covered_count;
     _Atomic int refcount;
+    /// Ring buffer of covered edge indices, appended on first-hit.
+    /// Enables O(covered_edges) hash/snapshot instead of O(total_edges) scan.
+    uint32_t* covered_indices;
+    size_t covered_indices_capacity;
 } SanCovMeasurementContext;
 
 /// Begin a measurement context for coverage isolation.
@@ -141,6 +145,12 @@ int64_t sancov_compute_signature_hash(SanCovMeasurementContext* context);
 /// @param count Number of indices
 /// @return The signature hash, or 0 if count is 0
 int64_t sancov_compute_hash_from_indices(const uint32_t* indices, size_t count);
+
+/// Get a pointer to the covered indices buffer (zero-copy).
+/// Valid until the next resetCoverage or endMeasurement call.
+/// Returns NULL if no coverage or no buffer.
+/// Sets *out_count to the number of covered indices.
+const uint32_t* sancov_get_covered_indices(SanCovMeasurementContext* context, size_t* out_count);
 
 /// Merge coverage from a measurement context directly into a bitmap.
 /// This is the fast path for checking coverage uniqueness - no allocation needed.

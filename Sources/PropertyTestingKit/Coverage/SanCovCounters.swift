@@ -277,6 +277,22 @@ extension SanCovCounters {
             Int(sancov_compute_hash_from_indices(buffer.baseAddress, buffer.count))
         }
     }
+
+    /// Access the covered indices buffer directly (zero-copy).
+    /// The pointer is valid until the next `resetCoverage` or `endMeasurement` call.
+    ///
+    /// - Returns: A buffer pointer to the covered indices, or nil if no coverage.
+    static func withCoveredIndices<R>(
+        context: MeasurementContext,
+        body: (UnsafeBufferPointer<UInt32>) -> R
+    ) -> R {
+        var count: Int = 0
+        let ptr = sancov_get_covered_indices(context.rawContext, &count)
+        if let ptr, count > 0 {
+            return body(UnsafeBufferPointer(start: ptr, count: count))
+        }
+        return body(UnsafeBufferPointer(start: nil, count: 0))
+    }
 }
 
 // MARK: Coverage Gap Detection

@@ -8,16 +8,19 @@
 /// Determines how the fuzzer decides if an input is interesting (i.e., worth adding to the corpus).
 ///
 /// Different strategies trade off between precision and performance:
-/// - `.signatureHash`: Fast hash-based check — new code path = new hash. Default.
+/// - `.signatureMatch`: Exact edge-set matching via inverted index. Zero false positives. Default.
 /// - `.newEdge`: Bitmap merge — any previously-unseen edge is interesting. Matches AFL/libFuzzer.
 /// - `.alwaysInteresting`: Every input is added. Useful for testing without coverage.
 public enum CoverageStrategyKind: Sendable {
-    /// Signature hash strategy (default).
+    /// Signature match strategy (default).
     ///
-    /// Computes a hash of the set of covered edges. An input is interesting
-    /// if its signature hash hasn't been seen before, indicating a different
-    /// code path even if all individual edges were previously covered.
-    case signatureHash
+    /// Tracks all previously-seen edge sets and uses an inverted index to check
+    /// if the current run's edge set exactly matches any of them. An input is
+    /// interesting if its exact set of covered edges hasn't been seen before.
+    ///
+    /// No hashing — no false positives. The reject path is O(covered_edges * avg_signatures_per_edge).
+    /// With typical coverage (4-8 edges, ~100 unique signatures), this is ~8-16 integer increments.
+    case signatureMatch
 
     /// New edge strategy (bitmap merge).
     ///
@@ -45,13 +48,13 @@ typealias CoverageStrategyFn<each Input: Codable & Sendable> = (
 /// Creates a coverage strategy closure for the given kind.
 ///
 /// The returned closure encapsulates all interestingness logic and corpus addition.
-/// It captures any mutable state it needs (e.g., the signature hash set).
+/// It captures any mutable state it needs (e.g., the inverted index).
 func makeCoverageStrategy<each Input: Codable & Sendable>(
     _ kind: CoverageStrategyKind
 ) -> CoverageStrategyFn<repeat each Input> {
     switch kind {
-    case .signatureHash:
-        return makeSignatureHashStrategy()
+    case .signatureMatch:
+        return makeSignatureMatchStrategy()
     case .newEdge:
         return makeNewEdgeStrategy()
     case .alwaysInteresting:
@@ -59,36 +62,117 @@ func makeCoverageStrategy<each Input: Codable & Sendable>(
     }
 }
 
-// MARK: - Strategy Implementations
+// MARK: - Signature Match Strategy
 
-/// Signature hash strategy: computes a hash of covered edges, adds if hash is new.
+/// Inverted index for exact edge-set duplicate detection.
 ///
-/// Captures a `Set<Int>` of seen hashes in the closure's state.
-private func makeSignatureHashStrategy<each Input: Codable & Sendable>(
+/// Stores all previously-seen coverage signatures (edge sets) and provides
+/// O(covered_edges) duplicate checking via an inverted index from edges to
+/// signature IDs.
+///
+/// For each stored signature, tracks:
+/// - Its total edge count
+/// - A per-iteration hit counter (how many of its edges were seen this run)
+///
+/// The inverted index maps each edge index to the list of signature IDs that
+/// contain it. When an edge is observed, its signatures' hit counters are
+/// incremented. After all edges are observed, a signature is a match iff
+/// `hits == signature_size AND covered_count == signature_size`.
+private struct SignatureIndex {
+    /// Number of edges in each stored signature.
+    private var signatureSizes: [Int] = []
+
+    /// Hit counters per signature, reset each iteration.
+    private var signatureHits: [Int] = []
+
+    /// Inverted index: edge index → list of signature IDs containing that edge.
+    private var edgeToSignatures: [UInt32: [Int]] = [:]
+
+    /// Number of stored signatures.
+    var count: Int { signatureSizes.count }
+
+    /// Reset all hit counters for a new iteration.
+    mutating func resetHits() {
+        for i in signatureHits.indices {
+            signatureHits[i] = 0
+        }
+    }
+
+    /// Check if the given covered edges exactly match any stored signature.
+    ///
+    /// - Parameter coveredIndices: Buffer of edge indices hit this run.
+    /// - Returns: `true` if a matching signature exists (duplicate), `false` if novel.
+    mutating func isDuplicate(coveredIndices: UnsafeBufferPointer<UInt32>) -> Bool {
+        let coveredCount = coveredIndices.count
+        if coveredCount == 0 { return false }
+
+        // Reset hits from previous check
+        resetHits()
+
+        // Increment hit counters for each covered edge
+        for i in 0..<coveredCount {
+            let edge = coveredIndices[i]
+            if let sigIDs = edgeToSignatures[edge] {
+                for sigID in sigIDs {
+                    signatureHits[sigID] += 1
+                }
+            }
+        }
+
+        // Check if any signature is fully matched
+        for i in 0..<signatureSizes.count {
+            if signatureHits[i] == signatureSizes[i] && coveredCount == signatureSizes[i] {
+                return true
+            }
+        }
+        return false
+    }
+
+    /// Register a new signature (edge set) in the index.
+    ///
+    /// - Parameter indices: The edge indices of the new signature.
+    mutating func addSignature(_ indices: [UInt32]) {
+        let sigID = signatureSizes.count
+        signatureSizes.append(indices.count)
+        signatureHits.append(0)
+
+        for edge in indices {
+            edgeToSignatures[edge, default: []].append(sigID)
+        }
+    }
+}
+
+/// Signature match strategy: exact edge-set matching via inverted index.
+///
+/// Zero false positives — if the edge set hasn't been seen before, it's interesting.
+private func makeSignatureMatchStrategy<each Input: Codable & Sendable>(
 ) -> CoverageStrategyFn<repeat each Input> {
-    var signatureHashes = Set<Int>()
+    var index = SignatureIndex()
 
     return { input, context, coverageClient, corpus in
-        // Fast path: compute signature hash in C without allocation
-        let hash = coverageClient.computeSignatureHash(context)
+        // Zero-copy access to covered indices buffer
+        let isDuplicate = coverageClient.withCoveredIndices(context) { buffer in
+            index.isDuplicate(coveredIndices: buffer)
+        }
 
-        // Check if this is a new code path
-        guard !signatureHashes.contains(hash) else {
+        guard !isDuplicate else {
             return false
         }
 
-        // New code path found - snapshot coverage and add entry
+        // Novel edge set — snapshot coverage and add to corpus
         guard let sparse = try? coverageClient.snapshotCoveredArraysWithContext(context) else {
-            print("[SIG-HASH] REJECT: snapshot failed for hash=\(hash)")
             return false
         }
 
-        // Track signature hash and merge coverage
-        signatureHashes.insert(hash)
+        // Register in the inverted index
+        index.addSignature(Array(sparse.indices))
+
         corpus.mergeCoverageAndAdd(input: input, sparse: sparse)
         return true
     }
 }
+
+// MARK: - New Edge Strategy
 
 /// New edge strategy: uses bitmap merge to detect any previously-unseen edge.
 ///
@@ -117,6 +201,8 @@ private func makeNewEdgeStrategy<each Input: Codable & Sendable>(
         return true
     }
 }
+
+// MARK: - Always Interesting Strategy
 
 /// Always interesting strategy: every input is added unconditionally.
 private func makeAlwaysInterestingStrategy<each Input: Codable & Sendable>(

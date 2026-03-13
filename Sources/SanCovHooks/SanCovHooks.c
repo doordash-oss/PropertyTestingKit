@@ -277,6 +277,7 @@ static void ctx_release(SanCovMeasurementContext* ctx) {
         if (old_count == 1) {
             // Refcount dropped to zero, free the context
             cleanup_task_map(ctx);
+            free(ctx->covered_indices);
             free(ctx);
         }
     }
@@ -296,6 +297,9 @@ SanCovMeasurementContext* sancov_begin_measurement(void) {
     SanCovMeasurementContext* ctx = (SanCovMeasurementContext*)xmalloc(sizeof(SanCovMeasurementContext));
     ctx->coverage_map = NULL;
     ctx->covered_count = 0;
+    // Pre-allocate covered index buffer (typical coverage is sparse, 64 is plenty for most iterations)
+    ctx->covered_indices_capacity = 64;
+    ctx->covered_indices = (uint32_t*)xmalloc(ctx->covered_indices_capacity * sizeof(uint32_t));
     atomic_init(&ctx->refcount, 1);  // Start with refcount of 1 (owner reference)
 
     // Associate this measurement context with the current task
@@ -326,6 +330,8 @@ SanCovMeasurementContext* sancov_create_dummy_context(void) {
     SanCovMeasurementContext* ctx = (SanCovMeasurementContext*)xmalloc(sizeof(SanCovMeasurementContext));
     ctx->coverage_map = NULL;
     ctx->covered_count = 0;
+    ctx->covered_indices_capacity = 0;
+    ctx->covered_indices = NULL;
     atomic_init(&ctx->refcount, 1);
     return ctx;
 }
@@ -339,6 +345,7 @@ void sancov_reset_coverage(SanCovMeasurementContext* ctx) {
         memset(ctx->coverage_map, 0, g_guard_count);
     }
     ctx->covered_count = 0;
+    // covered_indices buffer is reused — just reset the count (capacity stays)
 }
 
 /// Cleanup caches, etc
@@ -386,6 +393,17 @@ size_t sancov_get_covered_count_with_context(SanCovMeasurementContext* ctx) {
 
 // Allocate and fill an array of covered edge indices.
 //
+const uint32_t* sancov_get_covered_indices(SanCovMeasurementContext* ctx, size_t* out_count) {
+    if (!ctx || !out_count) {
+        if (out_count) *out_count = 0;
+        return NULL;
+    }
+    size_t count = ctx->covered_count;
+    *out_count = count;
+    if (count == 0 || !ctx->covered_indices) return NULL;
+    return ctx->covered_indices;
+}
+
 // Scans the coverage map and returns indices of edges that were hit (counter != 0).
 // The caller is responsible for freeing the returned array.
 // Use sancov_get_covered_count_with_context() to get the array size.
@@ -394,13 +412,20 @@ size_t sancov_get_covered_count_with_context(SanCovMeasurementContext* ctx) {
 //   Newly allocated array of covered indices, or NULL if none covered.
 //   Caller must free() the returned pointer.
 //
-// The SIMD path processes 16 counters at a time, skipping zero chunks entirely.
 uint32_t* sancov_snapshot_covered_indices_with_context(SanCovMeasurementContext* ctx) {
     if (!ctx) return NULL;
 
     size_t count = ctx->covered_count;
     if (count == 0) return NULL;
 
+    // Fast path: copy from covered indices buffer — O(covered_edges)
+    if (ctx->covered_indices && count <= ctx->covered_indices_capacity) {
+        uint32_t* indices = (uint32_t*)xmalloc(count * sizeof(uint32_t));
+        memcpy(indices, ctx->covered_indices, count * sizeof(uint32_t));
+        return indices;
+    }
+
+    // Fallback: scan counters
     const uint8_t* counters = get_counters_with_context(ctx);
     size_t counter_count = sancov_get_counter_count();
     if (!counters || counter_count == 0) return NULL;
@@ -514,6 +539,12 @@ int64_t sancov_compute_signature_hash(SanCovMeasurementContext* ctx) {
     size_t count = ctx->covered_count;
     if (count == 0) return 0;
 
+    // Fast path: use the covered indices buffer — O(covered_edges) not O(total_edges)
+    if (ctx->covered_indices && count <= ctx->covered_indices_capacity) {
+        return sancov_compute_hash_from_indices(ctx->covered_indices, count);
+    }
+
+    // Fallback: buffer overflow, scan counters (should be rare)
     const uint8_t* counters = get_counters_with_context(ctx);
     size_t counter_count = sancov_get_counter_count();
     if (!counters || counter_count == 0) return 0;
@@ -523,70 +554,14 @@ int64_t sancov_compute_signature_hash(SanCovMeasurementContext* ctx) {
 
     int64_t hash = 0;
 
-#if USE_NEON_SIMD
-
-    size_t i = 0;
-    uint8x16_t zero = vdupq_n_u8(0);
-
-    for (; i + 16 <= counter_count; i += 16) {
-        uint8x16_t chunk = vld1q_u8(counters + i);
-        uint8x16_t cmp = vcgtq_u8(chunk, zero);
-        uint64x2_t cmp64 = vreinterpretq_u64_u8(cmp);
-
-        uint64_t low = vgetq_lane_u64(cmp64, 0);
-        uint64_t high = vgetq_lane_u64(cmp64, 1);
-
-        // Skip entirely zero chunks (common case - coverage is sparse)
-        if (low == 0 && high == 0) {
-            continue;
-        }
-
-        // Process low 8 bytes using CTZ
-        while (low) {
-            int tz = __builtin_ctzll(low);
-            int byte_pos = tz >> 3;
-            uint32_t index = (uint32_t)(i + byte_pos);
-
-            int64_t mixed = (int64_t)index * INDEX_PRIME;
-            hash ^= mixed;
-
-            low &= ~(0xFFULL << (byte_pos << 3));
-        }
-
-        // Process high 8 bytes
-        while (high) {
-            int tz = __builtin_ctzll(high);
-            int byte_pos = tz >> 3;
-            uint32_t index = (uint32_t)(i + 8 + byte_pos);
-
-            int64_t mixed = (int64_t)index * INDEX_PRIME;
-            hash ^= mixed;
-
-            high &= ~(0xFFULL << (byte_pos << 3));
-        }
-    }
-
-    // Handle remaining bytes
-    for (; i < counter_count; i++) {
-        if (counters[i] != 0) {
-            int64_t mixed = (int64_t)i * INDEX_PRIME;
-            hash ^= mixed;
-        }
-    }
-
-#else
-    // Scalar fallback
     for (size_t i = 0; i < counter_count; i++) {
         if (counters[i] != 0) {
             int64_t mixed = (int64_t)i * INDEX_PRIME;
             hash ^= mixed;
         }
     }
-#endif
 
-    // Mix in the count to differentiate signatures with same XOR but different counts
     hash ^= (int64_t)count * COUNT_PRIME;
-
     return hash;
 }
 
@@ -792,8 +767,22 @@ void __sanitizer_cov_trace_pc_guard(uint32_t *guard) {
     if (map && *guard < g_guard_count) {
         if (map[*guard] == 0) {
             map[*guard] = 1;
-            if (tls_cached_measurement_context) {
-                tls_cached_measurement_context->covered_count++;
+            SanCovMeasurementContext* ctx = tls_cached_measurement_context;
+            if (ctx) {
+                size_t idx = ctx->covered_count;
+                ctx->covered_count = idx + 1;
+                // Append to covered indices buffer (grow if needed)
+                if (idx < ctx->covered_indices_capacity) {
+                    ctx->covered_indices[idx] = *guard;
+                } else if (ctx->covered_indices) {
+                    size_t new_cap = ctx->covered_indices_capacity * 2;
+                    uint32_t* new_buf = (uint32_t*)realloc(ctx->covered_indices, new_cap * sizeof(uint32_t));
+                    if (new_buf) {
+                        ctx->covered_indices = new_buf;
+                        ctx->covered_indices_capacity = new_cap;
+                        new_buf[idx] = *guard;
+                    }
+                }
             }
         }
     }
