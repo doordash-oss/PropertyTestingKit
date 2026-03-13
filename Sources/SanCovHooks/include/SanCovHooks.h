@@ -133,6 +133,15 @@ uint32_t* sancov_snapshot_covered_indices_with_context(SanCovMeasurementContext*
 /// @return The signature hash, or 0 if no coverage
 int64_t sancov_compute_signature_hash(SanCovMeasurementContext* context);
 
+/// Compute signature hash from an explicit array of edge indices.
+/// Pure function — no dependency on live coverage counters.
+/// Uses the same algorithm as sancov_compute_signature_hash.
+///
+/// @param indices Array of edge indices
+/// @param count Number of indices
+/// @return The signature hash, or 0 if count is 0
+int64_t sancov_compute_hash_from_indices(const uint32_t* indices, size_t count);
+
 /// Merge coverage from a measurement context directly into a bitmap.
 /// This is the fast path for checking coverage uniqueness - no allocation needed.
 ///

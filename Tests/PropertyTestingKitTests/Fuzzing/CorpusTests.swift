@@ -14,15 +14,16 @@ struct CorpusTests {
 
     @Test("Corpus adds interesting entries")
     func testCorpusAddsInteresting() {
-        var corpus = Corpus<Int>()
+        let corpus = Corpus<Int>()
+        var signatureHashes = Set<Int>()
 
         let sparse1 = SparseCoverage(indices: [0])
         let sparse2 = SparseCoverage(indices: [1])
         let sparse3 = SparseCoverage(indices: [0])  // Duplicate coverage
 
-        let added1 = corpus.addIfInteresting(input: (1), sparse: sparse1)
-        let added2 = corpus.addIfInteresting(input: (2), sparse: sparse2)
-        let added3 = corpus.addIfInteresting(input: (3), sparse: sparse3)
+        let added1 = corpus.addIfInteresting(input: (1), sparse: sparse1, signatureHashes: &signatureHashes)
+        let added2 = corpus.addIfInteresting(input: (2), sparse: sparse2, signatureHashes: &signatureHashes)
+        let added3 = corpus.addIfInteresting(input: (3), sparse: sparse3, signatureHashes: &signatureHashes)
 
         #expect(added1)
         #expect(added2)

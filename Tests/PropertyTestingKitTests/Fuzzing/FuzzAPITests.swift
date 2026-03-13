@@ -73,9 +73,6 @@ struct FuzzAPITests {
         let corpusDir = URL(fileURLWithPath: "/test/fuzz-persist")
         let (saveSpy, saveFn) = spy { (_: Data, _: URL) in }
 
-        // Create a registry that always returns "always interesting" corpus clients
-        let alwaysInterestingRegistry = AlwaysInterestingCorpusRegistry()
-
         let result = await withDependencies {
             $0.corpusPersistence = CorpusPersistenceClient(
                 save: saveFn,
@@ -83,13 +80,13 @@ struct FuzzAPITests {
                 exists: { _ in false },
                 delete: { _ in }
             )
-            $0.corpusRegistry = alwaysInterestingRegistry
             // Explicitly set live coverage to prevent mock leakage from parallel tests
             $0.coverageCounters = .liveValue
         } operation: {
             let config = FuzzEngineConfig(
                 maxDuration: .seconds(10),
-                verbose: false
+                verbose: false,
+                coverageStrategy: .alwaysInteresting
             )
 
             return await fuzzEngineWithMaxIterations(
@@ -113,16 +110,13 @@ struct FuzzAPITests {
 
     @Test("Public fuzz API with custom seeds")
     func testPublicFuzzAPIWithSeeds() async throws {
-        // Use AlwaysInterestingCorpusRegistry to bypass coverage data requirements
-        let alwaysInterestingRegistry = AlwaysInterestingCorpusRegistry()
-
         let result = try await withDependencies {
-            $0.corpusRegistry = alwaysInterestingRegistry
             $0.environment = EnvironmentClient(environment: { [:] })
         } operation: {
             try await fuzzWithMaxIterations(
                 maxIterations: 100,
-                seeds: ["0", "-0", "-1", "abc", String(Int.max)]
+                seeds: ["0", "-0", "-1", "abc", String(Int.max)],
+                coverageStrategy: .alwaysInteresting
             ) { input in
                 let parsed = NumberParser.parse(input)
 
@@ -194,26 +188,20 @@ struct FuzzAPITests {
         // Create an error to throw
         struct TestFailure: Error {}
 
-        // Use AlwaysInterestingCorpusRegistry to bypass coverage data requirements
-        let alwaysInterestingRegistry = AlwaysInterestingCorpusRegistry()
+        let config = FuzzEngineConfig(
+            maxDuration: .seconds(10),
+            verbose: false,
+            coverageStrategy: .alwaysInteresting
+        )
 
         // Test FuzzEngine directly to verify failure capture without Issue.record noise
-        let result = await withDependencies {
-            $0.corpusRegistry = alwaysInterestingRegistry
-        } operation: {
-            let config = FuzzEngineConfig(
-                maxDuration: .seconds(10),
-                verbose: false
-            )
-
-            return await fuzzEngineWithMaxIterations(
-                maxIterations: 100,
-                config: config,
-                additionalSeeds: [true, false]
-            ) { (_: Bool) in
-                // Throw for any input to guarantee a failure
-                throw TestFailure()
-            }
+        let result = await fuzzEngineWithMaxIterations(
+            maxIterations: 100,
+            config: config,
+            additionalSeeds: [true, false]
+        ) { (_: Bool) in
+            // Throw for any input to guarantee a failure
+            throw TestFailure()
         }
 
         // Verify failures were captured
@@ -229,13 +217,9 @@ struct FuzzAPITests {
     func testFuzzRecordsIssuesOnFailure() async throws {
         struct TestFailure: Error {}
 
-        // Use AlwaysInterestingCorpusRegistry to bypass coverage data requirements
-        let alwaysInterestingRegistry = AlwaysInterestingCorpusRegistry()
-
         // Use withKnownIssue to expect the recorded issues from fuzz()
         await withKnownIssue {
             try await withDependencies {
-                $0.corpusRegistry = alwaysInterestingRegistry
                 $0.fileManager = FileManagerClient(
                     currentDirectoryPath: { "/test" },
                     fileExists: { _ in false },
@@ -247,7 +231,10 @@ struct FuzzAPITests {
             } operation: {
                 // This will throw because the test always fails
                 // Note: Seeds are required to provide type context for the variadic generic
-                _ = try await fuzzWithMaxIterations(maxIterations: 10) { (_: Bool) in
+                _ = try await fuzzWithMaxIterations(
+                    maxIterations: 10,
+                    coverageStrategy: .alwaysInteresting
+                ) { (_: Bool) in
                     throw TestFailure()
                 }
             }
@@ -256,13 +243,9 @@ struct FuzzAPITests {
 
     @Test("fuzz writes corpus to filesystem")
     func testFuzzWritesCorpus() async throws {
-        // Use AlwaysInterestingCorpusRegistry to bypass coverage data requirements
-        let alwaysInterestingRegistry = AlwaysInterestingCorpusRegistry()
-
         let (saveSpy, saveFn) = spy { (_: Data, _: URL) in }
 
         try await withDependencies {
-            $0.corpusRegistry = alwaysInterestingRegistry
             $0.environment = EnvironmentClient(environment: { [:] })
             $0.corpusPersistence = CorpusPersistenceClient(
                 save: saveFn,
@@ -271,7 +254,11 @@ struct FuzzAPITests {
                 delete: { _ in }
             )
         } operation: {
-            try await fuzzWithMaxIterations(maxIterations: 50, seeds: ["a", "ab", "abc"]) { input in
+            try await fuzzWithMaxIterations(
+                maxIterations: 50,
+                seeds: ["a", "ab", "abc"],
+                coverageStrategy: .alwaysInteresting
+            ) { input in
                 _ = input.count
             }
         }
@@ -281,9 +268,6 @@ struct FuzzAPITests {
 
     @Test("fuzz reads existing corpus from filesystem")
     func testFuzzReadsCorpus() async throws {
-        // Use AlwaysInterestingCorpusRegistry to bypass coverage data requirements
-        let alwaysInterestingRegistry = AlwaysInterestingCorpusRegistry()
-
         // Create a mock corpus with known entries
         var existingCorpus = Corpus<String>()
         existingCorpus.add(
@@ -300,7 +284,6 @@ struct FuzzAPITests {
         let seenInputs = Synchronized<[String]>([])
 
         try await withDependencies {
-            $0.corpusRegistry = alwaysInterestingRegistry
             $0.environment = EnvironmentClient(environment: { [:] })
             $0.corpusPersistence = CorpusPersistenceClient(
                 save: { _, _ in },
@@ -310,7 +293,11 @@ struct FuzzAPITests {
             )
         } operation: {
             // Use seeds that include the corpus entry so it gets tested
-            try await fuzzWithMaxIterations(maxIterations: 50, seeds: ["from_corpus"]) { input in
+            try await fuzzWithMaxIterations(
+                maxIterations: 50,
+                seeds: ["from_corpus"],
+                coverageStrategy: .alwaysInteresting
+            ) { input in
                 await seenInputs.update { $0.append(input) }
             }
         }
@@ -432,16 +419,3 @@ let numberParserSeeds: [String] = [
     "12-34",
 ]
 
-// MARK: - Test Support
-
-/// A corpus registry that always returns "always interesting" corpus.
-/// This is useful for tests that want to verify corpus saving without depending on coverage data.
-struct AlwaysInterestingCorpusRegistry: CorpusRegistryProtocol {
-    func getCorpus<each T: Codable & Sendable>() -> Corpus<repeat each T> {
-        return Corpus<repeat each T>(alwaysInteresting: true)
-    }
-
-    func getCorpusAlwaysInteresting<each T: Codable & Sendable>() -> Corpus<repeat each T> {
-        return Corpus<repeat each T>(alwaysInteresting: true)
-    }
-}

@@ -39,6 +39,9 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
 
     private var mutationsCount: Int = 0
 
+    /// The coverage strategy closure that determines interestingness.
+    private let coverageStrategy: CoverageStrategyFn<repeat each Input>
+
     // Simple loop state (replaces WorkerPool)
     private var pendingInputs: SimpleRingBuffer<(repeat each Input)>
     private var halted: Bool = false
@@ -49,6 +52,7 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
         mutators: (repeat Mutator<each Input>),
         inputSize: Int,
         corpus: Corpus<repeat each Input>,
+        coverageStrategy: @escaping CoverageStrategyFn<repeat each Input>,
         processSyncPlugins: @escaping SyncPluginProcessorFn,
         processAsyncPlugins: @escaping AsyncPluginProcessorFn,
         config: FuzzEngineConfig,
@@ -62,6 +66,7 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
         self.seeds = seeds
         self.mutators = mutators
         self.inputSize = inputSize
+        self.coverageStrategy = coverageStrategy
         self.processSyncPlugins = processSyncPlugins
         self.processAsyncPlugins = processAsyncPlugins
         self.config = config
@@ -152,12 +157,12 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
                     // Will throw if either the test throws or if it logs an Issue
                     try await testWithIssueCapture(input)
 
-                    // Fast path: C merges coverage directly into corpus bitmap
-                    // No Swift allocation when coverage isn't interesting
-                    let didAdd = corpus.addIfInterestingWithBitmapMerge(
-                        input: input,
-                        context: coverageContext,
-                        coverageClient: coverageCountersClient
+                    // Delegate interestingness check to the coverage strategy
+                    let didAdd = coverageStrategy(
+                        input,
+                        coverageContext,
+                        coverageCountersClient,
+                        corpus
                     )
 
                     // Process iteration event synchronously (hot path - no async)

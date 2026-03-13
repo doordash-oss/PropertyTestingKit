@@ -46,7 +46,6 @@ struct CoverageCountersClient: Sendable {
     var snapshotCoveredArraysWithContext: @Sendable (SanCovCounters.MeasurementContext) throws -> SparseCoverage
 
     /// Access raw coverage data without creating a Swift array.
-    /// Use this with Corpus.addIfInterestingRaw to avoid allocation when coverage isn't interesting.
     var withRawCoverage: @Sendable (SanCovCounters.MeasurementContext, @escaping (UnsafePointer<UInt32>?, Int) throws -> Bool) throws -> Bool
 
     /// Merge coverage directly into a bitmap. This is the fastest path - no allocation.

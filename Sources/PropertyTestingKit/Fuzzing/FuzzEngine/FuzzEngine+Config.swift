@@ -36,6 +36,10 @@ struct FuzzEngineConfig: Sendable {
     /// Tests that need precise iteration control should use 1.
     let timeLimitCheckInterval: Int
 
+    /// The coverage strategy that determines when an input is "interesting."
+    /// Default: `.signatureHash` — hash-based uniqueness check.
+    let coverageStrategy: CoverageStrategyKind
+
     init(
         maxDuration: Duration = .seconds(60),
         minimizeCorpus: Bool = true,
@@ -43,6 +47,7 @@ struct FuzzEngineConfig: Sendable {
         corpusMode: CorpusMode? = nil,
         projectPath: String? = nil,
         timeLimitCheckInterval: Int = 1000,
+        coverageStrategy: CoverageStrategyKind = .signatureHash,
         fileID: String = #fileID,
         filePath: String = #filePath,
         line: Int = #line,
@@ -55,6 +60,7 @@ struct FuzzEngineConfig: Sendable {
         self.corpusMode = corpusMode ?? CorpusMode.fromEnvironment()
         self.projectPath = projectPath
         self.timeLimitCheckInterval = timeLimitCheckInterval
+        self.coverageStrategy = coverageStrategy
         self.sourceLocation = SourceLocation(
             fileID: fileID,
             filePath: filePath,

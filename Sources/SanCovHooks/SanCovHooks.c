@@ -493,6 +493,21 @@ static inline bool bitmap_insert(uint64_t* bitmap, size_t bitmap_word_count, uin
 //   hash = XOR of (index * 0x9e3779b97f4a7c15) for each covered index
 //   hash ^= count * 0x517cc1b727220a95
 // Uses the same SIMD iteration as other coverage functions.
+int64_t sancov_compute_hash_from_indices(const uint32_t* indices, size_t count) {
+    if (!indices || count == 0) return 0;
+
+    const int64_t INDEX_PRIME = 0x9e3779b97f4a7c15LL;
+    const int64_t COUNT_PRIME = 0x517cc1b727220a95LL;
+
+    int64_t hash = 0;
+    for (size_t i = 0; i < count; i++) {
+        int64_t mixed = (int64_t)indices[i] * INDEX_PRIME;
+        hash ^= mixed;
+    }
+    hash ^= (int64_t)count * COUNT_PRIME;
+    return hash;
+}
+
 int64_t sancov_compute_signature_hash(SanCovMeasurementContext* ctx) {
     if (!ctx) return 0;
 
@@ -503,7 +518,6 @@ int64_t sancov_compute_signature_hash(SanCovMeasurementContext* ctx) {
     size_t counter_count = sancov_get_counter_count();
     if (!counters || counter_count == 0) return 0;
 
-    // Golden ratio primes (same as Swift SparseCoverage.signatureHash)
     const int64_t INDEX_PRIME = 0x9e3779b97f4a7c15LL;
     const int64_t COUNT_PRIME = 0x517cc1b727220a95LL;
 
@@ -533,7 +547,6 @@ int64_t sancov_compute_signature_hash(SanCovMeasurementContext* ctx) {
             int byte_pos = tz >> 3;
             uint32_t index = (uint32_t)(i + byte_pos);
 
-            // Mix the index into the hash
             int64_t mixed = (int64_t)index * INDEX_PRIME;
             hash ^= mixed;
 

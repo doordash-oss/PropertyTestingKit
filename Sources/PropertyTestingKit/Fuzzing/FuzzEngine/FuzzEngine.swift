@@ -230,14 +230,15 @@ final class FuzzEngine<each Input: Codable & Sendable>: @unchecked Sendable {
             return .empty
         }
 
-        // Create corpus via DI - allows test injection of alwaysInteresting corpus
         let corpus: Corpus<repeat each Input> = corpusRegistry.getCorpus()
+        let coverageStrategy: CoverageStrategyFn<repeat each Input> = makeCoverageStrategy(config.coverageStrategy)
 
         let stateMachine = FuzzStateMachine<repeat each Input>(
             seeds: allSeeds,
             mutators: mutators,
             inputSize: inputSize,
             corpus: corpus,
+            coverageStrategy: coverageStrategy,
             processSyncPlugins: processSyncPlugins,
             processAsyncPlugins: processAsyncPlugins,
             config: config,

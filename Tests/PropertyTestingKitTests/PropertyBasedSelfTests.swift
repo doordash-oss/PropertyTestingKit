@@ -230,26 +230,27 @@ struct CorpusPropertyTests {
     @Test("Corpus addIfInteresting uses signature-based uniqueness")
     func testAddIfInterestingSignatureBasedUniqueness() throws {
         var corpus = Corpus<String>()
+        var signatureHashes = Set<Int>()
 
         let sparse1 = SparseCoverage(indices: [0, 1, 2])
 
         // First add should succeed
-        let added1 = corpus.addIfInteresting(input: ("first"), sparse: sparse1)
+        let added1 = corpus.addIfInteresting(input: ("first"), sparse: sparse1, signatureHashes: &signatureHashes)
         #expect(added1 == true, "First entry should be added")
 
         // Different signature (subset) IS interesting - represents a different code path
         let sparseSubset = SparseCoverage(indices: [0, 1])
-        let added2 = corpus.addIfInteresting(input: ("subset"), sparse: sparseSubset)
+        let added2 = corpus.addIfInteresting(input: ("subset"), sparse: sparseSubset, signatureHashes: &signatureHashes)
         #expect(added2 == true, "Different signature should be accepted (unique code path)")
 
         // Same signature as first should be rejected
         let sparseSame = SparseCoverage(indices: [0, 1, 2])
-        let added3 = corpus.addIfInteresting(input: ("same"), sparse: sparseSame)
+        let added3 = corpus.addIfInteresting(input: ("same"), sparse: sparseSame, signatureHashes: &signatureHashes)
         #expect(added3 == false, "Identical signature should be rejected")
 
         // Different signature with new edges should be accepted
         let sparseNew = SparseCoverage(indices: [3])
-        let added4 = corpus.addIfInteresting(input: ("new"), sparse: sparseNew)
+        let added4 = corpus.addIfInteresting(input: ("new"), sparse: sparseNew, signatureHashes: &signatureHashes)
         #expect(added4 == true, "New signature should be accepted")
     }
 
@@ -468,8 +469,6 @@ struct FuzzAPIPropertyTests {
     func testFuzzDefaultConfig() async throws {
         // Use a simple test that won't fail
         let result = try await withDependencies {
-            // Use AlwaysInterestingCorpusRegistry to bypass coverage data requirements
-            $0.corpusRegistry = AlwaysInterestingCorpusRegistry()
             $0.fileManager = FileManagerClient(
                 currentDirectoryPath: { "/test" },
                 fileExists: { _ in false },
@@ -480,7 +479,10 @@ struct FuzzAPIPropertyTests {
             )
             $0.environment = EnvironmentClient(environment: { [:] })
         } operation: {
-            try await fuzzWithMaxIterations(maxIterations: 50) { (input: Int) in
+            try await fuzzWithMaxIterations(
+                maxIterations: 50,
+                coverageStrategy: .alwaysInteresting
+            ) { (input: Int) in
                 _ = input > 0 ? "positive" : "non-positive"
             }
         }
@@ -491,11 +493,7 @@ struct FuzzAPIPropertyTests {
 
     @Test("fuzz function accepts custom seeds")
     func testFuzzWithCustomSeeds() async throws {
-        // Use AlwaysInterestingCorpusRegistry to bypass coverage data requirements
-        let alwaysInterestingRegistry = AlwaysInterestingCorpusRegistry()
-
         let result = try await withDependencies {
-            $0.corpusRegistry = alwaysInterestingRegistry
             $0.environment = EnvironmentClient(environment: { [:] })
             $0.fileManager = FileManagerClient(
                 currentDirectoryPath: { "/test" },
@@ -510,7 +508,8 @@ struct FuzzAPIPropertyTests {
             try await fuzzWithMaxIterations(
                 maxIterations: 50,
                 seeds: ["custom1", "custom2", "custom3"],
-                corpusMode: .refuzzReplace
+                corpusMode: .refuzzReplace,
+                coverageStrategy: .alwaysInteresting
             ) { (input: String) in
                 // Just exercise the input - no actor involvement
                 _ = input.count
@@ -521,7 +520,7 @@ struct FuzzAPIPropertyTests {
         // String.fuzz has 21 values + 3 custom = 24 seeds minimum
         #expect(result.stats.totalInputs >= 24, "Should process all seeds (got \(result.stats.totalInputs))")
 
-        // Also check corpus has entries (since AlwaysInterestingCorpusRegistry adds everything)
+        // Also check corpus has entries (since alwaysInteresting strategy adds everything)
         #expect(result.corpus.count > 0, "Corpus should have entries")
     }
 

@@ -268,6 +268,15 @@ extension SanCovCounters {
         guard isAvailable else { return 0 }
         return Int(sancov_compute_signature_hash(context.rawContext))
     }
+
+    /// Compute signature hash from an explicit array of edge indices.
+    /// Pure function — no dependency on live coverage counters.
+    /// Uses the same algorithm as `computeSignatureHash(context:)`.
+    static func computeSignatureHash(indices: [UInt32]) -> Int {
+        indices.withUnsafeBufferPointer { buffer in
+            Int(sancov_compute_hash_from_indices(buffer.baseAddress, buffer.count))
+        }
+    }
 }
 
 // MARK: Coverage Gap Detection
