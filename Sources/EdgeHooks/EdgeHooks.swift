@@ -97,6 +97,12 @@ public final class PathTrie {
         sancov_trie_mark_terminal(raw)
     }
 
+    /// Advance the trie for an edge index.
+    /// Does NOT touch the coverage map — pure trie operation.
+    public func advance(_ edgeIndex: UInt32) {
+        sancov_trie_advance(raw, edgeIndex)
+    }
+
     /// Reset to root for the next iteration.
     public func reset() {
         sancov_trie_reset(raw)

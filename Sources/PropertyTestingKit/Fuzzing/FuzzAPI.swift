@@ -100,34 +100,15 @@ public func fuzz<each Input: Codable & Sendable>(
     seeds: [(repeat each Input)] = [],
     duration: Duration = .seconds(60),
     corpusMode: CorpusMode? = nil,
-    coverageStrategy: CoverageStrategyKind = .signatureMatch,
+    coverageStrategy: CoverageStrategyKind = .pathTrie,
     edgeHook: EdgeHook? = nil,
     parallelism: Int = ProcessInfo.processInfo.processorCount,
-    handlers: [FuzzPluginHandler<repeat each Input>] = [.mutation()],
+    makeHandlers: @escaping @Sendable () -> [FuzzPluginHandler<repeat each Input>] = { [.corpusMutation()] },
     filePath: StaticString = #filePath,
     function: StaticString = #function,
     line: Int = #line,
     test: @escaping @Sendable ((repeat each Input)) async throws -> Void
 ) async throws -> FuzzResult<repeat each Input> {
-    let processor = PluginHandlerProcessor(handlers: handlers)
-
-    // Sync closure for hot path (iteration events)
-    let processSyncPlugins: @Sendable (
-        consuming SyncPluginEvent<repeat each Input>,
-        (FuzzPluginAction<repeat each Input>) -> Void
-    ) -> Void = { event, execute in
-        processor.processSync(event: event, execute: execute)
-    }
-
-    // Async closure for cold path (start/end/failureFound events)
-    let processAsyncPlugins: @Sendable (
-        isolated (any Actor)?,
-        consuming AsyncPluginEvent<repeat each Input>,
-        (FuzzPluginAction<repeat each Input>) -> Void
-    ) async -> Void = { isolation, event, execute in
-        await processor.processAsync(isolation: isolation, event: event, execute: execute)
-    }
-
     return try await fuzzInternal(
         mutators: (repeat each mutators),
         seeds: seeds,
@@ -136,8 +117,7 @@ public func fuzz<each Input: Codable & Sendable>(
         coverageStrategy: coverageStrategy,
         edgeHook: edgeHook,
         parallelism: parallelism,
-        processSyncPlugins: processSyncPlugins,
-        processAsyncPlugins: processAsyncPlugins,
+        makeHandlers: makeHandlers,
         filePath: filePath,
         function: function,
         line: line,
@@ -155,15 +135,7 @@ func fuzzInternal<each Input: Codable & Sendable>(
     coverageStrategy: CoverageStrategyKind,
     edgeHook: EdgeHook?,
     parallelism: Int,
-    processSyncPlugins: @Sendable @escaping (
-        consuming SyncPluginEvent<repeat each Input>,
-        (FuzzPluginAction<repeat each Input>) -> Void
-    ) -> Void,
-    processAsyncPlugins: @Sendable @escaping (
-        isolated (any Actor)?,
-        consuming AsyncPluginEvent<repeat each Input>,
-        (FuzzPluginAction<repeat each Input>) -> Void
-    ) async -> Void,
+    makeHandlers: @escaping @Sendable () -> [FuzzPluginHandler<repeat each Input>],
     filePath: StaticString,
     function: StaticString,
     line: Int,
@@ -184,7 +156,15 @@ func fuzzInternal<each Input: Codable & Sendable>(
     let shouldRunRegression = corpusExists && (effectiveCorpusMode == .auto || effectiveCorpusMode == .regressionOnly)
 
     if shouldRunRegression || effectiveParallelism == 1 {
-        // Single engine mode: handles regression and corpus loading
+        // Single engine mode: create a fresh handler set for this engine.
+        let processor = PluginHandlerProcessor(handlers: makeHandlers())
+        let processSyncPlugins: @Sendable (consuming SyncPluginEvent<repeat each Input>, (FuzzPluginAction<repeat each Input>) -> Void) -> Void = {
+            processor.processSync(event: $0, execute: $1)
+        }
+        let processAsyncPlugins: @Sendable (isolated (any Actor)?, consuming AsyncPluginEvent<repeat each Input>, (FuzzPluginAction<repeat each Input>) -> Void) async -> Void = {
+            await processor.processAsync(isolation: $0, event: $1, execute: $2)
+        }
+
         let config = FuzzEngineConfig(
             maxDuration: duration,
             verbose: verbose,
@@ -220,11 +200,21 @@ func fuzzInternal<each Input: Codable & Sendable>(
         distributedSeeds[index % effectiveParallelism].append(seed)
     }
 
-    // Create and run N engines in parallel
+    // Create and run N engines in parallel. Each engine calls makeHandlers() to get
+    // its own independent handler instances — handlers must never be shared across engines.
     let results = await withTaskGroup(of: FuzzResult<repeat each Input>.self) { group in
         for engineIndex in 0..<effectiveParallelism {
             let engineSeeds = distributedSeeds[engineIndex]
             group.addTask {
+                // Fresh handlers per engine — no shared mutable state.
+                let processor = PluginHandlerProcessor(handlers: makeHandlers())
+                let processSyncPlugins: @Sendable (consuming SyncPluginEvent<repeat each Input>, (FuzzPluginAction<repeat each Input>) -> Void) -> Void = {
+                    processor.processSync(event: $0, execute: $1)
+                }
+                let processAsyncPlugins: @Sendable (isolated (any Actor)?, consuming AsyncPluginEvent<repeat each Input>, (FuzzPluginAction<repeat each Input>) -> Void) async -> Void = {
+                    await processor.processAsync(isolation: $0, event: $1, execute: $2)
+                }
+
                 let config = FuzzEngineConfig(
                     maxDuration: duration,
                     verbose: verbose,
@@ -301,10 +291,10 @@ public func fuzz<each Input: MutatorProviding & Codable & Sendable>(
     seeds: [(repeat each Input)] = [],
     duration: Duration = .seconds(60),
     corpusMode: CorpusMode? = nil,
-    coverageStrategy: CoverageStrategyKind = .signatureMatch,
+    coverageStrategy: CoverageStrategyKind = .pathTrie,
     edgeHook: EdgeHook? = nil,
     parallelism: Int = ProcessInfo.processInfo.processorCount,
-    handlers: [FuzzPluginHandler<repeat each Input>] = [.mutation()],
+    makeHandlers: @escaping @Sendable () -> [FuzzPluginHandler<repeat each Input>] = { [.corpusMutation()] },
     filePath: StaticString = #filePath,
     function: StaticString = #function,
     line: Int = #line,
@@ -318,7 +308,7 @@ public func fuzz<each Input: MutatorProviding & Codable & Sendable>(
         coverageStrategy: coverageStrategy,
         edgeHook: edgeHook,
         parallelism: parallelism,
-        handlers: handlers,
+        makeHandlers: makeHandlers,
         filePath: filePath,
         function: function,
         line: line,
@@ -342,7 +332,7 @@ private func mergeResults<each Input: Codable & Sendable>(
     }
 
     // Merge all failures
-    var allFailures: [(input: (repeat each Input), error: Error)] = []
+    var allFailures: [(input: (repeat each Input), error: Error, timeElapsed: TimeInterval)] = []
     for result in results {
         allFailures.append(contentsOf: result.failures)
     }
@@ -436,7 +426,7 @@ private func reportFuzzResult<each Input: Codable & Sendable>(
 ) throws -> FuzzResult<repeat each Input> {
     let testFilePath = String(describing: filePath)
 
-    for (index, (input, error)) in result.failures.enumerated() {
+    for (index, (input, error, _)) in result.failures.enumerated() {
         // Format the input for readability
         let formattedInput = formatInput(input)
 
@@ -466,7 +456,9 @@ private func reportFuzzResult<each Input: Codable & Sendable>(
     if let firstFailure = result.failures.first {
         throw FuzzError.testFailed(
             input: formatInput(firstFailure.input),
-            underlyingError: firstFailure.error
+            underlyingError: firstFailure.error,
+            timeElapsed: firstFailure.timeElapsed,
+            stats: result.stats
         )
     }
 
@@ -571,7 +563,7 @@ private func sanitizeFunctionName(_ name: String) -> String {
 /// Errors that can occur during fuzzing.
 public enum FuzzError: Error, LocalizedError {
     /// A test failed with a specific input.
-    case testFailed(input: String, underlyingError: Error)
+    case testFailed(input: String, underlyingError: Error, timeElapsed: TimeInterval, stats: FuzzStats)
 
     /// Coverage is not available (not built with coverage enabled).
     case coverageUnavailable
@@ -581,7 +573,7 @@ public enum FuzzError: Error, LocalizedError {
 
     public var errorDescription: String? {
         switch self {
-        case .testFailed(let input, let error):
+        case .testFailed(let input, let error, _, _):
             return "Fuzz test failed with input '\(input)': \(error)"
         case .coverageUnavailable:
             return "Coverage instrumentation not available. Build with --enable-code-coverage"

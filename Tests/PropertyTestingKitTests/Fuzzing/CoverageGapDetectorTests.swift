@@ -300,8 +300,9 @@ struct CoverageGapDetectorTests {
             _ = try await fuzz(
                 duration: .seconds(0.5),
                 corpusMode: .refuzzReplace,
+                coverageStrategy: .signatureMatch,
                 parallelism: 1,
-                handlers: [.mutation(), .coverageGap()]
+                makeHandlers: { [.mutation(), .coverageGap()] }
             ) { (input: Int) in
                 partiallyCoveredFunction(input: input)
             }

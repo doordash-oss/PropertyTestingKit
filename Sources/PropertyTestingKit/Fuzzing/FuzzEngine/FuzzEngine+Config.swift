@@ -37,7 +37,7 @@ struct FuzzEngineConfig: Sendable {
     let timeLimitCheckInterval: Int
 
     /// The coverage strategy that determines when an input is "interesting."
-    /// Default: `.signatureMatch` — exact edge-set matching via inverted index.
+    /// Default: `.pathTrie` — O(1) per-hit trie-based path tracking.
     let coverageStrategy: CoverageStrategyKind
 
     /// Custom edge hook called on every edge hit.
@@ -54,7 +54,7 @@ struct FuzzEngineConfig: Sendable {
         corpusMode: CorpusMode? = nil,
         projectPath: String? = nil,
         timeLimitCheckInterval: Int = 1000,
-        coverageStrategy: CoverageStrategyKind = .signatureMatch,
+        coverageStrategy: CoverageStrategyKind = .pathTrie,
         edgeHook: EdgeHook? = nil,
         fileID: String = #fileID,
         filePath: String = #filePath,

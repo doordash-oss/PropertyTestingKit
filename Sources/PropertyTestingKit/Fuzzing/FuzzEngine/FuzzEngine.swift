@@ -323,7 +323,7 @@ final class FuzzEngine<each Input: Codable & Sendable>: @unchecked Sendable {
         test: @escaping @Sendable (InputTuple) async throws -> Void
     ) async -> FuzzResult<repeat each Input> {
         let startTime = dateClient.now()
-        var failures: [(input: InputTuple, error: Error)] = []
+        var failures: [(input: InputTuple, error: Error, timeElapsed: TimeInterval)] = []
         var coverageChanges: [(input: InputTuple, expected: SparseCoverage, actual: SparseCoverage)] = []
         var needsRefuzz = false
 
@@ -351,7 +351,7 @@ final class FuzzEngine<each Input: Codable & Sendable>: @unchecked Sendable {
             }
 
             if let error = testError {
-                failures.append((entry.input, error))
+                failures.append((entry.input, error, startTime.distance(to: dateClient.now())))
             }
 
             // Get coverage snapshot using context-aware API (O(1) even after task hop)

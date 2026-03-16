@@ -7,17 +7,27 @@
 
 import Testing
 import Foundation
+import Dependencies
 
 /// A plugin handler with closures specialized for specific input types.
 ///
 /// This replaces `FuzzPlugin` protocol for the hot path. Instead of generic
 /// protocol methods that require runtime dispatch, this struct holds closures
 /// that are already specialized for the input types.
-public struct FuzzPluginHandler<each Input: Sendable>: Sendable {
+///
+/// ## Ownership
+///
+/// Each fuzz engine creates its own handler instances via the `makeHandlers`
+/// factory. Handlers are never shared across engines, so `handleSync` does not
+/// need to be `@Sendable` — it always runs synchronously on the owning engine's
+/// task. Mutable state can be captured directly as `var` in the closure without
+/// a wrapper.
+public struct FuzzPluginHandler<each Input: Sendable>: @unchecked Sendable {
     public let id: String
 
     /// Synchronous event handler - hot path, called millions of times.
-    public let handleSync: @Sendable (SyncPluginEvent<repeat each Input>) -> [FuzzPluginAction<repeat each Input>]
+    /// Always invoked synchronously on the engine task that owns this handler.
+    public let handleSync: (SyncPluginEvent<repeat each Input>) -> [FuzzPluginAction<repeat each Input>]
 
     /// Asynchronous event handler - cold path, called rarely.
     public let handleAsync: @Sendable (AsyncPluginEvent<repeat each Input>) async throws -> [FuzzPluginAction<repeat each Input>]
@@ -25,27 +35,12 @@ public struct FuzzPluginHandler<each Input: Sendable>: Sendable {
     @inlinable
     public init(
         id: String,
-        handleSync: @escaping @Sendable (SyncPluginEvent<repeat each Input>) -> [FuzzPluginAction<repeat each Input>],
+        handleSync: @escaping (SyncPluginEvent<repeat each Input>) -> [FuzzPluginAction<repeat each Input>],
         handleAsync: @escaping @Sendable (AsyncPluginEvent<repeat each Input>) async throws -> [FuzzPluginAction<repeat each Input>] = { _ in [] }
     ) {
         self.id = id
         self.handleSync = handleSync
         self.handleAsync = handleAsync
-    }
-}
-
-// MARK: - Box for Stateful Handlers
-
-/// Simple box for reference semantics. Not thread-safe.
-/// Handlers run on a single task so no synchronization needed.
-@usableFromInline
-final class Box<Value>: @unchecked Sendable {
-    @usableFromInline
-    var value: Value
-
-    @usableFromInline
-    init(_ value: Value) {
-        self.value = value
     }
 }
 
@@ -65,6 +60,48 @@ extension FuzzPluginHandler {
                     if context.discoveredNewCoverage {
                         return [.selectForMutation(.init(input: context.input))]
                     }
+                    return []
+                }
+            }
+        )
+    }
+
+    /// Creates a corpus-cycling mutation handler.
+    ///
+    /// Extends the basic mutation handler with AFL-style corpus cycling:
+    /// when the pending mutation queue is exhausted (the state machine fell back
+    /// to fresh generation), this handler picks a random previously-interesting
+    /// input and re-queues its mutations. This keeps the fuzzer exploring the
+    /// neighborhood of known-good inputs rather than relying on pure random
+    /// generation to re-discover interesting territory.
+    ///
+    /// The handler maintains its own list of interesting inputs independently of
+    /// the corpus, so it works correctly in parallel fuzz mode where each engine
+    /// has its own plugin instance.
+    public static func corpusMutation() -> FuzzPluginHandler<repeat each Input> {
+        var interestingInputs: [(repeat each Input)] = []
+        @Dependency(\.fastRNG) var fastRNG: FastRNG
+        let seedRNG: FastRNG = fastRNG
+
+        return FuzzPluginHandler(
+            id: "corpus_mutation",
+            handleSync: { event in
+                switch event {
+                case let .iteration(context):
+                    if context.discoveredNewCoverage {
+                        interestingInputs.append(context.input)
+                        return [.selectForMutation(.init(input: context.input))]
+                    }
+
+                    // When the mutation queue was exhausted (state machine fell back to
+                    // fresh generation) and we have previously-interesting inputs, pick
+                    // one at random and schedule its mutations.
+                    if !context.fromMutationQueue, !interestingInputs.isEmpty {
+                        var rng = seedRNG
+                        let idx = Int.random(in: 0..<interestingInputs.count, using: &rng)
+                        return [.selectForMutation(.init(input: interestingInputs[idx]))]
+                    }
+
                     return []
                 }
             }
@@ -140,16 +177,16 @@ extension FuzzPluginHandler {
     public static func plateauDetector(
         config: SimpleCoveragePlateauDetector.Config = .init()
     ) -> FuzzPluginHandler<repeat each Input> {
-        let detector = Box(SimpleCoveragePlateauDetector(config: config))
+        var detector = SimpleCoveragePlateauDetector(config: config)
 
         return FuzzPluginHandler(
             id: "plateau_detector",
             handleSync: { event in
                 switch event {
                 case let .iteration(context):
-                    detector.value.record(discoveredNewCoverage: context.discoveredNewCoverage)
+                    detector.record(discoveredNewCoverage: context.discoveredNewCoverage)
 
-                    if detector.value.hasPlateaued {
+                    if detector.hasPlateaued {
                         return [.stop(FuzzPluginAction<repeat each Input>.StopAction(reason: .custom("coverage_plateaued")))]
                     }
 
@@ -189,16 +226,16 @@ extension FuzzPluginHandler {
     public static func stadsDetector(
         config: STADSPlateauDetector.Config
     ) -> FuzzPluginHandler<repeat each Input> {
-        let detector = Box(STADSPlateauDetector(config: config))
+        var detector = STADSPlateauDetector(config: config)
 
         return FuzzPluginHandler(
             id: "stads_detector",
             handleSync: { event in
                 switch event {
                 case let .iteration(context):
-                    detector.value.record(discoveredNewCoverage: context.discoveredNewCoverage)
+                    detector.record(discoveredNewCoverage: context.discoveredNewCoverage)
 
-                    if detector.value.hasPlateaued {
+                    if detector.hasPlateaued {
                         return [.stop(FuzzPluginAction<repeat each Input>.StopAction(reason: .custom("stads_plateau")))]
                     }
 
@@ -240,17 +277,101 @@ extension FuzzPluginHandler {
     public static func saturationDetector(
         config: SaturationPlateauDetector.Config
     ) -> FuzzPluginHandler<repeat each Input> {
-        let detector = Box(SaturationPlateauDetector(config: config))
+        var detector = SaturationPlateauDetector(config: config)
 
         return FuzzPluginHandler(
             id: "saturation_detector",
             handleSync: { event in
                 switch event {
                 case let .iteration(context):
-                    detector.value.record(discoveredNewCoverage: context.discoveredNewCoverage)
+                    detector.record(discoveredNewCoverage: context.discoveredNewCoverage)
 
-                    if detector.value.hasPlateaued {
+                    if detector.hasPlateaued {
                         return [.stop(FuzzPluginAction<repeat each Input>.StopAction(reason: .custom("saturation_plateau")))]
+                    }
+
+                    return []
+                }
+            }
+        )
+    }
+
+    /// Creates an energy-based mutation handler using the Entropic algorithm.
+    ///
+    /// Ports libFuzzer's Entropic energy scheduler. Each interesting input is
+    /// assigned an energy score based on how many globally-rare coverage edges it
+    /// covers. When the mutation queue drains, the next input to mutate is chosen
+    /// by weighted-random selection proportional to `2^energy`, so inputs covering
+    /// rare edges are selected more often.
+    ///
+    /// Energy formula (Shannon entropy of rare-feature incidence distribution):
+    /// - For each rare feature covered by the entry, subtract `(globalFreq+1)*log(globalFreq+1)`
+    ///   from the energy and add `(globalFreq+1)` to the sum of incidences.
+    /// - Add an abundance term: `-(mutations+1)*log(mutations+1)` to penalise
+    ///   over-mutated inputs.
+    /// - Normalize: `energy = energy/sumIncidence + log(sumIncidence)`.
+    /// - Over-fuzzing guard: if an entry has been mutated more than
+    ///   `kMaxMutationFactor × average`, its weight is set to zero.
+    ///
+    /// A feature is considered "rare" when fewer than `rareFeatureThreshold`
+    /// corpus entries cover it (default: 3).
+    public static func energyMutation(
+        rareFeatureThreshold: Int = 3,
+        maxMutationFactor: Int = 20
+    ) -> FuzzPluginHandler<repeat each Input> {
+        var entryInputs: [(repeat each Input)] = []
+        var entryFeatures: [[UInt32]] = []
+        var entryMutations: [Int] = []
+        var globalFeatureFreqs: [UInt32: Int] = [:]
+        var totalMutations = 0
+
+        @Dependency(\.fastRNG) var fastRNG: FastRNG
+        let seedRNG: FastRNG = fastRNG
+
+        return FuzzPluginHandler(
+            id: "energy_mutation",
+            handleSync: { event in
+                switch event {
+                case let .iteration(context):
+                    if context.discoveredNewCoverage, let coverage = context.sparseCoverage {
+                        // Register new entry with its features.
+                        for feature in coverage.indices {
+                            globalFeatureFreqs[feature, default: 0] += 1
+                        }
+                        entryInputs.append(context.input)
+                        entryFeatures.append(coverage.indices)
+                        entryMutations.append(0)
+
+                        // Immediately schedule mutations for the newly-interesting input.
+                        return [.selectForMutation(.init(input: context.input))]
+                    }
+
+                    // When the mutation queue has drained, pick the next entry to
+                    // mutate using energy-weighted selection.
+                    if !context.fromMutationQueue, !entryInputs.isEmpty {
+                        var rng = seedRNG
+                        let count = entryInputs.count
+                        let totalRareFeatures = globalFeatureFreqs.values
+                            .filter { $0 <= rareFeatureThreshold }.count
+
+                        let weights = (0..<count).map { i in
+                            entropicWeight(
+                                features: entryFeatures[i],
+                                mutations: entryMutations[i],
+                                globalFreqs: globalFeatureFreqs,
+                                totalRareFeatures: totalRareFeatures,
+                                totalMutations: totalMutations,
+                                corpusSize: count,
+                                rareFeatureThreshold: rareFeatureThreshold,
+                                maxMutationFactor: maxMutationFactor
+                            )
+                        }
+
+                        let selectedIdx = weightedRandomIndex(weights: weights, using: &rng)
+                        entryMutations[selectedIdx] += 1
+                        totalMutations += 1
+
+                        return [.selectForMutation(.init(input: entryInputs[selectedIdx]))]
                     }
 
                     return []
@@ -392,11 +513,78 @@ private func fileIDFromPath(_ path: String) -> String {
     return "Unknown/\(fileName)"
 }
 
+// MARK: - Entropic Energy Helpers
+
+/// Compute the Entropic energy weight for a corpus entry.
+///
+/// Returns `pow(2, energy)` — always positive, so entries with higher energy
+/// get proportionally more mutations. Returns 1.0 (uniform) when no rare
+/// features have been recorded yet.
+private func entropicWeight(
+    features: [UInt32],
+    mutations: Int,
+    globalFreqs: [UInt32: Int],
+    totalRareFeatures: Int,
+    totalMutations: Int,
+    corpusSize: Int,
+    rareFeatureThreshold: Int,
+    maxMutationFactor: Int
+) -> Double {
+    // Over-fuzzing guard: zero out entries mutated far beyond the average.
+    if corpusSize > 0, totalMutations > 0 {
+        let avgMutations = totalMutations / corpusSize
+        if avgMutations > 0, mutations / maxMutationFactor > avgMutations {
+            return 0.0
+        }
+    }
+
+    var energy = 0.0
+    var sumIncidence = 0.0
+    var coveredRareFeatures = 0
+
+    for feature in features {
+        let globalFreq = globalFreqs[feature] ?? 1
+        guard globalFreq <= rareFeatureThreshold else { continue }
+        let localIncidence = Double(globalFreq + 1)
+        energy -= localIncidence * log(localIncidence)
+        sumIncidence += localIncidence
+        coveredRareFeatures += 1
+    }
+
+    // Uncovered rare features add to the denominator but not to the numerator
+    // (their contribution to energy is -1*log(1) = 0).
+    let uncoveredRare = max(0, totalRareFeatures - coveredRareFeatures)
+    sumIncidence += Double(uncoveredRare)
+
+    // Abundance term: penalise inputs that have been mutated many times.
+    let abundanceIncidence = Double(mutations + 1)
+    energy -= abundanceIncidence * log(abundanceIncidence)
+    sumIncidence += abundanceIncidence
+
+    guard sumIncidence > 0 else { return 1.0 }
+    return pow(2.0, energy / sumIncidence + log(sumIncidence))
+}
+
+/// Weighted-random index selection. Falls back to uniform random if all weights are zero.
+private func weightedRandomIndex(weights: [Double], using rng: inout some RandomNumberGenerator) -> Int {
+    let total = weights.reduce(0.0, +)
+    guard total > 0 else {
+        return Int.random(in: 0..<weights.count, using: &rng)
+    }
+    let r = Double.random(in: 0..<total, using: &rng)
+    var cumsum = 0.0
+    for (i, w) in weights.enumerated() {
+        cumsum += w
+        if r < cumsum { return i }
+    }
+    return weights.count - 1
+}
+
 // MARK: - Processor
 
 /// Processes plugin handlers without protocol witness overhead.
 @usableFromInline
-struct PluginHandlerProcessor<each Input: Sendable>: Sendable {
+struct PluginHandlerProcessor<each Input: Sendable>: @unchecked Sendable {
     @usableFromInline
     let handlers: [FuzzPluginHandler<repeat each Input>]
 

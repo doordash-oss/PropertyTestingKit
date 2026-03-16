@@ -34,7 +34,7 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
     private let seeds: [(repeat each Input)]
     private let startTime: Date
     private let dateClient: DateClient
-    private var failures: [(input: (repeat each Input), error: Error)] = []
+    private var failures: [(input: (repeat each Input), error: Error, timeElapsed: TimeInterval)] = []
     private let test: @Sendable ((repeat each Input)) async throws -> Void
 
     private var mutationsCount: Int = 0
@@ -76,13 +76,13 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
     }
 
     private func recordFailure(input: (repeat each Input), error: any Error) {
-        failures.append((input: input, error: error))
+        failures.append((input: input, error: error, timeElapsed: startTime.distance(to: dateClient.now())))
     }
 
     struct FuzzStateMachineResult {
         let stats: FuzzStats
         let corpus: Corpus<repeat each Input>
-        let failures: [(input: (repeat each Input), error: Error)]
+        let failures: [(input: (repeat each Input), error: Error, timeElapsed: TimeInterval)]
     }
 
     func start() async throws -> FuzzStateMachineResult {
@@ -141,12 +141,15 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
 
                 // Get input: from pending queue or generate random
                 let input: (repeat each Input)
+                let fromMutationQueue: Bool
                 if !pendingInputs.isEmpty {
                     input = pendingInputs.removeFirstUnchecked()
+                    fromMutationQueue = true
                 } else {
                     // Generate directly - no closure indirection
                     input = (repeat (each mutators).generate(&rng))
                     generatedCount += 1
+                    fromMutationQueue = false
                 }
 
                 // Reset coverage for this iteration (cheap memset instead of hash table ops)
@@ -165,9 +168,20 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
                         corpus
                     )
 
+                    // Snapshot coverage only when new edges were found — amortizes
+                    // allocation cost since new coverage is rare (~0.1% of iterations).
+                    let sparseCoverage: SparseCoverage? = didAdd
+                        ? (try? coverageCountersClient.snapshotCoveredArraysWithContext(coverageContext))
+                        : nil
+
                     // Process iteration event synchronously (hot path - no async)
                     processSyncPlugins(
-                        .iteration(.init(discoveredNewCoverage: didAdd, input: input))
+                        .iteration(.init(
+                            discoveredNewCoverage: didAdd,
+                            input: input,
+                            fromMutationQueue: fromMutationQueue,
+                            sparseCoverage: sparseCoverage
+                        ))
                     ) { action in
                         self.executeAction(action)
                     }

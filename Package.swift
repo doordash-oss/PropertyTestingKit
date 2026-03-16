@@ -132,6 +132,43 @@ let package = Package(
                 "PropertyTestingKit",
             ]
         ),
+
+        // IFC machine benchmark library — port of FuzzChick's secure machine
+        .target(
+            name: "IFCMachine",
+            dependencies: ["PropertyTestingKit"],
+            swiftSettings: [
+                .unsafeFlags(["-O"])  // Optimize even in debug builds (disables assert)
+            ]
+        ),
+        .testTarget(
+            name: "IFCMachineTests",
+            dependencies: [
+                "IFCMachine",
+                "PropertyTestingKit",
+            ],
+            swiftSettings: [
+                .unsafeFlags([
+                    "-sanitize=undefined",
+                    "-sanitize-coverage=edge,pc-table"
+                ])
+            ]
+        ),
+        // IFC benchmark tests — property-based tests that exercise the fuzzer
+        // Ported from QuickChick/IFC Driver.v
+        .testTarget(
+            name: "IFCBenchmarkTests",
+            dependencies: [
+                "IFCMachine",
+                "PropertyTestingKit",
+            ],
+            swiftSettings: [
+                .unsafeFlags([
+                    "-sanitize=undefined",
+                    "-sanitize-coverage=edge,pc-table"
+                ])
+            ]
+        ),
     ]
 )
 
@@ -156,6 +193,32 @@ package.targets += [
         ],
         linkerSettings: [
             // Add rpath for Testing.framework from Xcode (needed for local toolchain)
+            .unsafeFlags([
+                "-Xlinker", "-rpath",
+                "-Xlinker", "/Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks"
+            ])
+        ],
+        plugins: [
+            .plugin(name: "BenchmarkPlugin", package: "package-benchmark")
+        ]
+    ),
+    .executableTarget(
+        name: "IFCBenchmarks",
+        dependencies: [
+            .product(name: "Benchmark", package: "package-benchmark"),
+            "IFCMachine",
+            "PropertyTestingKit",
+        ],
+        path: "Benchmarks/IFCBenchmarks",
+        exclude: ["Corpus"],
+        swiftSettings: [
+            .unsafeFlags([
+                "-O",
+                "-sanitize=undefined",
+                "-sanitize-coverage=edge,pc-table"
+            ])
+        ],
+        linkerSettings: [
             .unsafeFlags([
                 "-Xlinker", "-rpath",
                 "-Xlinker", "/Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks"

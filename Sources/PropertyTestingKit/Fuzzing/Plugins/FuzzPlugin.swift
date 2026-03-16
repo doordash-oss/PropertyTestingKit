@@ -22,13 +22,25 @@ public enum SyncPluginEvent<each T: Sendable>: Sendable {
         public let discoveredNewCoverage: Bool
         /// The input that was tested in this iteration.
         public let input: (repeat each T)
+        /// Whether this input came from the pending mutation queue (`true`)
+        /// or was freshly generated (`false`). Plugins can use this to detect
+        /// when the mutation queue has been exhausted and re-schedule corpus
+        /// entries for mutation.
+        public let fromMutationQueue: Bool
+        /// The sparse coverage snapshot for this iteration.
+        /// Only populated when `discoveredNewCoverage == true`; `nil` otherwise.
+        public let sparseCoverage: SparseCoverage?
 
         public init(
             discoveredNewCoverage: Bool,
-            input: consuming (repeat each T)
+            input: consuming (repeat each T),
+            fromMutationQueue: Bool = false,
+            sparseCoverage: SparseCoverage? = nil
         ) {
             self.discoveredNewCoverage = discoveredNewCoverage
             self.input = input
+            self.fromMutationQueue = fromMutationQueue
+            self.sparseCoverage = sparseCoverage
         }
     }
 }

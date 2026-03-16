@@ -348,6 +348,11 @@ void sancov_reset_coverage(SanCovMeasurementContext* ctx) {
     }
     ctx->covered_count = 0;
     // covered_indices buffer is reused — just reset the count (capacity stays)
+
+    // Reset the trie if attached (move pointer back to root, clear novel flag)
+    if (ctx->path_trie) {
+        sancov_trie_reset(ctx->path_trie);
+    }
 }
 
 /// Cleanup caches, etc
@@ -764,6 +769,9 @@ void __sanitizer_cov_trace_pc_guard_init(uint32_t *start, uint32_t *stop) {
     // else: Same section passed again (harmless, can happen during re-initialization)
 }
 
+// Forward declaration — implemented after trie types are defined
+static void maybe_advance_trie(SanCovMeasurementContext* ctx, uint32_t edge_index);
+
 __attribute__((noinline))
 void sancov_record_edge(uint32_t *guard) {
     uint8_t* map = get_current_coverage_map();
@@ -774,6 +782,8 @@ void sancov_record_edge(uint32_t *guard) {
             if (ctx) {
                 size_t idx = ctx->covered_count;
                 ctx->covered_count = idx + 1;
+                // Advance trie if attached (O(1) — just pointer chase + child lookup)
+                maybe_advance_trie(ctx, *guard);
                 // Append to covered indices buffer (grow if needed)
                 if (idx < ctx->covered_indices_capacity) {
                     ctx->covered_indices[idx] = *guard;
@@ -885,10 +895,27 @@ struct SanCovPathTrie {
     TrieNode* root;
     TrieNode* current;
     bool is_novel;
+    SanCovMeasurementContext* owner_context; // Back-pointer for cleanup
 };
+
+// Advance trie on first-hit if context has one attached.
+// Called from sancov_record_edge on every first-hit edge.
+static void maybe_advance_trie(SanCovMeasurementContext* ctx, uint32_t edge_index) {
+    SanCovPathTrie* trie = ctx->path_trie;
+    if (!trie) return;
+
+    TrieNode* child = trie_node_find_child(trie->current, edge_index);
+    if (child) {
+        trie->current = child;
+    } else {
+        trie->current = trie_node_add_child(trie->current, edge_index);
+        trie->is_novel = true;
+    }
+}
 
 void sancov_context_set_trie(SanCovMeasurementContext* context, SanCovPathTrie* trie) {
     if (context) context->path_trie = trie;
+    if (trie) trie->owner_context = context;
 }
 
 SanCovPathTrie* sancov_trie_create(void) {
@@ -896,11 +923,16 @@ SanCovPathTrie* sancov_trie_create(void) {
     trie->root = trie_node_create();
     trie->current = trie->root;
     trie->is_novel = false;
+    trie->owner_context = NULL;
     return trie;
 }
 
 void sancov_trie_destroy(SanCovPathTrie* trie) {
     if (!trie) return;
+    // NULL out the context's pointer to prevent use-after-free
+    if (trie->owner_context) {
+        trie->owner_context->path_trie = NULL;
+    }
     trie_node_destroy(trie->root);
     free(trie);
 }
@@ -920,6 +952,17 @@ void sancov_trie_reset(SanCovPathTrie* trie) {
     if (!trie) return;
     trie->current = trie->root;
     trie->is_novel = false;
+}
+
+void sancov_trie_advance(SanCovPathTrie* trie, uint32_t edge_index) {
+    if (!trie) return;
+    TrieNode* child = trie_node_find_child(trie->current, edge_index);
+    if (child) {
+        trie->current = child;
+    } else {
+        trie->current = trie_node_add_child(trie->current, edge_index);
+        trie->is_novel = true;
+    }
 }
 
 __attribute__((noinline))

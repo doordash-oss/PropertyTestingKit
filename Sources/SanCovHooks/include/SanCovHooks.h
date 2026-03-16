@@ -219,6 +219,11 @@ void sancov_trie_mark_terminal(SanCovPathTrie* trie);
 /// Reset the trie pointer to root and clear the novel flag.
 void sancov_trie_reset(SanCovPathTrie* trie);
 
+/// Advance the trie for a given edge index.
+/// If the child exists, advance. If not, create child and set novel flag.
+/// This is the low-level trie operation — does NOT touch the coverage map.
+void sancov_trie_advance(SanCovPathTrie* trie, uint32_t edge_index);
+
 /// Trie edge hook. Records binary coverage AND advances the trie pointer.
 /// On each edge hit: if child exists, advance; if not, create child and set novel flag.
 /// Both operations are O(1).

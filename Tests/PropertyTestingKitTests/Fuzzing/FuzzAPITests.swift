@@ -137,7 +137,9 @@ struct FuzzAPITests {
         // Test .testFailed
         let testFailedError = FuzzError.testFailed(
             input: "badInput",
-            underlyingError: NSError(domain: "test", code: 1)
+            underlyingError: NSError(domain: "test", code: 1),
+            timeElapsed: 0,
+            stats: FuzzStats(totalInputs: 0, mutations: 0, generations: 0, duration: 0)
         )
         #expect(testFailedError.errorDescription?.contains("badInput") == true)
         #expect(testFailedError.errorDescription?.contains("Fuzz test failed") == true)
@@ -208,7 +210,7 @@ struct FuzzAPITests {
         #expect(!result.failures.isEmpty, "Should have captured failures")
 
         // Verify the error type
-        if let (_, error) = result.failures.first {
+        if let (_, error, _) = result.failures.first {
             #expect(error is TestFailure, "Error should be TestFailure")
         }
     }

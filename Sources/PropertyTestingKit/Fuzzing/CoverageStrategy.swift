@@ -230,7 +230,6 @@ private func makePathTrieStrategy<each Input: Codable & Sendable>(
         // This binds it to the per-task context so the hook reads it
         // from tls_cached_measurement_context — safe across task hops.
         if !attached {
-            SanCovCounters.setEdgeHook(trieEdgeHook)
             SanCovCounters.attachTrie(trie, to: context)
             attached = true
         }
@@ -245,9 +244,13 @@ private func makePathTrieStrategy<each Input: Codable & Sendable>(
 
         trie.markTerminal()
 
-        // The trie handles uniqueness — no need for SparseCoverage data.
-        // Store the input with empty coverage; the trie is the source of truth.
-        corpus.addEntry(input: input, sparse: SparseCoverage())
+        // Snapshot coverage for the corpus entry so regression and gap detection work.
+        // The trie handles uniqueness; coverage data is for serialization/analysis.
+        if let sparse = try? coverageClient.snapshotCoveredArraysWithContext(context) {
+            corpus.mergeCoverageAndAdd(input: input, sparse: sparse)
+        } else {
+            corpus.addEntry(input: input, sparse: SparseCoverage())
+        }
         return true
     }
 }
