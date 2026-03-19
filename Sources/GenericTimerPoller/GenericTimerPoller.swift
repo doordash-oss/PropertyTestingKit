@@ -23,7 +23,7 @@ public actor GenericTimerPoller {
     public typealias PollHandler = () async throws -> Void
 
     /// Used for testing, emits when handlers emit
-    let stream: AsyncStream<Void>
+    public nonisolated let stream: AsyncStream<Void>
     private let continuation: AsyncStream<Void>.Continuation
 
     /// Clock used for sleeping between polls (injectable for tests)
@@ -39,11 +39,20 @@ public actor GenericTimerPoller {
     /// The closure to execute on every tick
     var handlers: [UUID: PollHandler]
 
+    /// Optional callback invoked on deallocation (for testing lifecycle).
+    private var onDeinitCallback: (@Sendable () -> Void)?
+
     deinit {
         // Only cancel the task — this is safe from any thread.
         // Do not call actor-isolated methods (stopPolling) from deinit.
         continuation.finish()
         pollingTask?.cancel()
+        onDeinitCallback?()
+    }
+
+    /// Registers a callback that fires when this actor is deallocated.
+    public func onDeinit(_ callback: @escaping @Sendable () -> Void) {
+        onDeinitCallback = callback
     }
 
     // Current effective interval

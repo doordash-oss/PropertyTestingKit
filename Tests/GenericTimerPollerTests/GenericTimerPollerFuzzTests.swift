@@ -12,6 +12,7 @@ import Dependencies
 import Foundation
 import GenericTimerPoller
 @testable import PropertyTestingKit
+import Synchronization
 import Testing
 
 // MARK: - Fuzz Input Model
@@ -125,7 +126,7 @@ struct PollerFuzzInput: Codable, Hashable, Sendable, MutatorProviding {
     }
 }
 
-// MARK: - Fuzz Test
+// MARK: - Fuzz Tests
 
 @Suite("GenericTimerPoller Fuzz Tests")
 struct GenericTimerPollerFuzzTests {
@@ -151,6 +152,42 @@ struct GenericTimerPollerFuzzTests {
 
                 // Poller deinits here — deinit cancels task and finishes continuation
             }
+        }
+    }
+
+    @Test("Poller deinits when all external references are dropped")
+    func pollerDoesNotLeak() async throws {
+        let deinited = Mutex(false)
+        let testClock = TestClock()
+
+        await withDependencies {
+            $0.continuousClock = testClock
+        } operation: {
+            // Keep poller reference so the task body can start
+            var poller: GenericTimerPoller? = GenericTimerPoller(defaultInterval: .seconds(1))
+            await poller?.onDeinit { deinited.withLock { $0 = true } }
+            var cancellable: AnyCancellable? = await poller?.subscribe { }
+            await poller?.startPolling()
+
+            // Wait for the first handler call — confirms the polling task's body
+            // has executed guard-let-self and now holds a strong reference.
+            // startPolling uses initialCall: true, so callHandler() runs before the sleep loop.
+            var iterator = poller?.stream.makeAsyncIterator()
+            _ = await iterator?.next()
+
+            // Drop our external reference — polling task should keep the actor alive
+            poller = nil
+
+            #expect(!deinited.withLock { $0 }, "Poller should be alive — polling task holds strong self")
+
+            // Cancel the subscription → async unsubscribe → stopPolling → cancel polling task
+            cancellable?.cancel()
+            cancellable = nil
+
+            // Give the actor time to process the async unsubscribe
+            try? await Task.sleep(for: .milliseconds(100))
+
+            #expect(deinited.withLock { $0 }, "Poller should deinit after subscription cancelled")
         }
     }
 }
