@@ -20,6 +20,7 @@ let package = Package(
         .package(url: "https://github.com/twof/FunctionSpy.git", from: "1.2.0"),
         .package(url: "https://github.com/apple/swift-collections.git", from: "1.1.0"),
         .package(url: "https://github.com/apple/swift-atomics.git", from: "1.2.0"),
+        .package(url: "https://github.com/pointfreeco/swift-clocks.git", from: "1.0.0"),
         .package(path: "../../../Documents/OpenSource/package-benchmark"),
     ],
     targets: [
@@ -161,6 +162,34 @@ let package = Package(
             dependencies: [
                 "IFCMachine",
                 "PropertyTestingKit",
+            ],
+            swiftSettings: [
+                .unsafeFlags([
+                    "-sanitize=undefined",
+                    "-sanitize-coverage=edge,pc-table"
+                ])
+            ]
+        ),
+
+        // GenericTimerPoller — production code under test
+        // Swift 5 language mode to match production compilation (actor isolation warnings, not errors)
+        .target(
+            name: "GenericTimerPoller",
+            dependencies: [
+                .product(name: "Dependencies", package: "swift-dependencies"),
+                .product(name: "Clocks", package: "swift-clocks"),
+            ],
+            swiftSettings: [
+                .swiftLanguageMode(.v5),
+            ]
+        ),
+        .testTarget(
+            name: "GenericTimerPollerTests",
+            dependencies: [
+                "GenericTimerPoller",
+                "PropertyTestingKit",
+                .product(name: "Dependencies", package: "swift-dependencies"),
+                .product(name: "Clocks", package: "swift-clocks"),
             ],
             swiftSettings: [
                 .unsafeFlags([
