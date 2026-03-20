@@ -26,7 +26,7 @@ Throughput scales nearly linearly — running 16 concurrent fuzz tests retains ~
 ## Requirements
 
 - macOS 26+ / iOS 26+
-- Swift 6.3+
+- Swift 6.2+
 
 ## Installation
 
@@ -56,8 +56,8 @@ The `fuzz` function automatically generates inputs that maximize code coverage:
 import Testing
 import PropertyTestingKit
 
-@Test func testDatabaseQuery() throws {
-    try fuzz(seeds: [
+@Test func testDatabaseQuery() async throws {
+    try await fuzz(seeds: [
         ("users", 0),
         ("users", 100),
         ("orders", -1),
@@ -75,11 +75,11 @@ import PropertyTestingKit
 ```
 
 **How it works:**
-1. Starts with seed values (yours + type defaults from `Fuzzable.fuzz`)
+1. Starts with seed values (yours + type defaults from `MutatorProviding.defaultMutator`)
 2. Runs each input and captures coverage
 3. Inputs that hit new code paths are saved to the corpus
 4. Mutates interesting inputs to discover more paths
-5. Stops when time or iteration limits are reached
+5. Stops when the time limit is reached
 6. Saves minimal corpus to disk for future runs
 
 **On subsequent runs:**
@@ -93,11 +93,10 @@ The corpus is saved alongside your test files:
 ```
 Tests/
   MyTests/
-    Fuzzing/
-      ParserTests.swift
-      Corpus/                    # Created automatically
-        testParser/
-          corpus.json            # Saved inputs + coverage signatures
+    ParserTests.swift
+    Corpus/                      # Created automatically
+      testParser/
+        corpus.json              # Saved inputs + coverage signatures
 ```
 
 Commit the `Corpus/` directory to version control for deterministic CI runs.
@@ -116,16 +115,16 @@ Control how the fuzzer interacts with saved corpora:
 **Per-test control:**
 
 ```swift
-@Test func testParser() throws {
+@Test func testParser() async throws {
     // Force re-fuzzing even if corpus exists
-    try fuzz(corpusMode: .refuzzReplace) { (input: String) in
+    try await fuzz(corpusMode: .refuzzReplace) { (input: String) in
         parse(input)
     }
 }
 
-@Test func testExtendCorpus() throws {
-    // Build on existing corpus
-    try fuzz(corpusMode: .refuzzExtend, iterations: 50_000) { (input: String) in
+@Test func testExtendCorpus() async throws {
+    // Build on existing corpus with a longer duration
+    try await fuzz(corpusMode: .refuzzExtend, duration: .seconds(120)) { (input: String) in
         parse(input)
     }
 }
@@ -137,8 +136,8 @@ Control how the fuzzer interacts with saved corpora:
 # Re-fuzz all tests, replacing existing corpora
 FUZZ_CORPUS_MODE=refuzzreplace swift test
 
-# Extend existing corpora with more fuzzing
-FUZZ_CORPUS_MODE=refuzzextend FUZZ_ITERATIONS=50000 swift test
+# Extend existing corpora with more fuzzing (2 minute duration)
+FUZZ_CORPUS_MODE=refuzzextend FUZZ_DURATION=120 swift test
 
 # CI mode: only run regression tests (fast, deterministic)
 FUZZ_CORPUS_MODE=regressiononly swift test
@@ -149,8 +148,8 @@ FUZZ_CORPUS_MODE=regressiononly swift test
 Provide domain-specific seeds to guide the fuzzer toward edge cases:
 
 ```swift
-@Test func testNumberParser() throws {
-    try fuzz(seeds: [
+@Test func testNumberParser() async throws {
+    try await fuzz(seeds: [
         "0", "-0", "+0",           // Zero variants
         String(Int.max),           // Boundary
         String(Int.min),           // Boundary
@@ -167,21 +166,21 @@ Provide domain-specific seeds to guide the fuzzer toward edge cases:
 
 ### Custom Mutators
 
-Use domain-specific mutation strategies instead of the default `Fuzzable` conformance:
+Use domain-specific mutation strategies instead of the default `MutatorProviding` conformance:
 
 ```swift
-@Test func testInputValidation() throws {
+@Test func testInputValidation() async throws {
     // Single mutator with multiple strategies
-    try fuzz(using: String.mutators(.sql, .xss)) { input in
+    try await fuzz(using: String.mutators(.sql, .xss)) { input in
         let sanitized = sanitize(input)
         #expect(!sanitized.contains("DROP TABLE"))
         #expect(!sanitized.contains("<script>"))
     }
 }
 
-@Test func testAPIEndpoint() throws {
+@Test func testAPIEndpoint() async throws {
     // Multiple mutators for multiple inputs
-    try fuzz(
+    try await fuzz(
         using: String.mutators(.urls), Int.mutators(.ports)
     ) { (url: String, port: Int) in
         let result = connect(to: url, port: port)
@@ -215,58 +214,62 @@ Use domain-specific mutation strategies instead of the default `Fuzzable` confor
 
 **Bool:**
 ```swift
-try fuzz(using: Bool.mutator()) { flag in ... }
+try await fuzz(using: Bool.mutator()) { flag in ... }
 ```
 
-Strategies can be composed - mutations from all strategies are applied to seeds from all strategies, enabling cross-strategy fuzzing (e.g., SQL mutations applied to XSS seeds).
+Strategies can be composed — mutations from all strategies are applied to seeds from all strategies, enabling cross-strategy fuzzing (e.g., SQL mutations applied to XSS seeds).
 
-### Fuzzable Protocol
+### MutatorProviding Protocol
 
-Types conforming to `Fuzzable` provide default seed values and mutation strategies:
+Types conforming to `MutatorProviding` provide a default mutator for fuzzing. When no explicit mutator is passed to `fuzz()`, the type's `defaultMutator` is used automatically.
 
 ```swift
-extension String: Fuzzable {
-    public static var fuzz: [String] {
-        ["", "a", "hello", "hello world", String(repeating: "x", count: 1000)]
-    }
-
-    public func mutate() -> [String] {
-        // Return variations of self
+extension MyType: MutatorProviding {
+    public static var defaultMutator: Mutator<MyType> {
+        Mutator(
+            seeds: [
+                MyType(field: "default"),
+                MyType(field: "edge-case"),
+            ],
+            mutate: { value in
+                // Return variations of value
+                [MyType(field: value.field.uppercased())]
+            },
+            generate: { rng in
+                // Generate a random value
+                MyType(field: String((0..<5).map { _ in
+                    Character(UnicodeScalar(UInt8.random(in: 65...90, using: &rng)))
+                }))
+            }
+        )
     }
 }
 ```
 
-Built-in `Fuzzable` conformances: `Bool`, `Int`, `String`, `Optional`, `Array`
+Built-in `MutatorProviding` conformances: `Bool`, `Int`, `UInt`, `UInt8`, `Double`, `Character`, `String`, `Optional`, `Array`
 
-When no custom mutators are provided to `fuzz()`, it uses the type's `Fuzzable` conformance.
+The `Mutator` struct has three components:
+- **`seeds`**: Starting values for fuzzing
+- **`mutate`**: Takes a value and returns variations of it
+- **`generate`**: Creates a fresh random value (called when the mutation queue is exhausted)
 
-### @Fuzzable Macro
-
-Generate fuzz values for custom types via cartesian product:
+You can omit `generate` — it defaults to picking a random seed:
 
 ```swift
-@Fuzzable
-struct Config {
-    let retries: Int      // Uses Int.fuzz
-    let timeout: Double   // Uses Double.fuzz
-    let enabled: Bool     // Uses Bool.fuzz
-}
-
-// Config.fuzz generates all combinations automatically
-@Test func testAllConfigs() throws {
-    try fuzz { config in
-        MyService(config: config).validate()
-    }
-}
+let mutator = Mutator<Int>(
+    seeds: [0, 1, -1, Int.max],
+    mutate: { [$0 + 1, $0 - 1, $0 * 2] }
+)
 ```
 
 ### Configuration
 
 ```swift
-try fuzz(
-    seeds: [...],           // Domain-specific seed values
-    iterations: 10_000,     // Max fuzzing iterations (default: 10,000)
-    duration: 60            // Max time in seconds (default: 60)
+try await fuzz(
+    seeds: [...],                  // Domain-specific seed values
+    duration: .seconds(60),        // Max fuzzing time (default: 60s)
+    corpusMode: .auto,             // Corpus behavior (default: .auto)
+    parallelism: 8                 // Parallel engines (default: CPU count)
 ) { input in
     // test
 }
@@ -274,8 +277,7 @@ try fuzz(
 
 Environment variables:
 - `FUZZ_VERBOSE=1` - Enable detailed logging
-- `FUZZ_ITERATIONS=N` - Override max iterations
-- `FUZZ_DURATION=N` - Override max duration
+- `FUZZ_DURATION=N` - Override max duration (seconds)
 - `FUZZ_CORPUS_MODE=<mode>` - Control corpus behavior (see [Corpus Modes](#corpus-modes))
 
 ### When Fuzzing Finds a Bug
@@ -296,8 +298,7 @@ ValidationError: User ID cannot be negative
 
 Fuzz run stats:
   - Total inputs tested: 847
-  - Unique coverage paths: 23
-  - Stop reason: iteration_limit
+  - Stop reason: timeLimit
 ```
 
 The failure includes:
@@ -307,33 +308,14 @@ The failure includes:
 
 To reproduce the failure, the failing input is automatically saved to the corpus and will be replayed on subsequent test runs.
 
-### Hang Detection
-
-Detect infinite loops or deadlocks with per-input timeouts:
-
-```swift
-@Test func testParser() throws {
-    try fuzz(
-        perInputTimeout: 1.0  // 1 second timeout per input
-    ) { (input: String) in
-        parse(input)  // Will be interrupted if it takes > 1s
-    }
-}
-```
-
-When a hang is detected:
-- The input is recorded as a "hang" (separate from failures)
-- The test continues with other inputs
-- Stats include both failure and hang counts
-
 ### Coverage Gap Detection
 
-Find functions with incomplete test coverage using the coverage gap analysis plugin:
+Find functions with incomplete test coverage using the coverage gap plugin:
 
 ```swift
-@Test func testParser() throws {
-    try fuzz(
-        analysisPlugins: [.coverageGaps()]
+@Test func testParser() async throws {
+    try await fuzz(
+        makeHandlers: { [.corpusMutation(), .coverageGap()] }
     ) { (input: String) in
         parse(input)
     }
@@ -355,76 +337,93 @@ See [Plugins](#plugins) for more details on the plugin system.
 
 ### Plugins
 
-The fuzzer supports a plugin system for customizing behavior. Plugins are grouped into three categories:
-
-#### Observer Plugins
-
-Receive lifecycle notifications during fuzzing (read-only, don't influence behavior):
+The fuzzer uses a plugin handler system to customize behavior. Plugins are passed via the `makeHandlers` parameter, which is a factory that creates a fresh set of handlers per parallel engine:
 
 ```swift
-try fuzz(
-    observerPlugins: [MyLoggingPlugin()]
+try await fuzz(
+    makeHandlers: { [.corpusMutation(), .plateauDetector()] }
+) { (input: String) in
+    parse(input)
+}
+```
+
+Each `FuzzPluginHandler` receives synchronous events (per-iteration) and async events (start, end, failure), and can return actions (stop, queue inputs, record issues, etc.).
+
+#### Built-in Plugin Handlers
+
+| Handler | Category | Description |
+|---------|----------|-------------|
+| `.mutation()` | Mutation | Basic: queues mutations when new coverage is found |
+| `.corpusMutation()` | Mutation | AFL-style: re-mutates random interesting inputs when queue drains (default) |
+| `.energyMutation()` | Mutation | Entropic: Shannon entropy weighted selection from interesting inputs |
+| `.shrinking()` | Shrinking | Delta-debugging shrink on failure to find minimal reproducer |
+| `.plateauDetector()` | Stopping | Stops when coverage discovery rate drops below threshold |
+| `.stadsDetector()` | Stopping | Statistical stopping using STADS methodology |
+| `.saturationDetector()` | Stopping | Stops when coverage growth saturates |
+| `.coverageGap()` | Analysis | Reports partially-covered functions after fuzzing completes |
+
+#### Stopping Condition Examples
+
+```swift
+// Default: only time limit applies
+try await fuzz { input in ... }
+
+// Stop early when coverage plateaus
+try await fuzz(
+    makeHandlers: { [.corpusMutation(), .plateauDetector()] }
+) { input in ... }
+
+// Statistical stopping with custom config
+try await fuzz(
+    makeHandlers: { [
+        .corpusMutation(),
+        .stadsDetector(minDiscoveryProbability: 0.001, confirmationChecks: 3, checkInterval: 100)
+    ] }
+) { input in ... }
+
+// Saturation-based stopping
+try await fuzz(
+    makeHandlers: { [
+        .corpusMutation(),
+        .saturationDetector(minSaturation: 0.99, windowSize: 500)
+    ] }
 ) { input in ... }
 ```
 
-Observer plugins implement `FuzzObserverPlugin` and receive callbacks for:
-- `onStart(context:)` - Fuzzing started
-- `onIteration(context:)` - Each iteration completed
-- `onBatchComplete(context:)` - Batch of mutations completed
-- `onEnd(context:)` - Fuzzing ended
+#### Custom Plugin Handlers
 
-#### Stopping Condition Plugins
-
-Control when fuzzing should stop:
+Create custom handlers by constructing `FuzzPluginHandler` directly:
 
 ```swift
-// Default: only iteration/time limits apply
-try fuzz { input in ... }
-
-// Enable plateau detection (stops when no new coverage is found)
-try fuzz(stoppingPlugins: [.plateauDetector()]) { input in ... }
-
-// Custom plateau detection configuration
-try fuzz(
-    stoppingPlugins: [.plateauDetector(windowSize: 200, minDiscoveryRate: 0.01)]
-) { input in ... }
-```
-
-#### Analysis Plugins
-
-Run after fuzzing completes to analyze results:
-
-```swift
-try fuzz(
-    analysisPlugins: [.coverageGaps()]
-) { input in ... }
-```
-
-#### Built-in Plugins
-
-| Plugin | Type | Description |
-|--------|------|-------------|
-| `PlateauDetectorPlugin` | Stopping | Stops fuzzing when coverage discovery rate drops below threshold. |
-| `CoverageGapPlugin` | Analysis | Detects partially-covered functions and reports uncovered regions. |
-
-**Plateau Detector Configuration:**
-
-```swift
-.plateauDetector(
-    windowSize: 100,        // Iterations per window (default: maxIterations/10)
-    minDiscoveryRate: 0.001, // Stop if rate drops below this (default: 0.001)
-    confirmationWindows: 3   // Consecutive low windows before stopping (default: 3)
+let loggingHandler = FuzzPluginHandler<String>(
+    id: "logger",
+    handleSync: { event in
+        switch event {
+        case .iteration(let ctx):
+            if ctx.discoveredNewCoverage {
+                print("New coverage from: \(ctx.input)")
+            }
+        }
+        return []
+    },
+    handleAsync: { event in
+        switch event {
+        case .start(let ctx):
+            print("Fuzzing started, max duration: \(ctx.maxDuration)")
+        case .end:
+            print("Fuzzing complete")
+        case .failureFound(let ctx):
+            print("Failure: \(ctx.input)")
+        }
+        return []
+    }
 )
-```
 
-**Coverage Gap Configuration:**
-
-```swift
-.coverageGaps(
-    minCoveragePercentage: 5.0,  // Only report functions with >5% coverage
-    excludedPathPrefixes: [],     // Paths to exclude from analysis
-    onlyReportSignificant: true   // Filter to significant gaps only
-)
+try await fuzz(
+    makeHandlers: { [.corpusMutation(), loggingHandler] }
+) { (input: String) in
+    parse(input)
+}
 ```
 
 ### Building with Coverage
@@ -455,38 +454,30 @@ swift test
 
 | Function | Description |
 |----------|-------------|
-| `fuzz(seeds:iterations:duration:corpusMode:test:)` | Coverage-guided fuzz testing |
-| `fuzz(using:seeds:iterations:duration:corpusMode:test:)` | Fuzz testing with custom mutators |
+| `fuzz(seeds:duration:corpusMode:test:)` | Coverage-guided fuzz testing (infers mutators from `MutatorProviding`) |
+| `fuzz(using:seeds:duration:corpusMode:test:)` | Fuzz testing with explicit mutators |
 
-### Fuzzing Types
+### Core Types
 
 | Type | Description |
 |------|-------------|
-| `Fuzzable` | Protocol for types that can be fuzzed |
+| `MutatorProviding` | Protocol for types that provide a default `Mutator` |
+| `Mutator<Value>` | Composable mutation strategy (seeds + mutate + generate) |
 | `FuzzResult` | Result of a fuzz run with corpus and stats |
-| `Corpus` | Collection of interesting inputs with coverage signatures |
 | `CorpusMode` | Controls corpus behavior (`.auto`, `.refuzzReplace`, `.refuzzExtend`, `.regressionOnly`) |
+| `FuzzPluginHandler` | Plugin handler with sync/async event processing |
 
-### Plugin Protocols
+### Built-in Plugin Handlers
 
-| Protocol | Description |
-|----------|-------------|
-| `FuzzObserverPlugin` | Receives lifecycle notifications (start, iteration, batch, end) |
-| `StoppingConditionPlugin` | Determines when fuzzing should stop |
-| `AnalysisPlugin` | Runs post-fuzzing analysis and generates reports |
-
-### Built-in Plugins
-
-| Plugin | Description |
-|--------|-------------|
+| Handler | Description |
+|---------|-------------|
+| `.corpusMutation()` | AFL-style corpus mutation (default) |
+| `.energyMutation()` | Entropic energy-based mutation selection |
+| `.shrinking()` | Delta-debugging failure shrinking |
 | `.plateauDetector()` | Stops when coverage discovery plateaus |
-| `.coverageGaps()` | Detects functions with incomplete coverage |
-
-### Macros
-
-| Macro | Description |
-|-------|-------------|
-| `@Fuzzable` | Generate `fuzz` property via cartesian product |
+| `.stadsDetector()` | Statistical stopping (STADS) |
+| `.saturationDetector()` | Stops when coverage growth saturates |
+| `.coverageGap()` | Reports partially-covered functions |
 
 ## How It Works
 
@@ -498,7 +489,7 @@ PropertyTestingKit uses SanitizerCoverage with custom task-based isolation:
 4. **Corpus Management**: Saves inputs that discover new coverage, replays them on subsequent runs
 
 The fuzzer follows an AFL-inspired approach:
-- Seeds with boundary values from `Fuzzable.fuzz`
+- Seeds with boundary values from `MutatorProviding.defaultMutator`
 - Captures coverage signature for each input
 - Adds inputs with new signatures to the corpus
 - Mutates corpus entries to discover more paths
