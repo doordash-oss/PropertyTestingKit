@@ -26,7 +26,7 @@ Throughput scales nearly linearly — running 16 concurrent fuzz tests retains ~
 ## Requirements
 
 - macOS 26+ / iOS 26+
-- Swift 6.2+
+- Swift 6.3+
 
 ## Installation
 
