@@ -7,6 +7,7 @@ import Clocks
 import Combine
 import Dependencies
 import Foundation
+import os
 
 /// A reusable timer-based poller..
 ///
@@ -24,7 +25,7 @@ public actor GenericTimerPoller {
 
     /// Used for testing, emits when handlers emit
     public nonisolated let stream: AsyncStream<Void>
-    private let continuation: AsyncStream<Void>.Continuation
+    private nonisolated let continuation: AsyncStream<Void>.Continuation
 
     /// Clock used for sleeping between polls (injectable for tests)
     @Dependency(\.continuousClock) var clock
@@ -33,20 +34,23 @@ public actor GenericTimerPoller {
     var defaultInterval: Duration
     var intervalOverride: Duration?
 
-    // Combine subscription to the underlying timer
-    var pollingTask: Task<Void, Error>?
-
-    /// The closure to execute on every tick
-    var handlers: [UUID: PollHandler]
+    /// Thread-safe shared state. Protected by OSAllocatedUnfairLock so that
+    /// AnyCancellable's synchronous cancel closure can remove handlers and
+    /// cancel the polling task without actor isolation.
+    private nonisolated let _state = OSAllocatedUnfairLock(initialState: PollerState())
 
     /// Optional callback invoked on deallocation (for testing lifecycle).
     private var onDeinitCallback: (@Sendable () -> Void)?
 
     deinit {
-        // Only cancel the task — this is safe from any thread.
-        // Do not call actor-isolated methods (stopPolling) from deinit.
+        let task = _state.withLock { state in
+            state.handlers = [:]
+            let task = state.pollingTask
+            state.pollingTask = nil
+            return task
+        }
         continuation.finish()
-        pollingTask?.cancel()
+        task?.cancel()
         onDeinitCallback?()
     }
 
@@ -71,7 +75,6 @@ public actor GenericTimerPoller {
         self.function = function
         self.file = file
         self.defaultInterval = defaultInterval
-        self.handlers = [:]
         (self.stream, self.continuation) = AsyncStream<Void>.makeStream()
     }
 
@@ -85,45 +88,59 @@ public actor GenericTimerPoller {
     /// Registers the caller as a subscriber.
     ///
     /// The returned `AnyCancellable` automatically removes the caller when it is deallocated or cancelled.
+    /// Cancellation is fully synchronous — the handler is removed and, if this was the last subscriber,
+    /// the polling task is cancelled before `.cancel()` returns.
     @discardableResult
     public func subscribe(handler: @escaping PollHandler) -> AnyCancellable {
         let id = UUID()
-        handlers[id] = handler
+        _state.withLock { $0.handlers[id] = handler }
 
-        // Each caller manages its own cancellable; when it cancels we decrease the count.
-        // Must dispatch through the actor — AnyCancellable's closure runs on arbitrary threads.
         return AnyCancellable { [weak self] in
             guard let self else { return }
-            Task { await self.unsubscribe(id) }
-        }
-    }
-
-    func unsubscribe(_ id: UUID) {
-        handlers[id] = nil
-        if handlers.isEmpty {
-            stopPolling()
+            let task = self._state.withLock { state -> Task<Void, Error>? in
+                state.handlers[id] = nil
+                if state.handlers.isEmpty {
+                    let task = state.pollingTask
+                    state.pollingTask = nil
+                    return task
+                }
+                return nil
+            }
+            if let task {
+                self.continuation.finish()
+                task.cancel()
+            }
         }
     }
 
     /// Temporarily stops the timer but keeps subscriber bookkeeping intact.
     public func pausePolling() {
-        pollingTask?.cancel()
-        pollingTask = nil
+        let task = _state.withLock { state in
+            let task = state.pollingTask
+            state.pollingTask = nil
+            return task
+        }
+        task?.cancel()
     }
 
     /// Resumes polling if at least one subscriber is still registered.
     /// Triggers `handler` immediately
     public func resumePolling() {
-        guard handlers.count > 0, pollingTask == nil else { return }
+        let (count, hasTask) = _state.withLock { ($0.handlers.count, $0.pollingTask != nil) }
+        guard count > 0, !hasTask else { return }
         configureTimer(initialCall: false)
     }
 
     /// Removes all subscribers and tears down the timer.
     public func stopPolling() {
-        handlers = [:]
+        let task = _state.withLock { state in
+            state.handlers = [:]
+            let task = state.pollingTask
+            state.pollingTask = nil
+            return task
+        }
         continuation.finish()
-        pollingTask?.cancel()
-        pollingTask = nil
+        task?.cancel()
     }
 
     /// Updates the timer interval. Passing `nil` reverts to the default interval.
@@ -132,7 +149,8 @@ public actor GenericTimerPoller {
     /// - Parameter newInterval: New interval in seconds, or `nil` to clear the override.
     public func updateInterval(_ newInterval: Duration?) {
         intervalOverride = newInterval
-        if pollingTask != nil {
+        let hasTask = _state.withLock { $0.pollingTask != nil }
+        if hasTask {
             configureTimer(initialCall: false)
         }
     }
@@ -142,33 +160,47 @@ public actor GenericTimerPoller {
     /// - Parameter initialCall: Trigger the callback on the first loop.
     private func configureTimer(initialCall: Bool) {
         // Cancel existing task before starting a new one
-        pollingTask?.cancel()
+        let oldTask = _state.withLock { state in
+            let old = state.pollingTask
+            state.pollingTask = nil
+            return old
+        }
+        oldTask?.cancel()
 
         let interval = effectiveInterval
 
-        pollingTask = Task { [weak self] in
+        let newTask = Task { [weak self] in
             guard let self else {
                 return
             }
 
             // We want to trigger the handler immediately when we start polling
             if initialCall {
-                try await callHandler()
+                try await callHandlers()
             }
 
             while !Task.isCancelled {
                 // Sleep for the configured interval using the injected clock
                 try await clock.sleep(for: interval)
 
-                try await callHandler()
+                try await callHandlers()
             }
         }
+        _state.withLock { $0.pollingTask = newTask }
     }
 
-    private func callHandler() async throws {
-        for handler in handlers.values {
+    private func callHandlers() async throws {
+        let handlers = _state.withLock { Array($0.handlers.values) }
+        for handler in handlers {
             try await handler()
         }
         continuation.yield()
     }
+}
+
+// MARK: - Internal State
+
+private struct PollerState {
+    var handlers: [UUID: GenericTimerPoller.PollHandler] = [:]
+    var pollingTask: Task<Void, Error>?
 }
