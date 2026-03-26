@@ -193,21 +193,7 @@ struct FuzzEngineTests {
         let corpusDir = URL(fileURLWithPath: "/test/fuzz-regression")
 
         // Regression is crash-only: replay inputs, check for failures, done.
-        // No coverage comparison needed.
-        let corpusJSON = """
-        {
-            "entries": [
-                {
-                    "input": ["NDI="],
-                    "signature": {"indices": [1]},
-                    "discoveredAt": "2025-01-01T00:00:00Z"
-                }
-            ],
-            "createdAt": "2025-01-01T00:00:00Z",
-            "updatedAt": "2025-01-01T00:00:00Z",
-            "coveredIndices": [1]
-        }
-        """
+        let corpusJSON = "[[42]]"
         let corpusData = Data(corpusJSON.utf8)
 
         let (loadSpy, loadFn) = spy { (_: URL) -> Data in corpusData }
@@ -310,14 +296,7 @@ struct FuzzEngineTests {
         let corpusDir = URL(fileURLWithPath: "/test/fuzz-regression-success")
 
         // Empty corpus — regression replays zero inputs, succeeds immediately
-        let corpusJSON = """
-        {
-            "entries": [],
-            "createdAt": "2025-01-01T00:00:00Z",
-            "updatedAt": "2025-01-01T00:00:00Z",
-            "coveredIndices": []
-        }
-        """
+        let corpusJSON = "[]"
         let corpusData = Data(corpusJSON.utf8)
 
         let (loadSpy, loadFn) = spy { (_: URL) -> Data in corpusData }
@@ -406,20 +385,7 @@ struct FuzzEngineTests {
         let corpusDir = URL(fileURLWithPath: "/test/fuzz-regression-fail")
 
         // Corpus with one entry (input=42)
-        let corpusJSON = """
-        {
-            "entries": [
-                {
-                    "input": ["NDI="],
-                    "signature": {"indices": [1]},
-                    "discoveredAt": "2025-01-01T00:00:00Z"
-                }
-            ],
-            "createdAt": "2025-01-01T00:00:00Z",
-            "updatedAt": "2025-01-01T00:00:00Z",
-            "coveredIndices": [1]
-        }
-        """
+        let corpusJSON = "[[42]]"
         let corpusData = Data(corpusJSON.utf8)
 
         let (_, loadFn) = spy { (_: URL) -> Data in corpusData }

@@ -337,7 +337,7 @@ struct CorpusPropertyTests {
 @Suite("CorpusEntry Properties")
 struct CorpusEntryPropertyTests {
 
-    @Test("CorpusEntry preserves all fields through Codable")
+    @Test("CorpusEntry preserves input through Codable")
     func testCorpusEntryCodable() async throws {
         let entry = CorpusEntry(
             input: "test input",
@@ -353,8 +353,8 @@ struct CorpusEntryPropertyTests {
         let decoded = try decoder.decode(CorpusEntry<String>.self, from: data)
 
         #expect(decoded.input == entry.input)
-        #expect(decoded.sparseCoverage == entry.sparseCoverage)
-        #expect(decoded.entryType == entry.entryType)
+        #expect(decoded.sparseCoverage == SparseCoverage(), "Coverage is not persisted")
+        #expect(decoded.entryType == .coverage, "Defaults to .coverage on decode")
         #expect(decoded.failure == nil)
     }
 }

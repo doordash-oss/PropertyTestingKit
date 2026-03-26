@@ -33,61 +33,18 @@ public struct CorpusEntry<each Input: Codable & Sendable>: Sendable, Codable {
         self.failure = failure
     }
 
+    /// Encodes as a plain JSON array of inputs: `[42]` or `["hello", 3]`
     public func encode(to encoder: any Encoder) throws {
-        var container = encoder.container(keyedBy: CorpusEntryCodingKeys.self)
-        var dataList = [Data]()
-        var readableList = [String]()
-        let jsonEncoder = JSONEncoder.corpusEncoder
-
-        (repeat try dataList.append(jsonEncoder.encode(each input)))
-        (repeat readableList.append(toReadableString(each input)))
-
-        try container.encode(dataList, forKey: .input)
-        try container.encode(readableList, forKey: .inputReadable)
-
-        try container.encode(sparseCoverage, forKey: .signature)
-        try container.encode(entryType, forKey: .entryType)
-        try container.encodeIfPresent(failure, forKey: .failure)
+        var container = encoder.unkeyedContainer()
+        (repeat try container.encode(each input))
     }
 
-    /// Convert a value to a human-readable string representation.
-    private func toReadableString<T>(_ value: T) -> String {
-        if let string = value as? String {
-            return string
-        } else if let data = value as? Data {
-            // Try to decode as UTF-8 string, fall back to hex representation
-            if let str = String(data: data, encoding: .utf8) {
-                return str
-            } else {
-                return data.map { String(format: "%02x", $0) }.joined(separator: " ")
-            }
-        } else if let array = value as? [Any] {
-            return "[\(array.map { "\($0)" }.joined(separator: ", "))]"
-        } else {
-            return "\(value)"
-        }
-    }
-
+    /// Decodes from a plain JSON array of inputs: `[42]` or `["hello", 3]`
     public init(from decoder: any Decoder) throws {
-        let container = try decoder.container(keyedBy: CorpusEntryCodingKeys.self)
-        let dataList = try container.decode([Data].self, forKey: .input)
-        var dataIterator = dataList.makeIterator()
-
-        let jsonDecoder = JSONDecoder.corpusDecoder
-
-        self.input = try (repeat jsonDecoder.decode((each Input).self, from: dataIterator.next()!))
-
-        self.sparseCoverage = try container.decode(SparseCoverage.self, forKey: .signature)
-        // Default to .coverage for backward compatibility with existing corpus files
-        self.entryType = try container.decodeIfPresent(CorpusEntryType.self, forKey: .entryType) ?? .coverage
-        self.failure = try container.decodeIfPresent(FailureInfo.self, forKey: .failure)
+        var container = try decoder.unkeyedContainer()
+        self.input = (repeat try container.decode((each Input).self))
+        self.sparseCoverage = SparseCoverage()
+        self.entryType = .coverage
+        self.failure = nil
     }
-}
-
-public enum CorpusEntryCodingKeys: String, CodingKey {
-    case input
-    case inputReadable
-    case signature
-    case entryType
-    case failure
 }

@@ -345,15 +345,29 @@ final class FuzzEngine<each Input: Codable & Sendable>: @unchecked Sendable {
         // Install custom edge hook if configured
         SanCovCounters.setEdgeHook(config.edgeHook)
 
+        // Measure live coverage during regression for accurate .end event
+        let context = coverageCounters.beginMeasurement()
+        defer { coverageCounters.endMeasurement(context) }
+        var liveCoveredIndices = Set<UInt32>()
+
         for (index, entry) in snapshot.entries.enumerated() {
             if config.verbose {
                 print("[Regression] Replaying input \(index + 1)/\(snapshot.count)")
             }
 
+            coverageCounters.resetCoverage(context)
+
             do {
                 try await test(entry.input)
             } catch {
                 failures.append((entry.input, error, startTime.distance(to: dateClient.now())))
+            }
+
+            // Accumulate live coverage
+            if let sparse = try? coverageCounters.snapshotCoveredArraysWithContext(context) {
+                for idx in sparse.indices {
+                    liveCoveredIndices.insert(idx)
+                }
             }
         }
 
@@ -370,9 +384,9 @@ final class FuzzEngine<each Input: Codable & Sendable>: @unchecked Sendable {
             print("[Regression] Completed: \(snapshot.count) inputs, \(failures.count) failures, \(String(format: "%.2f", duration))s")
         }
 
-        // Send .end event to plugins (for coverage gap analysis, etc.)
+        // Send .end event with live coverage (not stale persisted values)
         let endContext = AsyncPluginEvent<repeat each Input>.EndContext(
-            totalCoveredIndices: snapshot.coveredIndices,
+            totalCoveredIndices: liveCoveredIndices,
             projectPath: config.projectPath,
             sourceLocation: config.sourceLocation
         )
