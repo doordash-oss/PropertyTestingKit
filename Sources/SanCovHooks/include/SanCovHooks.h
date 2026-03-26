@@ -234,6 +234,36 @@ void sancov_record_edge_trie(uint32_t *guard);
 /// Pass NULL to restore the default (sancov_swift_trampoline → sancov_record_edge).
 void sancov_install_swift_hook(void (*hook)(uint32_t*));
 
+// MARK: - Edge Filter
+//
+// Filters compiler-generated edges (outlined destroyers, lazy witness table
+// accessors, lazy metadata accessors) by setting their guard value to
+// SANCOV_GUARD_SKIP. Because the hot-path check is `*guard < g_guard_count`,
+// guards set to UINT32_MAX will always fail that check — zero overhead.
+
+/// Sentinel value that disables a guard. Any guard set to this value will be
+/// skipped by the edge recording hooks (since UINT32_MAX >= g_guard_count).
+#define SANCOV_GUARD_SKIP UINT32_MAX
+
+/// Scan all guard PCs and disable compiler-generated edges.
+/// Call once before fuzzing begins — both __sanitizer_cov_trace_pc_guard_init
+/// and __sanitizer_cov_pcs_init will have completed by then.
+///
+/// Filtered symbol patterns (matched on raw mangled dli_sname):
+///   - WOh suffix — outlined destroy
+///   - WOc suffix — outlined copy
+///   - WOd suffix — outlined consume
+///   - WOr suffix — outlined release
+///   - Wl  suffix — lazy protocol witness table accessor
+///   - WL  suffix — lazy metadata accessor
+///   - Ma  suffix — type metadata accessor (generic)
+///   - __swift_ prefix — runtime internals
+///   - _swift_  prefix — runtime internals
+void sancov_apply_edge_filter(void);
+
+/// Return the number of edges disabled by sancov_apply_edge_filter().
+size_t sancov_get_filtered_count(void);
+
 #ifdef __cplusplus
 }
 #endif

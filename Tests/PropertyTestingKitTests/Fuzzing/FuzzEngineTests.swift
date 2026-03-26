@@ -192,28 +192,8 @@ struct FuzzEngineTests {
     func testRegressionMode() async throws {
         let corpusDir = URL(fileURLWithPath: "/test/fuzz-regression")
 
-        // For regression to succeed, the mock must return consistent coverage that
-        // matches the corpus entry's signature.
-        //
-        // With reset+snapshot model:
-        // - reset() is called (no snapshot needed)
-        // - test runs
-        // - snapshot() returns the coverage
-        //
-        // The corpus entry has signature {"buckets": {"1": 1}} = [1: .one]
-        // So snapshot must always return counters[1]=1 to match.
-        // FuzzEngine uses snapshotCoveredArrays (sync) in the hot path
-        // Return counters[1]=1 to match the corpus signature
-        let snapshotCoveredArraysFn: @Sendable () -> SparseCoverage = {
-            SparseCoverage(indices: [1])
-        }
-
-        // Test the signature creation first
-        let sigTest = CoverageSignature(sparse: SparseCoverage(indices: [1]))
-        print("DEBUG: Test signature edges=\(sigTest.edges)")
-
-        // Create corpus with matching sparse coverage
-        // Note: InputContainer encodes Int 42 as base64 of "42" = "NDI="
+        // Regression is crash-only: replay inputs, check for failures, done.
+        // No coverage comparison needed.
         let corpusJSON = """
         {
             "entries": [
@@ -230,22 +210,10 @@ struct FuzzEngineTests {
         """
         let corpusData = Data(corpusJSON.utf8)
 
-        // Parse corpus to verify the coverage
-        let parsedCorpusSnapshot = try JSONDecoder.corpusDecoder.decode(CorpusSnapshot<Int>.self, from: corpusData)
-        print("DEBUG: Parsed corpus sparse coverage=\(parsedCorpusSnapshot.entries[0].sparseCoverage.indices)")
-        print("DEBUG: Coverage matches? \(parsedCorpusSnapshot.entries[0].sparseCoverage.indices == [1])")
-
         let (loadSpy, loadFn) = spy { (_: URL) -> Data in corpusData }
         let (existsSpy, existsFn) = spy { (_: URL) -> Bool in true }
 
         let result = await withDependencies {
-            $0.coverageCounters = CoverageCountersClient(
-                isAvailable: { true },
-                beginMeasurement: { SanCovCounters.MeasurementContext.testInstance() },
-                endMeasurement: { _ in },
-                resetCoverage: { _ in },
-                snapshotCoveredArraysWithContext: { _ in snapshotCoveredArraysFn() }
-            )
             $0.corpusPersistence = CorpusPersistenceClient(
                 save: { _, _ in },
                 load: loadFn,
@@ -337,16 +305,11 @@ struct FuzzEngineTests {
         #expect(!result.wasRegression)
     }
 
-    @Test("FuzzEngine regression success without coverage change")
+    @Test("FuzzEngine regression success with empty corpus")
     func testRegressionSuccessPath() async throws {
         let corpusDir = URL(fileURLWithPath: "/test/fuzz-regression-success")
 
-        // All zeros means empty SparseCoverage
-        let snapshotCoveredArraysFn: @Sendable () -> SparseCoverage = {
-            SparseCoverage(indices: [])
-        }
-
-        // Empty corpus
+        // Empty corpus — regression replays zero inputs, succeeds immediately
         let corpusJSON = """
         {
             "entries": [],
@@ -361,13 +324,6 @@ struct FuzzEngineTests {
         let (existsSpy, existsFn) = spy { (_: URL) -> Bool in true }
 
         let result = await withDependencies {
-            $0.coverageCounters = CoverageCountersClient(
-                isAvailable: { true },
-                beginMeasurement: { SanCovCounters.MeasurementContext.testInstance() },
-                endMeasurement: { _ in },
-                resetCoverage: { _ in },
-                snapshotCoveredArraysWithContext: { _ in snapshotCoveredArraysFn() }
-            )
             $0.corpusPersistence = CorpusPersistenceClient(
                 save: { _, _ in },
                 load: loadFn,
@@ -427,65 +383,6 @@ struct FuzzEngineTests {
         #expect(result.corpus.count == 0, "Corpus should be empty when coverage throws")
     }
 
-    @Test("FuzzEngine regression detects coverage change and re-fuzzes")
-    func testRegressionCoverageChange() async throws {
-        let corpusDir = URL(fileURLWithPath: "/test/fuzz-regression-change")
-
-        // Corpus has signature {5: 1}, but mock always returns {1: 1}
-        // This mismatch triggers coverage change detection
-        // FuzzEngine uses snapshotCoveredArrays, so provide that
-        let snapshotCoveredArraysFn: @Sendable () -> SparseCoverage = {
-            SparseCoverage(indices: [1])  // Different from corpus signature {5: 1}
-        }
-
-        // Corpus has signature with edge 5
-        // Mock returns edge 1 which is different, triggering coverage change
-        // Note: InputContainer encodes Int 42 as base64 of "42" = "NDI="
-        let corpusJSON = """
-        {
-            "entries": [
-                {
-                    "input": ["NDI="],
-                    "signature": {"edges": [5]},
-                    "discoveredAt": "2025-01-01T00:00:00Z"
-                }
-            ],
-            "createdAt": "2025-01-01T00:00:00Z",
-            "updatedAt": "2025-01-01T00:00:00Z",
-            "coveredIndices": [5]
-        }
-        """
-        let corpusData = Data(corpusJSON.utf8)
-
-        let (loadSpy, loadFn) = spy { (_: URL) -> Data in corpusData }
-        let (existsSpy, existsFn) = spy { (_: URL) -> Bool in true }
-
-        let result = await withDependencies {
-            $0.coverageCounters = CoverageCountersClient(
-                isAvailable: { true },
-                beginMeasurement: { SanCovCounters.MeasurementContext.testInstance() },
-                endMeasurement: { _ in },
-                resetCoverage: { _ in },
-                snapshotCoveredArraysWithContext: { _ in snapshotCoveredArraysFn() }
-            )
-            $0.corpusPersistence = CorpusPersistenceClient(
-                save: { _, _ in },
-                load: loadFn,
-                exists: existsFn,
-                delete: { _ in }
-            )
-        } operation: {
-            await fuzzEngineWithMaxIterations(
-                maxIterations: 50,
-                corpusDirectory: corpusDir
-            ) { (_: Int) in }
-        }
-
-        #expect(existsSpy.callCount >= 1)
-        #expect(loadSpy.callCount == 1, "Should have loaded corpus")
-        #expect(!result.wasRegression, "Should re-fuzz after coverage change")
-    }
-
     @Test("FuzzEngine verbose logs new coverage during iterations")
     func testNewCoverageVerboseInIterations() async {
         let config = FuzzEngineConfig(
@@ -508,14 +405,7 @@ struct FuzzEngineTests {
     func testRegressionFailures() async throws {
         let corpusDir = URL(fileURLWithPath: "/test/fuzz-regression-fail")
 
-        // All calls return counters[1]=1 to match corpus signature {1: 1}
-        // FuzzEngine uses snapshotCoveredArrays in the hot path
-        let snapshotCoveredArraysFn: @Sendable () -> SparseCoverage = {
-            SparseCoverage(indices: [1])  // Always return matching coverage
-        }
-
-        // Corpus with sparse coverage containing edge 1
-        // Note: InputContainer encodes Int 42 as base64 of "42" = "NDI="
+        // Corpus with one entry (input=42)
         let corpusJSON = """
         {
             "entries": [
@@ -537,13 +427,6 @@ struct FuzzEngineTests {
         struct RegressionError: Error {}
 
         let result = await withDependencies {
-            $0.coverageCounters = CoverageCountersClient(
-                isAvailable: { true },
-                beginMeasurement: { SanCovCounters.MeasurementContext.testInstance() },
-                endMeasurement: { _ in },
-                resetCoverage: { _ in },
-                snapshotCoveredArraysWithContext: { _ in snapshotCoveredArraysFn() }
-            )
             $0.corpusPersistence = CorpusPersistenceClient(
                 save: { _, _ in },
                 load: loadFn,

@@ -19,21 +19,16 @@ public struct FuzzResult<each Input: Codable & Sendable>: Sendable {
     /// Whether this was a regression run (replaying saved corpus).
     public let wasRegression: Bool
 
-    /// Inputs that had different coverage than expected (regression only).
-    public let coverageChanges: [(input: (repeat each Input), expected: SparseCoverage, actual: SparseCoverage)]
-
     public init(
         corpus: CorpusSnapshot<repeat each Input>,
         failures: [(input: (repeat each Input), error: Error, timeElapsed: TimeInterval)],
         stats: FuzzStats,
-        wasRegression: Bool,
-        coverageChanges: [(input: (repeat each Input), expected: SparseCoverage, actual: SparseCoverage)]
+        wasRegression: Bool
     ) {
         self.corpus = corpus
         self.failures = failures
         self.stats = stats
         self.wasRegression = wasRegression
-        self.coverageChanges = coverageChanges
     }
 }
 
@@ -124,8 +119,7 @@ extension FuzzResult {
             corpus: emptySnapshot,
             failures: [],
             stats: emptyStats,
-            wasRegression: true,
-            coverageChanges: []
+            wasRegression: true
         )
     }
 }

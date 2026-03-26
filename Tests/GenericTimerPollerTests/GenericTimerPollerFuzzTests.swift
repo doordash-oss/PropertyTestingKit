@@ -7,10 +7,9 @@
 //
 
 import Clocks
-@preconcurrency import Combine
 import Dependencies
 import Foundation
-import GenericTimerPoller
+@testable import GenericTimerPoller
 @testable import PropertyTestingKit
 import Synchronization
 import Testing
@@ -126,10 +125,72 @@ struct PollerFuzzInput: Codable, Hashable, Sendable, MutatorProviding {
     }
 }
 
+// MARK: - Sequential Fuzz Input
+
+struct SequentialPollerInput: Codable, Hashable, Sendable, MutatorProviding {
+    var ops: [PollerOp]
+
+    static var defaultMutator: Mutator<SequentialPollerInput> {
+        Mutator(
+            seeds: [
+                SequentialPollerInput(ops: [.subscribe, .startPolling, .stopPolling]),
+                SequentialPollerInput(ops: [.subscribe, .startPolling, .cancelLast]),
+                SequentialPollerInput(ops: [.subscribe, .startPolling, .pausePolling, .resumePolling, .stopPolling]),
+                SequentialPollerInput(ops: [.subscribe, .subscribe, .startPolling, .cancelLast, .cancelLast, .stopPolling]),
+                SequentialPollerInput(ops: [.subscribe, .startPolling, .updateIntervalShort, .updateIntervalLong, .updateIntervalClear, .stopPolling]),
+            ],
+            mutate: { input in
+                var mutations: [SequentialPollerInput] = []
+                let ops = PollerOp.allCases
+
+                for i in input.ops.indices {
+                    var copy = input
+                    copy.ops[i] = ops[Int(copy.ops[i].rawValue + 1) % ops.count]
+                    mutations.append(copy)
+                }
+                for op in ops {
+                    var copy = input
+                    copy.ops.append(op)
+                    mutations.append(copy)
+                }
+                if input.ops.count > 1 {
+                    var copy = input
+                    copy.ops.removeLast()
+                    mutations.append(copy)
+                }
+                return mutations
+            },
+            generate: { rng in
+                let len = Int.random(in: 3...12, using: &rng)
+                return SequentialPollerInput(
+                    ops: (0..<len).map { _ in
+                        let index = Int.random(in: 0..<PollerOp.allCases.count, using: &rng)
+                        return PollerOp(rawValue: UInt8(index)) ?? .startPolling
+                    }
+                )
+            }
+        )
+    }
+}
+
 // MARK: - Fuzz Tests
 
 @Suite("GenericTimerPoller Fuzz Tests")
 struct GenericTimerPollerFuzzTests {
+
+    @Test("Sequential operations don't crash")
+    func fuzzSequentialOperations() async throws {
+        try await withDependencies {
+            $0.continuousClock = ImmediateClock()
+        } operation: {
+            try await fuzz(
+                duration: .seconds(30)
+            ) { (input: SequentialPollerInput) in
+                let poller = GenericTimerPoller(defaultInterval: .microseconds(100))
+                await executeLane(input.ops, on: poller)
+            }
+        }
+    }
 
     @Test("Concurrent operations don't crash")
     func fuzzConcurrentOperations() async throws {
@@ -163,28 +224,27 @@ struct GenericTimerPollerFuzzTests {
         await withDependencies {
             $0.continuousClock = testClock
         } operation: {
-            // Keep poller reference so the task body can start
             var poller: GenericTimerPoller? = GenericTimerPoller(defaultInterval: .seconds(1))
             await poller?.onDeinit { deinited.withLock { $0 = true } }
-            var cancellable: AnyCancellable? = await poller?.subscribe { }
+            var subscription: Task<Void, Never>? = await poller?.subscribe { }
             await poller?.startPolling()
 
-            // Wait for the first handler call — confirms the polling task's body
-            // has executed guard-let-self and now holds a strong reference.
-            // startPolling uses initialCall: true, so callHandler() runs before the sleep loop.
-            var iterator = poller?.stream.makeAsyncIterator()
-            _ = await iterator?.next()
+            // Wait for the first handler call — startPolling fires an immediate
+            // Task { await callHandlers() } which yields to the stream.
+            let stream = await poller!.stream
+            var iterator = stream.makeAsyncIterator()
+            _ = await iterator.next()
 
-            // Drop our external reference — polling task should keep the actor alive
+            // Drop our external reference — timer task holds strong self via guard-let
             poller = nil
 
-            #expect(!deinited.withLock { $0 }, "Poller should be alive — polling task holds strong self")
+            #expect(!deinited.withLock { $0 }, "Poller should be alive — timer task holds strong self")
 
-            // Cancel the subscription → async unsubscribe → stopPolling → cancel polling task
-            cancellable?.cancel()
-            cancellable = nil
+            // Cancel the subscription → finish aliveStream → removeSubscriber → cancel timerTask
+            subscription?.cancel()
+            subscription = nil
 
-            // Give the actor time to process the async unsubscribe
+            // Give the actor time to process removeSubscriber and release the timer task
             try? await Task.sleep(for: .milliseconds(100))
 
             #expect(deinited.withLock { $0 }, "Poller should deinit after subscription cancelled")
@@ -196,9 +256,9 @@ struct GenericTimerPollerFuzzTests {
 
 /// Executes a sequence of operations on the poller, maintaining per-lane subscription state.
 /// Each lane tracks its own subscriptions independently — when the lane ends,
-/// all subscriptions deinit, firing their cancel closures (which race with the other lane).
+/// all remaining subscription tasks are cancelled.
 private func executeLane(_ ops: [PollerOp], on poller: GenericTimerPoller) async {
-    var subs: [AnyCancellable] = []
+    var subs: [Task<Void, Never>] = []
 
     for op in ops {
         switch op {
@@ -211,8 +271,8 @@ private func executeLane(_ ops: [PollerOp], on poller: GenericTimerPoller) async
         case .resumePolling:
             await poller.resumePolling()
         case .subscribe:
-            let cancellable = await poller.subscribe { }
-            subs.append(cancellable)
+            let task = await poller.subscribe { }
+            subs.append(task)
         case .cancelLast:
             if !subs.isEmpty {
                 subs.removeLast().cancel()
@@ -225,5 +285,6 @@ private func executeLane(_ ops: [PollerOp], on poller: GenericTimerPoller) async
             await poller.updateInterval(nil)
         }
     }
-    // subs deinit here — cancel closures fire, racing with the other lane
+    // Cancel remaining subscriptions when lane ends
+    for sub in subs { sub.cancel() }
 }

@@ -15,7 +15,7 @@ import Dependencies
 ///
 /// This function combines property-based testing with coverage guidance:
 /// 1. First run: Explores inputs to maximize code coverage, saves minimal corpus
-/// 2. Subsequent runs: Replays saved corpus, re-fuzzes if coverage changes
+/// 2. Subsequent runs: Replays saved corpus, checks for crashes (regression)
 ///
 /// ## Usage
 ///
@@ -337,12 +337,6 @@ private func mergeResults<each Input: Codable & Sendable>(
         allFailures.append(contentsOf: result.failures)
     }
 
-    // Merge all coverage changes
-    var allCoverageChanges: [(input: (repeat each Input), expected: SparseCoverage, actual: SparseCoverage)] = []
-    for result in results {
-        allCoverageChanges.append(contentsOf: result.coverageChanges)
-    }
-
     // Merge corpus: combine all entries, deduplicate by coverage
     // Note: Use explicit closures instead of keypaths to avoid Swift runtime crashes with parameter packs
     let mergedCorpus = mergeCorpusSnapshots(results.map { $0.corpus })
@@ -378,8 +372,7 @@ private func mergeResults<each Input: Codable & Sendable>(
         corpus: mergedCorpus,
         failures: allFailures,
         stats: mergedStats,
-        wasRegression: wasRegression,
-        coverageChanges: allCoverageChanges
+        wasRegression: wasRegression
     )
 }
 

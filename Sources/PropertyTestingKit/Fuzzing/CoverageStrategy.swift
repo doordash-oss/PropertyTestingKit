@@ -42,6 +42,22 @@ public enum CoverageStrategyKind: Sendable {
     /// Every input is added to the corpus unconditionally. Useful for tests
     /// that need deterministic corpus growth without depending on coverage data.
     case alwaysInteresting
+
+    /// Whether coverage changed between the expected and actual sparse coverage.
+    ///
+    /// Used by regression to decide if the corpus needs to be re-fuzzed.
+    /// Order-sensitive strategies (pathTrie) compare arrays directly.
+    /// Set-based strategies (signatureMatch, newEdge) compare sorted indices.
+    func coverageChanged(expected: SparseCoverage, actual: SparseCoverage) -> Bool {
+        switch self {
+        case .pathTrie:
+            return expected != actual
+        case .signatureMatch, .newEdge:
+            return expected.indices.sorted() != actual.indices.sorted()
+        case .alwaysInteresting:
+            return false
+        }
+    }
 }
 
 /// A closure that decides if an input is interesting and adds it to the corpus.

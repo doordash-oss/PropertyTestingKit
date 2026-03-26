@@ -264,8 +264,7 @@ struct CoverageGapDetectorTests {
             corpus: emptySnapshot,
             failures: [],
             stats: stats,
-            wasRegression: false,
-            coverageChanges: []
+            wasRegression: false
         )
 
         // Coverage gap reports are now handled via recordIssue actions from plugins
@@ -282,7 +281,7 @@ struct CoverageGapDetectorTests {
             let hash = (input &* 31) ^ (input >> 4)
             if hash == 0x7FFFFFFE {
                 // This branch is effectively unreachable (requires specific input)
-                print("found magic!")  // Line 285 - expected uncovered
+                print("found magic!")  // Line 284 - expected uncovered
             } else if input < 0 {
                 print("negative")
             } else {
@@ -291,9 +290,9 @@ struct CoverageGapDetectorTests {
         }
 
         // This test intentionally creates a coverage gap to verify detection works
-        // We expect exactly: 75% coverage, uncovered edge at line 285
+        // We expect exactly: 75% coverage, uncovered edge at line 284
         // If the issue doesn't match these criteria, the test will fail as "unexpected issue"
-        let expectedLine = 285
+        let expectedLine = 284
 
         try await withKnownIssue("Expected coverage gap in partiallyCoveredFunction") {
             // mutation() is included by default via handlers

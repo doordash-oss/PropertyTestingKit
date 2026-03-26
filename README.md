@@ -8,7 +8,7 @@ PropertyTestingKit brings coverage-guided fuzzing to Swift Testing:
 
 - **Coverage-guided fuzzing** - Automatically discover inputs that exercise new code paths
 - **Corpus persistence** - Save and replay interesting inputs across test runs
-- **Regression detection** - Automatically re-fuzz when code changes affect coverage
+- **Regression testing** - Replay saved corpus to catch regressions
 - **High throughput** - ~35M iterations/sec with full coverage isolation
 
 ## Performance
@@ -83,8 +83,7 @@ import PropertyTestingKit
 6. Saves minimal corpus to disk for future runs
 
 **On subsequent runs:**
-- Replays saved corpus to verify coverage unchanged
-- If coverage differs (code changed), automatically re-fuzzes
+- Replays saved corpus to check for crashes (regression testing)
 
 ### Corpus Storage
 

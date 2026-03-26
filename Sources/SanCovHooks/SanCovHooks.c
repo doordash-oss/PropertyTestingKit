@@ -734,6 +734,9 @@ static uint8_t* get_current_coverage_map(void) {
     ensure_tls_coverage_map();
     tls_cached_task = task;
     tls_cached_task_map = tls_coverage_map;
+    // Clear stale measurement context so sancov_record_edge doesn't append
+    // edges from this task into another test's measurement context.
+    set_tls_measurement_context(NULL);
     return tls_coverage_map;
 }
 
@@ -1104,4 +1107,71 @@ size_t sancov_get_covered_locations(SanCovSourceLocation* locations, size_t max_
     }
 
     return covered_count;
+}
+
+// MARK: - Edge Filter
+
+static size_t g_filtered_count = 0;
+static bool g_filter_applied = false;
+
+/// Check if a mangled symbol name matches a compiler-generated pattern.
+/// Returns true if the symbol should be filtered out.
+static bool is_compiler_generated_symbol(const char* sname) {
+    if (!sname) return false;
+
+    // Prefix checks: runtime internals
+    if (strncmp(sname, "__swift_", 8) == 0) return true;
+    if (strncmp(sname, "_swift_", 7) == 0) return true;
+
+    size_t len = strlen(sname);
+    if (len < 3) return false;
+
+    // Suffix checks on mangled Swift names.
+    // Two-character suffixes:
+    const char* last2 = sname + len - 2;
+    if (strcmp(last2, "Wl") == 0) return true;  // lazy protocol witness table accessor
+    if (strcmp(last2, "WL") == 0) return true;  // lazy metadata accessor
+    if (strcmp(last2, "Ma") == 0) return true;  // type metadata accessor (generic)
+
+    // Three-character suffixes (WO + specifier):
+    if (len >= 3) {
+        const char* last3 = sname + len - 3;
+        if (strcmp(last3, "WOh") == 0) return true;  // outlined destroy
+        if (strcmp(last3, "WOc") == 0) return true;  // outlined copy
+        if (strcmp(last3, "WOd") == 0) return true;  // outlined consume
+        if (strcmp(last3, "WOr") == 0) return true;  // outlined release
+    }
+
+    return false;
+}
+
+void sancov_apply_edge_filter(void) {
+    if (g_filter_applied) return;
+    if (!g_guards_start || g_guard_count == 0) return;
+    if (!g_pcs_start || g_pcs_count == 0) return;
+
+    size_t filtered = 0;
+    size_t limit = g_guard_count < g_pcs_count ? g_guard_count : g_pcs_count;
+
+    for (size_t i = 0; i < limit; i++) {
+        // PC table format: pairs of (PC, flags)
+        uintptr_t pc = g_pcs_start[i * 2];
+        if (pc == 0) continue;
+
+        Dl_info info;
+        if (dladdr((void*)pc, &info) == 0) continue;
+        if (!info.dli_sname) continue;
+
+        if (is_compiler_generated_symbol(info.dli_sname)) {
+            g_guards_start[i] = SANCOV_GUARD_SKIP;
+            filtered++;
+        }
+    }
+
+    g_filtered_count = filtered;
+    g_filter_applied = true;
+}
+
+size_t sancov_get_filtered_count(void) {
+    return g_filtered_count;
 }

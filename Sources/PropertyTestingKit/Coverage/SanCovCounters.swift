@@ -86,6 +86,22 @@ enum SanCovCounters {
     static var currentCoveredCount: Int {
         sancov_get_covered_count()
     }
+
+    /// Filter out compiler-generated edges (outlined destroyers, lazy witness
+    /// table accessors, lazy metadata accessors, etc.) by setting their guard
+    /// values to `UINT32_MAX`. This makes the hot-path check
+    /// `*guard < g_guard_count` fail for these edges — zero overhead.
+    ///
+    /// Call once before any measurement begins. Safe to call multiple times
+    /// (subsequent calls re-scan, which is harmless).
+    static func applyEdgeFilter() {
+        sancov_apply_edge_filter()
+    }
+
+    /// The number of edges disabled by `applyEdgeFilter()`.
+    static var filteredEdgeCount: Int {
+        sancov_get_filtered_count()
+    }
 }
 
 // MARK: - Edge Hook

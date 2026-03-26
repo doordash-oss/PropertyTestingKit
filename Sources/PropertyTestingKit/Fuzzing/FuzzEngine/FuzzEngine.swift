@@ -15,7 +15,7 @@ import Testing
 ///
 /// The engine runs in two modes:
 /// 1. **Fuzz mode**: Generate inputs, track coverage, build corpus
-/// 2. **Regression mode**: Replay saved corpus, verify coverage unchanged
+/// 2. **Regression mode**: Replay saved corpus, check for crashes
 ///
 /// ## Corpus Modes
 ///
@@ -193,9 +193,7 @@ final class FuzzEngine<each Input: Codable & Sendable>: @unchecked Sendable {
             }
         }
 
-        // Default (auto): regression if corpus exists
-        // We don't check schema version - runRegression will detect if coverage
-        // changed and trigger re-fuzzing automatically.
+        // Default (auto): regression if corpus exists, otherwise fuzz
         if corpusExists, let directory = corpusDirectory {
             do {
                 let savedSnapshot: CorpusSnapshot<repeat each Input> = try corpusPersistenceClient.loadSnapshot(from: directory)
@@ -218,6 +216,17 @@ final class FuzzEngine<each Input: Codable & Sendable>: @unchecked Sendable {
         processAsyncPlugins: @escaping AsyncPluginProcessorFn,
         test: @escaping @Sendable (InputTuple) async throws -> Void
     ) async -> FuzzResult<repeat each Input> {
+        // Filter compiler-generated edges before any measurement.
+        // This is a one-time scan (~2s for large binaries), so we do it before
+        // capturing startTime so it doesn't eat into the fuzz duration budget.
+        SanCovCounters.applyEdgeFilter()
+        if config.verbose {
+            let filtered = SanCovCounters.filteredEdgeCount
+            if filtered > 0 {
+                print("[Fuzz] Filtered \(filtered) compiler-generated edges")
+            }
+        }
+
         let startTime = dateClient.now()
 
         // Install custom edge hook if configured
@@ -298,8 +307,7 @@ final class FuzzEngine<each Input: Codable & Sendable>: @unchecked Sendable {
             corpus: finalSnapshot,
             failures: failures,
             stats: stats,
-            wasRegression: false,
-            coverageChanges: []
+            wasRegression: false
         )
     }
 
@@ -322,64 +330,31 @@ final class FuzzEngine<each Input: Codable & Sendable>: @unchecked Sendable {
         processAsyncPlugins: @escaping AsyncPluginProcessorFn,
         test: @escaping @Sendable (InputTuple) async throws -> Void
     ) async -> FuzzResult<repeat each Input> {
+        // Filter compiler-generated edges before any measurement
+        SanCovCounters.applyEdgeFilter()
+
         let startTime = dateClient.now()
         var failures: [(input: InputTuple, error: Error, timeElapsed: TimeInterval)] = []
-        var coverageChanges: [(input: InputTuple, expected: SparseCoverage, actual: SparseCoverage)] = []
-        var needsRefuzz = false
 
         if config.verbose {
+            let filtered = SanCovCounters.filteredEdgeCount
+            print("[Regression] Filtered \(filtered) compiler-generated edges out of \(SanCovCounters.totalEdgeCount)")
             print("[Regression] Running \(snapshot.count) saved inputs...")
         }
 
         // Install custom edge hook if configured
         SanCovCounters.setEdgeHook(config.edgeHook)
 
-        // Hoist measurement context creation outside the loop for performance.
-        // This avoids hash table insert/remove operations per entry.
-        let context = coverageCounters.beginMeasurement()
-        defer { coverageCounters.endMeasurement(context) }
+        for (index, entry) in snapshot.entries.enumerated() {
+            if config.verbose {
+                print("[Regression] Replaying input \(index + 1)/\(snapshot.count)")
+            }
 
-        for entry in snapshot.entries {
-            // Reset coverage for this entry (cheap memset instead of hash table ops)
-            coverageCounters.resetCoverage(context)
-
-            var testError: Error?
             do {
                 try await test(entry.input)
             } catch {
-                testError = error
-            }
-
-            if let error = testError {
                 failures.append((entry.input, error, startTime.distance(to: dateClient.now())))
             }
-
-            // Get coverage snapshot using context-aware API (O(1) even after task hop)
-            do {
-                let actualSparse = try coverageCounters.snapshotCoveredArraysWithContext(context)
-                if actualSparse != entry.sparseCoverage {
-                    coverageChanges.append((
-                        input: entry.input,
-                        expected: entry.sparseCoverage,
-                        actual: actualSparse
-                    ))
-                    needsRefuzz = true
-                }
-            } catch {
-                fatalError("coverage needs to be enabled for fuzzing")
-            }
-        }
-
-        // If coverage changed, re-fuzz
-        if needsRefuzz {
-            if config.verbose {
-                print("[Regression] Coverage changed for \(coverageChanges.count) inputs, re-fuzzing...")
-            }
-            // Delete old corpus and re-fuzz
-            if let directory = corpusDirectory {
-                try? corpusPersistenceClient.delete(directory)
-            }
-            return await runFuzzing(processSyncPlugins: processSyncPlugins, processAsyncPlugins: processAsyncPlugins, test: test)
         }
 
         let duration = dateClient.now().timeIntervalSince(startTime)
@@ -391,6 +366,10 @@ final class FuzzEngine<each Input: Codable & Sendable>: @unchecked Sendable {
             stopReason: .regression,
         )
 
+        if config.verbose {
+            print("[Regression] Completed: \(snapshot.count) inputs, \(failures.count) failures, \(String(format: "%.2f", duration))s")
+        }
+
         // Send .end event to plugins (for coverage gap analysis, etc.)
         let endContext = AsyncPluginEvent<repeat each Input>.EndContext(
             totalCoveredIndices: snapshot.coveredIndices,
@@ -401,13 +380,11 @@ final class FuzzEngine<each Input: Codable & Sendable>: @unchecked Sendable {
             self.executeEndAction(action)
         }
 
-        // Return the snapshot directly for the result
         return FuzzResult(
             corpus: snapshot,
             failures: failures,
             stats: stats,
-            wasRegression: true,
-            coverageChanges: coverageChanges
+            wasRegression: true
         )
     }
 }
