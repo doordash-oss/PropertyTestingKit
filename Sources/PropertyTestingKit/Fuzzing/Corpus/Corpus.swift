@@ -348,15 +348,10 @@ public final class Corpus<each Input: Codable & Sendable>: @unchecked Sendable {
     }
 }
 
-/// Coding keys for Corpus serialization.
-private enum CorpusCodingKeys: String, CodingKey {
-    case entries
-    case coveredIndices
-}
-
 // MARK: - Corpus Snapshot
 
 /// A serializable snapshot of corpus state.
+/// On disk this is a plain JSON array of entries: `[{input: ...}, ...]`
 public struct CorpusSnapshot<each Input: Codable & Sendable>: Sendable, Codable {
     public let entries: [CorpusEntry<repeat each Input>]
     public let coveredIndices: Set<UInt32>
@@ -373,15 +368,14 @@ public struct CorpusSnapshot<each Input: Codable & Sendable>: Sendable, Codable 
     public var isEmpty: Bool { entries.isEmpty }
 
     public func encode(to encoder: any Encoder) throws {
-        var container = encoder.container(keyedBy: CorpusCodingKeys.self)
-        try container.encode(entries, forKey: .entries)
-        try container.encode(coveredIndices, forKey: .coveredIndices)
+        var container = encoder.singleValueContainer()
+        try container.encode(entries)
     }
 
     public init(from decoder: any Decoder) throws {
-        let container = try decoder.container(keyedBy: CorpusCodingKeys.self)
-        self.entries = try container.decode([CorpusEntry<repeat each Input>].self, forKey: .entries)
-        self.coveredIndices = try container.decode(Set<UInt32>.self, forKey: .coveredIndices)
+        let container = try decoder.singleValueContainer()
+        self.entries = try container.decode([CorpusEntry<repeat each Input>].self)
+        self.coveredIndices = []
     }
 }
 
