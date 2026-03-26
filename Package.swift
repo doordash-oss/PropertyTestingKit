@@ -66,11 +66,18 @@ let package = Package(
             // No -sanitize-coverage: functions here are safe to use as edge hooks
         ),
 
+        // Schedule control for concurrency fuzzing — intercepts swift_task_enqueueGlobal_hook
+        // No -sanitize-coverage to avoid instrumenting the hook itself
+        .target(
+            name: "ScheduleControl"
+        ),
+
         .target(
             name: "PropertyTestingKit",
             dependencies: [
                 "SanCovHooks",
                 "EdgeHooks",
+                "ScheduleControl",
                 "CLLVMSymbolizer",
                 .product(name: "Dependencies", package: "swift-dependencies"),
                 .product(name: "DequeModule", package: "swift-collections"),

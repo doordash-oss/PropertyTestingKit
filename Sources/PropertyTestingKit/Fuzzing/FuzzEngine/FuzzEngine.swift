@@ -17,6 +17,7 @@
 
 import Dependencies
 import Foundation
+import ScheduleControl
 import Testing
 
 // MARK: - FuzzEngine
