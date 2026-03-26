@@ -285,7 +285,7 @@ struct FuzzAPITests {
             sparse: SparseCoverage(indices: [1])
         )
         let corpusSnapshot = existingCorpus.snapshot()
-        let corpusData = try JSONEncoder.corpusEncoder.encode(corpusSnapshot)
+        let corpusData = try JSONEncoder.corpusEncoder().encode(corpusSnapshot)
 
         let (loadSpy, loadFn) = spy { (_: URL) -> Data in
             return corpusData

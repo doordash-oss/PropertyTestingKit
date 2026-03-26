@@ -53,6 +53,11 @@ struct FuzzEngineConfig: Sendable {
     /// When `nil`, the default binary recording is used.
     let edgeHook: EdgeHook?
 
+    /// When true, wraps each test execution with `ScheduleController.run` to fuzz
+    /// the order in which concurrent tasks are drained. Uses `swift_task_enqueueGlobal_hook`
+    /// to intercept and reorder task scheduling.
+    let scheduleFuzzing: Bool
+
     init(
         maxDuration: Duration = .seconds(60),
         verbose: Bool = false,
@@ -61,6 +66,7 @@ struct FuzzEngineConfig: Sendable {
         timeLimitCheckInterval: Int = 1000,
         coverageStrategy: CoverageStrategyKind = .pathTrie,
         edgeHook: EdgeHook? = nil,
+        scheduleFuzzing: Bool = false,
         fileID: String = #fileID,
         filePath: String = #filePath,
         line: Int = #line,
@@ -74,6 +80,7 @@ struct FuzzEngineConfig: Sendable {
         self.timeLimitCheckInterval = timeLimitCheckInterval
         self.coverageStrategy = coverageStrategy
         self.edgeHook = edgeHook
+        self.scheduleFuzzing = scheduleFuzzing
         self.sourceLocation = SourceLocation(
             fileID: fileID,
             filePath: filePath,

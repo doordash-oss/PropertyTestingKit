@@ -15,21 +15,24 @@
 import Foundation
 
 extension JSONEncoder {
-    static let corpusEncoder: JSONEncoder = {
+    static func corpusEncoder(scheduleFuzzing: Bool = false) -> JSONEncoder {
         let encoder = JSONEncoder()
-        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-        encoder.dateEncodingStrategy = .iso8601
         encoder.outputFormatting = [.sortedKeys]
-
+        encoder.dateEncodingStrategy = .iso8601
+        if scheduleFuzzing {
+            encoder.userInfo[.scheduleFuzzing] = true
+        }
         return encoder
-    }()
+    }
 }
 
 extension JSONDecoder {
-    static let corpusDecoder: JSONDecoder = {
+    static func corpusDecoder(scheduleFuzzing: Bool = false) -> JSONDecoder {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
-
+        if scheduleFuzzing {
+            decoder.userInfo[.scheduleFuzzing] = true
+        }
         return decoder
-    }()
+    }
 }
