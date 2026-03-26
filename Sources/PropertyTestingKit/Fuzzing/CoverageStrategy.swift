@@ -65,6 +65,7 @@ public enum CoverageStrategyKind: Sendable {
 /// Returns `true` if the input was interesting and added.
 typealias CoverageStrategyFn<each Input: Codable & Sendable> = (
     _ input: (repeat each Input),
+    _ scheduleBytes: [UInt8]?,
     _ context: SanCovCounters.MeasurementContext,
     _ coverageClient: CoverageCountersClient,
     _ corpus: Corpus<repeat each Input>
@@ -176,7 +177,7 @@ private func makeSignatureMatchStrategy<each Input: Codable & Sendable>(
 ) -> CoverageStrategyFn<repeat each Input> {
     var index = SignatureIndex()
 
-    return { input, context, coverageClient, corpus in
+    return { input, scheduleBytes, context, coverageClient, corpus in
         // Zero-copy access to covered indices buffer
         let isDuplicate = coverageClient.withCoveredIndices(context) { buffer in
             index.isDuplicate(coveredIndices: buffer)
@@ -194,7 +195,7 @@ private func makeSignatureMatchStrategy<each Input: Codable & Sendable>(
         // Register in the inverted index
         index.addSignature(Array(sparse.indices))
 
-        corpus.mergeCoverageAndAdd(input: input, sparse: sparse)
+        corpus.mergeCoverageAndAdd(input: input, scheduleBytes: scheduleBytes, sparse: sparse)
         return true
     }
 }
@@ -206,7 +207,7 @@ private func makeSignatureMatchStrategy<each Input: Codable & Sendable>(
 /// Aligns with AFL/libFuzzer model.
 private func makeNewEdgeStrategy<each Input: Codable & Sendable>(
 ) -> CoverageStrategyFn<repeat each Input> {
-    return { input, context, coverageClient, corpus in
+    return { input, scheduleBytes, context, coverageClient, corpus in
         // Merge coverage directly into corpus bitmap - returns true if any new edge found
         let foundNewEdge = coverageClient.mergeCoverageIntoBitmap(
             context,
@@ -224,7 +225,7 @@ private func makeNewEdgeStrategy<each Input: Codable & Sendable>(
             return false
         }
 
-        corpus.addEntry(input: input, sparse: sparse)
+        corpus.addEntry(input: input, scheduleBytes: scheduleBytes, sparse: sparse)
         return true
     }
 }
@@ -241,7 +242,7 @@ private func makePathTrieStrategy<each Input: Codable & Sendable>(
     let trie = PathTrie()
     var attached = false
 
-    return { input, context, coverageClient, corpus in
+    return { input, scheduleBytes, context, coverageClient, corpus in
         // Attach the trie to the measurement context on first call.
         // This binds it to the per-task context so the hook reads it
         // from tls_cached_measurement_context — safe across task hops.
@@ -263,9 +264,9 @@ private func makePathTrieStrategy<each Input: Codable & Sendable>(
         // Snapshot coverage for the corpus entry so regression and gap detection work.
         // The trie handles uniqueness; coverage data is for serialization/analysis.
         if let sparse = try? coverageClient.snapshotCoveredArraysWithContext(context) {
-            corpus.mergeCoverageAndAdd(input: input, sparse: sparse)
+            corpus.mergeCoverageAndAdd(input: input, scheduleBytes: scheduleBytes, sparse: sparse)
         } else {
-            corpus.addEntry(input: input, sparse: SparseCoverage())
+            corpus.addEntry(input: input, scheduleBytes: scheduleBytes, sparse: SparseCoverage())
         }
         return true
     }
@@ -276,11 +277,11 @@ private func makePathTrieStrategy<each Input: Codable & Sendable>(
 /// Always interesting strategy: every input is added unconditionally.
 private func makeAlwaysInterestingStrategy<each Input: Codable & Sendable>(
 ) -> CoverageStrategyFn<repeat each Input> {
-    return { input, context, coverageClient, corpus in
+    return { input, scheduleBytes, context, coverageClient, corpus in
         if let sparse = try? coverageClient.snapshotCoveredArraysWithContext(context) {
-            corpus.mergeCoverageAndAdd(input: input, sparse: sparse)
+            corpus.mergeCoverageAndAdd(input: input, scheduleBytes: scheduleBytes, sparse: sparse)
         } else {
-            corpus.addEntry(input: input, sparse: SparseCoverage())
+            corpus.addEntry(input: input, scheduleBytes: scheduleBytes, sparse: SparseCoverage())
         }
         return true
     }

@@ -22,6 +22,9 @@ public enum SyncPluginEvent<each T: Sendable>: Sendable {
         public let discoveredNewCoverage: Bool
         /// The input that was tested in this iteration.
         public let input: (repeat each T)
+        /// Schedule bytes used for this iteration's task ordering.
+        /// Non-nil when schedule fuzzing is enabled.
+        public let scheduleBytes: [UInt8]?
         /// Whether this input came from the pending mutation queue (`true`)
         /// or was freshly generated (`false`). Plugins can use this to detect
         /// when the mutation queue has been exhausted and re-schedule corpus
@@ -34,11 +37,13 @@ public enum SyncPluginEvent<each T: Sendable>: Sendable {
         public init(
             discoveredNewCoverage: Bool,
             input: consuming (repeat each T),
+            scheduleBytes: [UInt8]? = nil,
             fromMutationQueue: Bool = false,
             sparseCoverage: SparseCoverage? = nil
         ) {
             self.discoveredNewCoverage = discoveredNewCoverage
             self.input = input
+            self.scheduleBytes = scheduleBytes
             self.fromMutationQueue = fromMutationQueue
             self.sparseCoverage = sparseCoverage
         }
@@ -99,6 +104,8 @@ public enum AsyncPluginEvent<each T: Sendable>: Sendable {
     public struct FailureFoundContext: @unchecked Sendable {
         /// The input that caused the failure.
         public let input: (repeat each T)
+        /// Schedule bytes used for this iteration's task ordering.
+        public let scheduleBytes: [UInt8]?
         /// The test closure for shrinking attempts.
         public let test: @Sendable ((repeat each T)) async throws -> Void
         /// Source location where the fuzz test was called.
@@ -107,11 +114,13 @@ public enum AsyncPluginEvent<each T: Sendable>: Sendable {
 
         public init(
             input: consuming (repeat each T),
+            scheduleBytes: [UInt8]? = nil,
             test: @Sendable @escaping ((repeat each T)) async throws -> Void,
             sourceLocation: SourceLocation,
             sparseCoverage: SparseCoverage
         ) {
             self.input = input
+            self.scheduleBytes = scheduleBytes
             self.test = test
             self.sourceLocation = sourceLocation
             self.sparseCoverage = sparseCoverage
@@ -161,9 +170,12 @@ public enum FuzzPluginAction<each T: Sendable>: Sendable {
     public struct QueueInputsAction: Sendable {
         /// Encoded inputs to add to the mutation queue.
         public let inputs: [(repeat each T)]
+        /// Schedule bytes for each queued input (parallel array).
+        public let scheduleBytes: [[UInt8]?]
 
-        public init(inputs: consuming [(repeat each T)]) {
+        public init(inputs: consuming [(repeat each T)], scheduleBytes: [[UInt8]?] = []) {
             self.inputs = inputs
+            self.scheduleBytes = scheduleBytes
         }
     }
 
@@ -171,9 +183,12 @@ public enum FuzzPluginAction<each T: Sendable>: Sendable {
     public struct SelectForMutationAction: Sendable {
         /// The input to select for mutation.
         public let input: (repeat each T)
+        /// Schedule bytes to mutate alongside the input.
+        public let scheduleBytes: [UInt8]?
 
-        public init(input: consuming (repeat each T)) {
+        public init(input: consuming (repeat each T), scheduleBytes: [UInt8]? = nil) {
             self.input = input
+            self.scheduleBytes = scheduleBytes
         }
     }
 
@@ -181,17 +196,21 @@ public enum FuzzPluginAction<each T: Sendable>: Sendable {
     public struct SubmitToCorpusAction: Sendable {
         /// The input to submit to the corpus.
         public let input: (repeat each T)
+        /// Schedule bytes for this corpus entry.
+        public let scheduleBytes: [UInt8]?
         public let sparseCoverage: SparseCoverage
         public let entryType: CorpusEntryType
         public let failureInfo: FailureInfo?
 
         public init(
             input: consuming (repeat each T),
+            scheduleBytes: [UInt8]? = nil,
             sparseCoverage: SparseCoverage,
             entryType: CorpusEntryType,
             failureInfo: FailureInfo? = nil
         ) {
             self.input = input
+            self.scheduleBytes = scheduleBytes
             self.sparseCoverage = sparseCoverage
             self.entryType = entryType
             self.failureInfo = failureInfo

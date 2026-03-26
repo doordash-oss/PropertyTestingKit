@@ -58,7 +58,7 @@ extension FuzzPluginHandler {
                 switch event {
                 case let .iteration(context):
                     if context.discoveredNewCoverage {
-                        return [.selectForMutation(.init(input: context.input))]
+                        return [.selectForMutation(.init(input: context.input, scheduleBytes: context.scheduleBytes))]
                     }
                     return []
                 }
@@ -80,6 +80,7 @@ extension FuzzPluginHandler {
     /// has its own plugin instance.
     public static func corpusMutation() -> FuzzPluginHandler<repeat each Input> {
         var interestingInputs: [(repeat each Input)] = []
+        var interestingScheduleBytes: [[UInt8]?] = []
         @Dependency(\.fastRNG) var fastRNG: FastRNG
         let seedRNG: FastRNG = fastRNG
 
@@ -90,7 +91,8 @@ extension FuzzPluginHandler {
                 case let .iteration(context):
                     if context.discoveredNewCoverage {
                         interestingInputs.append(context.input)
-                        return [.selectForMutation(.init(input: context.input))]
+                        interestingScheduleBytes.append(context.scheduleBytes)
+                        return [.selectForMutation(.init(input: context.input, scheduleBytes: context.scheduleBytes))]
                     }
 
                     // When the mutation queue was exhausted (state machine fell back to
@@ -99,7 +101,7 @@ extension FuzzPluginHandler {
                     if !context.fromMutationQueue, !interestingInputs.isEmpty {
                         var rng = seedRNG
                         let idx = Int.random(in: 0..<interestingInputs.count, using: &rng)
-                        return [.selectForMutation(.init(input: interestingInputs[idx]))]
+                        return [.selectForMutation(.init(input: interestingInputs[idx], scheduleBytes: interestingScheduleBytes[idx]))]
                     }
 
                     return []
@@ -152,9 +154,10 @@ extension FuzzPluginHandler {
 
                     // Return actions: select for mutation, add to corpus, and record issue
                     return [
-                        .selectForMutation(.init(input: minimized)),
+                        .selectForMutation(.init(input: minimized, scheduleBytes: context.scheduleBytes)),
                         .submitToCorpus(.init(
                             input: minimized,
+                            scheduleBytes: context.scheduleBytes,
                             sparseCoverage: context.sparseCoverage,
                             entryType: .failure
                         )),
@@ -320,6 +323,7 @@ extension FuzzPluginHandler {
         maxMutationFactor: Int = 20
     ) -> FuzzPluginHandler<repeat each Input> {
         var entryInputs: [(repeat each Input)] = []
+        var entryScheduleBytes: [[UInt8]?] = []
         var entryFeatures: [[UInt32]] = []
         var entryMutations: [Int] = []
         var globalFeatureFreqs: [UInt32: Int] = [:]
@@ -339,11 +343,12 @@ extension FuzzPluginHandler {
                             globalFeatureFreqs[feature, default: 0] += 1
                         }
                         entryInputs.append(context.input)
+                        entryScheduleBytes.append(context.scheduleBytes)
                         entryFeatures.append(coverage.indices)
                         entryMutations.append(0)
 
                         // Immediately schedule mutations for the newly-interesting input.
-                        return [.selectForMutation(.init(input: context.input))]
+                        return [.selectForMutation(.init(input: context.input, scheduleBytes: context.scheduleBytes))]
                     }
 
                     // When the mutation queue has drained, pick the next entry to
@@ -371,7 +376,7 @@ extension FuzzPluginHandler {
                         entryMutations[selectedIdx] += 1
                         totalMutations += 1
 
-                        return [.selectForMutation(.init(input: entryInputs[selectedIdx]))]
+                        return [.selectForMutation(.init(input: entryInputs[selectedIdx], scheduleBytes: entryScheduleBytes[selectedIdx]))]
                     }
 
                     return []

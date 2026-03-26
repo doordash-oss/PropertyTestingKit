@@ -102,6 +102,7 @@ public func fuzz<each Input: Codable & Sendable>(
     corpusMode: CorpusMode? = nil,
     coverageStrategy: CoverageStrategyKind = .pathTrie,
     edgeHook: EdgeHook? = nil,
+    scheduleFuzzing: Bool = false,
     parallelism: Int = ProcessInfo.processInfo.processorCount,
     makeHandlers: @escaping @Sendable () -> [FuzzPluginHandler<repeat each Input>] = { [.corpusMutation()] },
     filePath: StaticString = #filePath,
@@ -116,6 +117,7 @@ public func fuzz<each Input: Codable & Sendable>(
         corpusMode: corpusMode,
         coverageStrategy: coverageStrategy,
         edgeHook: edgeHook,
+        scheduleFuzzing: scheduleFuzzing,
         parallelism: parallelism,
         makeHandlers: makeHandlers,
         filePath: filePath,
@@ -134,6 +136,7 @@ func fuzzInternal<each Input: Codable & Sendable>(
     corpusMode: CorpusMode?,
     coverageStrategy: CoverageStrategyKind,
     edgeHook: EdgeHook?,
+    scheduleFuzzing: Bool,
     parallelism: Int,
     makeHandlers: @escaping @Sendable () -> [FuzzPluginHandler<repeat each Input>],
     filePath: StaticString,
@@ -172,6 +175,7 @@ func fuzzInternal<each Input: Codable & Sendable>(
             projectPath: projectPath(from: filePath),
             coverageStrategy: coverageStrategy,
             edgeHook: edgeHook,
+            scheduleFuzzing: scheduleFuzzing,
             fileID: testFilePath,
             filePath: testFilePath,
             line: line,
@@ -222,6 +226,7 @@ func fuzzInternal<each Input: Codable & Sendable>(
                     projectPath: projectPath(from: filePath),
                     coverageStrategy: coverageStrategy,
                     edgeHook: edgeHook,
+                    scheduleFuzzing: scheduleFuzzing,
                     fileID: testFilePath,
                     filePath: testFilePath,
                     line: line,
@@ -251,7 +256,7 @@ func fuzzInternal<each Input: Codable & Sendable>(
     // Save merged corpus
     if !mergedResult.corpus.entries.isEmpty {
         do {
-            try corpusPersistence.save(mergedResult.corpus, to: corpusDir)
+            try corpusPersistence.save(mergedResult.corpus, to: corpusDir, scheduleFuzzing: scheduleFuzzing)
             if verbose {
                 print("[Fuzz] Saved merged corpus to \(corpusDir.path)")
             }
@@ -293,6 +298,7 @@ public func fuzz<each Input: MutatorProviding & Codable & Sendable>(
     corpusMode: CorpusMode? = nil,
     coverageStrategy: CoverageStrategyKind = .pathTrie,
     edgeHook: EdgeHook? = nil,
+    scheduleFuzzing: Bool = false,
     parallelism: Int = ProcessInfo.processInfo.processorCount,
     makeHandlers: @escaping @Sendable () -> [FuzzPluginHandler<repeat each Input>] = { [.corpusMutation()] },
     filePath: StaticString = #filePath,
@@ -307,6 +313,7 @@ public func fuzz<each Input: MutatorProviding & Codable & Sendable>(
         corpusMode: corpusMode,
         coverageStrategy: coverageStrategy,
         edgeHook: edgeHook,
+        scheduleFuzzing: scheduleFuzzing,
         parallelism: parallelism,
         makeHandlers: makeHandlers,
         filePath: filePath,

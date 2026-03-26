@@ -40,18 +40,20 @@ struct CorpusPersistenceClient: Sendable {
     /// Save a corpus snapshot to the given directory.
     func save<each Input: Codable & Sendable>(
         _ snapshot: CorpusSnapshot<repeat each Input>,
-        to url: URL
+        to url: URL,
+        scheduleFuzzing: Bool = false
     ) throws {
-        let data = try JSONEncoder.corpusEncoder.encode(snapshot)
+        let data = try JSONEncoder.corpusEncoder(scheduleFuzzing: scheduleFuzzing).encode(snapshot)
         try _save(data, url)
     }
 
     /// Load a corpus snapshot from the given directory.
     func loadSnapshot<each Input: Codable & Sendable>(
-        from url: URL
+        from url: URL,
+        scheduleFuzzing: Bool = false
     ) throws -> CorpusSnapshot<repeat each Input> {
         let data = try _load(url)
-        return try JSONDecoder.corpusDecoder.decode(CorpusSnapshot<repeat each Input>.self, from: data)
+        return try JSONDecoder.corpusDecoder(scheduleFuzzing: scheduleFuzzing).decode(CorpusSnapshot<repeat each Input>.self, from: data)
     }
 }
 
