@@ -161,6 +161,9 @@ func fuzzInternal<each Input: Codable & Sendable>(
 
     let testFilePath = String(describing: filePath)
     let verbose = environment.environment()["FUZZ_VERBOSE"] != nil
+    // Schedule fuzzing installs a process-global task-enqueue hook, so it cannot be
+    // shared across parallel engines — force a single engine when it's enabled.
+    let effectiveParallelism = scheduleFuzzing ? 1 : max(1, parallelism)
     let corpusDir = corpusDirectory(filePath: filePath, function: function)
 
     // All corpus policy (load/save/delete, regression replay, parallel orchestration)
@@ -174,7 +177,7 @@ func fuzzInternal<each Input: Codable & Sendable>(
             userSeeds: seeds,
             corpusDir: corpusDir,
             persistence: resolved,
-            parallelism: max(1, parallelism),
+            parallelism: effectiveParallelism,
             duration: duration,
             verbose: verbose,
             coverageStrategy: coverageStrategy,
