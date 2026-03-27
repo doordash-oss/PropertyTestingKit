@@ -194,8 +194,13 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
                         // Will throw if either the test throws or if it logs an Issue.
                         // When scheduling is being fuzzed, run the test under the
                         // recorded/generated schedule so task interleaving is controlled.
+                        // The coverage context is forwarded so edges recorded by the
+                        // schedule-controlled tasks are attributed to this measurement.
                         if let bytes = currentScheduleBytes {
-                            try await ScheduleController.run(scheduleBytes: bytes) {
+                            try await ScheduleController.run(
+                                scheduleBytes: bytes,
+                                coverageContext: coverageContext.rawContext
+                            ) {
                                 try await testWithIssueCapture(input)
                             }
                         } else {
