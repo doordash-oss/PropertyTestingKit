@@ -15,6 +15,7 @@
 import Foundation
 import Dependencies
 import Testing
+import SanCovHooks
 import ScheduleControl
 
 /// Manages the fuzzing loop state. Not thread-safe - only used from a single task.
@@ -191,7 +192,16 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
                             try await testWithIssueCapture(input)
                         }
                     } else {
-                        try await testWithIssueCapture(input)
+                        // Wrap in coverage inheritance so child tasks (TaskGroup,
+                        // Task {}) write edges to this engine's coverage map.
+                        let ctxBits = UInt(bitPattern: coverageContext.rawContext)
+                        try await CoverageInheritance.$context.withValue(ctxBits) {
+                            CoverageInheritance.captureKeyIfNeeded(contextBits: ctxBits)
+                            try await testWithIssueCapture(input)
+                        }
+                        // Rebuild covered_indices from bitmap — child tasks wrote
+                        // to the map but skipped covered_indices to avoid races.
+                        sancov_rebuild_covered_indices_from_map(coverageContext.rawContext)
                     }
 
                     // Delegate interestingness check to the coverage strategy

@@ -226,6 +226,30 @@ struct GenericTimerPollerFuzzTests {
         }
     }
 
+    @Test("Schedule-fuzzed concurrent operations don't crash", .timeLimit(.minutes(2)))
+    func fuzzScheduledConcurrentOperations() async throws {
+        try await withDependencies {
+            $0.continuousClock = ImmediateClock()
+        } operation: {
+            let result = try await fuzz(
+                duration: .seconds(60),
+                scheduleFuzzing: true
+            ) { (input: PollerFuzzInput) in
+                let poller = GenericTimerPoller(defaultInterval: .microseconds(100))
+
+                await withTaskGroup(of: Void.self) { group in
+                    group.addTask {
+                        await executeLane(input.lane1, on: poller)
+                    }
+                    group.addTask {
+                        await executeLane(input.lane2, on: poller)
+                    }
+                }
+            }
+            print("Schedule fuzz: \(result.stats.totalInputs) iterations, \(result.corpus.entries.count) corpus entries, \(String(format: "%.1f", result.stats.inputsPerSecond)) iter/s")
+        }
+    }
+
     @Test("Poller deinits when all external references are dropped")
     func pollerDoesNotLeak() async throws {
         let deinited = Mutex(false)
@@ -236,7 +260,7 @@ struct GenericTimerPollerFuzzTests {
         } operation: {
             var poller: GenericTimerPoller? = GenericTimerPoller(defaultInterval: .seconds(1))
             await poller?.onDeinit { deinited.withLock { $0 = true } }
-            var subscription: Task<Void, Never>? = await poller?.subscribe { }
+            var subscription: TaskCancellable? = await poller?.subscribe { }
             await poller?.startPolling()
 
             // Wait for the first handler call — startPolling fires an immediate
@@ -268,7 +292,7 @@ struct GenericTimerPollerFuzzTests {
 /// Each lane tracks its own subscriptions independently — when the lane ends,
 /// all remaining subscription tasks are cancelled.
 private func executeLane(_ ops: [PollerOp], on poller: GenericTimerPoller) async {
-    var subs: [Task<Void, Never>] = []
+    var subs: [TaskCancellable] = []
 
     for op in ops {
         switch op {
@@ -281,8 +305,8 @@ private func executeLane(_ ops: [PollerOp], on poller: GenericTimerPoller) async
         case .resumePolling:
             await poller.resumePolling()
         case .subscribe:
-            let task = await poller.subscribe { }
-            subs.append(task)
+            let cancellable = await poller.subscribe { }
+            subs.append(cancellable)
         case .cancelLast:
             if !subs.isEmpty {
                 subs.removeLast().cancel()

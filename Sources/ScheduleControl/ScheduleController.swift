@@ -187,6 +187,13 @@ public enum ScheduleController {
                 waitForStateChange(completion: completion)
             }
 
+            // Rebuild covered_indices from the bitmap now that drain is done
+            // and no other thread is writing to the map. This is the single-threaded
+            // fixup for not maintaining covered_indices during the concurrent drain.
+            if let coverageContext {
+                sancov_rebuild_covered_indices_from_map(coverageContext)
+            }
+
             if let error = completion.error {
                 throw error
             }
