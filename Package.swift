@@ -66,10 +66,18 @@ let package = Package(
             // No -sanitize-coverage: functions here are safe to use as edge hooks
         ),
 
+        // C helpers for reading Swift runtime ABI (job flags, task locals, actor pointers)
+        .target(
+            name: "CScheduleHooks",
+            path: "Sources/CScheduleHooks",
+            publicHeadersPath: "include"
+        ),
+
         // Schedule control for concurrency fuzzing — intercepts swift_task_enqueueGlobal_hook
         // No -sanitize-coverage to avoid instrumenting the hook itself
         .target(
-            name: "ScheduleControl"
+            name: "ScheduleControl",
+            dependencies: ["CScheduleHooks"]
         ),
 
         .target(

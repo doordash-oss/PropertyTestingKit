@@ -149,7 +149,7 @@ func fuzzInternal<each Input: Codable & Sendable>(
 
     let testFilePath = String(describing: filePath)
     let verbose = environment.environment()["FUZZ_VERBOSE"] != nil
-    let effectiveParallelism = max(1, parallelism)
+    let effectiveParallelism = scheduleFuzzing ? 1 : max(1, parallelism)
     let corpusDir = corpusDirectory(filePath: filePath, function: function)
     let effectiveCorpusMode = corpusMode ?? CorpusMode.fromEnvironment()
 
