@@ -10,6 +10,7 @@
 //
 
 import Foundation
+import os
 import SanCovHooks
 @_exported import EdgeHooks
 import MachO
@@ -55,6 +56,28 @@ import MachO
 ///     ]
 /// )
 /// ```
+/// Task-local tag for coverage inheritance. When set, child tasks created
+/// via TaskGroup.addTask or Task {} inherit the parent's measurement context.
+/// The value is the raw pointer bits of the SanCovMeasurementContext.
+enum CoverageInheritance {
+    @TaskLocal static var context: UInt = 0
+
+    /// Whether the task-local key has been captured for C-level lookup.
+    private static let _keyCaptured = OSAllocatedUnfairLock(initialState: false)
+
+    /// Capture the task-local key on first use. Must be called inside
+    /// a `$context.withValue(...)` scope so the task local is visible.
+    static func captureKeyIfNeeded(contextBits: UInt) {
+        let captured = _keyCaptured.withLock { $0 }
+        if captured { return }
+
+        guard let task = sancov_get_current_task() else { return }
+        guard let key = sancov_capture_key_by_value(task, contextBits) else { return }
+        sancov_set_coverage_inheritance_key(key)
+        _keyCaptured.withLock { $0 = true }
+    }
+}
+
 enum SanCovCounters {
     /// Check if SanitizerCoverage counters are available.
     ///

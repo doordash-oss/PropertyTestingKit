@@ -55,6 +55,50 @@ static size_t g_guard_count = 0;
 // Forward declaration — defined in Schedule-Aware Target Context section.
 static SanCovMeasurementContext* g_target_context;
 
+// Key pointer for coverage inheritance task local. When set, child tasks
+// inherit their parent's measurement context via Swift task locals.
+static const void* g_coverage_inheritance_key = NULL;
+
+// ABI constants (same as CScheduleHooks — duplicated to avoid cross-dependency)
+#define SANCOV_TASK_LOCAL_HEAD_OFFSET 136
+#define SANCOV_ITEM_KIND_VALUE 0
+#define SANCOV_ITEM_KIND_VALUE_IN_GROUP 1
+#define SANCOV_ITEM_KIND_PARENT_MARKER 2
+#define SANCOV_ITEM_KIND_STOP_MARKER 3
+
+static bool sancov_is_valid_pointer(const void *ptr) {
+    uintptr_t p = (uintptr_t)ptr;
+    return p >= 0x100000000ULL && p < 0x800000000000ULL;
+}
+
+/// Read the inherited measurement context from a task's task-local chain.
+/// Returns NULL if no inheritance key is set or the task local is not found.
+// Swift runtime function that looks up task locals with proper inheritance.
+// Resolves via dlsym to avoid link-time dependency.
+typedef void* (*TaskLocalValueLookupFn)(const void* key);
+static TaskLocalValueLookupFn swift_task_localValueLookup_fn = NULL;
+static bool swift_task_localValueLookup_resolved = false;
+
+static SanCovMeasurementContext* read_inherited_context(void* task) {
+    if (g_coverage_inheritance_key == NULL || task == NULL) return NULL;
+
+    // Resolve the runtime function once
+    if (!swift_task_localValueLookup_resolved) {
+        swift_task_localValueLookup_fn = (TaskLocalValueLookupFn)dlsym(
+            RTLD_DEFAULT, "swift_task_localValueGet");
+        swift_task_localValueLookup_resolved = true;
+    }
+    if (!swift_task_localValueLookup_fn) return NULL;
+
+    // Call the runtime's own lookup — handles parent-chain inheritance correctly.
+    void* result = swift_task_localValueLookup_fn(g_coverage_inheritance_key);
+    if (!result) return NULL;
+
+    uintptr_t ctx_bits;
+    memcpy(&ctx_bits, result, sizeof(ctx_bits));
+    return (ctx_bits != 0) ? (SanCovMeasurementContext*)ctx_bits : NULL;
+}
+
 // MARK: - Lock-Free Hash Tables using ConcurrencyKit ck_ht
 //
 // Design: Use ck_ht (BSD licensed, battle-tested) for truly lock-free operations.
@@ -699,10 +743,12 @@ static uint8_t* get_current_coverage_map(void) {
     // When schedule fuzzing is active, ALL edge hits go to the engine's context
     // regardless of which task/thread they fire on.
     if (g_target_context != NULL) {
-        // Set TLS caches so sancov_record_edge sees the target context
-        // for covered_indices bookkeeping and trie advancement.
-        set_tls_measurement_context(g_target_context);
-        tls_cached_coverage_map = g_target_context->coverage_map;
+        // Return the target context's map so edge hits land there.
+        // Do NOT set tls_cached_measurement_context — that would let every
+        // cooperative pool thread advance the shared trie / covered_indices
+        // concurrently, causing realloc races.  Instead, covered_indices
+        // are rebuilt from the bitmap after drain via
+        // sancov_rebuild_covered_indices_from_map().
         return g_target_context->coverage_map;
     }
 
@@ -713,13 +759,22 @@ static uint8_t* get_current_coverage_map(void) {
     // FAST PATH: Check if we have a cached map for this exact task
     // This avoids the O(512) scans in the common case where the task hasn't changed
     if (task == tls_cached_task && tls_cached_task_map != NULL) {
-        return tls_cached_task_map;
+        // When coverage inheritance is active, don't trust the cache for tasks
+        // without a measurement context — they may have been cached to the TLS
+        // fallback map before the inheritance key was set. Force re-lookup so
+        // read_inherited_context gets a chance to route to the parent's map.
+        if (g_coverage_inheritance_key != NULL && tls_cached_measurement_context == NULL) {
+            // Fall through to full lookup
+        } else {
+            return tls_cached_task_map;
+        }
     }
 #endif
 
     // Task changed - need to do full lookup
     // First check for measurement context for this task (highest priority)
     SanCovMeasurementContext* measurement_ctx = (SanCovMeasurementContext*)get_measurement_context_for_task(task);
+    // removed debug
     if (measurement_ctx != NULL) {
 #if !SANCOV_DISABLE_TLS_CACHE
         // Check measurement context cache
@@ -739,6 +794,20 @@ static uint8_t* get_current_coverage_map(void) {
             tls_cached_task_map = map;
             return map;
         }
+    }
+
+    // Check task-local inheritance: child tasks inherit their parent's
+    // measurement context via a @TaskLocal propagated down the task tree.
+    // This is O(n) in task-local chain length (~3-5 items) but only runs
+    // once per child task per thread — subsequent hits use the TLS cache above.
+    SanCovMeasurementContext* inherited = read_inherited_context(task);
+    if (inherited != NULL && inherited->coverage_map != NULL) {
+        // Write edges to the parent's map. Do NOT set tls_cached_measurement_context
+        // to avoid trie/covered_indices races from concurrent child tasks.
+        tls_cached_task = task;
+        tls_cached_task_map = inherited->coverage_map;
+        set_tls_measurement_context(NULL);
+        return inherited->coverage_map;
     }
 
     // No measurement context - use thread-local storage directly
@@ -1014,6 +1083,65 @@ static SanCovMeasurementContext* g_target_context = NULL;
 
 void sancov_set_target_context(SanCovMeasurementContext* context) {
     g_target_context = context;
+}
+
+// MARK: - Coverage Inheritance (Task-Local Propagation)
+
+void sancov_set_coverage_inheritance_key(const void* key) {
+    g_coverage_inheritance_key = key;
+}
+
+void* sancov_get_current_task(void) {
+    if (swift_task_getCurrent != NULL) {
+        return swift_task_getCurrent();
+    }
+    return NULL;
+}
+
+const void* sancov_capture_key_by_value(const void* task, uintptr_t expected_value) {
+    if (!task) return NULL;
+
+    const void* head;
+    memcpy(&head, (const char*)task + SANCOV_TASK_LOCAL_HEAD_OFFSET, sizeof(head));
+    if (!head || !sancov_is_valid_pointer(head)) return NULL;
+
+    const void* current = head;
+    for (int depth = 0; depth < 30 && current; depth++) {
+        uintptr_t nextAndKind;
+        memcpy(&nextAndKind, current, sizeof(nextAndKind));
+        unsigned kind = nextAndKind & 0x3;
+
+        if (kind == SANCOV_ITEM_KIND_VALUE || kind == SANCOV_ITEM_KIND_VALUE_IN_GROUP) {
+            uintptr_t value;
+            memcpy(&value, (const char*)current + 24, sizeof(value));
+            if (value == expected_value) {
+                const void* key;
+                memcpy(&key, (const char*)current + 8, sizeof(key));
+                return key;
+            }
+        }
+
+        if (kind == SANCOV_ITEM_KIND_STOP_MARKER) break;
+
+        uintptr_t nextPtr = nextAndKind & ~(uintptr_t)0x3;
+        current = (nextPtr != 0 && sancov_is_valid_pointer((void*)nextPtr))
+            ? (const void*)nextPtr : NULL;
+    }
+    return NULL;
+}
+
+void sancov_rebuild_covered_indices_from_map(SanCovMeasurementContext* ctx) {
+    if (!ctx || !ctx->coverage_map) return;
+    size_t count = 0;
+    for (size_t i = 0; i < g_guard_count; i++) {
+        if (ctx->coverage_map[i]) {
+            if (count < ctx->covered_indices_capacity && ctx->covered_indices) {
+                ctx->covered_indices[count] = (uint32_t)i;
+            }
+            count++;
+        }
+    }
+    ctx->covered_count = count;
 }
 
 void sancov_record_edge_to_target(uint32_t *guard) {

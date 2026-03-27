@@ -246,6 +246,22 @@ void sancov_install_swift_hook(void (*hook)(uint32_t*));
 /// Pass NULL to disable.
 void sancov_set_target_context(SanCovMeasurementContext* context);
 
+// MARK: - Coverage Inheritance (Task-Local Propagation)
+
+/// Set the task-local key used for coverage inheritance lookup.
+void sancov_set_coverage_inheritance_key(const void* key);
+
+/// Get the current Swift task pointer (wraps swift_task_getCurrent).
+void* sancov_get_current_task(void);
+
+/// Walk a task's task-local chain to find the key whose value matches expected_value.
+const void* sancov_capture_key_by_value(const void* task, uintptr_t expected_value);
+
+/// Scan the bitmap and rebuild covered_indices from it.
+/// Call after schedule-controlled drain completes (single-threaded) so that
+/// strategies using covered_indices see the correct data.
+void sancov_rebuild_covered_indices_from_map(SanCovMeasurementContext* context);
+
 /// Edge recording that writes to the target context set by `sancov_set_target_context`.
 /// Falls back to `sancov_record_edge` if no target context is set.
 /// Use as the hook via `sancov_install_swift_hook(sancov_record_edge_to_target)`.
