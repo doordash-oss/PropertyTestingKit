@@ -16,6 +16,27 @@ import Clocks
 import Dependencies
 import Foundation
 
+/// A handle to a poller subscription that cancels on deinit.
+///
+/// Works like `AnyCancellable` — reassigning the variable or letting it
+/// go out of scope automatically cancels the underlying task.
+public final class TaskCancellable: Sendable {
+    private let task: Task<Void, Never>
+
+    public init(_ task: Task<Void, Never>) {
+        self.task = task
+    }
+
+    deinit {
+        task.cancel()
+    }
+
+    /// Cancels the subscription immediately.
+    public func cancel() {
+        task.cancel()
+    }
+}
+
 /// A reusable timer-based poller.
 ///
 /// Usage:
@@ -31,8 +52,8 @@ public actor GenericTimerPoller {
     public typealias PollHandler = () async -> Void
 
     /// Used for testing, emits when handlers emit
-    let stream: AsyncStream<Void>
-    let continuation: AsyncStream<Void>.Continuation
+    public let stream: AsyncStream<Void>
+    private let continuation: AsyncStream<Void>.Continuation
 
     /// Clock used for sleeping between polls (injectable for tests)
     @Dependency(\.continuousClock) var clock
@@ -50,6 +71,7 @@ public actor GenericTimerPoller {
 
     deinit {
         timerTask?.cancel()
+        for cont in subscriberContinuations.values { cont.finish() }
         continuation.finish()
         onDeinitCallback?()
     }
@@ -70,10 +92,7 @@ public actor GenericTimerPoller {
 
     /// - Parameters:
     ///   - defaultInterval: Base interval (in seconds) when no override is set.
-    public init(
-        defaultInterval: Duration = .seconds(60), line: Int = #line, function: String = #function,
-        file: String = #filePath
-    ) {
+    public init(defaultInterval: Duration = .seconds(60), line: Int = #line, function: String = #function, file: String = #filePath) {
         self.line = line
         self.function = function
         self.file = file
@@ -85,27 +104,24 @@ public actor GenericTimerPoller {
 
     /// Starts (or restarts) the timer-driven polling
     public func startPolling() {
-        configureTimer()
-
-        // Call handlers immediately
-        Task {
-            await callHandlers()
-        }
+        configureTimer(fireImmediately: true)
     }
 
     /// Registers the caller as a subscriber.
     ///
-    /// The returned `Task` automatically removes the caller when it is cancelled.
-    /// Cancellation is synchronous — `task.cancel()` works in `deinit` just like `AnyCancellable.cancel()` did.
+    /// The returned ``TaskCancellable`` automatically removes the subscriber
+    /// when it is cancelled **or deallocated** — reassigning the variable or
+    /// letting it go out of scope cancels the subscription, just like
+    /// `AnyCancellable`.
     @discardableResult
-    public func subscribe(handler: @escaping PollHandler) -> Task<Void, Never> {
+    public func subscribe(handler: @escaping PollHandler) -> TaskCancellable {
         let id = UUID()
         handlers[id] = handler
 
         let (aliveStream, aliveContinuation) = AsyncStream<Void>.makeStream()
         subscriberContinuations[id] = aliveContinuation
 
-        return Task { [weak self] in
+        let task = Task { [weak self] in
             await withTaskCancellationHandler {
                 for await _ in aliveStream {}
             } onCancel: {
@@ -113,6 +129,7 @@ public actor GenericTimerPoller {
             }
             await self?.removeSubscriber(id)
         }
+        return TaskCancellable(task)
     }
 
     /// Temporarily stops the timer but keeps subscriber bookkeeping intact.
@@ -124,7 +141,7 @@ public actor GenericTimerPoller {
     /// Resumes polling if at least one subscriber is still registered.
     public func resumePolling() {
         guard !handlers.isEmpty, timerTask == nil else { return }
-        configureTimer()
+        configureTimer(fireImmediately: false)
     }
 
     /// Removes all subscribers and tears down the timer.
@@ -160,13 +177,17 @@ public actor GenericTimerPoller {
         }
     }
 
-    private func configureTimer() {
+    private func configureTimer(fireImmediately: Bool = false) {
         timerTask?.cancel()
 
         let task = Task { [weak self] in
-            guard let self else { return }
             do {
+                if fireImmediately {
+                    guard let self else { return }
+                    await self.callHandlers()
+                }
                 while !Task.isCancelled {
+                    guard let self else { return }
                     try await self.clock.sleep(for: self.effectiveInterval)
                     await self.callHandlers()
                 }

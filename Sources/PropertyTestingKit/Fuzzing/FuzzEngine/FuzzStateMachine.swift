@@ -15,6 +15,7 @@
 import Dependencies
 import Foundation
 import Testing
+import SanCovHooks
 import ScheduleControl
 
 /// Manages the fuzzing loop state. Not thread-safe - only used from a single task.

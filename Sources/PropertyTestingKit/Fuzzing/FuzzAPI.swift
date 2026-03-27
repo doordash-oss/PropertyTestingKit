@@ -164,6 +164,10 @@ func fuzzInternal<each Input: Codable & Sendable>(
     // Schedule fuzzing installs a process-global task-enqueue hook, so it cannot be
     // shared across parallel engines — force a single engine when it's enabled.
     let effectiveParallelism = scheduleFuzzing ? 1 : max(1, parallelism)
+    // pathTrie requires ordered edge sequences maintained via tls_cached_measurement_context,
+    // which is incompatible with schedule fuzzing's multi-thread target context approach.
+    // Fall back to newEdge (bitmap merge) which reads the map directly.
+    let effectiveCoverageStrategy = (scheduleFuzzing && coverageStrategy == .pathTrie) ? .newEdge : coverageStrategy
     let corpusDir = corpusDirectory(filePath: filePath, function: function)
 
     // All corpus policy (load/save/delete, regression replay, parallel orchestration)
@@ -180,7 +184,7 @@ func fuzzInternal<each Input: Codable & Sendable>(
             parallelism: effectiveParallelism,
             duration: duration,
             verbose: verbose,
-            coverageStrategy: coverageStrategy,
+            coverageStrategy: effectiveCoverageStrategy,
             edgeHook: edgeHook,
             scheduleFuzzing: scheduleFuzzing,
             projectPath: projectPath(from: filePath),

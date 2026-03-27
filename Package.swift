@@ -30,7 +30,7 @@ let package = Package(
             path: "Sources/SanCovHooks",
             publicHeadersPath: "include",
             cSettings: [
-                .unsafeFlags(["-O3"])  // Optimize hot path even in debug builds
+                // .unsafeFlags(["-O3"])  // Optimize hot path even in debug builds
             ]
         ),
 
@@ -92,7 +92,7 @@ let package = Package(
                 .product(name: "Atomics", package: "swift-atomics"),
             ],
             swiftSettings: [
-                .unsafeFlags(["-O"])  // Optimize even in debug builds
+                // .unsafeFlags(["-O"])  // Optimize even in debug builds
             ]
         ),
         .testTarget(
