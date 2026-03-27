@@ -165,7 +165,7 @@ extension SanCovCounters {
     ///   `endMeasurement(_:)` from the same task that called `beginMeasurement()`.
     ///   The context is intentionally non-Sendable to enforce this requirement.
     struct MeasurementContext {
-        fileprivate let rawContext: UnsafeMutablePointer<SanCovMeasurementContext>
+        public let rawContext: UnsafeMutablePointer<SanCovMeasurementContext>
 
         fileprivate init(_ raw: UnsafeMutablePointer<SanCovMeasurementContext>) {
             self.rawContext = raw

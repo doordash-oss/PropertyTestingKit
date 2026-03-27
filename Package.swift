@@ -77,7 +77,7 @@ let package = Package(
         // No -sanitize-coverage to avoid instrumenting the hook itself
         .target(
             name: "ScheduleControl",
-            dependencies: ["CScheduleHooks"]
+            dependencies: ["CScheduleHooks", "SanCovHooks"]
         ),
 
         .target(
@@ -103,6 +103,19 @@ let package = Package(
                 .product(name: "FunctionSpy", package: "FunctionSpy"),
             ],
             exclude: ["Corpus", "Fuzzing/Corpus"],
+            swiftSettings: [
+                .unsafeFlags([
+                    "-sanitize=undefined",
+                    "-sanitize-coverage=edge,pc-table"
+                ])
+            ]
+        ),
+        .testTarget(
+            name: "ScheduleControlTests",
+            dependencies: [
+                "ScheduleControl",
+                "PropertyTestingKit",
+            ],
             swiftSettings: [
                 .unsafeFlags([
                     "-sanitize=undefined",

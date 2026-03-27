@@ -52,6 +52,9 @@ static uint32_t *g_guards_start = NULL;
 static uint32_t *g_guards_end = NULL;
 static size_t g_guard_count = 0;
 
+// Forward declaration — defined in Schedule-Aware Target Context section.
+static SanCovMeasurementContext* g_target_context;
+
 // MARK: - Lock-Free Hash Tables using ConcurrencyKit ck_ht
 //
 // Design: Use ck_ht (BSD licensed, battle-tested) for truly lock-free operations.
@@ -692,6 +695,17 @@ static void ensure_tls_coverage_map(void) {
 #endif
 
 static uint8_t* get_current_coverage_map(void) {
+    // HIGHEST PRIORITY: schedule-aware target context.
+    // When schedule fuzzing is active, ALL edge hits go to the engine's context
+    // regardless of which task/thread they fire on.
+    if (g_target_context != NULL) {
+        // Set TLS caches so sancov_record_edge sees the target context
+        // for covered_indices bookkeeping and trie advancement.
+        set_tls_measurement_context(g_target_context);
+        tls_cached_coverage_map = g_target_context->coverage_map;
+        return g_target_context->coverage_map;
+    }
+
     // Get the current task (Swift task or sync pseudo-task)
     void* task = get_current_task_for_measurement();
 
@@ -991,6 +1005,45 @@ void sancov_record_edge_trie(uint32_t *guard) {
     } else {
         trie->current = trie_node_add_child(trie->current, edge_index);
         trie->is_novel = true;
+    }
+}
+
+// MARK: - Schedule-Aware Target Context
+
+static SanCovMeasurementContext* g_target_context = NULL;
+
+void sancov_set_target_context(SanCovMeasurementContext* context) {
+    g_target_context = context;
+}
+
+void sancov_record_edge_to_target(uint32_t *guard) {
+    SanCovMeasurementContext* ctx = g_target_context;
+    if (ctx && ctx->coverage_map && *guard < g_guard_count) {
+        uint8_t* map = ctx->coverage_map;
+        if (map[*guard] == 0) {
+            map[*guard] = 1;
+            size_t idx = ctx->covered_count;
+            ctx->covered_count = idx + 1;
+            // Also advance trie if attached
+            if (ctx->path_trie) {
+                sancov_trie_advance(ctx->path_trie, *guard);
+            }
+            // Append to covered indices buffer
+            if (idx < ctx->covered_indices_capacity) {
+                ctx->covered_indices[idx] = *guard;
+            } else if (ctx->covered_indices) {
+                size_t new_cap = ctx->covered_indices_capacity * 2;
+                uint32_t* new_buf = (uint32_t*)realloc(ctx->covered_indices, new_cap * sizeof(uint32_t));
+                if (new_buf) {
+                    ctx->covered_indices = new_buf;
+                    ctx->covered_indices_capacity = new_cap;
+                    new_buf[idx] = *guard;
+                }
+            }
+        }
+    } else if (!ctx) {
+        // No target context — fall back to normal recording
+        sancov_record_edge(guard);
     }
 }
 

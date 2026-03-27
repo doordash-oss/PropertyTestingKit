@@ -234,6 +234,23 @@ void sancov_record_edge_trie(uint32_t *guard);
 /// Pass NULL to restore the default (sancov_swift_trampoline → sancov_record_edge).
 void sancov_install_swift_hook(void (*hook)(uint32_t*));
 
+// MARK: - Schedule-Aware Coverage
+//
+// When schedule fuzzing is active, test code runs in a different Swift task
+// from the engine. The target context mechanism bypasses the task-keyed lookup
+// and writes coverage directly to a specified measurement context.
+
+/// Set a target measurement context for schedule-aware coverage recording.
+/// When non-NULL, `sancov_record_edge_to_target` writes to this context
+/// instead of using the task-keyed lookup.
+/// Pass NULL to disable.
+void sancov_set_target_context(SanCovMeasurementContext* context);
+
+/// Edge recording that writes to the target context set by `sancov_set_target_context`.
+/// Falls back to `sancov_record_edge` if no target context is set.
+/// Use as the hook via `sancov_install_swift_hook(sancov_record_edge_to_target)`.
+void sancov_record_edge_to_target(uint32_t *guard);
+
 // MARK: - Edge Filter
 //
 // Filters compiler-generated edges (outlined destroyers, lazy witness table
