@@ -184,7 +184,10 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
                 do {
                     // Will throw if either the test throws or if it logs an Issue
                     if let bytes = currentScheduleBytes {
-                        try await ScheduleController.run(scheduleBytes: bytes) {
+                        try await ScheduleController.run(
+                            scheduleBytes: bytes,
+                            coverageContext: coverageContext.rawContext
+                        ) {
                             try await testWithIssueCapture(input)
                         }
                     } else {

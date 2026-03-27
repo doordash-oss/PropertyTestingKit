@@ -1507,6 +1507,45 @@ void sancov_record_edge_to_target(uint32_t *guard) {
     }
 }
 
+// MARK: - Schedule-Aware Target Context
+
+static SanCovMeasurementContext* g_target_context = NULL;
+
+void sancov_set_target_context(SanCovMeasurementContext* context) {
+    g_target_context = context;
+}
+
+void sancov_record_edge_to_target(uint32_t *guard) {
+    SanCovMeasurementContext* ctx = g_target_context;
+    if (ctx && ctx->coverage_map && *guard < g_guard_count) {
+        uint8_t* map = ctx->coverage_map;
+        if (map[*guard] == 0) {
+            map[*guard] = 1;
+            size_t idx = ctx->covered_count;
+            ctx->covered_count = idx + 1;
+            // Also advance trie if attached
+            if (ctx->path_trie) {
+                sancov_trie_advance(ctx->path_trie, *guard);
+            }
+            // Append to covered indices buffer
+            if (idx < ctx->covered_indices_capacity) {
+                ctx->covered_indices[idx] = *guard;
+            } else if (ctx->covered_indices) {
+                size_t new_cap = ctx->covered_indices_capacity * 2;
+                uint32_t* new_buf = (uint32_t*)realloc(ctx->covered_indices, new_cap * sizeof(uint32_t));
+                if (new_buf) {
+                    ctx->covered_indices = new_buf;
+                    ctx->covered_indices_capacity = new_cap;
+                    new_buf[idx] = *guard;
+                }
+            }
+        }
+    } else if (!ctx) {
+        // No target context — fall back to normal recording
+        sancov_record_edge(guard);
+    }
+}
+
 // Edge hook function pointer — set by Swift via sancov_install_swift_hook().
 // Before Swift init, falls back to sancov_record_edge directly.
 static void (*g_edge_hook)(uint32_t*) = NULL;

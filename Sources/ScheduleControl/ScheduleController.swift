@@ -1,6 +1,7 @@
 import Foundation
 import os
 import CScheduleHooks
+import SanCovHooks
 
 // MARK: - Hook types and globals
 
@@ -105,8 +106,16 @@ public enum ScheduleController {
     private static let maxDrainSteps = 100_000
 
     /// Execute `test` under schedule control.
+    ///
+    /// - Parameters:
+    ///   - scheduleBytes: Bytes that guide scheduling decisions.
+    ///   - coverageContext: If non-nil, edge hits from the test body are recorded
+    ///     directly to this context (bypassing task-keyed lookup). This enables
+    ///     coverage-guided schedule fuzzing where the test runs in a different task.
+    ///   - test: The async throwing closure to execute under schedule control.
     public static func run(
         scheduleBytes: [UInt8],
+        coverageContext: UnsafeMutablePointer<SanCovMeasurementContext>? = nil,
         test: @escaping @Sendable () async throws -> Void
     ) async throws {
         schedule_tls_init()
@@ -114,7 +123,6 @@ public enum ScheduleController {
         let sessionID = Int.random(in: 1..<Int.max)
 
         try await SessionTag.$id.withValue(sessionID) {
-            // Capture session key from within withValue scope
             captureSessionKeyIfNeeded()
 
             _state.withLock { $0.pending.removeAll() }
@@ -123,9 +131,18 @@ public enum ScheduleController {
 
             let completion = TestCompletion()
 
+            // Set the target context for edge recording — all edge hits
+            // from the test body will write directly to this context.
+            if let coverageContext {
+                sancov_set_target_context(coverageContext)
+            }
+
             // Install the routing hook
             _hookPtr.ptr.pointee = _routingHook
-            defer { _hookPtr.ptr.pointee = nil }
+            defer {
+                _hookPtr.ptr.pointee = nil
+                sancov_set_target_context(nil)
+            }
 
             // Launch test — Task {} inherits session task local
             Task {

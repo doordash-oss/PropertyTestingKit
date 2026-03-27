@@ -7,7 +7,7 @@
 //  verified ABI offsets from the Swift runtime source.
 //
 
-#include "include/ScheduleHooks.h"
+#include "ScheduleHooks.h"
 #include <string.h>
 #include <stdint.h>
 
