@@ -12,10 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//
-//  CLLVMSymbolizer.h
-//  PropertyTestingKit
-//
 //  C wrapper for LLVM's LLVMSymbolizer for address-to-line lookup.
 //
 

@@ -63,6 +63,7 @@ done < <(
     find "$ROOT/Sources" "$ROOT/Tests" \
         -not -path "*/.build/*" \
         -not -path "*/ck/*" \
+        -not -name "ck_ht.c" \
         -not -path "*/__BenchmarkBoilerplate.swift" \
         \( -name "*.swift" -o -name "*.c" -o -name "*.h" \) \
         -type f | sort

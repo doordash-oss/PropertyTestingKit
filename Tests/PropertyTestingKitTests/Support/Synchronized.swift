@@ -12,10 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//
-//  ThreadSafeCollector.swift
-//  PropertyTestingKit
-//
 //  Thread-safe utilities for collecting test data in concurrent fuzz tests.
 //
 

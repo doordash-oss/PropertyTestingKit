@@ -12,10 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//
-//  SanCovHooks.h
-//  PropertyTestingKit
-//
 //  Hooks for LLVM's SanitizerCoverage instrumentation.
 //  Provides resettable coverage counters and PC-to-source mapping.
 //
