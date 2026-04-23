@@ -12,11 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//
-//  CoverageGapReport.swift
-//  Copyright © 2025 DoorDash. All rights reserved.
-//
-
 import Foundation
 
 /// Report of all coverage gaps found during fuzzing.

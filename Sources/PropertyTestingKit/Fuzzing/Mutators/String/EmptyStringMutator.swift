@@ -12,11 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//
-//  EmptyStringMutator.swift
-//  PropertyTestingKit
-//
-
 import Dependencies
 
 private let _emptyStringSeeds: [String] = ["", " ", "\t", "\n", "\0"]

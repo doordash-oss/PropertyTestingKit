@@ -12,10 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//
-//  CoverageStrategy.swift
-//  PropertyTestingKit
-//
 //  Swappable coverage strategies that determine when a fuzz input is "interesting."
 //
 

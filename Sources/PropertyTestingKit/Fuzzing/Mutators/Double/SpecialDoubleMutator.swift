@@ -12,11 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//
-//  SpecialDoubleMutator.swift
-//  PropertyTestingKit
-//
-
 import Dependencies
 
 private let _specialDoubleSeeds: [Double] = [

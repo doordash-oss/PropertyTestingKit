@@ -12,10 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//
-//  IFCMutators.swift
-//  IFCMachine
-//
 //  Mutators for the IFC machine types, ported from QuickChick/IFC Generation.v.
 //
 //  The Coq generation strategy:

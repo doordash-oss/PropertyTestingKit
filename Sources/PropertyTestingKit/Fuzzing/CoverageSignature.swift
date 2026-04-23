@@ -12,10 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//
-//  CoverageSignature.swift
-//  PropertyTestingKit
-//
 //  A stable representation of code coverage for comparing test inputs.
 //
 

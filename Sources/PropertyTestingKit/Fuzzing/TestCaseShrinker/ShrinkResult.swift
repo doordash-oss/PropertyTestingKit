@@ -12,11 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//
-//  ShrinkResult.swift
-//  Copyright © 2025 DoorDash. All rights reserved.
-//
-
 /// The result of testing a candidate during shrinking.
 public enum ShrinkResult: Sendable {
     /// Test passed (no failure) - this candidate doesn't preserve the property.

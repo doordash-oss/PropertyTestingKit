@@ -12,11 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//
-//  NegativeIntMutator.swift
-//  PropertyTestingKit
-//
-
 import Dependencies
 
 private let _negativeIntSeeds: [Int] = [-1, -2, -10, -100, -1000, Int.min, Int.min + 1]

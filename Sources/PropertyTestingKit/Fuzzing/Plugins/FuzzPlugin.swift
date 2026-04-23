@@ -12,10 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//
-//  FuzzPlugin.swift
-//  PropertyTestingKit
-//
 //  Plugin events and actions for FuzzEngine.
 //
 

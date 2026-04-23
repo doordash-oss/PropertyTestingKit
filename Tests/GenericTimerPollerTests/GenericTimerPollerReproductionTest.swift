@@ -12,10 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//
-//  GenericTimerPollerReproductionTest.swift
-//  GenericTimerPollerTests
-//
 //  Regression test for a data race in a previous GenericTimerPoller implementation.
 //
 //  The original bug: `subscribe()` returned an `AnyCancellable` whose cancel

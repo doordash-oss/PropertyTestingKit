@@ -12,11 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//
-//  CorpusMode.swift
-//  Copyright © 2025 DoorDash. All rights reserved.
-//
-
 import Dependencies
 
 /// Controls how the fuzzer handles existing corpus files.

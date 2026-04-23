@@ -12,10 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//
-//  SanCovEdgeFilterTests.swift
-//  PropertyTestingKit
-//
 //  Tests for sancov_apply_edge_filter() which disables compiler-generated
 //  edges (outlined destroyers, lazy witness table accessors, etc.).
 //

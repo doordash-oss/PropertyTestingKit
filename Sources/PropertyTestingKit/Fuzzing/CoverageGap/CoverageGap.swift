@@ -12,11 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//
-//  CoverageGap.swift
-//  Copyright © 2025 DoorDash. All rights reserved.
-//
-
 /// A coverage gap in a partially-covered function.
 struct CoverageGap: Sendable, Equatable {
     /// The function name containing the gap.

@@ -12,10 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//
-//  GenericTimerPollerFuzzTests.swift
-//  GenericTimerPollerTests
-//
 //  Fuzz test for GenericTimerPoller to find continuation misuse crashes.
 //  Generates concurrent operation sequences and runs them against the poller.
 //

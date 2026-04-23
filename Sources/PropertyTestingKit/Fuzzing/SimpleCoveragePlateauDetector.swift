@@ -12,10 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//
-//  SimpleCoveragePlateauDetector.swift
-//  PropertyTestingKit
-//
 //  Simple adaptive early stopping based on coverage discovery rate.
 //
 

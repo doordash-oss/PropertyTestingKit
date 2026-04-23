@@ -12,10 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//
-//  Value.swift
-//  IFCMachine
-//
 //  Values and labeled atoms for the IFC machine.
 //
 

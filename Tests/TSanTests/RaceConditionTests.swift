@@ -12,10 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//
-//  RaceConditionTests.swift
-//  PropertyTestingKit
-//
 //  Tests to detect race conditions using Thread Sanitizer (TSan).
 //  These tests exercise concurrent code paths that might have data races.
 //

@@ -12,10 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//
-//  SimpleRingBuffer.swift
-//  PropertyTestingKit
-//
 //  A simple non-concurrent growing ring buffer optimized for the fuzzing hot path.
 //  No Collection protocol conformance to avoid protocol witness overhead.
 //

@@ -12,10 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//
-//  FileManagerClient.swift
-//  PropertyTestingKit
-//
 //  Dependency client for file system operations to enable testing.
 //
 

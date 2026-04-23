@@ -12,11 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//
-// GenericTimerPoller.swift
-// Copyright © 2026 DoorDash. All rights reserved.
-//
-
 import Clocks
 import Dependencies
 import Foundation

@@ -12,10 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//
-//  ParallelTimingTest.swift
-//  PropertyTestingKit
-//
 //  Test to diagnose parallel fuzz timing/serialization issues.
 //
 

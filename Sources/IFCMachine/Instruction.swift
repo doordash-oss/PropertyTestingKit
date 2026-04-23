@@ -12,10 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//
-//  Instruction.swift
-//  IFCMachine
-//
 //  The instruction set for the IFC register machine.
 //  Ported from QuickChick/IFC Instructions.v.
 //

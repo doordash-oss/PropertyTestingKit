@@ -12,10 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//
-//  DWARFSymbolizer.swift
-//  PropertyTestingKit
-//
 //  Native DWARF symbolication using LLVM for address-to-line lookup.
 //
 

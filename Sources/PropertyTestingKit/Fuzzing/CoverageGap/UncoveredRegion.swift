@@ -12,11 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//
-//  UncoveredRegion.swift
-//  Copyright © 2025 DoorDash. All rights reserved.
-//
-
 /// An uncovered region within a function.
 struct UncoveredRegion: Sendable, Equatable {
     /// The starting line number (1-indexed). May be 0 if not yet resolved.

@@ -12,10 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//
-//  ContinuousClockClient.swift
-//  PropertyTestingKit
-//
 //  Dependency key for clock operations with safe test defaults.
 //
 

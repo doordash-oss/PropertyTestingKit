@@ -12,11 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//
-//  Array+Shrinkable.swift
-//  Copyright © 2025 DoorDash. All rights reserved.
-//
-
 extension Array: Shrinkable {
     var shrinkableElementCount: Int { count }
 

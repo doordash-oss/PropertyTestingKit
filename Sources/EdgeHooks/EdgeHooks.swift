@@ -12,10 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//
-//  EdgeHooks.swift
-//  PropertyTestingKit
-//
 //  Uninstrumented Swift target for writing custom edge hooks.
 //
 //  This target is NOT compiled with -sanitize-coverage, so functions here

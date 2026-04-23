@@ -12,11 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//
-//  ArraySequenceInsertionMutator.swift
-//  PropertyTestingKit
-//
-
 import Dependencies
 
 /// Creates an array sequence-insertion mutator that inserts sequences of seed values into arrays.

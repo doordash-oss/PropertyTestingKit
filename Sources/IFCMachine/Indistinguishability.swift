@@ -12,10 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//
-//  Indistinguishability.swift
-//  IFCMachine
-//
 //  Low-equivalence (indistinguishability) relations for noninterference testing.
 //  Ported from QuickChick/IFC Indist.v.
 //

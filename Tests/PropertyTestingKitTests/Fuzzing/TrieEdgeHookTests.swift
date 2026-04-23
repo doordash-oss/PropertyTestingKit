@@ -12,10 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//
-//  TrieEdgeHookTests.swift
-//  PropertyTestingKit
-//
 //  Tests for the trie-based path tracking.
 //  Uses sancov_trie_advance directly to test the trie data structure
 //  without going through the coverage system (avoids framework edge pollution).

@@ -12,11 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//
-//  UInt+MutatorProviding.swift
-//  Copyright © 2025 DoorDash. All rights reserved.
-//
-
 import Dependencies
 
 private let _uintSeeds: [UInt] = [0, 1, UInt.max, UInt.max / 2, 42, 100, 1000]

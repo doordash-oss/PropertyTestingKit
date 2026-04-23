@@ -12,11 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//
-//  ArrayLengthTargetedMutator.swift
-//  PropertyTestingKit
-//
-
 import Dependencies
 
 /// Creates an array length-targeted mutator that extends arrays to specific target lengths.

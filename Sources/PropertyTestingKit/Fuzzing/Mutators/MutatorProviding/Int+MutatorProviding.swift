@@ -12,11 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//
-//  Int+MutatorProviding.swift
-//  Copyright © 2025 DoorDash. All rights reserved.
-//
-
 import Dependencies
 
 // Static arrays at file scope to avoid extension static initialization issues

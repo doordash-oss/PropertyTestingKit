@@ -12,10 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//
-// IssueDetection.swift
-// PropertyTestingKit
-//
 // Lightweight issue detection for high-performance fuzzing.
 // Uses Issue.onRecordCallback to bypass Configuration/Event overhead.
 //

@@ -12,11 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//
-//  TestCaseShrinkerTests.swift
-//  PropertyTestingKit
-//
-
 import Testing
 import Foundation
 import Dependencies

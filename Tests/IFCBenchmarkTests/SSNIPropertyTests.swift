@@ -12,10 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//
-//  SSNIPropertyTests.swift
-//  IFCBenchmarkTests
-//
 //  Property-based tests for the IFC machine, ported line-by-line from
 //  QuickChick/IFC Driver.v, SSNI.v, and SanityChecks.v.
 //

@@ -12,11 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//
-//  SparseCoverage.swift
-//  Copyright © 2025 DoorDash. All rights reserved.
-//
-
 /// Efficient representation of sparse coverage data.
 ///
 /// This is significantly faster than `Set<Int>` for the common case of

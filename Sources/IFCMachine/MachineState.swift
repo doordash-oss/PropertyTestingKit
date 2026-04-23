@@ -12,10 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//
-//  MachineState.swift
-//  IFCMachine
-//
 //  The state of the IFC register machine.
 //  Ported from QuickChick/IFC Machine.v.
 //

@@ -12,10 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//
-//  SanCovResetTests.swift
-//  PropertyTestingKit
-//
 //  Tests for verifying that sancov_reset_coverage() correctly clears coverage
 //  and that the hoisted measurement context pattern works correctly.
 //

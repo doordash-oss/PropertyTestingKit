@@ -12,10 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//
-//  SanCovCounters.swift
-//  PropertyTestingKit
-//
 //  Task-isolated coverage counters using SanitizerCoverage.
 //
 //  Unlike LLVM's global profile counters, these use task-keyed maps

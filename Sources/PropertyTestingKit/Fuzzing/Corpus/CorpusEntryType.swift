@@ -12,11 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//
-//  CorpusEntryType.swift
-//  Copyright © 2025 DoorDash. All rights reserved.
-//
-
 import Foundation
 
 /// The reason this entry was added to the corpus.

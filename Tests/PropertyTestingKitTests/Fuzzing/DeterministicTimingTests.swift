@@ -12,10 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//
-//  DeterministicTimingTests.swift
-//  PropertyTestingKit
-//
 //  Tests for time-dependent behavior using controlled DateClient.
 //
 

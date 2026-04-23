@@ -12,11 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//
-//  UInt8+MutatorProviding.swift
-//  Copyright © 2025 DoorDash. All rights reserved.
-//
-
 import Dependencies
 
 private let _uint8Seeds: [UInt8] = [0, 1, 127, 128, 255, 42, 100]

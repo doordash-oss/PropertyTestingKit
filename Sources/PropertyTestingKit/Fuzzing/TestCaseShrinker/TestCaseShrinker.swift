@@ -12,10 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//
-//  TestCaseShrinker.swift
-//  PropertyTestingKit
-//
 //  Test case shrinking / delta debugging for failure minimization.
 //
 //  Based on:

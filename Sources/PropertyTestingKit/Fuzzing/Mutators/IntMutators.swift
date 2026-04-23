@@ -12,10 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//
-//  IntMutators.swift
-//  PropertyTestingKit
-//
 //  Built-in integer mutation strategies for fuzz testing.
 //
 

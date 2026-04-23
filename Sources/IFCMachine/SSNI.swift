@@ -12,10 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//
-//  SSNI.swift
-//  IFCMachine
-//
 //  Step-sensitive noninterference (SSNI) property helpers.
 //  Ported from QuickChick/IFC SSNI.v and SanityChecks.v.
 //

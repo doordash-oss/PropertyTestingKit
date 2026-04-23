@@ -12,11 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//
-//  IntBoundaryMutator.swift
-//  PropertyTestingKit
-//
-
 import Dependencies
 
 private let _intBoundarySeeds: [Int] = [

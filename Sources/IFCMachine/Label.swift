@@ -12,10 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//
-//  Label.swift
-//  IFCMachine
-//
 //  Security labels for information flow control.
 //  Two-point lattice: Low (public) and High (secret).
 //

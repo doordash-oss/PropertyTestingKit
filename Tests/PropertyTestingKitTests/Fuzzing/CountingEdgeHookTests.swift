@@ -12,10 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//
-//  CountingEdgeHookTests.swift
-//  PropertyTestingKit
-//
 //  Tests for countingEdgeHook — the 8-bit saturating counter hook.
 //  Calls the hook directly with arbitrary guard values rather than
 //  running instrumented code.

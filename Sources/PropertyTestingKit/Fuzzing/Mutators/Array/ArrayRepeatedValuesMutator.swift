@@ -12,11 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//
-//  ArrayRepeatedValuesMutator.swift
-//  PropertyTestingKit
-//
-
 import Dependencies
 
 /// Creates an array repeated-values mutator that creates arrays with many repeated matching values.

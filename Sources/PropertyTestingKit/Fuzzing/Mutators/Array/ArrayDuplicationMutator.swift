@@ -12,11 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//
-//  ArrayDuplicationMutator.swift
-//  PropertyTestingKit
-//
-
 import Dependencies
 
 /// Creates an array duplication mutator that duplicates elements within arrays.

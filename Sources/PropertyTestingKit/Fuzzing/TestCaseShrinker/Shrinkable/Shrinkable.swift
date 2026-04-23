@@ -12,11 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//
-//  Shrinkable.swift
-//  Copyright © 2025 DoorDash. All rights reserved.
-//
-
 /// A type that can be shrunk (reduced to simpler/smaller forms).
 ///
 /// Provides structure-aware shrinking for complex types.

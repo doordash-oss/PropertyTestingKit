@@ -12,10 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//
-//  CoverageBitmap.swift
-//  PropertyTestingKit
-//
 //  A bitmap-based coverage storage optimized for zero ARC overhead.
 //
 //  This replaces Set<UInt32> for tracking covered edges, eliminating the

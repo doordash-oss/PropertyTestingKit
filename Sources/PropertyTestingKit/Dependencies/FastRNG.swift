@@ -12,10 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//
-//  FastRNG.swift
-//  PropertyTestingKit
-//
 //  Thread-local XorShift64 random number generator for high-performance
 //  random number generation in mutators without lock contention.
 //

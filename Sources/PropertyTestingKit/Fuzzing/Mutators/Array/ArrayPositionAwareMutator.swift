@@ -12,11 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//
-//  ArrayPositionAwareMutator.swift
-//  PropertyTestingKit
-//
-
 import Dependencies
 
 /// Creates an array position-aware mutator that inserts elements at specific indices commonly used in tests.

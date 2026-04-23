@@ -12,10 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//
-//  Corpus.swift
-//  PropertyTestingKit
-//
 //  Storage and management of fuzzing inputs with coverage signatures.
 //
 

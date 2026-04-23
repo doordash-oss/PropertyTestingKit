@@ -12,10 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//
-//  BugInjection.swift
-//  IFCMachine
-//
 //  Systematic bug injection for the IFC register machine.
 //  Each bug corresponds to exactly one mutation from the paper's methodology
 //  (Lampropoulos et al., OOPSLA 2019, §4.1.2): for each rule, drop one

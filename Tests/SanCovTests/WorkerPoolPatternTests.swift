@@ -12,10 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//
-//  WorkerPoolPatternTests.swift
-//  PropertyTestingKit
-//
 //  Tests that verify begin/endMeasurement work correctly when the same task
 //  calls them multiple times in a loop (the worker pool pattern).
 //

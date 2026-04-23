@@ -12,10 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//
-//  TestHelpers.swift
-//  PropertyTestingKitTests
-//
 //  Shared test utilities for PropertyTestingKit tests.
 //
 

@@ -12,11 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//
-//  SQLInjectionMutator.swift
-//  PropertyTestingKit
-//
-
 import Dependencies
 
 private let _sqlInjectionSeeds: [String] = [

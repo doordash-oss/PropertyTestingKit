@@ -12,10 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//
-//  PropertyBasedSelfTests.swift
-//  PropertyTestingKit
-//
 //  Property-based tests for PropertyTestingKit itself.
 //  Using the library to test the library - dogfooding!
 //

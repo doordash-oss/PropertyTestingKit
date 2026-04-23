@@ -12,10 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//
-//  RuleTable.swift
-//  IFCMachine
-//
 //  Label propagation rules for the IFC machine.
 //  Ported from QuickChick/IFC Machine.v default_table.
 //

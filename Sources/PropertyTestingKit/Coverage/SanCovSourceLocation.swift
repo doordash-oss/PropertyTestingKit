@@ -12,11 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//
-//  SanCovSourceLocation.swift
-//  Copyright © 2026 DoorDash. All rights reserved.
-//
-
 /// Source location information for a covered edge.
 ///
 /// Maps a SanCov edge index to its source location using debug symbol info.
