@@ -107,7 +107,15 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
 
         // Initialize pending inputs with seeds
         pendingInputs = SimpleRingBuffer(seeds)
-        pendingScheduleBytes = SimpleRingBuffer(seeds.map { _ in nil as [UInt8]? })
+        // When schedule fuzzing, seeds need random schedule bytes so they run
+        // under ScheduleController.run. Without this, seeds take the non-scheduled
+        // path and their coverage reflects uncontrolled FIFO ordering.
+        var seedRng = FastRNG()
+        pendingScheduleBytes = SimpleRingBuffer(seeds.map { _ in
+            config.scheduleFuzzing
+                ? ScheduleByteMutator.generate(using: &seedRng) as [UInt8]?
+                : nil
+        })
 
         // Setup for test execution
         let coverageCountersClient = Self.fetchCoverageCounters()
@@ -172,7 +180,7 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
                     // Generate directly - no closure indirection
                     input = (repeat (each mutators).generate(&rng))
                     currentScheduleBytes = config.scheduleFuzzing
-                        ? (0..<64).map { _ in UInt8.random(in: 0...255, using: &rng) }
+                        ? ScheduleByteMutator.generate(using: &rng)
                         : nil
                     generatedCount += 1
                     fromMutationQueue = false
@@ -336,7 +344,7 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
 
             // Generate schedule byte mutations paired with original input
             if let bytes = mutationAction.scheduleBytes {
-                let scheduleMutations = [UInt8].defaultMutator.mutate(bytes)
+                let scheduleMutations = ScheduleByteMutator.mutate(bytes)
                 for _ in scheduleMutations {
                     pendingInputs.append(mutationAction.input)
                 }
