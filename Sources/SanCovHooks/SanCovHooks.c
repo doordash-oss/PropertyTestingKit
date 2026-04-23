@@ -8,6 +8,7 @@
 #include "include/SanCovHooks.h"
 #include <string.h>
 #include <dlfcn.h>
+#include <os/lock.h>
 
 // SIMD support for ARM64 NEON
 #if defined(__aarch64__) || defined(__arm64__)
@@ -52,8 +53,11 @@ static uint32_t *g_guards_start = NULL;
 static uint32_t *g_guards_end = NULL;
 static size_t g_guard_count = 0;
 
-// Forward declaration — defined in Schedule-Aware Target Context section.
-static SanCovMeasurementContext* g_target_context;
+// Thread-local target context for schedule-aware coverage.
+// Set per-thread so parallel sessions don't corrupt each other.
+// Defined here (before first use in get_current_coverage_map) and
+// set/cleared in sancov_set_target_context below.
+static _Thread_local SanCovMeasurementContext* g_target_context = NULL;
 
 // Key pointer for coverage inheritance task local. When set, child tasks
 // inherit their parent's measurement context via Swift task locals.
@@ -743,12 +747,11 @@ static uint8_t* get_current_coverage_map(void) {
     // When schedule fuzzing is active, ALL edge hits go to the engine's context
     // regardless of which task/thread they fire on.
     if (g_target_context != NULL) {
-        // Return the target context's map so edge hits land there.
-        // Do NOT set tls_cached_measurement_context — that would let every
-        // cooperative pool thread advance the shared trie / covered_indices
-        // concurrently, causing realloc races.  Instead, covered_indices
-        // are rebuilt from the bitmap after drain via
-        // sancov_rebuild_covered_indices_from_map().
+        // Route all edges to the target context. Set tls_cached_measurement_context
+        // so the trie and covered_indices are maintained. Trie operations are
+        // protected by g_trie_lock to handle concurrent access from pool threads.
+        set_tls_measurement_context(g_target_context);
+        tls_cached_coverage_map = g_target_context->coverage_map;
         return g_target_context->coverage_map;
     }
 
@@ -984,12 +987,17 @@ struct SanCovPathTrie {
     SanCovMeasurementContext* owner_context; // Back-pointer for cleanup
 };
 
+// Lock protecting trie advancement. When g_target_context routes all threads'
+// edges to one context, multiple pool threads can advance the same trie.
+static os_unfair_lock g_trie_lock = OS_UNFAIR_LOCK_INIT;
+
 // Advance trie on first-hit if context has one attached.
 // Called from sancov_record_edge on every first-hit edge.
 static void maybe_advance_trie(SanCovMeasurementContext* ctx, uint32_t edge_index) {
     SanCovPathTrie* trie = ctx->path_trie;
     if (!trie) return;
 
+    os_unfair_lock_lock(&g_trie_lock);
     TrieNode* child = trie_node_find_child(trie->current, edge_index);
     if (child) {
         trie->current = child;
@@ -997,6 +1005,7 @@ static void maybe_advance_trie(SanCovMeasurementContext* ctx, uint32_t edge_inde
         trie->current = trie_node_add_child(trie->current, edge_index);
         trie->is_novel = true;
     }
+    os_unfair_lock_unlock(&g_trie_lock);
 }
 
 void sancov_context_set_trie(SanCovMeasurementContext* context, SanCovPathTrie* trie) {
@@ -1040,8 +1049,49 @@ void sancov_trie_reset(SanCovPathTrie* trie) {
     trie->is_novel = false;
 }
 
+// Temporary dump functions for trie analysis
+uintptr_t sancov_get_pc(size_t edge_index);
+
+static const char* resolve_edge_symbol(uint32_t edge_index) {
+    uintptr_t pc = sancov_get_pc(edge_index);
+    if (pc == 0) return "?";
+    Dl_info info;
+    if (dladdr((void*)pc, &info) == 0 || !info.dli_sname) return "?";
+    return info.dli_sname;
+}
+
+static void trie_dump_recursive(TrieNode* node, uint32_t* path_buf, int depth, int* path_count) {
+    if (node->is_terminal) {
+        fprintf(stderr, "  path %d (len=%d):\n", *path_count, depth);
+        for (int i = 0; i < depth; i++) {
+            fprintf(stderr, "    [%d] edge %u = %s\n", i, path_buf[i], resolve_edge_symbol(path_buf[i]));
+        }
+        (*path_count)++;
+    }
+    for (uint16_t i = 0; i < node->child_count; i++) {
+        if (depth < 4096) {
+            path_buf[depth] = node->child_edges[i];
+            trie_dump_recursive(node->child_nodes[i], path_buf, depth + 1, path_count);
+        }
+    }
+}
+
+void sancov_trie_dump(SanCovPathTrie* trie) {
+    if (!trie || !trie->root) {
+        fprintf(stderr, "[trie] empty\n");
+        return;
+    }
+    uint32_t* buf = (uint32_t*)malloc(4096 * sizeof(uint32_t));
+    int count = 0;
+    fprintf(stderr, "[trie] dumping all terminal paths:\n");
+    trie_dump_recursive(trie->root, buf, 0, &count);
+    fprintf(stderr, "[trie] total terminal paths: %d\n", count);
+    free(buf);
+}
+
 void sancov_trie_advance(SanCovPathTrie* trie, uint32_t edge_index) {
     if (!trie) return;
+    os_unfair_lock_lock(&g_trie_lock);
     TrieNode* child = trie_node_find_child(trie->current, edge_index);
     if (child) {
         trie->current = child;
@@ -1049,6 +1099,7 @@ void sancov_trie_advance(SanCovPathTrie* trie, uint32_t edge_index) {
         trie->current = trie_node_add_child(trie->current, edge_index);
         trie->is_novel = true;
     }
+    os_unfair_lock_unlock(&g_trie_lock);
 }
 
 __attribute__((noinline))
@@ -1068,6 +1119,7 @@ void sancov_record_edge_trie(uint32_t *guard) {
     if (!trie) return;
 
     uint32_t edge_index = *guard;
+    os_unfair_lock_lock(&g_trie_lock);
     TrieNode* child = trie_node_find_child(trie->current, edge_index);
     if (child) {
         trie->current = child;
@@ -1075,11 +1127,10 @@ void sancov_record_edge_trie(uint32_t *guard) {
         trie->current = trie_node_add_child(trie->current, edge_index);
         trie->is_novel = true;
     }
+    os_unfair_lock_unlock(&g_trie_lock);
 }
 
 // MARK: - Schedule-Aware Target Context
-
-static SanCovMeasurementContext* g_target_context = NULL;
 
 void sancov_set_target_context(SanCovMeasurementContext* context) {
     g_target_context = context;
@@ -1317,10 +1368,32 @@ static bool is_compiler_generated_symbol(const char* sname) {
     // Three-character suffixes (WO + specifier):
     if (len >= 3) {
         const char* last3 = sname + len - 3;
-        if (strcmp(last3, "WOh") == 0) return true;  // outlined destroy
-        if (strcmp(last3, "WOc") == 0) return true;  // outlined copy
-        if (strcmp(last3, "WOd") == 0) return true;  // outlined consume
-        if (strcmp(last3, "WOr") == 0) return true;  // outlined release
+        if (strncmp(last3, "WO", 2) == 0) return true;  // all outlined operations (WOh/c/d/r/b/e/...)
+    }
+
+    // Two-character suffixes for other compiler-generated patterns:
+    if (strcmp(last2, "TA") == 0) return true;  // partial apply forwarder
+    if (strcmp(last2, "TR") == 0) return true;  // reabstraction thunk
+    if (strcmp(last2, "TK") == 0) return true;  // key path getter
+    if (strcmp(last2, "Mr") == 0) return true;  // type metadata completion
+
+    // Async resume/suspend of compiler-generated thunks:
+    // e.g. ...TRTATQ0_ (resume of partial apply of reabstraction thunk)
+    if (strstr(sname, "TATQ") != NULL) return true;
+    if (strstr(sname, "TATY") != NULL) return true;
+    if (strstr(sname, "TRTQ") != NULL) return true;
+    if (strstr(sname, "TRTY") != NULL) return true;
+
+    // Default argument: ends with fA<digit>_ (e.g. fA_, fA0_, fA1_)
+    if (len >= 3) {
+        // Check fA_ (no digit)
+        const char* last3 = sname + len - 3;
+        if (last3[0] == 'f' && last3[1] == 'A' && last3[2] == '_') return true;
+        // Check fA<digit>_ (4-char pattern)
+        if (len >= 4) {
+            const char* last4 = sname + len - 4;
+            if (last4[0] == 'f' && last4[1] == 'A' && last4[3] == '_') return true;
+        }
     }
 
     return false;

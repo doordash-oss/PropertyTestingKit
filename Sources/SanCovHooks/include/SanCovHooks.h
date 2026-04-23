@@ -219,6 +219,9 @@ void sancov_trie_mark_terminal(SanCovPathTrie* trie);
 /// Reset the trie pointer to root and clear the novel flag.
 void sancov_trie_reset(SanCovPathTrie* trie);
 
+/// Dump all terminal paths in the trie to stderr.
+void sancov_trie_dump(SanCovPathTrie* trie);
+
 /// Advance the trie for a given edge index.
 /// If the child exists, advance. If not, create child and set novel flag.
 /// This is the low-level trie operation — does NOT touch the coverage map.

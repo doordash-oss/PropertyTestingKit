@@ -41,8 +41,8 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
 
     private var mutationsCount: Int = 0
 
-    /// The coverage strategy closure that determines interestingness.
-    private let coverageStrategy: CoverageStrategyFn<repeat each Input>
+    /// The coverage strategy that determines interestingness.
+    private let coverageStrategy: CoverageStrategy<repeat each Input>
 
     // Simple loop state (replaces WorkerPool)
     private var pendingInputs: SimpleRingBuffer<(repeat each Input)>
@@ -57,7 +57,7 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
         mutators: (repeat Mutator<each Input>),
         inputSize: Int,
         corpus: Corpus<repeat each Input>,
-        coverageStrategy: @escaping CoverageStrategyFn<repeat each Input>,
+        coverageStrategy: CoverageStrategy<repeat each Input>,
         processSyncPlugins: @escaping SyncPluginProcessorFn,
         processAsyncPlugins: @escaping AsyncPluginProcessorFn,
         config: FuzzEngineConfig,
@@ -98,7 +98,15 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
 
         // Initialize pending inputs with seeds
         pendingInputs = SimpleRingBuffer(seeds)
-        pendingScheduleBytes = SimpleRingBuffer(seeds.map { _ in nil as [UInt8]? })
+        // When schedule fuzzing, seeds need random schedule bytes so they run
+        // under ScheduleController.run. Without this, seeds take the non-scheduled
+        // path and their coverage reflects uncontrolled FIFO ordering.
+        var seedRng = FastRNG()
+        pendingScheduleBytes = SimpleRingBuffer(seeds.map { _ in
+            config.scheduleFuzzing
+                ? ScheduleByteMutator.generate(using: &seedRng) as [UInt8]?
+                : nil
+        })
 
         // Setup for test execution
         let coverageCountersClient = Self.fetchCoverageCounters()
@@ -125,6 +133,11 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
             // This avoids millions of hash table insert/remove operations.
             let coverageContext = coverageCountersClient.beginMeasurement()
             defer { coverageCountersClient.endMeasurement(coverageContext) }
+
+            // Set up the coverage strategy before the first test execution.
+            // pathTrie needs to attach its trie to the context so edges
+            // advance the trie during the very first iteration.
+            coverageStrategy.setup?(coverageContext)
 
             // Check time limit every N iterations to avoid per-iteration Date.init() overhead.
             // With ~10M iterations/sec and default interval of 1000, this means ~10K checks/sec.
@@ -158,7 +171,7 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
                     // Generate directly - no closure indirection
                     input = (repeat (each mutators).generate(&rng))
                     currentScheduleBytes = config.scheduleFuzzing
-                        ? (0..<64).map { _ in UInt8.random(in: 0...255, using: &rng) }
+                        ? ScheduleByteMutator.generate(using: &rng)
                         : nil
                     generatedCount += 1
                     fromMutationQueue = false
@@ -191,7 +204,7 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
                     }
 
                     // Delegate interestingness check to the coverage strategy
-                    let didAdd = coverageStrategy(
+                    let didAdd = coverageStrategy.evaluate(
                         input,
                         currentScheduleBytes,
                         coverageContext,
@@ -322,7 +335,7 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
 
             // Generate schedule byte mutations paired with original input
             if let bytes = mutationAction.scheduleBytes {
-                let scheduleMutations = [UInt8].defaultMutator.mutate(bytes)
+                let scheduleMutations = ScheduleByteMutator.mutate(bytes)
                 for _ in scheduleMutations {
                     pendingInputs.append(mutationAction.input)
                 }

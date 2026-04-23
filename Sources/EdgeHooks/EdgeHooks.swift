@@ -107,4 +107,9 @@ public final class PathTrie {
     public func reset() {
         sancov_trie_reset(raw)
     }
+
+    /// Print all terminal paths in the trie to stderr.
+    public func dump() {
+        sancov_trie_dump(raw)
+    }
 }

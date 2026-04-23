@@ -150,10 +150,6 @@ func fuzzInternal<each Input: Codable & Sendable>(
     let testFilePath = String(describing: filePath)
     let verbose = environment.environment()["FUZZ_VERBOSE"] != nil
     let effectiveParallelism = scheduleFuzzing ? 1 : max(1, parallelism)
-    // pathTrie requires ordered edge sequences maintained via tls_cached_measurement_context,
-    // which is incompatible with schedule fuzzing's multi-thread target context approach.
-    // Fall back to newEdge (bitmap merge) which reads the map directly.
-    let effectiveCoverageStrategy = (scheduleFuzzing && coverageStrategy == .pathTrie) ? .newEdge : coverageStrategy
     let corpusDir = corpusDirectory(filePath: filePath, function: function)
     let effectiveCorpusMode = corpusMode ?? CorpusMode.fromEnvironment()
 
@@ -177,7 +173,7 @@ func fuzzInternal<each Input: Codable & Sendable>(
             verbose: verbose,
             corpusMode: corpusMode,
             projectPath: projectPath(from: filePath),
-            coverageStrategy: effectiveCoverageStrategy,
+            coverageStrategy: coverageStrategy,
             edgeHook: edgeHook,
             scheduleFuzzing: scheduleFuzzing,
             fileID: testFilePath,

@@ -71,22 +71,35 @@ typealias CoverageStrategyFn<each Input: Codable & Sendable> = (
     _ corpus: Corpus<repeat each Input>
 ) -> Bool
 
-/// Creates a coverage strategy closure for the given kind.
+/// Called once with the measurement context before the first test execution.
+/// Strategies that need to attach to the context (e.g., pathTrie) use this
+/// to set up before any edges are recorded.
+typealias CoverageStrategySetup = (
+    _ context: SanCovCounters.MeasurementContext
+) -> Void
+
+/// A coverage strategy with an optional setup phase.
+struct CoverageStrategy<each Input: Codable & Sendable> {
+    let setup: CoverageStrategySetup?
+    let evaluate: CoverageStrategyFn<repeat each Input>
+}
+
+/// Creates a coverage strategy for the given kind.
 ///
-/// The returned closure encapsulates all interestingness logic and corpus addition.
+/// The returned strategy encapsulates all interestingness logic and corpus addition.
 /// It captures any mutable state it needs (e.g., the inverted index).
 func makeCoverageStrategy<each Input: Codable & Sendable>(
     _ kind: CoverageStrategyKind
-) -> CoverageStrategyFn<repeat each Input> {
+) -> CoverageStrategy<repeat each Input> {
     switch kind {
     case .signatureMatch:
-        return makeSignatureMatchStrategy()
+        return CoverageStrategy(setup: nil, evaluate: makeSignatureMatchStrategy())
     case .newEdge:
-        return makeNewEdgeStrategy()
+        return CoverageStrategy(setup: nil, evaluate: makeNewEdgeStrategy())
     case .pathTrie:
         return makePathTrieStrategy()
     case .alwaysInteresting:
-        return makeAlwaysInterestingStrategy()
+        return CoverageStrategy(setup: nil, evaluate: makeAlwaysInterestingStrategy())
     }
 }
 
@@ -238,31 +251,35 @@ private func makeNewEdgeStrategy<each Input: Codable & Sendable>(
 /// via `trie.isUniquePath` after each run. The trie is attached to the
 /// measurement context so each parallel engine gets its own trie.
 private func makePathTrieStrategy<each Input: Codable & Sendable>(
-) -> CoverageStrategyFn<repeat each Input> {
+) -> CoverageStrategy<repeat each Input> {
     let trie = PathTrie()
-    var attached = false
 
-    return { input, scheduleBytes, context, coverageClient, corpus in
-        // Attach the trie to the measurement context on first call.
-        // This binds it to the per-task context so the hook reads it
-        // from tls_cached_measurement_context — safe across task hops.
-        if !attached {
-            SanCovCounters.attachTrie(trie, to: context)
-            attached = true
+    let setup: CoverageStrategySetup = { context in
+        SanCovCounters.attachTrie(trie, to: context)
+    }
+
+    var iterationCount = 0
+
+    let evaluate: CoverageStrategyFn<repeat each Input> = { input, scheduleBytes, context, coverageClient, corpus in
+        iterationCount += 1
+        let iter = iterationCount
+        let isNovel = trie.isUniquePath
+
+        if iter <= 10 || iter % 500 == 0 {
+            trie.dump()
+            print("[pathTrie iter=\(iter)] novel=\(isNovel) corpus=\(corpus.entries.count)")
         }
 
         defer {
             trie.reset()
         }
 
-        guard trie.isUniquePath else {
+        guard isNovel else {
             return false
         }
 
         trie.markTerminal()
 
-        // Snapshot coverage for the corpus entry so regression and gap detection work.
-        // The trie handles uniqueness; coverage data is for serialization/analysis.
         if let sparse = try? coverageClient.snapshotCoveredArraysWithContext(context) {
             corpus.mergeCoverageAndAdd(input: input, scheduleBytes: scheduleBytes, sparse: sparse)
         } else {
@@ -270,6 +287,8 @@ private func makePathTrieStrategy<each Input: Codable & Sendable>(
         }
         return true
     }
+
+    return CoverageStrategy(setup: setup, evaluate: evaluate)
 }
 
 // MARK: - Always Interesting Strategy

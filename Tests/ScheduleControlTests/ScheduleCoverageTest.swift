@@ -134,4 +134,33 @@ struct ScheduleCoverageTest {
         #expect(!testBodyEdges.isEmpty,
                 "Test body must contribute edges beyond infrastructure")
     }
+
+    @Test("pathTrie advances under g_target_context (schedule control)")
+    func trieAdvancesUnderTargetContext() async throws {
+        // Warmup
+        try await ScheduleController.run(scheduleBytes: [0]) {
+            let _ = Self.branchingCode(0)
+        }
+
+        let trie = PathTrie()
+        let ctx = SanCovCounters.beginMeasurement()
+        SanCovCounters.attachTrie(trie, to: ctx)
+        SanCovCounters.resetCoverage(ctx)
+
+        // Run branchingCode(111) under schedule control with g_target_context
+        try await ScheduleController.run(scheduleBytes: [0], coverageContext: ctx.rawContext) {
+            let _ = Self.branchingCode(111)
+        }
+
+        let isNovel = trie.isUniquePath
+        print("After branchingCode(111): isUniquePath=\(isNovel)")
+
+        SanCovCounters.endMeasurement(ctx)
+
+        // The trie must have advanced from root — g_target_context routes edges
+        // to the measurement context, and the trie hook records them.
+        // Without this fix, tls_cached_measurement_context would be NULL and
+        // the trie would never advance (isUniquePath would always be false).
+        #expect(isNovel, "Trie must advance under g_target_context — edges must reach the trie")
+    }
 }

@@ -209,6 +209,10 @@ let package = Package(
             ],
             swiftSettings: [
                 .swiftLanguageMode(.v5),
+                .unsafeFlags([
+                    "-sanitize=undefined",
+                    "-sanitize-coverage=edge,pc-table"
+                ])
             ]
         ),
         .testTarget(
@@ -218,12 +222,6 @@ let package = Package(
                 "PropertyTestingKit",
                 .product(name: "Dependencies", package: "swift-dependencies"),
                 .product(name: "Clocks", package: "swift-clocks"),
-            ],
-            swiftSettings: [
-                .unsafeFlags([
-                    "-sanitize=undefined",
-                    "-sanitize-coverage=edge,pc-table"
-                ])
             ]
         ),
     ]
