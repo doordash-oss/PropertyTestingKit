@@ -282,8 +282,6 @@ private func makePathTrieStrategy<each Input: Codable & Sendable>(
 
         trie.markTerminal()
 
-        // Snapshot coverage for the corpus entry so regression and gap detection work.
-        // The trie handles uniqueness; coverage data is for serialization/analysis.
         if let sparse = try? coverageClient.snapshotCoveredArraysWithContext(context) {
             corpus.mergeCoverageAndAdd(input: input, scheduleBytes: scheduleBytes, sparse: sparse)
         } else {

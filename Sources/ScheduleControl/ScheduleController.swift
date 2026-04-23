@@ -13,14 +13,69 @@ private let _hookPtr = SendablePointer(
         .assumingMemoryBound(to: Optional<HookFn>.self)
 )
 
-private let _state = OSAllocatedUnfairLock(initialState: HookState())
+/// Per-session state for the drain loop.
+final class SessionState: @unchecked Sendable {
+    let lock = OSAllocatedUnfairLock(initialState: [UnownedJob]())
+    let jobArrived = DispatchSemaphore(value: 0)
 
-private struct HookState: Sendable {
-    var pending: [UnownedJob] = []
-    var original: OriginalFn? = nil
+    /// Serial queue for running job segments one at a time.
+    private let queue = DispatchQueue(label: "schedule-control.session")
+
+    /// Dedicated queue for the drain loop.
+    let drainQueue = DispatchQueue(label: "schedule-control.drain")
+
+
+
+    /// Per-session coverage context. Set on the serial queue thread via TLS
+    /// so parallel sessions don't corrupt each other's coverage.
+    var coverageContext: UnsafeMutablePointer<SanCovMeasurementContext>?
+
+    func append(_ job: UnownedJob) {
+        lock.withLock { $0.append(job) }
+        jobArrived.signal()
+    }
+
+    var count: Int {
+        lock.withLock { $0.count }
+    }
+
+    func remove(at index: Int) -> UnownedJob {
+        lock.withLock { $0.remove(at: index) }
+    }
+
+    /// Dispatch a job segment to the serial queue. Returns immediately.
+    /// Sets the thread-local g_target_context before running the job
+    /// and clears it after, so parallel sessions are isolated.
+    func dispatch(_ job: UnownedJob) {
+        let ctx = coverageContext
+        queue.async {
+            if let ctx {
+                sancov_set_target_context(ctx)
+            }
+            job.runSynchronously(on: _inlineExecutor.asUnownedSerialExecutor())
+            if ctx != nil {
+                sancov_set_target_context(nil)
+            }
+        }
+    }
 }
 
-private let _jobArrived = DispatchSemaphore(value: 0)
+/// Minimal executor identity for `runSynchronously(on:)`.
+private final class _InlineExecutor: SerialExecutor {
+    func enqueue(_ job: consuming ExecutorJob) {
+        fatalError("Should not be called — jobs are run via runSynchronously directly")
+    }
+    func asUnownedSerialExecutor() -> UnownedSerialExecutor {
+        UnownedSerialExecutor(ordinary: self)
+    }
+}
+private let _inlineExecutor = _InlineExecutor()
+
+/// Global registry of active sessions, keyed by session ID.
+private let _sessions = OSAllocatedUnfairLock(initialState: [Int: SessionState]())
+
+/// Original enqueue function, captured once from the first hook call.
+private let _original = OSAllocatedUnfairLock<OriginalFn?>(initialState: nil)
 
 /// Task-local key stored as UInt (pointer bits). 0 = not captured.
 private let _sessionKeyBits = OSAllocatedUnfairLock<UInt>(initialState: 0)
@@ -39,12 +94,24 @@ private let _getCurrentTask: @convention(c) () -> UnsafeRawPointer? = {
 /// 2. Task local on enqueued job (parent re-enqueue during completeFuture)
 /// 3. pthread TLS (ProcessOutOfLineJob during completeFuture)
 /// Non-session jobs pass through via original(job).
+/// Route a job to its session's queue, or pass through if no session.
+private func routeToSession(_ sid: Int, _ job: UnownedJob) {
+    if let session = _sessions.withLock({ $0[sid] }) {
+        session.append(job)
+        return
+    }
+    // Session not found — use original to avoid dropping the job
+    if let original = _original.withLock({ $0 }) {
+        original(job)
+    }
+}
+
 private let _routingHook: HookFn = { job, original in
     let jobPtr = unsafeBitCast(job, to: UnsafeRawPointer.self)
     let keyBits = _sessionKeyBits.withLock { $0 }
 
-    _state.withLock { s in
-        if s.original == nil { s.original = original }
+    _original.withLock { o in
+        if o == nil { o = original }
     }
 
     // Method 1: current task's session task local
@@ -53,8 +120,7 @@ private let _routingHook: HookFn = { job, original in
             schedule_actor_registry_register(actor, Int64(sid))
         }
         schedule_tls_set_session(Int64(sid))
-        _state.withLock { $0.pending.append(job) }
-        _jobArrived.signal()
+        routeToSession(sid, job)
         return
     }
 
@@ -63,22 +129,25 @@ private let _routingHook: HookFn = { job, original in
         let sid = schedule_read_session_from_task(jobPtr, UnsafeRawPointer(bitPattern: keyBits))
         if sid >= 0 {
             schedule_tls_set_session(sid)
-            _state.withLock { $0.pending.append(job) }
-            _jobArrived.signal()
+            routeToSession(Int(sid), job)
             return
         }
     }
 
     // Method 3: pthread TLS
-    if schedule_tls_get_session() >= 0 {
-        _state.withLock { $0.pending.append(job) }
-        _jobArrived.signal()
+    let tlsSid = schedule_tls_get_session()
+    if tlsSid >= 0 {
+        routeToSession(Int(tlsSid), job)
         return
     }
 
     // No session — pass through
     original(job)
 }
+
+// MARK: - Serial Job Executor
+
+// (Serial execution is handled per-session via SessionState.executor)
 
 // MARK: - Helpers
 
@@ -125,24 +194,20 @@ public enum ScheduleController {
         try await SessionTag.$id.withValue(sessionID) {
             captureSessionKeyIfNeeded()
 
-            _state.withLock { $0.pending.removeAll() }
-            drainSemaphore()
+            // Create per-session state
+            let session = SessionState()
+            _sessions.withLock { $0[sessionID] = session }
+
             schedule_actor_registry_clear()
 
             let completion = TestCompletion()
 
-            // Set the target context for edge recording — all edge hits
-            // from the test body will write directly to this context.
-            if let coverageContext {
-                sancov_set_target_context(coverageContext)
-            }
+            // Store coverage context on the session — dispatch() will set
+            // the thread-local g_target_context on the serial queue thread.
+            session.coverageContext = coverageContext
 
-            // Install the routing hook
+            // Install the routing hook. Non-session jobs pass through via original(job).
             _hookPtr.ptr.pointee = _routingHook
-            defer {
-                _hookPtr.ptr.pointee = nil
-                sancov_set_target_context(nil)
-            }
 
             // Launch test — Task {} inherits session task local
             Task {
@@ -152,13 +217,11 @@ public enum ScheduleController {
                     completion.setError(error)
                 }
                 completion.markCompleted()
-                _jobArrived.signal()
+                session.jobArrived.signal()
             }
 
-            // Synchronous drain on the calling cooperative thread.
-            // Blocks this thread with semaphore waits — acceptable because
-            // parallelism: 1 is enforced and the pool has nprocs threads.
-            _jobArrived.wait()
+            // Drain loop on cooperative pool thread.
+            session.jobArrived.wait()
 
             var byteIndex = 0
             var steps = 0
@@ -166,11 +229,10 @@ public enum ScheduleController {
             while !completion.isCompleted && steps < maxDrainSteps {
                 steps += 1
 
-                let (count, original) = _state.withLock { ($0.pending.count, $0.original) }
-                guard let original else { break }
+                let count = session.count
 
                 if count == 0 {
-                    _ = _jobArrived.wait(timeout: .now() + 0.1)
+                    _ = session.jobArrived.wait(timeout: .now() + 0.1)
                     continue
                 }
 
@@ -182,9 +244,20 @@ public enum ScheduleController {
                     choice = 0
                 }
 
-                let job = _state.withLock { $0.pending.remove(at: choice) }
-                original(job)
-                waitForStateChange(completion: completion)
+                let job = session.remove(at: choice)
+                session.dispatch(job)
+                waitForStateChange(session: session, completion: completion)
+            }
+
+            _sessions.withLock { sessions in
+                sessions[sessionID] = nil
+                if sessions.isEmpty {
+                    _hookPtr.ptr.pointee = nil
+                }
+            }
+
+            if let error = completion.error {
+                throw error
             }
 
             // Rebuild covered_indices from the bitmap now that drain is done
@@ -194,22 +267,14 @@ public enum ScheduleController {
                 sancov_rebuild_covered_indices_from_map(coverageContext)
             }
 
-            if let error = completion.error {
-                throw error
-            }
         }
     }
 
-    private static func waitForStateChange(completion: TestCompletion) {
+    private static func waitForStateChange(session: SessionState, completion: TestCompletion) {
         while !completion.isCompleted {
-            let count = _state.withLock { $0.pending.count }
-            if count > 0 { return }
-            _ = _jobArrived.wait(timeout: .now() + 0.1)
+            if session.count > 0 { return }
+            _ = session.jobArrived.wait(timeout: .now() + 0.1)
         }
-    }
-
-    private static func drainSemaphore() {
-        while _jobArrived.wait(timeout: .now()) == .success {}
     }
 
     private static func captureSessionKeyIfNeeded() {

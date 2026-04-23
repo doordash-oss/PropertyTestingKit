@@ -67,6 +67,11 @@ public actor GenericTimerPoller {
     private var subscriberContinuations: [UUID: AsyncStream<Void>.Continuation] = [:]
     private var timerTask: Task<Void, Never>?
 
+    // Test-observable state (internal access for @testable import)
+    var subscriberCount: Int { handlers.count }
+    var hasActiveTimer: Bool { timerTask != nil }
+    var handlerSubscriberSync: Bool { handlers.count == subscriberContinuations.count }
+
     private var onDeinitCallback: (@Sendable () -> Void)?
 
     deinit {

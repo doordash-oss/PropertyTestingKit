@@ -38,6 +38,29 @@ enum PollerOp: UInt8, Codable, Hashable, Sendable, CaseIterable {
     case updateIntervalClear = 8
 }
 
+// MARK: - Constant Input (for controlled experiments)
+
+/// A PollerFuzzInput wrapper whose mutator always returns the same fixed input.
+/// Used to isolate schedule-byte variation from input variation.
+struct ConstantPollerInput: Codable, Hashable, Sendable, MutatorProviding {
+    var lane1: [PollerOp]
+    var lane2: [PollerOp]
+
+    static var defaultMutator: Mutator<ConstantPollerInput> {
+        let fixed = ConstantPollerInput(
+            lane1: [.subscribe],
+            lane2: [.cancelLast]
+        )
+        return Mutator(
+            seeds: [fixed],
+            mutate: { _ in [fixed] },
+            generate: { _ in fixed }
+        )
+    }
+}
+
+// MARK: - Fuzz Input Model
+
 struct PollerFuzzInput: Codable, Hashable, Sendable, MutatorProviding {
     var lane1: [PollerOp]
     var lane2: [PollerOp]
@@ -207,7 +230,7 @@ struct GenericTimerPollerFuzzTests {
         try await withDependencies {
             $0.continuousClock = ImmediateClock()
         } operation: {
-            try await fuzz(
+            let result = try await fuzz(
                 duration: .seconds(30)
             ) { (input: PollerFuzzInput) in
                 let poller = GenericTimerPoller(defaultInterval: .microseconds(100))
@@ -223,6 +246,10 @@ struct GenericTimerPollerFuzzTests {
 
                 // Poller deinits here — deinit cancels task and finishes continuation
             }
+            for (i, entry) in result.corpus.entries.enumerated() {
+                let edges = entry.sparseCoverage.indices.sorted()
+                print("Entry \(i): \(edges.count) edges, input=\(entry.input)")
+            }
         }
     }
 
@@ -231,10 +258,18 @@ struct GenericTimerPollerFuzzTests {
         try await withDependencies {
             $0.continuousClock = ImmediateClock()
         } operation: {
+            let iterCounter = Atomic<Int>(0)
             let result = try await fuzz(
-                duration: .seconds(60),
+                duration: .seconds(3),
                 scheduleFuzzing: true
             ) { (input: PollerFuzzInput) in
+                let iter = iterCounter.wrappingAdd(1, ordering: .relaxed).newValue
+                if iter <= 10 || iter % 500 == 0 {
+                    let l1 = input.lane1.map { "\($0)" }.joined(separator: ", ")
+                    let l2 = input.lane2.map { "\($0)" }.joined(separator: ", ")
+                    print("[INPUT iter=\(iter)] lane1=[\(l1)] lane2=[\(l2)]")
+                }
+
                 let poller = GenericTimerPoller(defaultInterval: .microseconds(100))
 
                 await withTaskGroup(of: Void.self) { group in
@@ -246,7 +281,46 @@ struct GenericTimerPollerFuzzTests {
                     }
                 }
             }
-            print("Schedule fuzz: \(result.stats.totalInputs) iterations, \(result.corpus.entries.count) corpus entries, \(String(format: "%.1f", result.stats.inputsPerSecond)) iter/s")
+            let allEdges = result.corpus.entries.reduce(into: Set<UInt32>()) { $0.formUnion($1.sparseCoverage.indices) }
+            print("Schedule fuzz: \(result.stats.totalInputs) iterations, \(result.corpus.entries.count) corpus entries, \(String(format: "%.1f", result.stats.inputsPerSecond)) iter/s, \(allEdges.count) unique edges total")
+        }
+    }
+
+    @Test("Fixed input with schedule fuzzing produces bounded unique paths", .timeLimit(.minutes(2)))
+    func fixedInputBoundedPaths() async throws {
+        try await withDependencies {
+            $0.continuousClock = ImmediateClock()
+        } operation: {
+            let result = try await fuzz(
+                duration: .milliseconds(100),
+                scheduleFuzzing: true
+            ) { (input: ConstantPollerInput) in
+                let poller = GenericTimerPoller(defaultInterval: .microseconds(100))
+
+                await withTaskGroup(of: Void.self) { group in
+                    group.addTask {
+                        await executeLane(input.lane1, on: poller)
+                    }
+                    group.addTask {
+                        await executeLane(input.lane2, on: poller)
+                    }
+                }
+            }
+
+            let corpusCount = result.corpus.entries.count
+            print("Fixed input: \(result.stats.totalInputs) iterations, \(corpusCount) corpus entries")
+
+            // Dump edge -> PC mapping for all edges seen
+            let allEdges = result.corpus.entries.reduce(into: Set<UInt32>()) { $0.formUnion($1.sparseCoverage.indices) }
+            for edge in allEdges.sorted() {
+                let pc = SanCovCounters.getPC(for: Int(edge))
+                print("[EDGE_PC] \(edge)|\(pc)")
+            }
+
+            #expect(
+                corpusCount <= 10,
+                "Expected at most ~5-10 unique paths for a fixed input, got \(corpusCount)"
+            )
         }
     }
 
