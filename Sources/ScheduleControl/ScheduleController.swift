@@ -95,12 +95,118 @@ private let _getCurrentTask: @convention(c) () -> UnsafeRawPointer? = {
 
 // MARK: - Routing hook
 
-/// Session-routing hook. Three methods to identify session ownership:
-/// 1. Task local on enqueueing task (task creation, actor processing)
-/// 2. Task local on enqueued job (parent re-enqueue during completeFuture)
-/// 3. pthread TLS (ProcessOutOfLineJob during completeFuture)
-/// Non-session jobs pass through via original(job).
-/// Route a job to its session's queue, or pass through if no session.
+/// Per-branch hit counters for the routing hook. Exposed so tests can
+/// verify that expected branches actually fire for specific code shapes.
+public enum RoutingHookCounters {
+    private static let _method1 = OSAllocatedUnfairLock(initialState: 0)
+    private static let _method2 = OSAllocatedUnfairLock(initialState: 0)
+    private static let _method3 = OSAllocatedUnfairLock(initialState: 0)
+    private static let _passThrough = OSAllocatedUnfairLock(initialState: 0)
+    private static let _method1JobKind = OSAllocatedUnfairLock(initialState: [Int: Int]())
+    private static let _method2JobKind = OSAllocatedUnfairLock(initialState: [Int: Int]())
+    private static let _method3JobKind = OSAllocatedUnfairLock(initialState: [Int: Int]())
+    private static let _passThroughJobKind = OSAllocatedUnfairLock(initialState: [Int: Int]())
+
+    public static var method1Hits: Int { _method1.withLock { $0 } }
+    public static var method2Hits: Int { _method2.withLock { $0 } }
+    public static var method3Hits: Int { _method3.withLock { $0 } }
+    public static var passThroughHits: Int { _passThrough.withLock { $0 } }
+    public static var method1JobKinds: [Int: Int] { _method1JobKind.withLock { $0 } }
+    public static var method2JobKinds: [Int: Int] { _method2JobKind.withLock { $0 } }
+    public static var method3JobKinds: [Int: Int] { _method3JobKind.withLock { $0 } }
+    public static var passThroughJobKinds: [Int: Int] { _passThroughJobKind.withLock { $0 } }
+
+    public static func reset() {
+        _method1.withLock { $0 = 0 }
+        _method2.withLock { $0 = 0 }
+        _method3.withLock { $0 = 0 }
+        _passThrough.withLock { $0 = 0 }
+        _method1JobKind.withLock { $0 = [:] }
+        _method2JobKind.withLock { $0 = [:] }
+        _method3JobKind.withLock { $0 = [:] }
+        _passThroughJobKind.withLock { $0 = [:] }
+    }
+
+    static func recordMethod1(jobKind: Int) {
+        _method1.withLock { $0 += 1 }
+        _method1JobKind.withLock { $0[jobKind, default: 0] += 1 }
+    }
+    static func recordMethod2(jobKind: Int) {
+        _method2.withLock { $0 += 1 }
+        _method2JobKind.withLock { $0[jobKind, default: 0] += 1 }
+    }
+    static func recordMethod3(jobKind: Int) {
+        _method3.withLock { $0 += 1 }
+        _method3JobKind.withLock { $0[jobKind, default: 0] += 1 }
+    }
+    static func recordPassThrough(jobKind: Int) {
+        _passThrough.withLock { $0 += 1 }
+        _passThroughJobKind.withLock { $0[jobKind, default: 0] += 1 }
+    }
+}
+
+/// Read the job kind byte at offset 32 from the job pointer.
+/// Matches `JOB_KIND_TASK=0`, `JOB_KIND_DEFAULT_ACTOR_INLINE=192`, etc.
+private func readJobKind(_ jobPtr: UnsafeRawPointer) -> Int {
+    let flagsPtr = jobPtr.advanced(by: 32).assumingMemoryBound(to: UInt32.self)
+    return Int(flagsPtr.pointee & 0xFF)
+}
+
+/// Session-routing hook. Identification is attempted in priority order;
+/// each enqueue takes exactly one path (early return per branch).
+/// Empirical hit rates referenced below are from
+/// `Tests/ScheduleControlTests/RoutingBranchTests.swift`.
+///
+/// 1. Current task's `SessionTag.id` task-local.
+///    Fires when the enqueueing task has the tag visible. Observed
+///    triggers include the initial `Task { test() }` spawn inside
+///    `run`, `TaskGroup.addTask` from a tagged parent, `Task.detached`
+///    from a tagged parent (the tag is read off the *spawning* task,
+///    not the detached one), and a fraction of continuation re-enqueues
+///    (roughly 1/3 in sequential yield tests — the rest take method 2).
+///    Side effects: stamps pthread TLS and, for actor-processing jobs
+///    (kinds 192–194), registers the actor pointer in the actor→session
+///    registry.
+///    NOTE: actor-processing job enqueues themselves are **not** reliably
+///    caught here. In the actor-only test, the `ProcessOutOfLineJob`
+///    enqueue landed in method 3, not method 1 — runtime internals
+///    apparently enqueue the actor job from a context where the tag is
+///    not visible.
+///
+/// 2. Session key on the enqueued job's own task-local chain.
+///    Fires when the enqueueing context does not have `SessionTag.id`
+///    visible but the job being enqueued is an `AsyncTask` whose own
+///    local-storage chain still carries the session tag inherited from
+///    its parent. This is the dominant path for continuation
+///    re-enqueues: in a sequential `Task.yield()` loop it fires about
+///    2× as often as method 1 (observed m2=22 vs m1=11 for 10 yields).
+///
+/// 3. pthread TLS session ID.
+///    Fires when neither method 1 nor method 2 matches but the current
+///    pthread has a session ID stored in TLS from a previous method-1
+///    or method-2 routing. Observed to catch two kinds of jobs:
+///    - `ProcessOutOfLineJob` for default-actor processing
+///      (`JobKind` 192/193/194) enqueued by runtime internals during
+///      `completeFuture`. This is the originally intended case.
+///    - Untagged `AsyncTask` jobs (`JobKind` 0) enqueued on a
+///      previously-stamped pool thread. Observed in every test that
+///      involves concurrent child tasks (TaskGroup, detached) but
+///      absent in sequential yield tests. Whose AsyncTasks these are
+///      (runtime-internal vs framework vs our own children in a
+///      setup-window gap) is not traced by the current tests.
+///
+/// Side effect shared by methods 1 and 2: `schedule_tls_set_session` is
+/// called on every successful routing and is **never cleared**. This
+/// stickiness is what makes method 3 work *within* a session, but also
+/// means a pool thread retains session TLS after the session tears
+/// down. If an unrelated test's job later runs on that thread, method 3
+/// fires with a stale session ID; `routeToSession` then falls back to
+/// `original(job)` because the session is gone from `_sessions`.
+///
+/// Non-session jobs (no method matches) pass through via `original(job)`.
+/// Route a job to its session's queue, or fall back to `original(job)` if
+/// the session ID is no longer registered (session torn down after
+/// routing decided but before we reached here).
 private func routeToSession(_ sid: Int, _ job: UnownedJob) {
     if let session = _sessions.withLock({ $0[sid] }) {
         session.append(job)
@@ -120,8 +226,11 @@ private let _routingHook: HookFn = { job, original in
         if o == nil { o = original }
     }
 
+    let kind = readJobKind(jobPtr)
+
     // Method 1: current task's session task local
     if let sid = SessionTag.id {
+        RoutingHookCounters.recordMethod1(jobKind: kind)
         if let actor = schedule_read_actor_from_job(jobPtr) {
             schedule_actor_registry_register(actor, Int64(sid))
         }
@@ -134,6 +243,7 @@ private let _routingHook: HookFn = { job, original in
     if keyBits != 0 {
         let sid = schedule_read_session_from_task(jobPtr, UnsafeRawPointer(bitPattern: keyBits))
         if sid >= 0 {
+            RoutingHookCounters.recordMethod2(jobKind: kind)
             schedule_tls_set_session(sid)
             routeToSession(Int(sid), job)
             return
@@ -143,11 +253,13 @@ private let _routingHook: HookFn = { job, original in
     // Method 3: pthread TLS
     let tlsSid = schedule_tls_get_session()
     if tlsSid >= 0 {
+        RoutingHookCounters.recordMethod3(jobKind: kind)
         routeToSession(Int(tlsSid), job)
         return
     }
 
     // No session — pass through
+    RoutingHookCounters.recordPassThrough(jobKind: kind)
     original(job)
 }
 

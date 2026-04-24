@@ -348,8 +348,11 @@ SanCovMeasurementContext* sancov_begin_measurement(void) {
     SanCovMeasurementContext* ctx = (SanCovMeasurementContext*)xmalloc(sizeof(SanCovMeasurementContext));
     ctx->coverage_map = NULL;
     ctx->covered_count = 0;
-    // Pre-allocate covered index buffer (typical coverage is sparse, 64 is plenty for most iterations)
-    ctx->covered_indices_capacity = 64;
+    // Pre-allocate covered index buffer to g_guard_count so concurrent child
+    // task writes (under CoverageInheritance) never trigger realloc races.
+    // A realloc racing with another thread's append would be a use-after-free.
+    size_t initial_cap = g_guard_count > 64 ? g_guard_count : 64;
+    ctx->covered_indices_capacity = initial_cap;
     ctx->covered_indices = (uint32_t*)xmalloc(ctx->covered_indices_capacity * sizeof(uint32_t));
     ctx->path_trie = NULL;
     atomic_init(&ctx->refcount, 1);  // Start with refcount of 1 (owner reference)
@@ -814,11 +817,14 @@ static uint8_t* get_current_coverage_map(void) {
     // once per child task per thread — subsequent hits use the TLS cache above.
     SanCovMeasurementContext* inherited = read_inherited_context(task);
     if (inherited != NULL && inherited->coverage_map != NULL) {
-        // Write edges to the parent's map. Do NOT set tls_cached_measurement_context
-        // to avoid trie/covered_indices races from concurrent child tasks.
+        // Write edges to the parent's map AND set the measurement context so
+        // the trie advances for child task edges. Bitmap first-hit is made
+        // atomic in sancov_record_edge to handle concurrent child task writes;
+        // the trie has its own g_trie_lock; covered_indices/count can race but
+        // is rebuilt from the bitmap at snapshot time.
         tls_cached_task = task;
         tls_cached_task_map = inherited->coverage_map;
-        set_tls_measurement_context(NULL);
+        set_tls_measurement_context(inherited);
         return inherited->coverage_map;
     }
 
@@ -874,25 +880,23 @@ __attribute__((noinline))
 void sancov_record_edge(uint32_t *guard) {
     uint8_t* map = get_current_coverage_map();
     if (map && *guard < g_guard_count) {
-        if (map[*guard] == 0) {
-            map[*guard] = 1;
+        // Atomic first-hit check: only ONE thread transitions 0→1. Concurrent
+        // child tasks inheriting the same measurement context may race on this
+        // cell; atomic compare-and-swap ensures only the winner proceeds to
+        // trie advance / indices append.
+        uint8_t expected = 0;
+        if (__atomic_compare_exchange_n(&map[*guard], &expected, (uint8_t)1,
+                                         false, __ATOMIC_ACQ_REL, __ATOMIC_RELAXED)) {
             SanCovMeasurementContext* ctx = tls_cached_measurement_context;
             if (ctx) {
-                size_t idx = ctx->covered_count;
-                ctx->covered_count = idx + 1;
-                // Advance trie if attached (O(1) — just pointer chase + child lookup)
+                // Atomic fetch_add so each concurrent child task gets a
+                // unique slot in covered_indices. The buffer is sized to
+                // g_guard_count in sancov_begin_measurement so there can
+                // be no realloc race here.
+                size_t idx = __atomic_fetch_add(&ctx->covered_count, 1, __ATOMIC_RELAXED);
                 maybe_advance_trie(ctx, *guard);
-                // Append to covered indices buffer (grow if needed)
                 if (idx < ctx->covered_indices_capacity) {
                     ctx->covered_indices[idx] = *guard;
-                } else if (ctx->covered_indices) {
-                    size_t new_cap = ctx->covered_indices_capacity * 2;
-                    uint32_t* new_buf = (uint32_t*)realloc(ctx->covered_indices, new_cap * sizeof(uint32_t));
-                    if (new_buf) {
-                        ctx->covered_indices = new_buf;
-                        ctx->covered_indices_capacity = new_cap;
-                        new_buf[idx] = *guard;
-                    }
                 }
             }
         }
@@ -903,29 +907,29 @@ __attribute__((noinline))
 void sancov_record_edge_counting(uint32_t *guard) {
     uint8_t* map = get_current_coverage_map();
     if (map && *guard < g_guard_count) {
-        uint8_t prev = map[*guard];
-        if (prev == 0) {
-            // First hit: record the edge index, same as binary
-            map[*guard] = 1;
+        // Atomic first-hit check so concurrent child tasks (under
+        // CoverageInheritance) can't both observe 0 and both record first-hit.
+        uint8_t expected = 0;
+        if (__atomic_compare_exchange_n(&map[*guard], &expected, (uint8_t)1,
+                                         false, __ATOMIC_ACQ_REL, __ATOMIC_RELAXED)) {
             SanCovMeasurementContext* ctx = tls_cached_measurement_context;
             if (ctx) {
-                size_t idx = ctx->covered_count;
-                ctx->covered_count = idx + 1;
+                size_t idx = __atomic_fetch_add(&ctx->covered_count, 1, __ATOMIC_RELAXED);
                 if (idx < ctx->covered_indices_capacity) {
                     ctx->covered_indices[idx] = *guard;
-                } else if (ctx->covered_indices) {
-                    size_t new_cap = ctx->covered_indices_capacity * 2;
-                    uint32_t* new_buf = (uint32_t*)realloc(ctx->covered_indices, new_cap * sizeof(uint32_t));
-                    if (new_buf) {
-                        ctx->covered_indices = new_buf;
-                        ctx->covered_indices_capacity = new_cap;
-                        new_buf[idx] = *guard;
-                    }
                 }
             }
-        } else if (prev < 255) {
-            // Subsequent hit: saturating 8-bit increment
-            map[*guard] = prev + 1;
+        } else {
+            // Already first-hit. Saturating 8-bit increment for counting mode.
+            // Relaxed because exact count per iteration isn't required for
+            // bucketing — any count >= 1 means "hit" and saturates at 255.
+            uint8_t cur = __atomic_load_n(&map[*guard], __ATOMIC_RELAXED);
+            while (cur < 255) {
+                if (__atomic_compare_exchange_n(&map[*guard], &cur, (uint8_t)(cur + 1),
+                                                 false, __ATOMIC_RELAXED, __ATOMIC_RELAXED)) {
+                    break;
+                }
+            }
         }
     }
 }
