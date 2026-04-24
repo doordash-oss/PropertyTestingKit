@@ -97,3 +97,53 @@ edge level.
 - Union: 49 edges
 - Intersection: 39 edges (same every run)
 - Varying: 10 edges (metadata + witness + destructor)
+
+### R5: does adding the non-actor-isolated timer body surface more paths?
+User hypothesis: the timer body (`configureTimer`'s `Task { }`) is not
+actor-isolated, so it should interleave concurrently with the lane ops
+and produce more variation.
+
+Input with startPolling added. 200 iterations, direct execution.
+
+| Config | Unique paths | Union edges |
+|---|---|---|
+| Lanes with no timer (no filter) | 3 | 62 |
+| Lanes + startPolling (no filter) | 3 | 122 |
+| Lanes + startPolling (filter on) | 2 | 37 |
+
+Finding: timer body contributes ~60 extra edges but **zero additional
+unique pathTrie paths**. Reasons:
+1. `ImmediateClock.sleep` returns without meaningful suspension, so the
+   timer loop doesn't actually yield in a way that lets scheduling diverge.
+2. `callHandlers()` is actor-isolated — edges inside run serially.
+3. The non-isolated edges the timer DOES contribute are TQ/TY async
+   resume points, which are filtered (and in first-hit order are
+   still mostly deterministic per-iteration because the timer resumes
+   at the same point each time).
+
+So "non-actor-isolated" ≠ "produces scheduling-dependent edge order"
+when the underlying clock doesn't actually suspend and the called
+methods are actor-isolated.
+
+### R6: can we cleanly demonstrate "many paths without schedule control, one with"?
+
+New test: `InterleavingContrastTest` in `Tests/ScheduleControlTests/`.
+Two non-actor-isolated tasks, each calling a distinct `@inline(never)`
+work function with `await Task.yield()` suspensions interspersed.
+
+| Config | Unique paths |
+|---|---|
+| UNCONTROLLED (500 iter) | 500 / 500 |
+| CONTROLLED (200 iter, no filter) | 200 / 200 |
+| CONTROLLED (200 iter, filter on) | 1 / 200 |
+
+Key finding: **schedule control alone does not produce determinism**;
+the TQ/TY filter is essential. The filter removes async resume edges
+whose first-hit order varies based on continuation enqueue races that
+`ScheduleController.run(scheduleBytes:...)` does not serialize.
+
+Combined (schedule control + filter), 500 possible interleavings
+collapse to 1 deterministic path.
+
+`Tests/ScheduleControlTests/InterleavingContrastTest.swift` now
+contains this contrast experiment as a permanent test.
