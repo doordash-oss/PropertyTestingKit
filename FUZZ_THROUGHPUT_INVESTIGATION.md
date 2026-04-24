@@ -147,3 +147,57 @@ collapse to 1 deterministic path.
 
 `Tests/ScheduleControlTests/InterleavingContrastTest.swift` now
 contains this contrast experiment as a permanent test.
+
+### R7: pathTrie was silently missing child task first-hit order
+User suspected schedule control shouldn't behave identically to OS scheduling.
+Added instrumentation (atomic entry log) that showed OS scheduling DOES
+produce 6–8 distinct interleavings per 50 runs. But pathTrie showed 1 path.
+
+Root cause in `SanCovHooks.c` / `get_current_coverage_map`:
+```c
+// Write edges to the parent's map. Do NOT set tls_cached_measurement_context
+// to avoid trie/covered_indices races from concurrent child tasks.
+set_tls_measurement_context(NULL);   // <-- bug for this use case
+```
+
+For child tasks inheriting a measurement context, the TLS context was
+explicitly NULL'd. `sancov_record_edge` then saw `ctx == NULL` and **skipped
+trie advance entirely** for child-task edges. Only the parent's edges
+advanced the trie → same path every iteration regardless of scheduling.
+
+Fix: set the inherited context on TLS so the trie advances. Made the
+bitmap first-hit check atomic (`__atomic_compare_exchange_n` on the
+`coverage_map[*guard]` byte) so concurrent child tasks can't both observe 0
+and both record as first-hit. `maybe_advance_trie` already had `g_trie_lock`
+for its own concurrency safety.
+
+**Correction** — the `covered_count` / `covered_indices` race is NOT
+pre-existing; my change introduced it. Before the TLS-context change,
+inherited child tasks took the `if (ctx)` FALSE branch and never entered
+that block. `g_target_context` code goes through that block too, but
+under schedule control the drain loop dispatches jobs serially so no
+concurrency occurs there. My change opened up a path where concurrent
+child tasks would reach the racy RMW on `covered_count` and the racy
+`realloc`.
+
+Fixes applied in the same change:
+1. `__atomic_fetch_add` on `covered_count` so each concurrent winner
+   gets a unique slot index.
+2. Pre-size `covered_indices` to `g_guard_count` in `sancov_begin_measurement`
+   so no realloc ever happens during `record_edge` — eliminates the
+   concurrent-realloc use-after-free risk.
+3. Same atomic treatment applied to `sancov_record_edge_counting`
+   (counting strategy variant) for consistency, with CAS-loop for the
+   saturating increment branch.
+
+Also discovered: the test body needs distinct call sites per step (not
+`workA(0)`, `workA(1)`, `workA(2)` which share the same BB edges). Made
+workA0/A1/A2/B0/B1/B2 distinct `@inline(never)` functions. With that
+correction plus the hooks fix, `InterleavingContrastTest` shows:
+
+| Config | Unique paths / Iterations |
+|---|---|
+| UNCONTROLLED + filter | **101 / 500** |
+| CONTROLLED + filter | **1 / 200** |
+
+This is the contrast the user asked for, and it is real.
