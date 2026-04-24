@@ -164,9 +164,7 @@ private func readJobKind(_ jobPtr: UnsafeRawPointer) -> Int {
 ///    from a tagged parent (the tag is read off the *spawning* task,
 ///    not the detached one), and a fraction of continuation re-enqueues
 ///    (roughly 1/3 in sequential yield tests — the rest take method 2).
-///    Side effects: stamps pthread TLS and, for actor-processing jobs
-///    (kinds 192–194), registers the actor pointer in the actor→session
-///    registry.
+///    Side effect: stamps pthread TLS with the session ID.
 ///    NOTE: actor-processing job enqueues themselves are **not** reliably
 ///    caught here. In the actor-only test, the `ProcessOutOfLineJob`
 ///    enqueue landed in method 3, not method 1 — runtime internals
@@ -231,9 +229,6 @@ private let _routingHook: HookFn = { job, original in
     // Method 1: current task's session task local
     if let sid = SessionTag.id {
         RoutingHookCounters.recordMethod1(jobKind: kind)
-        if let actor = schedule_read_actor_from_job(jobPtr) {
-            schedule_actor_registry_register(actor, Int64(sid))
-        }
         schedule_tls_set_session(Int64(sid))
         routeToSession(sid, job)
         return
@@ -315,8 +310,6 @@ public enum ScheduleController {
             // Create per-session state
             let session = SessionState()
             _sessions.withLock { $0[sessionID] = session }
-
-            schedule_actor_registry_clear()
 
             let completion = TestCompletion()
 
