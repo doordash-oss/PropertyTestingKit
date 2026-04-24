@@ -21,6 +21,8 @@ import Dependencies
 import Foundation
 @testable import GenericTimerPoller
 @testable import PropertyTestingKit
+@testable import ScheduleControl
+import SanCovHooks
 import Synchronization
 import Testing
 
@@ -47,9 +49,12 @@ struct ConstantPollerInput: Codable, Hashable, Sendable, MutatorProviding {
     var lane2: [PollerOp]
 
     static var defaultMutator: Mutator<ConstantPollerInput> {
+        // Operations that exercise concurrent actor contention without
+        // unbounded timer loops (startPolling + ImmediateClock spins
+        // indefinitely, making iteration count timing-dependent).
         let fixed = ConstantPollerInput(
-            lane1: [.subscribe],
-            lane2: [.cancelLast]
+            lane1: [.subscribe, .subscribe, .cancelLast, .subscribe, .cancelLast, .cancelLast],
+            lane2: [.subscribe, .cancelLast, .subscribe, .subscribe, .cancelLast, .cancelLast]
         )
         return Mutator(
             seeds: [fixed],
@@ -320,6 +325,150 @@ struct GenericTimerPollerFuzzTests {
             #expect(
                 corpusCount <= 10,
                 "Expected at most ~5-10 unique paths for a fixed input, got \(corpusCount)"
+            )
+        }
+    }
+
+    // MARK: - Schedule control reproducibility
+
+    @Test("Uncontrolled: constant input produces many corpus entries (non-deterministic paths)",
+          .timeLimit(.minutes(1)))
+    func uncontrolledConstantInputManyPaths() async throws {
+        try await withDependencies {
+            $0.continuousClock = ImmediateClock()
+        } operation: {
+            // refuzzReplace forces fresh fuzzing (not regression replay). Without
+            // this, the fuzz engine auto-detects the saved corpus and runs only
+            // the saved entries — defeating the point of measuring uncontrolled
+            // non-determinism.
+            let result = try await fuzz(
+                duration: .seconds(3),
+                corpusMode: .refuzzReplace,
+                coverageStrategy: .pathTrie
+            ) { (input: ConstantPollerInput) in
+                let poller = GenericTimerPoller(defaultInterval: .microseconds(100))
+                await withTaskGroup(of: Void.self) { group in
+                    group.addTask { await executeLane(input.lane1, on: poller) }
+                    group.addTask { await executeLane(input.lane2, on: poller) }
+                }
+            }
+
+            let corpusCount = result.corpus.entries.count
+            print("Uncontrolled constant input: \(result.stats.totalInputs) iterations, \(corpusCount) corpus entries")
+
+            // Without schedule control, OS scheduling non-determinism means the
+            // same input produces different pathTrie paths on different runs.
+            // The main sources of variation here are teardown timing (deinit
+            // sometimes runs within the iteration window) and first-iteration
+            // one-shot metadata cache-miss edges. Actor-isolated method calls
+            // themselves share PCs across lanes and run atomically, so
+            // interleaving the two lanes doesn't produce edge variation.
+            #expect(
+                corpusCount > 1,
+                "Expected >1 corpus entries from scheduling non-determinism, got \(corpusCount)"
+            )
+        }
+    }
+
+    @Test("Controlled: constant input with schedule fuzzing produces reproducible entries",
+          .timeLimit(.minutes(1)))
+    func controlledConstantInputReproducible() async throws {
+        try await withDependencies {
+            $0.continuousClock = ImmediateClock()
+        } operation: {
+            // refuzzReplace so we measure fresh fuzzing behavior, not replay a
+            // previously saved corpus.
+            let result = try await fuzz(
+                duration: .seconds(2),
+                corpusMode: .refuzzReplace,
+                coverageStrategy: .pathTrie,
+                scheduleFuzzing: true
+            ) { (input: ConstantPollerInput) in
+                let poller = GenericTimerPoller(defaultInterval: .microseconds(100))
+                await withTaskGroup(of: Void.self) { group in
+                    group.addTask { await executeLane(input.lane1, on: poller) }
+                    group.addTask { await executeLane(input.lane2, on: poller) }
+                }
+            }
+
+            let corpusCount = result.corpus.entries.count
+            print("Controlled constant input: \(result.stats.totalInputs) iterations, \(corpusCount) corpus entries")
+
+            // With schedule fuzzing, different schedule bytes explore different
+            // interleavings, so we still expect multiple corpus entries.
+            #expect(
+                corpusCount > 1,
+                "Expected >1 corpus entries from schedule exploration, got \(corpusCount)"
+            )
+
+            // Verify reproducibility: replay each corpus entry TWICE with its
+            // saved schedule bytes and confirm both replays produce identical
+            // coverage. We compare replay-vs-replay (not original-vs-replay)
+            // because the fuzz engine uses CoverageInheritance (task-local) while
+            // replay uses g_target_context (thread-local), which capture
+            // slightly different edge sets.
+            let replayCtx = SanCovCounters.beginMeasurement()
+
+            var reproducible = 0
+            var nonReproducible = 0
+
+            for entry in result.corpus.entries {
+                guard let scheduleBytes = entry.scheduleBytes else {
+                    nonReproducible += 1
+                    continue
+                }
+
+                // Replay 1
+                SanCovCounters.resetCoverage(replayCtx)
+                try await ScheduleController.run(
+                    scheduleBytes: scheduleBytes,
+                    coverageContext: replayCtx.rawContext
+                ) {
+                    let poller = GenericTimerPoller(defaultInterval: .microseconds(100))
+                    await withTaskGroup(of: Void.self) { group in
+                        group.addTask { await executeLane(entry.input.lane1, on: poller) }
+                        group.addTask { await executeLane(entry.input.lane2, on: poller) }
+                    }
+                }
+                let replay1 = try SanCovCounters.snapshotCoveredArrays(with: replayCtx)
+
+                // Replay 2
+                SanCovCounters.resetCoverage(replayCtx)
+                try await ScheduleController.run(
+                    scheduleBytes: scheduleBytes,
+                    coverageContext: replayCtx.rawContext
+                ) {
+                    let poller = GenericTimerPoller(defaultInterval: .microseconds(100))
+                    await withTaskGroup(of: Void.self) { group in
+                        group.addTask { await executeLane(entry.input.lane1, on: poller) }
+                        group.addTask { await executeLane(entry.input.lane2, on: poller) }
+                    }
+                }
+                let replay2 = try SanCovCounters.snapshotCoveredArrays(with: replayCtx)
+
+                let set1 = Set(replay1.indices)
+                let set2 = Set(replay2.indices)
+
+                if set1 == set2 {
+                    reproducible += 1
+                } else {
+                    nonReproducible += 1
+                    if nonReproducible <= 2 {
+                        let missing = set1.subtracting(set2)
+                        let extra = set2.subtracting(set1)
+                        print("Non-reproducible: replay1 \(replay1.count) edges, replay2 \(replay2.count) edges")
+                        print("  only in replay1: \(missing.count), only in replay2: \(extra.count)")
+                    }
+                }
+            }
+
+            SanCovCounters.endMeasurement(replayCtx)
+
+            print("Reproducibility: \(reproducible)/\(corpusCount) reproducible, \(nonReproducible) non-reproducible")
+
+            #expect(
+                reproducible == corpusCount,
+                "All \(corpusCount) corpus entries should be reproducible, but \(nonReproducible) were not"
             )
         }
     }

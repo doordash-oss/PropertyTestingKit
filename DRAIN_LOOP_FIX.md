@@ -246,3 +246,161 @@ The hang occurs when multiple suites run in parallel and each test installs/unin
 1. Put ALL schedule control tests in one serialized suite
 2. Don't install/uninstall hooks in the passthrough tests (use ScheduleController.run instead)
 3. Use a lock around hook installation
+
+### Attempt 9: swift_task_donateThreadToGlobalExecutorUntil
+**Plan**: Donate the drain thread to the cooperative executor while waiting for jobs. The thread processes other sessions work while checking our condition. Solves thread starvation (thread is useful) and lost wakeups (thread is pumping the executor).
+
+C signature: `void swift_task_donateThreadToGlobalExecutorUntil(bool (*condition)(void*), void *context)`
+
+**Acceptance tests**: jobsDoNotOverlap, parallelSessionsBothComplete, determinism, full ScheduleControlTests 10/10.
+
+
+### Attempt 9 update: donateThread not available on dispatch executor
+`swift_task_donateThreadToGlobalExecutorUntilImpl` fatalErrors on dispatch executor (our runtime). Only works with Swift 6.3 RunLoopExecutor.
+
+### Key finding from runtime source code
+cont.resume() path: resumeTaskAfterContinuation → flagAsAndEnqueueOnExecutor(generic()) → swift_task_enqueue → swift_task_enqueueGlobal(job) → goes through swift_task_enqueueGlobal_hook → our routing hook.
+
+So cont.resume() DOES go through our hook. And original(job) is dispatch_async_f on GCD global queue. GCD dispatch_async_f should reliably wake threads.
+
+The lost wakeup must be the routing hook sending the continuation to the wrong session pending buffer under parallel execution. Need to set breakpoints in the routing hook during a hang to observe where the continuation actually goes.
+
+
+### Attempt 9 continued: withCheckedThrowingContinuation (re-implemented)
+Reverted to continuation bridge approach. Key differences from previous attempt:
+- No diagnostic test files (HookPassthroughTest, ContinuationBridgeTest, DonateThreadTest all removed)
+- Session unregister + hook uninstall happens atomically before cont.resume()
+- TLS cleared before resume
+
+Running 10x stability test...
+
+
+**Result**: 0 OK, 1 FAIL, 9 HUNG / 10. Worse than cooperative pool (4 OK, 0 FAIL, 6 HUNG / 10).
+
+The continuation bridge consistently hangs. The cooperative pool approach at least passes 40% of the time. The extra GCD queue overhead from the continuation bridge adds more thread contention without solving the fundamental issue.
+
+### Comparison table (updated)
+| Approach | OK | FAIL | HUNG | Notes |
+|----------|-----|------|------|-------|
+| Cooperative pool drain | 4/10 | 0/10 | 6/10 | Blocks pool threads |
+| withCheckedThrowingContinuation | 0/10 | 1/10 | 9/10 | cont.resume() lost wakeup |
+
+Cooperative pool drain is strictly better. The hangs there were from the determinism test (6 sequential ScheduleController.run calls) blocking a cooperative pool thread while 3 other suites also block threads.
+
+### Next investigation
+Need to understand: with cooperative pool drain, exactly how many pool threads exist and how many are blocked? The hang happens with 4 suites. Each suite blocks 1 pool thread for its drain loop. The default cooperative pool size on this machine (M1 Pro, 10 cores) should be ~10 threads. 4 blocked should leave 6 free — enough to run jobs.
+
+Unless: the tests themselves create additional ScheduleController.run calls internally. The determinism test runs ScheduleController.run 6 times (warmup + 5 repeats). The parallelSessions test runs 2 concurrent sessions. The coverage test runs 3 sessions. Total concurrent sessions at peak could be much higher than 4.
+
+Need to count actual concurrent sessions during the hang.
+
+
+### Cooperative pool drain: peak session analysis
+Caught a hang. Key findings:
+- Peak concurrent sessions: 4 (first batch when all suites start)
+- ALL 9 session batches completed (hook uninstalled 9 times)
+- 7/8 tests passed
+- Process hangs AFTER all sessions complete
+- No dropped jobs
+- 2 fallthrough routes (dead session → original)
+
+The hang is NOT from active sessions blocking threads. All sessions completed. The hang is the TEST FRAMEWORK unable to finish — the "determinism" test started but did not pass, even though all its ScheduleController.run calls completed.
+
+This might be a different bug: the determinism test itself might be stuck in its own loop (e.g., the warmup call completed but the subsequent calls are queued on a cooperative pool thread that is no longer available).
+
+Or: the cooperative pool thread that was blocked during the drain loop went to sleep after the drain completed, and the determinism test is waiting to resume on that thread but nobody wakes it.
+
+Need to check: after the drain loop returns, does the async function properly resume? The drain loop blocks the cooperative pool thread with session.jobArrived.wait(). When the drain completes, the thread unblocks and the async function continues. But does the thread stay in the cooperative pool?
+
+
+### Critical insight: cooperative pool thread goes dormant after semaphore wait
+
+When the drain loop calls session.jobArrived.wait(), it blocks the GCD cooperative queue thread. GCD sees this thread as "blocked" and may spawn a replacement. When the wait returns, the thread continues the async function. But the thread is no longer in the cooperative pool rotation — GCD doesnt know its back.
+
+The async function returns from ScheduleController.run, which is inside SessionTag.$id.withValue(), which eventually returns to the test. But the test runs in a Swift Testing framework task. Returning from the test requires enqueuing the test frameworks continuation back to the cooperative pool. If the cooperative pool has no active threads (all went dormant after semaphore waits), the continuation is enqueued but never processed.
+
+This explains why:
+- All sessions complete (drain loops finish, hooks uninstall)
+- Some tests pass (their pool threads happened to stay active)
+- Some tests hang (their pool threads went dormant)
+- All threads are idle in the backtrace (GCD dormant threads)
+
+### The real fix
+The drain loop MUST NOT block the cooperative pool thread with a semaphore. The thread must remain cooperative — either yielding properly or running on a non-cooperative thread.
+
+Since withCheckedThrowingContinuation also fails (different reason — cont.resume lost wakeup), and donateThread isnt available, the remaining option is:
+
+**Run ScheduleController.run synchronously on a dedicated GCD thread, not on the cooperative pool at all.** The caller wraps it in withCheckedThrowingContinuation, but the ENTIRE session (hook install, Task launch, drain loop, cleanup) runs on GCD. The continuation is resumed from GCD after everything completes. The cooperative pool thread is freed immediately.
+
+This is similar to Attempt 4 but with the session lifecycle entirely on GCD — no cooperative pool involvement during the drain.
+
+
+### LLDB backtrace analysis (definitive)
+
+Caught the hang with LLDB. Only 3 threads:
+
+| Thread | Queue | State |
+|--------|-------|-------|
+| #1 | main-thread | CFRunLoop (async main drain) |
+| #2 | (workqueue) | `__workq_kernreturn` — idle, returned to kernel |
+| #3 | **cooperative** | `semaphore_timedwait_trap` in `waitForStateChange` line 290 |
+
+**Thread #3** is the determinism test's drain loop, running on a cooperative pool thread. It dispatched a job via `session.queue.async { job.runSynchronously(...) }`, then called `waitForStateChange` which loops on `session.jobArrived.wait(timeout: .now() + 0.1)`.
+
+**The job was dispatched to the session's serial GCD queue but never ran.** Thread #2 (a regular workqueue thread) is idle in `__workq_kernreturn` — meaning it returned to the kernel and GCD hasn't woken it to service the `queue.async` block.
+
+**Root cause hypothesis**: The cooperative pool thread (#3) is blocking on a semaphore. GCD may treat this as "thread is busy" and not wake thread #2 because it doesn't see a clear need. The `queue.async` work is sitting in the queue but GCD's thread pool management hasn't dispatched it.
+
+**Key insight**: `runSynchronously` runs the job on the GCD serial queue thread. When the job runs, it may enqueue more Swift tasks to the cooperative pool. But the cooperative pool is blocked (thread #3). If the job itself needs the cooperative pool to make progress (e.g., `await` inside the test body), it can't, and we deadlock.
+
+Actually — `runSynchronously` runs the Swift task's job. The job IS a continuation of the async test body. When it runs on the GCD serial queue, it will execute synchronously until it hits the next suspension point. At that point, the runtime needs to enqueue a NEW job for the continuation. That new job goes through our hook → into the session's pending queue → session.count increases → `waitForStateChange` returns. This should work IF the GCD serial queue actually runs the block.
+
+The real question: **why doesn't GCD service the serial queue?**
+
+### Attempt 10: Inline dispatch (no GCD serial queue)
+
+**Change**: Instead of `queue.async { job.runSynchronously(...) }`, run the job inline on the drain loop thread: `job.runSynchronously(...)` directly.
+
+**Result**: 10/10 passes, 0 hangs, 0 failures.
+
+**Root cause confirmed**: The GCD serial queue was never serviced. LLDB showed only 3 threads — the cooperative pool thread (#3) blocked on `semaphore_timedwait_trap` in `waitForStateChange`, and thread #2 (a workqueue thread) idle in `__workq_kernreturn`. GCD knew about the enqueued block but never woke thread #2 to service it.
+
+**Why inline works**: The drain loop thread itself runs each job slice synchronously. When the job hits an `await`, it suspends and enqueues a continuation through our hook → pending queue → `jobArrived` signals → `waitForStateChange` returns → drain loop picks the next job. No GCD coordination needed.
+
+**Serial guarantee**: Jobs are still serial because the drain loop runs one job at a time inline. There's no risk of overlap because `runSynchronously` returns only when the job slice completes (either finishes or suspends).
+
+### Final validation
+- ScheduleControlTests: 10/10 passes, 0 hangs, 0 failures
+- Full PropertyTestingKitTests suite: 310/310 tests pass
+
+### Summary
+The fix was simple: run jobs inline on the drain loop thread instead of dispatching to a GCD serial queue. The GCD serial queue was never serviced because the cooperative pool thread was blocking on a semaphore, and GCD's thread pool management didn't wake a new thread to service it. Running inline eliminates the dependency on GCD thread scheduling entirely.
+
+Removed:
+- `SessionState.queue` (serial GCD queue, no longer needed)
+- `SessionState.drainQueue` (dedicated drain queue, no longer needed)
+- `_routeStats` and `_peakSessions` (debug instrumentation)
+
+### _InlineExecutor.enqueue crash — LLDB root cause
+
+**Stack trace**:
+```
+_InlineExecutor.enqueue at ScheduleController.swift:56
+Task<>.yield at Task.swift:643
+Task.megaYield at Task.swift:18 (swift-concurrency-extras)
+```
+
+**Thread**: #37, "Task 5476", cooperative queue
+
+**Root cause**: A non-session detached task (created by `Task.megaYield()` from swift-concurrency-extras, used by TestClock) gets incorrectly routed to a ScheduleControl session via pthread TLS (Method 3 in the routing hook).
+
+**Chain**:
+1. Drain loop runs a session job inline via `runSynchronously` on the cooperative pool thread
+2. The drain loop thread has pthread TLS set to the session ID
+3. The job (or something concurrent on the same thread) creates a `Task.detached { await Task.yield() }` via megaYield
+4. The detached task has no task locals → Method 1 (SessionTag.id) = nil → Method 2 (job task locals) fails
+5. Method 3 (pthread TLS) matches because the thread still has session TLS → routes to session
+6. Drain loop dispatches the megaYield job via `runSynchronously(on: _inlineExecutor)`
+7. `Task.yield()` inside the job re-enqueues onto `_InlineExecutor` → fatalError
+
+**Fix needed**: TLS-based routing is too broad. It captures detached tasks that happen to be enqueued from the drain loop thread but don't belong to the session.

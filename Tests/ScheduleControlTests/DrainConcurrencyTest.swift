@@ -56,6 +56,34 @@ struct DrainConcurrencyTest {
         #expect(!didOverlap, "Jobs should not overlap — drain loop must execute one at a time")
     }
 
+    @Test("Task.yield inside session does not crash")
+    func taskYieldInsideSession() async throws {
+        try await ScheduleController.run(
+            scheduleBytes: [0, 0, 0, 0, 0, 0, 0, 0]
+        ) {
+            // Task.yield() re-enqueues the current task. When run via
+            // runSynchronously(on: _inlineExecutor), the runtime calls
+            // _InlineExecutor.enqueue. This must not crash.
+            await Task.yield()
+        }
+    }
+
+    @Test("Detached Task.yield inside session does not crash")
+    func detachedTaskYieldInsideSession() async throws {
+        // This reproduces the megaYield pattern from swift-concurrency-extras.
+        // A detached task has no task locals, so session routing falls through
+        // to pthread TLS. If the drain loop thread has TLS set, the detached
+        // task gets incorrectly captured.
+        try await ScheduleController.run(
+            scheduleBytes: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+        ) {
+            // Simulate megaYield: detached task that yields
+            await Task.detached(priority: .background) {
+                await Task.yield()
+            }.value
+        }
+    }
+
     @Test("Two schedule-controlled sessions run in parallel without deadlock")
     func parallelSessionsBothComplete() async throws {
         let sessionADone = OSAllocatedUnfairLock(initialState: false)

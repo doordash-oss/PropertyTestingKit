@@ -18,15 +18,12 @@ final class SessionState: @unchecked Sendable {
     let lock = OSAllocatedUnfairLock(initialState: [UnownedJob]())
     let jobArrived = DispatchSemaphore(value: 0)
 
-    /// Serial queue for running job segments one at a time.
-    private let queue = DispatchQueue(label: "schedule-control.session")
+    /// Per-session executor. When a job yields during `runSynchronously`,
+    /// the runtime calls this executor's `enqueue` to reschedule the
+    /// continuation back into this session's pending queue.
+    private lazy var executor: _SessionExecutor = _SessionExecutor(session: self)
 
-    /// Dedicated queue for the drain loop.
-    let drainQueue = DispatchQueue(label: "schedule-control.drain")
-
-
-
-    /// Per-session coverage context. Set on the serial queue thread via TLS
+    /// Per-session coverage context. Set on the drain loop thread via TLS
     /// so parallel sessions don't corrupt each other's coverage.
     var coverageContext: UnsafeMutablePointer<SanCovMeasurementContext>?
 
@@ -43,33 +40,42 @@ final class SessionState: @unchecked Sendable {
         lock.withLock { $0.remove(at: index) }
     }
 
-    /// Dispatch a job segment to the serial queue. Returns immediately.
+    /// Run a job segment synchronously on the current thread.
     /// Sets the thread-local g_target_context before running the job
     /// and clears it after, so parallel sessions are isolated.
     func dispatch(_ job: UnownedJob) {
         let ctx = coverageContext
-        queue.async {
-            if let ctx {
-                sancov_set_target_context(ctx)
-            }
-            job.runSynchronously(on: _inlineExecutor.asUnownedSerialExecutor())
-            if ctx != nil {
-                sancov_set_target_context(nil)
-            }
+        if let ctx {
+            sancov_set_target_context(ctx)
+        }
+        job.runSynchronously(on: executor.asUnownedSerialExecutor())
+        if ctx != nil {
+            sancov_set_target_context(nil)
         }
     }
 }
 
-/// Minimal executor identity for `runSynchronously(on:)`.
-private final class _InlineExecutor: SerialExecutor {
-    func enqueue(_ job: consuming ExecutorJob) {
-        fatalError("Should not be called — jobs are run via runSynchronously directly")
+/// Per-session executor for `runSynchronously(on:)`.
+///
+/// When a job running via `runSynchronously` yields (e.g., `Task.yield()`),
+/// the runtime calls `enqueue` on this executor to reschedule the continuation.
+/// We route it back into the session's pending queue so the drain loop picks
+/// it up on the next iteration.
+private final class _SessionExecutor: SerialExecutor {
+    let session: SessionState
+
+    init(session: SessionState) {
+        self.session = session
     }
+
+    func enqueue(_ job: consuming ExecutorJob) {
+        session.append(UnownedJob(job))
+    }
+
     func asUnownedSerialExecutor() -> UnownedSerialExecutor {
         UnownedSerialExecutor(ordinary: self)
     }
 }
-private let _inlineExecutor = _InlineExecutor()
 
 /// Global registry of active sessions, keyed by session ID.
 private let _sessions = OSAllocatedUnfairLock(initialState: [Int: SessionState]())
