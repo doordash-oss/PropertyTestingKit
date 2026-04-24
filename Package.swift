@@ -115,6 +115,9 @@ let package = Package(
             dependencies: [
                 "ScheduleControl",
                 "PropertyTestingKit",
+                "GenericTimerPoller",
+                .product(name: "Dependencies", package: "swift-dependencies"),
+                .product(name: "Clocks", package: "swift-clocks"),
             ],
             swiftSettings: [
                 .unsafeFlags([
@@ -184,6 +187,7 @@ let package = Package(
             dependencies: [
                 "GenericTimerPoller",
                 "PropertyTestingKit",
+                "ScheduleControl",
                 .product(name: "Dependencies", package: "swift-dependencies"),
                 .product(name: "Clocks", package: "swift-clocks"),
             ]
