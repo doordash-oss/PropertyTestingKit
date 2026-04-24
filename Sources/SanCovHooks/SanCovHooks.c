@@ -400,6 +400,15 @@ void sancov_reset_coverage(SanCovMeasurementContext* ctx) {
     ctx->covered_count = 0;
     // covered_indices buffer is reused — just reset the count (capacity stays)
 
+    // Also clear the TLS cached map so infrastructure edges outside g_target_context
+    // are re-recorded on the next run (needed for correct trie path tracking).
+    tls_cached_coverage_map = NULL;
+    // Clear the per-task map from the hash table if it's different from the context map.
+    // This handles edges that fire before/after g_target_context is set.
+    if (tls_cached_task_map != NULL && tls_cached_task_map != ctx->coverage_map) {
+        memset(tls_cached_task_map, 0, g_guard_count);
+    }
+
     // Reset the trie if attached (move pointer back to root, clear novel flag)
     if (ctx->path_trie) {
         sancov_trie_reset(ctx->path_trie);
@@ -993,9 +1002,14 @@ static os_unfair_lock g_trie_lock = OS_UNFAIR_LOCK_INIT;
 
 // Advance trie on first-hit if context has one attached.
 // Called from sancov_record_edge on every first-hit edge.
+static bool g_trie_debug = false;
+
 static void maybe_advance_trie(SanCovMeasurementContext* ctx, uint32_t edge_index) {
     SanCovPathTrie* trie = ctx->path_trie;
     if (!trie) return;
+    if (g_trie_debug) {
+        fprintf(stderr, "[trie-adv] edge=%u\n", edge_index);
+    }
 
     os_unfair_lock_lock(&g_trie_lock);
     TrieNode* child = trie_node_find_child(trie->current, edge_index);
@@ -1089,8 +1103,13 @@ void sancov_trie_dump(SanCovPathTrie* trie) {
     free(buf);
 }
 
+void sancov_trie_set_debug(bool enable) { g_trie_debug = enable; }
+
 void sancov_trie_advance(SanCovPathTrie* trie, uint32_t edge_index) {
     if (!trie) return;
+    if (g_trie_debug) {
+        fprintf(stderr, "[trie-adv] edge=%u\n", edge_index);
+    }
     os_unfair_lock_lock(&g_trie_lock);
     TrieNode* child = trie_node_find_child(trie->current, edge_index);
     if (child) {
@@ -1348,7 +1367,7 @@ static bool g_filter_applied = false;
 
 /// Check if a mangled symbol name matches a compiler-generated pattern.
 /// Returns true if the symbol should be filtered out.
-static bool is_compiler_generated_symbol(const char* sname) {
+bool sancov_is_compiler_generated(const char* sname) {
     if (!sname) return false;
 
     // Prefix checks: runtime internals
@@ -1384,6 +1403,32 @@ static bool is_compiler_generated_symbol(const char* sname) {
     if (strstr(sname, "TRTQ") != NULL) return true;
     if (strstr(sname, "TRTY") != NULL) return true;
 
+    // Global/static variable addressors: ends with "vau" (unsigned addressor)
+    // These have init-once semantics with different branches for first vs cached access.
+    if (len >= 3) {
+        const char* last3 = sname + len - 3;
+        if (last3[0] == 'v' && last3[1] == 'a' && last3[2] == 'u') return true;
+    }
+
+    // Bare async resume/yield points: ends with TQ<digit(s)>_ or TY<digit(s)>_
+    // e.g. ...FTQ3_, ...FTY4_, ...cfU_TQ0_, ...cfU_TY1_
+    // These continuation edges are scheduling-dependent — even under
+    // ScheduleController.run (deterministic task ordering), the "which resume
+    // point fires first" order can vary because two continuations may be
+    // enqueued in whichever order the dependency-resolution happened to pick.
+    // Filtering them is required for pathTrie-based determinism.
+    if (len >= 4) {
+        const char* p = sname + len - 1;
+        if (*p == '_') {
+            p--;
+            // Skip digits
+            while (p > sname && *p >= '0' && *p <= '9') p--;
+            // Check for TQ or TY
+            if (p >= sname + 1 && *p == 'Q' && *(p-1) == 'T') return true;
+            if (p >= sname + 1 && *p == 'Y' && *(p-1) == 'T') return true;
+        }
+    }
+
     // Default argument: ends with fA<digit>_ (e.g. fA_, fA0_, fA1_)
     if (len >= 3) {
         // Check fA_ (no digit)
@@ -1416,7 +1461,7 @@ void sancov_apply_edge_filter(void) {
         if (dladdr((void*)pc, &info) == 0) continue;
         if (!info.dli_sname) continue;
 
-        if (is_compiler_generated_symbol(info.dli_sname)) {
+        if (sancov_is_compiler_generated(info.dli_sname)) {
             g_guards_start[i] = SANCOV_GUARD_SKIP;
             filtered++;
         }

@@ -300,6 +300,13 @@ void sancov_apply_edge_filter(void);
 /// Return the number of edges disabled by sancov_apply_edge_filter().
 size_t sancov_get_filtered_count(void);
 
+/// Check if a symbol name matches compiler-generated patterns.
+/// Exposed for testing the filter logic.
+bool sancov_is_compiler_generated(const char* sname);
+
+/// Enable/disable debug logging for trie advances.
+void sancov_trie_set_debug(bool enable);
+
 #ifdef __cplusplus
 }
 #endif

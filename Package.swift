@@ -115,6 +115,9 @@ let package = Package(
             dependencies: [
                 "ScheduleControl",
                 "PropertyTestingKit",
+                "GenericTimerPoller",
+                .product(name: "Dependencies", package: "swift-dependencies"),
+                .product(name: "Clocks", package: "swift-clocks"),
             ],
             swiftSettings: [
                 .unsafeFlags([
@@ -142,12 +145,13 @@ let package = Package(
             name: "SanCovTests",
             dependencies: [
                 "SanCovHooks",
+                "PropertyTestingKit",
             ],
             swiftSettings: [
                 // Enable sanitizer coverage for thread-local coverage testing
                 .unsafeFlags([
                     "-sanitize=undefined",
-                    "-sanitize-coverage=edge"
+                    "-sanitize-coverage=edge,pc-table"
                 ])
             ]
         ),
@@ -220,6 +224,7 @@ let package = Package(
             dependencies: [
                 "GenericTimerPoller",
                 "PropertyTestingKit",
+                "ScheduleControl",
                 .product(name: "Dependencies", package: "swift-dependencies"),
                 .product(name: "Clocks", package: "swift-clocks"),
             ]

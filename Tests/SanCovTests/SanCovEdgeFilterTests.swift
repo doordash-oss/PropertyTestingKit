@@ -38,10 +38,10 @@ struct SanCovEdgeFilterTests {
         // If this fails, the test binary may not contain any Swift standard library code.
         #expect(filteredCount > 0, "Expected at least some compiler-generated edges to be filtered, got 0 out of \(totalEdges)")
 
-        // Verify the ratio is reasonable — typically 5-30% of edges are compiler-generated.
-        // We don't want to filter too many (would indicate a bug in pattern matching).
+        // Verify the ratio is reasonable — typically 30-65% of edges are compiler-generated
+        // (metadata accessors, async resume/yield points, outlined ops, global addressors).
         let ratio = Double(filteredCount) / Double(totalEdges)
-        #expect(ratio < 0.5, "Filtered \(filteredCount)/\(totalEdges) (\(Int(ratio * 100))%) — more than half seems wrong")
+        #expect(ratio < 0.75, "Filtered \(filteredCount)/\(totalEdges) (\(Int(ratio * 100))%) — more than 75% seems wrong")
     }
 
     @Test("filtered edges are not recorded in coverage")
