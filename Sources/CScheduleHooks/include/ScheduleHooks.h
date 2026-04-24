@@ -21,10 +21,6 @@ bool schedule_job_is_async_task(const void *job);
 /// Returns the session ID (>= 0) or -1 if not found.
 int64_t schedule_read_session_from_task(const void *job, const void *expected_key);
 
-/// Read the actor pointer from a ProcessOutOfLineJob (DefaultActorSeparate/Inline/Override).
-/// Returns NULL if the job is not an actor processing job.
-const void *schedule_read_actor_from_job(const void *job);
-
 // MARK: - Session key capture
 
 /// Capture the task-local key pointer from a task known to have a session value.
@@ -54,18 +50,6 @@ int64_t schedule_tls_get_session(void);
 
 /// Initialize the pthread TLS key. Call once at startup.
 void schedule_tls_init(void);
-
-// MARK: - Actor → session registry
-
-/// Register an actor pointer as belonging to a session.
-void schedule_actor_registry_register(const void *actor, int64_t session_id);
-
-/// Look up the session ID for an actor pointer.
-/// Returns -1 if not found.
-int64_t schedule_actor_registry_lookup(const void *actor);
-
-/// Clear the actor registry. Call between runs.
-void schedule_actor_registry_clear(void);
 
 #ifdef __cplusplus
 }

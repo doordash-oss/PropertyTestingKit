@@ -29,20 +29,14 @@
 //
 // Within PrivateStorage, TaskLocal::Storage.head is at offset 56.
 // Total: 80 + 56 = 136 bytes from Job* to task-local head pointer.
-//
-// ProcessOutOfLineJob extends Job:
-//   Offset 64: DefaultActorImpl* Actor
 
 #define JOB_FLAGS_OFFSET 32
 #define TASK_LOCAL_HEAD_OFFSET 136
-#define PROCESS_JOB_ACTOR_OFFSET 64
-#define MAX_TRACKED_ACTORS 256
 
-// JobKind values from MetadataValues.h
+// JobKind values from MetadataValues.h (only JOB_KIND_TASK is consumed
+// by this module; the DefaultActor kinds are documented in the header
+// for callers that inspect job kinds).
 #define JOB_KIND_TASK 0
-#define JOB_KIND_DEFAULT_ACTOR_INLINE 192
-#define JOB_KIND_DEFAULT_ACTOR_SEPARATE 193
-#define JOB_KIND_DEFAULT_ACTOR_OVERRIDE 194
 
 // TaskLocal::Item::Kind values
 #define ITEM_KIND_VALUE 0
@@ -73,17 +67,6 @@ static unsigned read_job_kind(const void *job) {
 bool schedule_job_is_async_task(const void *job) {
     if (!job) return false;
     return read_job_kind(job) == JOB_KIND_TASK;
-}
-
-const void *schedule_read_actor_from_job(const void *job) {
-    if (!job) return NULL;
-    unsigned kind = read_job_kind(job);
-    if (kind < JOB_KIND_DEFAULT_ACTOR_INLINE || kind > JOB_KIND_DEFAULT_ACTOR_OVERRIDE) {
-        return NULL;
-    }
-    const void *actor;
-    memcpy(&actor, (const char *)job + PROCESS_JOB_ACTOR_OFFSET, sizeof(actor));
-    return actor;
 }
 
 // MARK: - Task-local reading
@@ -172,37 +155,3 @@ int64_t schedule_tls_get_session(void) {
     return val == 0 ? -1 : (int64_t)(val - 1);
 }
 
-// MARK: - Actor → session registry
-
-static struct {
-    const void *actor;
-    int64_t session_id;
-} actor_registry[MAX_TRACKED_ACTORS];
-static int actor_registry_count = 0;
-
-void schedule_actor_registry_register(const void *actor, int64_t session_id) {
-    for (int i = 0; i < actor_registry_count; i++) {
-        if (actor_registry[i].actor == actor) {
-            actor_registry[i].session_id = session_id;
-            return;
-        }
-    }
-    if (actor_registry_count < MAX_TRACKED_ACTORS) {
-        actor_registry[actor_registry_count].actor = actor;
-        actor_registry[actor_registry_count].session_id = session_id;
-        actor_registry_count++;
-    }
-}
-
-int64_t schedule_actor_registry_lookup(const void *actor) {
-    for (int i = 0; i < actor_registry_count; i++) {
-        if (actor_registry[i].actor == actor) {
-            return actor_registry[i].session_id;
-        }
-    }
-    return -1;
-}
-
-void schedule_actor_registry_clear(void) {
-    actor_registry_count = 0;
-}
