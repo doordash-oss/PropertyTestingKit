@@ -35,8 +35,17 @@ const void *schedule_capture_session_key(const void *task);
 // MARK: - Thread-local session marker
 
 /// Set the thread-local session ID for the current thread.
-/// Called from the hook when a tagged job is processed, so that
-/// ProcessOutOfLineJob on the same thread can inherit the session.
+/// Called from the routing hook on every successful method-1 or method-2
+/// routing. Enables method-3 routing to catch jobs that later enqueue on
+/// the same pthread without a visible session tag — originally added to
+/// catch `ProcessOutOfLineJob` during `completeFuture`, but empirically
+/// also catches untagged `AsyncTask` jobs produced in concurrent child
+/// scenarios (see `RoutingBranchTests`).
+///
+/// Note: TLS is never cleared. The pthread retains the last-seen session
+/// ID across the lifetime of the thread. After a session ends, a stale ID
+/// may still be present; `routeToSession` handles missing session IDs by
+/// falling back to the original enqueue.
 void schedule_tls_set_session(int64_t session_id);
 
 /// Get the thread-local session ID for the current thread.
