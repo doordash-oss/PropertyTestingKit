@@ -1,0 +1,4 @@
+module CScheduleHooks {
+    header "ScheduleHooks.h"
+    export *
+}
