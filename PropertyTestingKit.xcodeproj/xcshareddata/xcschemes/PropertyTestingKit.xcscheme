@@ -1,12 +1,39 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <Scheme
    LastUpgradeVersion = "1600"
-   version = "1.7">
+   version = "1.3">
    <BuildAction
       parallelizeBuildables = "YES"
-      buildImplicitDependencies = "YES"
-      runPostActionsOnFailure = "NO">
+      buildImplicitDependencies = "YES">
       <BuildActionEntries>
+         <BuildActionEntry
+            buildForTesting = "YES"
+            buildForRunning = "NO"
+            buildForProfiling = "NO"
+            buildForArchiving = "NO"
+            buildForAnalyzing = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "0D92E8ED3377557F25BE96C0"
+               BuildableName = "GenericTimerPollerTests.xctest"
+               BlueprintName = "GenericTimerPollerTests"
+               ReferencedContainer = "container:PropertyTestingKit.xcodeproj">
+            </BuildableReference>
+         </BuildActionEntry>
+         <BuildActionEntry
+            buildForTesting = "YES"
+            buildForRunning = "NO"
+            buildForProfiling = "NO"
+            buildForArchiving = "NO"
+            buildForAnalyzing = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "D02D86FDC3BF5B899E05A187"
+               BuildableName = "IFCMachineTests.xctest"
+               BlueprintName = "IFCMachineTests"
+               ReferencedContainer = "container:PropertyTestingKit.xcodeproj">
+            </BuildableReference>
+         </BuildActionEntry>
          <BuildActionEntry
             buildForTesting = "YES"
             buildForRunning = "YES"
@@ -57,6 +84,20 @@
             buildForAnalyzing = "NO">
             <BuildableReference
                BuildableIdentifier = "primary"
+               BlueprintIdentifier = "F74FCC35759AE6C277E7C344"
+               BuildableName = "ScheduleControlTests.xctest"
+               BlueprintName = "ScheduleControlTests"
+               ReferencedContainer = "container:PropertyTestingKit.xcodeproj">
+            </BuildableReference>
+         </BuildActionEntry>
+         <BuildActionEntry
+            buildForTesting = "YES"
+            buildForRunning = "NO"
+            buildForProfiling = "NO"
+            buildForArchiving = "NO"
+            buildForAnalyzing = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
                BlueprintIdentifier = "B0BE09FFE9F586EDF3FC5EB9"
                BuildableName = "TSanTests.xctest"
                BlueprintName = "TSanTests"
@@ -69,8 +110,7 @@
       buildConfiguration = "Debug"
       selectedDebuggerIdentifier = "Xcode.DebuggerFoundation.Debugger.LLDB"
       selectedLauncherIdentifier = "Xcode.DebuggerFoundation.Launcher.LLDB"
-      shouldUseLaunchSchemeArgsEnv = "YES"
-      onlyGenerateCoverageForSpecifiedTargets = "NO">
+      shouldUseLaunchSchemeArgsEnv = "YES">
       <MacroExpansion>
          <BuildableReference
             BuildableIdentifier = "primary"
@@ -114,9 +154,40 @@
                ReferencedContainer = "container:PropertyTestingKit.xcodeproj">
             </BuildableReference>
          </TestableReference>
+         <TestableReference
+            skipped = "NO"
+            parallelizable = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "F74FCC35759AE6C277E7C344"
+               BuildableName = "ScheduleControlTests.xctest"
+               BlueprintName = "ScheduleControlTests"
+               ReferencedContainer = "container:PropertyTestingKit.xcodeproj">
+            </BuildableReference>
+         </TestableReference>
+         <TestableReference
+            skipped = "NO"
+            parallelizable = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "0D92E8ED3377557F25BE96C0"
+               BuildableName = "GenericTimerPollerTests.xctest"
+               BlueprintName = "GenericTimerPollerTests"
+               ReferencedContainer = "container:PropertyTestingKit.xcodeproj">
+            </BuildableReference>
+         </TestableReference>
+         <TestableReference
+            skipped = "NO"
+            parallelizable = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "D02D86FDC3BF5B899E05A187"
+               BuildableName = "IFCMachineTests.xctest"
+               BlueprintName = "IFCMachineTests"
+               ReferencedContainer = "container:PropertyTestingKit.xcodeproj">
+            </BuildableReference>
+         </TestableReference>
       </Testables>
-      <CommandLineArguments>
-      </CommandLineArguments>
    </TestAction>
    <LaunchAction
       buildConfiguration = "Debug"

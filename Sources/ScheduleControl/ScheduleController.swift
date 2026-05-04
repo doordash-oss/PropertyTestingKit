@@ -15,6 +15,12 @@ private let _hookPtr = SendablePointer(
 
 /// Per-session state for the drain loop.
 final class SessionState: @unchecked Sendable {
+    /// This session's id. Stamped into pthread TLS during `dispatch` so
+    /// that any runtime-internal enqueue (`ProcessOutOfLineJob` during
+    /// `completeFuture`, etc.) that happens synchronously inside the
+    /// dispatched job can be caught by method 3.
+    let sid: Int
+
     let lock = OSAllocatedUnfairLock(initialState: [UnownedJob]())
     let jobArrived = DispatchSemaphore(value: 0)
 
@@ -27,9 +33,27 @@ final class SessionState: @unchecked Sendable {
     /// so parallel sessions don't corrupt each other's coverage.
     var coverageContext: UnsafeMutablePointer<SanCovMeasurementContext>?
 
+    private let _dispatchCount = OSAllocatedUnfairLock(initialState: 0)
+    /// Number of jobs this session's drain loop has dispatched.
+    var dispatchCount: Int { _dispatchCount.withLock { $0 } }
+
+    private let _method3AppendCount = OSAllocatedUnfairLock(initialState: 0)
+    /// Number of jobs appended to this session's queue via method 3
+    /// (pthread-TLS routing).
+    var method3AppendCount: Int { _method3AppendCount.withLock { $0 } }
+
+    init(sid: Int) {
+        self.sid = sid
+    }
+
     func append(_ job: UnownedJob) {
         lock.withLock { $0.append(job) }
         jobArrived.signal()
+    }
+
+    func appendFromMethod3(_ job: UnownedJob) {
+        _method3AppendCount.withLock { $0 += 1 }
+        append(job)
     }
 
     var count: Int {
@@ -43,12 +67,19 @@ final class SessionState: @unchecked Sendable {
     /// Run a job segment synchronously on the current thread.
     /// Sets the thread-local g_target_context before running the job
     /// and clears it after, so parallel sessions are isolated.
+    /// Also stamps pthread TLS with this session's sid for the duration
+    /// of `runSynchronously`, so method 3 in the routing hook can route
+    /// runtime-internal enqueues (which fire on the same thread during
+    /// the dispatched job) back to this session.
     func dispatch(_ job: UnownedJob) {
+        _dispatchCount.withLock { $0 += 1 }
         let ctx = coverageContext
         if let ctx {
             sancov_set_target_context(ctx)
         }
+        schedule_tls_set_session(Int64(sid))
         job.runSynchronously(on: executor.asUnownedSerialExecutor())
+        schedule_tls_set_session(-1)
         if ctx != nil {
             sancov_set_target_context(nil)
         }
@@ -101,6 +132,7 @@ public enum RoutingHookCounters {
     private static let _method1 = OSAllocatedUnfairLock(initialState: 0)
     private static let _method2 = OSAllocatedUnfairLock(initialState: 0)
     private static let _method3 = OSAllocatedUnfairLock(initialState: 0)
+    private static let _method3StaleSid = OSAllocatedUnfairLock(initialState: 0)
     private static let _passThrough = OSAllocatedUnfairLock(initialState: 0)
     private static let _method1JobKind = OSAllocatedUnfairLock(initialState: [Int: Int]())
     private static let _method2JobKind = OSAllocatedUnfairLock(initialState: [Int: Int]())
@@ -110,6 +142,8 @@ public enum RoutingHookCounters {
     public static var method1Hits: Int { _method1.withLock { $0 } }
     public static var method2Hits: Int { _method2.withLock { $0 } }
     public static var method3Hits: Int { _method3.withLock { $0 } }
+    /// Method-3 hits where the TLS sid was not in `_sessions`.
+    public static var method3StaleSidHits: Int { _method3StaleSid.withLock { $0 } }
     public static var passThroughHits: Int { _passThrough.withLock { $0 } }
     public static var method1JobKinds: [Int: Int] { _method1JobKind.withLock { $0 } }
     public static var method2JobKinds: [Int: Int] { _method2JobKind.withLock { $0 } }
@@ -120,6 +154,7 @@ public enum RoutingHookCounters {
         _method1.withLock { $0 = 0 }
         _method2.withLock { $0 = 0 }
         _method3.withLock { $0 = 0 }
+        _method3StaleSid.withLock { $0 = 0 }
         _passThrough.withLock { $0 = 0 }
         _method1JobKind.withLock { $0 = [:] }
         _method2JobKind.withLock { $0 = [:] }
@@ -139,6 +174,9 @@ public enum RoutingHookCounters {
         _method3.withLock { $0 += 1 }
         _method3JobKind.withLock { $0[jobKind, default: 0] += 1 }
     }
+    static func recordMethod3StaleSid() {
+        _method3StaleSid.withLock { $0 += 1 }
+    }
     static func recordPassThrough(jobKind: Int) {
         _passThrough.withLock { $0 += 1 }
         _passThroughJobKind.withLock { $0[jobKind, default: 0] += 1 }
@@ -154,52 +192,29 @@ private func readJobKind(_ jobPtr: UnsafeRawPointer) -> Int {
 
 /// Session-routing hook. Identification is attempted in priority order;
 /// each enqueue takes exactly one path (early return per branch).
-/// Empirical hit rates referenced below are from
-/// `Tests/ScheduleControlTests/RoutingBranchTests.swift`.
 ///
 /// 1. Current task's `SessionTag.id` task-local.
-///    Fires when the enqueueing task has the tag visible. Observed
-///    triggers include the initial `Task { test() }` spawn inside
-///    `run`, `TaskGroup.addTask` from a tagged parent, `Task.detached`
-///    from a tagged parent (the tag is read off the *spawning* task,
-///    not the detached one), and a fraction of continuation re-enqueues
-///    (roughly 1/3 in sequential yield tests — the rest take method 2).
-///    Side effect: stamps pthread TLS with the session ID.
-///    NOTE: actor-processing job enqueues themselves are **not** reliably
-///    caught here. In the actor-only test, the `ProcessOutOfLineJob`
-///    enqueue landed in method 3, not method 1 — runtime internals
-///    apparently enqueue the actor job from a context where the tag is
-///    not visible.
+///    Fires when the enqueueing task has the tag visible (e.g., the
+///    initial `Task { test() }` spawn, `TaskGroup.addTask` from a
+///    tagged parent).
 ///
 /// 2. Session key on the enqueued job's own task-local chain.
-///    Fires when the enqueueing context does not have `SessionTag.id`
-///    visible but the job being enqueued is an `AsyncTask` whose own
-///    local-storage chain still carries the session tag inherited from
-///    its parent. This is the dominant path for continuation
-///    re-enqueues: in a sequential `Task.yield()` loop it fires about
-///    2× as often as method 1 (observed m2=22 vs m1=11 for 10 yields).
+///    Fires when the enqueueing context lacks `SessionTag.id` but the
+///    enqueued job is an `AsyncTask` whose own local-storage chain
+///    still carries the session tag (e.g., libdispatch timer threads
+///    waking a `Task.sleep`).
 ///
 /// 3. pthread TLS session ID.
 ///    Fires when neither method 1 nor method 2 matches but the current
-///    pthread has a session ID stored in TLS from a previous method-1
-///    or method-2 routing. Observed to catch two kinds of jobs:
-///    - `ProcessOutOfLineJob` for default-actor processing
-///      (`JobKind` 192/193/194) enqueued by runtime internals during
-///      `completeFuture`. This is the originally intended case.
-///    - Untagged `AsyncTask` jobs (`JobKind` 0) enqueued on a
-///      previously-stamped pool thread. Observed in every test that
-///      involves concurrent child tasks (TaskGroup, detached) but
-///      absent in sequential yield tests. Whose AsyncTasks these are
-///      (runtime-internal vs framework vs our own children in a
-///      setup-window gap) is not traced by the current tests.
-///
-/// Side effect shared by methods 1 and 2: `schedule_tls_set_session` is
-/// called on every successful routing and is **never cleared**. This
-/// stickiness is what makes method 3 work *within* a session, but also
-/// means a pool thread retains session TLS after the session tears
-/// down. If an unrelated test's job later runs on that thread, method 3
-/// fires with a stale session ID; `routeToSession` then falls back to
-/// `original(job)` because the session is gone from `_sessions`.
+///    pthread has a session ID stored in TLS by `SessionState.dispatch`.
+///    TLS is set at the start of `runSynchronously` and cleared after,
+///    so it is only present *while a session's job is currently
+///    executing on this thread*. The intended case is
+///    `ProcessOutOfLineJob` enqueued by runtime internals during
+///    `completeFuture`, which fires synchronously inside the dispatched
+///    job. Because TLS is scoped to dispatch, foreign work that runs
+///    on the same thread *after* dispatch returns sees no stamp and
+///    passes through cleanly.
 ///
 /// Non-session jobs (no method matches) pass through via `original(job)`.
 /// Route a job to its session's queue, or fall back to `original(job)` if
@@ -226,30 +241,41 @@ private let _routingHook: HookFn = { job, original in
 
     let kind = readJobKind(jobPtr)
 
-    // Method 1: current task's session task local
+    // Method 1: current task's session task local. Routes only — does
+    // not stamp TLS (TLS is owned by `SessionState.dispatch`).
     if let sid = SessionTag.id {
         RoutingHookCounters.recordMethod1(jobKind: kind)
-        schedule_tls_set_session(Int64(sid))
         routeToSession(sid, job)
         return
     }
 
-    // Method 2: enqueued job's own task locals
+    // Method 2: enqueued job's own task locals. Routes only — does not
+    // stamp TLS, same reason as method 1.
     if keyBits != 0 {
         let sid = schedule_read_session_from_task(jobPtr, UnsafeRawPointer(bitPattern: keyBits))
         if sid >= 0 {
             RoutingHookCounters.recordMethod2(jobKind: kind)
-            schedule_tls_set_session(sid)
             routeToSession(Int(sid), job)
             return
         }
     }
 
-    // Method 3: pthread TLS
+    // Method 3: pthread TLS. Only matches when an enqueue happens
+    // synchronously inside `SessionState.dispatch`, since dispatch is
+    // the only code path that sets TLS.
     let tlsSid = schedule_tls_get_session()
     if tlsSid >= 0 {
         RoutingHookCounters.recordMethod3(jobKind: kind)
-        routeToSession(Int(tlsSid), job)
+        if let session = _sessions.withLock({ $0[Int(tlsSid)] }) {
+            session.appendFromMethod3(job)
+            return
+        }
+        // Stale sid: session gone, pass through. Should be rare under
+        // the new TLS-scope policy since dispatch always clears TLS.
+        RoutingHookCounters.recordMethod3StaleSid()
+        if let original = _original.withLock({ $0 }) {
+            original(job)
+        }
         return
     }
 
@@ -308,7 +334,7 @@ public enum ScheduleController {
             captureSessionKeyIfNeeded()
 
             // Create per-session state
-            let session = SessionState()
+            let session = SessionState(sid: sessionID)
             _sessions.withLock { $0[sessionID] = session }
 
             let completion = TestCompletion()
@@ -386,6 +412,13 @@ public enum ScheduleController {
             if session.count > 0 { return }
             _ = session.jobArrived.wait(timeout: .now() + 0.1)
         }
+    }
+
+    /// Internal helper for tests: returns the SessionState for the current
+    /// session tag. `nil` if called outside a session body or after teardown.
+    static func _currentSessionStateForTesting() -> SessionState? {
+        guard let sid = SessionTag.id else { return nil }
+        return _sessions.withLock { $0[sid] }
     }
 
     private static func captureSessionKeyIfNeeded() {

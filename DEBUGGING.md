@@ -120,6 +120,72 @@ pgrep -f "swiftpm-testing-helper"
 
 This works but has a race condition — the test may complete before you attach.
 
+## Catching an Intermittent Crash (Loop-Until-Crash Recipe)
+
+For an intermittent crash, write the lldb commands to a file and run lldb in batch
+mode (`-b`) inside a shell loop until the process stops on a fatal signal. Verified
+to capture a real `EXC_BAD_ACCESS` from `test16ParallelFuzzTiming` within 4 attempts.
+
+### Pattern
+
+1. Write a one-shot lldb script that:
+   - Loads `swiftpm-testing-helper` and sets the `--filter` run-args (see "Debugging a Specific Swift Testing Test").
+   - Tells lldb to stop on `SIGSEGV` / `SIGBUS` instead of forwarding them to the process:
+     ```
+     process handle SIGSEGV --stop true --pass false --notify true
+     process handle SIGBUS  --stop true --pass false --notify true
+     ```
+   - Launches with `process launch -X false`.
+   - On stop, runs `process status` and `bt all`, then `quit`.
+2. Wrap that lldb script in a shell loop:
+   - Run `lldb -b -s script.lldb > run-N.log 2>&1` per attempt.
+   - Detect a real crash by grepping the log for `stop reason = signal` or
+     `EXC_BAD_ACCESS`.
+   - Detect a clean exit by `exited with status = 0`.
+   - Stop on first crash; report the log path.
+
+### Example
+
+A working example is checked into `/tmp/lldb-loop.sh` in past runs (regenerable from
+this recipe). Each attempt at `test16ParallelFuzzTiming` takes ~5 seconds; 50
+attempts ≈ 5 minutes wall-clock.
+
+### Why batch mode
+
+`lldb -b -s script.lldb` runs commands in order, halts when any signal handler
+configured with `--stop true` fires, and lets the script process the resulting
+stop deterministically. The interactive session is unnecessary and harder to
+script around — batch mode lets you `quit` cleanly after the trace is captured
+and re-launch on the next loop iteration with no state carried over.
+
+### Reading the trace
+
+After capture, the log contains many `AST validation error` and module-import
+warnings (toolchain SDK / lldb compiler skew). These do **not** prevent `bt all`
+from rendering the C/Swift frames — they only suppress some Swift-side
+expression evaluation. To extract just the frame list:
+
+```bash
+grep -A 200 "thread #N" run-NNN.log | grep -E "^    frame #|^\* thread"
+```
+
+Where `N` is the thread number reported on the `* thread #N, … stop reason = …` line.
+
+### What this is good for
+
+- Capturing the actual crash subsystem (which thread, which call site) without
+  guessing from test output.
+- Distinguishing a fix from a masking effect — if the fix is real, the crash
+  rate drops; if it's masking via timing/memory layout, the same `bt` may still
+  appear, just less often. Counter-instrumentation cannot distinguish those.
+
+### What it is not good for
+
+- Capturing the *interleaving* that produced a race. The trace tells you where
+  the crash landed, not what other threads were doing at the moment of the
+  collision. For interleaving you need watchpoints, recorded execution, or
+  reasoning from static analysis of the stack you do have.
+
 ## Console Log Debugging
 
 If you encounter attach failures, check the system logs:

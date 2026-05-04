@@ -307,6 +307,33 @@ bool sancov_is_compiler_generated(const char* sname);
 /// Enable/disable debug logging for trie advances.
 void sancov_trie_set_debug(bool enable);
 
+/// Diagnostic: per-routing-path counters maintained inside get_current_coverage_map.
+/// Pure atomic loads — safe to call from anywhere; concurrent reads are consistent
+/// even if increments are interleaved.
+typedef struct {
+    uint64_t target_ctx;
+    uint64_t tls_cache_inheritance_active;
+    uint64_t inherited_runtime;
+    uint64_t inherited_manualwalk;
+    uint64_t per_task_registry;
+    uint64_t tls_fallback_inheritance_active;
+    uint64_t tls_fallback_no_inheritance;
+    /// Sub-categorization of `tls_fallback_inheritance_active`: synchronous
+    /// caller (swift_task_getCurrent returned NULL).
+    uint64_t tlsfb_sync_pseudo_task;
+    /// Sub-categorization: real Swift task whose task-local chain HEAD
+    /// (offset 136) is NULL — the task has no inherited locals.
+    uint64_t tlsfb_real_task_no_head;
+    /// Sub-categorization: real Swift task with non-NULL HEAD whose chain
+    /// walk did NOT match the captured key or any registered active
+    /// measurement context. This bucket would indicate a routing bug if
+    /// non-zero for tasks that should have inherited.
+    uint64_t tlsfb_real_task_no_match;
+} SanCovRouteCounters;
+
+/// Read the current routing-path counters into `out`. Safe to call concurrently.
+void sancov_read_route_counters(SanCovRouteCounters* out);
+
 #ifdef __cplusplus
 }
 #endif

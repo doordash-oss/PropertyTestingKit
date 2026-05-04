@@ -26,7 +26,11 @@ private func makeMockCoverageClient(
                 indices.append(UInt32(index))
             }
             return SparseCoverage(indices: indices)
-        }
+        },
+        withRawCoverage: { _, _ in false },
+        mergeCoverageIntoBitmap: { _, _, _, _ in false },
+        computeSignatureHash: { _ in 0 },
+        withCoveredIndices: { _, _ in false }
     )
 }
 
@@ -40,7 +44,11 @@ private func makeThrowingCoverageClient() -> CoverageCountersClient {
         beginMeasurement: { SanCovCounters.MeasurementContext.testInstance() },
         endMeasurement: { _ in },
         resetCoverage: { _ in },
-        snapshotCoveredArraysWithContext: { _ in throw MockCoverageUnavailableError() }
+        snapshotCoveredArraysWithContext: { _ in throw MockCoverageUnavailableError() },
+        withRawCoverage: { _, _ in false },
+        mergeCoverageIntoBitmap: { _, _, _, _ in false },
+        computeSignatureHash: { _ in 0 },
+        withCoveredIndices: { _, _ in false }
     )
 }
 
@@ -456,7 +464,11 @@ struct FuzzEngineTests {
                 beginMeasurement: { SanCovCounters.MeasurementContext.testInstance() },
                 endMeasurement: { _ in },
                 resetCoverage: { _ in },
-                snapshotCoveredArraysWithContext: { _ in snapshotCoveredArraysFn() }
+                snapshotCoveredArraysWithContext: { _ in snapshotCoveredArraysFn() },
+                withRawCoverage: { _, _ in false },
+                mergeCoverageIntoBitmap: { _, _, _, _ in false },
+                computeSignatureHash: { _ in 0 },
+                withCoveredIndices: { _, _ in false }
             )
         } operation: {
             await fuzzEngineWithMaxIterations(maxIterations: 50) { (input: Int) in
@@ -490,6 +502,9 @@ struct FuzzEngineTests {
                     // Return sparse coverage with a unique index each time
                     SparseCoverage(indices: [UInt32(coveredIndicesCheckCount.value)])
                 },
+                withRawCoverage: { _, _ in false },
+                mergeCoverageIntoBitmap: { _, _, _, _ in false },
+                computeSignatureHash: { _ in 0 },
                 withCoveredIndices: { _, body in
                     coveredIndicesCheckCount.update { $0 += 1 }
                     // Return unique index each time so corpus accepts it
@@ -525,7 +540,11 @@ struct FuzzEngineTests {
                     endCount.update { $0 += 1 }
                 },
                 resetCoverage: { _ in },
-                snapshotCoveredArraysWithContext: { _ in SparseCoverage(indices: [1]) }
+                snapshotCoveredArraysWithContext: { _ in SparseCoverage(indices: [1]) },
+                withRawCoverage: { _, _ in false },
+                mergeCoverageIntoBitmap: { _, _, _, _ in false },
+                computeSignatureHash: { _ in 0 },
+                withCoveredIndices: { _, _ in false }
             )
         } operation: {
             await fuzzEngineWithMaxIterations(maxIterations: 50) { (_: Int) in }
@@ -566,6 +585,9 @@ struct FuzzEngineTests {
                 snapshotCoveredArraysWithContext: { _ in
                     SparseCoverage(indices: [UInt32(checkCounter.value)])
                 },
+                withRawCoverage: { _, _ in false },
+                mergeCoverageIntoBitmap: { _, _, _, _ in false },
+                computeSignatureHash: { _ in 0 },
                 withCoveredIndices: { _, body in
                     events.update { $0.append(.coverageCheck) }
                     checkCounter.update { $0 += 1 }

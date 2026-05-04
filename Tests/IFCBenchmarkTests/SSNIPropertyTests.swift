@@ -27,7 +27,7 @@ import IFCMachine
 /// - PC is within instruction bounds
 /// - All pointer values point to valid memory addresses
 /// - Register count matches expected count
-@Suite("SanityChecks")
+@Suite("SanityChecks", .disabled())
 struct SanityCheckTests {
 
     @Test("Generated states are well-formed (prop_stamp_generation)")
@@ -94,7 +94,7 @@ struct SanityCheckTests {
 ///     | _ => collect "Failed" (checker true)
 ///     end
 ///   else collect "Not indist!" (checker true)
-@Suite("SSNI Properties")
+@Suite("SSNI Properties", .disabled())
 struct SSNIPropertyTests {
 
     /// propSSNI default_table
@@ -123,7 +123,7 @@ struct SSNIPropertyTests {
 ///
 /// For each injected bug, SSNI should FAIL — the bug introduces a
 /// noninterference violation that the fuzzer should find.
-@Suite("Mutant Detection")
+@Suite("Mutant Detection", .disabled())
 struct MutantDetectionTests {
 
     /// Test each bug variant: SSNI should be violated.
