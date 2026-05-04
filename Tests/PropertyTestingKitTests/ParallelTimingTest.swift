@@ -29,7 +29,7 @@ struct ParallelTimingTest {
         fputs("[TEST] Single fuzz() completed in \(durationMs)ms with \(result.stats.totalInputs) iterations\n", stderr)
     }
 
-    @Test("16 parallel fuzz calls with parallelism=16 each", .disabled())
+    @Test("16 parallel fuzz calls with parallelism=16 each")
     func test16ParallelFuzzTiming() async throws {
         fputs("[TEST] Starting 16 parallel fuzz() calls, each with parallelism=16 (256 total engines)\n", stderr)
         let start = DispatchTime.now().uptimeNanoseconds
