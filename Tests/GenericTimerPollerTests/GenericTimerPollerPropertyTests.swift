@@ -683,7 +683,7 @@ struct GenericTimerPollerPropertyTests {
             let result = try await fuzz(
                 duration: .seconds(60),
                 scheduleFuzzing: true,
-                makeHandlers: { [.corpusMutation(), .stadsDetector()] }
+                plugins: { [.corpusMutation(), .stadsDetector()] }
             ) { (input: PollerFuzzInput) in
                 let poller = GenericTimerPoller(defaultInterval: .microseconds(1))
 

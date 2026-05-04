@@ -343,7 +343,7 @@ struct GenericTimerPollerFuzzTests {
             // non-determinism.
             let result = try await fuzz(
                 duration: .seconds(3),
-                corpusMode: .refuzzReplace,
+                persistence: .replace,
                 coverageStrategy: .pathTrie
             ) { (input: ConstantPollerInput) in
                 let poller = GenericTimerPoller(defaultInterval: .microseconds(100))
@@ -380,7 +380,7 @@ struct GenericTimerPollerFuzzTests {
             // previously saved corpus.
             let result = try await fuzz(
                 duration: .seconds(2),
-                corpusMode: .refuzzReplace,
+                persistence: .replace,
                 coverageStrategy: .pathTrie,
                 scheduleFuzzing: true
             ) { (input: ConstantPollerInput) in
