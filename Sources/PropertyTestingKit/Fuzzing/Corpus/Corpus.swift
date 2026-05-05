@@ -232,11 +232,13 @@ public final class Corpus<each Input: Codable & Sendable>: @unchecked Sendable {
     /// Used by coverage strategies that have already determined the input is interesting.
     func mergeCoverageAndAdd(
         input: (repeat each Input),
+        scheduleBytes: [UInt8]? = nil,
         sparse: SparseCoverage
     ) {
         bitmapMergeSparse(sparse)
         entries.append(CorpusEntry(
             input: repeat each input,
+            scheduleBytes: scheduleBytes,
             sparseCoverage: sparse
         ))
     }
@@ -244,10 +246,12 @@ public final class Corpus<each Input: Codable & Sendable>: @unchecked Sendable {
     /// Add an entry without merging coverage (caller already merged, e.g., newEdge strategy).
     func addEntry(
         input: (repeat each Input),
+        scheduleBytes: [UInt8]? = nil,
         sparse: SparseCoverage
     ) {
         entries.append(CorpusEntry(
             input: repeat each input,
+            scheduleBytes: scheduleBytes,
             sparseCoverage: sparse
         ))
     }
@@ -260,6 +264,7 @@ public final class Corpus<each Input: Codable & Sendable>: @unchecked Sendable {
     @discardableResult
     func addIfInteresting(
         input: borrowing (repeat each Input),
+        scheduleBytes: [UInt8]? = nil,
         sparse: consuming SparseCoverage,
         signatureHashes: inout Set<Int>
     ) -> Bool {
@@ -272,6 +277,7 @@ public final class Corpus<each Input: Codable & Sendable>: @unchecked Sendable {
         signatureHashes.insert(hash)
         entries.append(CorpusEntry(
             input: repeat each input,
+            scheduleBytes: scheduleBytes,
             sparseCoverage: sparse
         ))
         return true
@@ -280,12 +286,14 @@ public final class Corpus<each Input: Codable & Sendable>: @unchecked Sendable {
     /// Add an entry unconditionally with metadata.
     func add(
         input: (repeat each Input),
+        scheduleBytes: [UInt8]? = nil,
         sparse: SparseCoverage,
         entryType: CorpusEntryType = .coverage,
         failure: FailureInfo? = nil
     ) {
         let entry = CorpusEntry(
             input: repeat each input,
+            scheduleBytes: scheduleBytes,
             sparseCoverage: sparse,
             entryType: entryType,
             failure: failure

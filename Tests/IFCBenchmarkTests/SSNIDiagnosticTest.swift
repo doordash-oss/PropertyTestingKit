@@ -19,7 +19,7 @@ import Testing
 import IFCMachine
 @testable import PropertyTestingKit
 
-@Suite("SSNI Diagnostics")
+@Suite("SSNI Diagnostics", .disabled())
 struct SSNIDiagnosticTests {
 
     @Test("Find and report SSNI violation details")

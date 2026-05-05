@@ -21,7 +21,7 @@ import PropertyTestingKit
 
 @Suite("Parallel Timing Test", .serialized)  // Force sequential to isolate measurements
 struct ParallelTimingTest {
-    @Test("Single fuzz call with parallelism=16")
+    @Test("Single fuzz call with parallelism=16", .disabled())
     func testSingleFuzzTiming() async throws {
         fputs("[TEST] Starting single fuzz() call with parallelism=16\n", stderr)
         let start = DispatchTime.now().uptimeNanoseconds

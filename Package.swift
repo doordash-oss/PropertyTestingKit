@@ -30,7 +30,7 @@ let package = Package(
             path: "Sources/SanCovHooks",
             publicHeadersPath: "include",
             cSettings: [
-                .unsafeFlags(["-O3"])  // Optimize hot path even in debug builds
+                // .unsafeFlags(["-O3"])  // Optimize hot path even in debug builds
             ]
         ),
 
@@ -66,18 +66,33 @@ let package = Package(
             // No -sanitize-coverage: functions here are safe to use as edge hooks
         ),
 
+        // C helpers for reading Swift runtime ABI (job flags, task locals, actor pointers)
+        .target(
+            name: "CScheduleHooks",
+            path: "Sources/CScheduleHooks",
+            publicHeadersPath: "include"
+        ),
+
+        // Schedule control for concurrency fuzzing — intercepts swift_task_enqueueGlobal_hook
+        // No -sanitize-coverage to avoid instrumenting the hook itself
+        .target(
+            name: "ScheduleControl",
+            dependencies: ["CScheduleHooks", "SanCovHooks"]
+        ),
+
         .target(
             name: "PropertyTestingKit",
             dependencies: [
                 "SanCovHooks",
                 "EdgeHooks",
+                "ScheduleControl",
                 "CLLVMSymbolizer",
                 .product(name: "Dependencies", package: "swift-dependencies"),
                 .product(name: "DequeModule", package: "swift-collections"),
                 .product(name: "Atomics", package: "swift-atomics"),
             ],
             swiftSettings: [
-                .unsafeFlags(["-O"])  // Optimize even in debug builds
+                // .unsafeFlags(["-O"])  // Optimize even in debug builds
             ]
         ),
         .testTarget(
@@ -88,6 +103,22 @@ let package = Package(
                 .product(name: "FunctionSpy", package: "FunctionSpy"),
             ],
             exclude: ["Corpus", "Fuzzing/Corpus"],
+            swiftSettings: [
+                .unsafeFlags([
+                    "-sanitize=undefined",
+                    "-sanitize-coverage=edge,pc-table"
+                ])
+            ]
+        ),
+        .testTarget(
+            name: "ScheduleControlTests",
+            dependencies: [
+                "ScheduleControl",
+                "PropertyTestingKit",
+                "GenericTimerPoller",
+                .product(name: "Dependencies", package: "swift-dependencies"),
+                .product(name: "Clocks", package: "swift-clocks"),
+            ],
             swiftSettings: [
                 .unsafeFlags([
                     "-sanitize=undefined",
@@ -114,12 +145,13 @@ let package = Package(
             name: "SanCovTests",
             dependencies: [
                 "SanCovHooks",
+                "PropertyTestingKit",
             ],
             swiftSettings: [
                 // Enable sanitizer coverage for thread-local coverage testing
                 .unsafeFlags([
                     "-sanitize=undefined",
-                    "-sanitize-coverage=edge"
+                    "-sanitize-coverage=edge,pc-table"
                 ])
             ]
         ),
@@ -139,7 +171,7 @@ let package = Package(
             name: "IFCMachine",
             dependencies: ["PropertyTestingKit"],
             swiftSettings: [
-                .unsafeFlags(["-O"])  // Optimize even in debug builds (disables assert)
+                // .unsafeFlags(["-O"])  // Optimize even in debug builds (disables assert)
             ]
         ),
         .testTarget(
@@ -181,6 +213,10 @@ let package = Package(
             ],
             swiftSettings: [
                 .swiftLanguageMode(.v5),
+                .unsafeFlags([
+                    "-sanitize=undefined",
+                    "-sanitize-coverage=edge,pc-table"
+                ])
             ]
         ),
         .testTarget(
@@ -188,14 +224,9 @@ let package = Package(
             dependencies: [
                 "GenericTimerPoller",
                 "PropertyTestingKit",
+                "ScheduleControl",
                 .product(name: "Dependencies", package: "swift-dependencies"),
                 .product(name: "Clocks", package: "swift-clocks"),
-            ],
-            swiftSettings: [
-                .unsafeFlags([
-                    "-sanitize=undefined",
-                    "-sanitize-coverage=edge,pc-table"
-                ])
             ]
         ),
     ]

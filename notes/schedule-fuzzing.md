@@ -214,51 +214,115 @@ language-integrated (`actor`, `async let`, `TaskGroup`), not a swappable library
 | Shuttle (PCT)     | Yes (random+replay) | Yes (executor)  | Most promising      |
 | GFuzz/RFF/ConFuzz | Yes                 | Varies         | Requires hooks      |
 
-## Schedule Fuzzing via `swift_task_enqueueOnExecutor_hook`
+## Schedule Fuzzing via `swift_task_enqueueGlobal_hook`
 
-### Swift runtime hooks
+### Swift runtime hooks (verified against source)
 
-The Swift runtime exposes internal hook function pointers for task scheduling:
+Source: `swift/include/swift/Runtime/ConcurrencyHooks.def`,
+`swift/stdlib/public/Concurrency/ConcurrencyHooks.cpp`
 
-| Hook                                 | What it intercepts               | Actor calls? |
-|--------------------------------------|----------------------------------|--------------|
-| `swift_task_enqueueGlobal_hook`      | Global concurrent executor tasks | No           |
-| `swift_task_enqueueOnExecutor_hook`  | All executor-targeted enqueues   | Yes          |
-| Custom `SerialExecutor` on the actor | That specific actor's mailbox    | Yes (1 actor)|
+The Swift runtime exposes hookable function pointers via
+`SWIFT_CONCURRENCY_HOOK` macros. Each hook is a global nullable function
+pointer initialized to `nullptr`. When non-null, the runtime calls the hook
+instead of the default implementation, passing the original as the last
+argument.
 
-Point-Free's `swift-concurrency-extras` uses `swift_task_enqueueGlobal_hook` to
-redirect all global enqueues to the main actor's serial executor (FIFO
-serialization). This gives deterministic scheduling but can't explore different
-interleavings — it's a single fixed order.
+**All hooks (ConcurrencyHooks.def):**
 
-`swift_task_enqueueOnExecutor_hook` intercepts ALL enqueues including
-actor-targeted ones. This is what we want for schedule fuzzing — it covers
-`Task {}`, `TaskGroup`, and `await actor.method()` uniformly.
+| Hook                                              | Signature (params before `original`)                    |
+|---------------------------------------------------|---------------------------------------------------------|
+| `swift_task_enqueueGlobal_hook`                   | `Job *job`                                              |
+| `swift_task_enqueueGlobalWithDelay_hook`           | `unsigned long long delay, Job *job`                    |
+| `swift_task_enqueueGlobalWithDeadline_hook`        | `long long sec/nsec/tsec/tnsec, int clock, Job *job`    |
+| `swift_task_enqueueMainExecutor_hook`              | `Job *job`                                              |
+| `swift_task_getMainExecutor_hook`                  | (none — returns `SerialExecutorRef`)                    |
+| `swift_task_isMainExecutor_hook`                   | `SerialExecutorRef executor`                            |
+| `swift_task_checkIsolated_hook`                    | `SerialExecutorRef executor`                            |
+| `swift_task_isIsolatingCurrentContext_hook`         | `SerialExecutorRef executor`                            |
+| `swift_task_isOnExecutor_hook`                     | `HeapObject *executor, Metadata*, WitnessTable*`        |
+| `swift_task_donateThreadToGlobalExecutorUntil_hook`| `bool (*condition)(void*), void *context`               |
 
-Note: `swift_task_enqueueGlobal_hook` does NOT intercept actor calls. When you
-call `await poller.subscribe()`, the runtime enqueues the job directly on the
-actor's serial executor via `SerialExecutor.enqueue()`, bypassing the global
-hook entirely.
+**There is no `swift_task_enqueueOnExecutor_hook`.** The function
+`_swift_task_enqueueOnExecutor` exists (Actor.cpp, Executor.swift) but has no
+hook variable. Actor-targeted enqueues cannot be intercepted via a hook.
+
+### What `swift_task_enqueueGlobal_hook` actually intercepts
+
+The central dispatch function is `swift_task_enqueueImpl` (Actor.cpp:2677).
+It receives a `Job*` and `SerialExecutorRef` and branches:
+
+```
+swift_task_enqueueImpl(Job *job, SerialExecutorRef executor):
+
+  if executor.isGeneric():              // no specific executor target
+    → swift_task_enqueueGlobal(job)       ← HOOKED
+
+  if executor.isDefaultActor():         // plain `actor MyActor {}`
+    → swift_defaultActor_enqueue(job)     // adds to actor's MPSC queue
+      → if actor was idle:
+          scheduleActorProcessJob()
+            → swift_task_enqueueGlobal(processJob)  ← HOOKED
+
+  else:                                 // custom SerialExecutor (incl MainActor)
+    → _swift_task_enqueueOnExecutor()     // calls executor.enqueue() directly
+                                          // NOT hooked
+```
+
+Key insight: **default actors request processing threads via
+`swift_task_enqueueGlobal`**. When a default actor is idle and receives a job,
+`DefaultActorImpl::enqueue` (Actor.cpp:1556) transitions the actor to
+"scheduled" state and calls `scheduleActorProcessJob` (Actor.cpp:1533), which
+creates a `ProcessOutOfLineJob` and enqueues it on the global executor. This
+goes through the hook.
+
+What this means for schedule fuzzing:
+
+| What happens                          | Goes through global hook? |
+|---------------------------------------|---------------------------|
+| `Task { }` / `Task.detached { }`     | Yes — directly            |
+| `TaskGroup.addTask { }`              | Yes — directly            |
+| Default actor needs processing thread | Yes — via `scheduleActorProcessJob` |
+| Jobs queued on already-busy actor     | No — drained by existing thread |
+| MainActor-targeted jobs               | No — separate `swift_task_enqueueMainExecutor_hook` |
+| Custom `SerialExecutor` enqueues      | No — `_swift_task_enqueueOnExecutor`, unhookable |
+
+**The global hook controls when actors get processing time**, which is
+sufficient for controlling interleavings between concurrent tasks and actor
+method calls.
+
+### Point-Free's approach (reference implementation)
+
+Source: `swift-concurrency-extras/Sources/ConcurrencyExtras/MainSerialExecutor.swift`
+
+```swift
+// Hook access via dlsym
+private typealias Original = @convention(thin) (UnownedJob) -> Void
+private typealias Hook = @convention(thin) (UnownedJob, Original) -> Void
+
+private let _swift_task_enqueueGlobal_hook = UncheckedSendable(
+    dlsym(dlopen(nil, 0), "swift_task_enqueueGlobal_hook")
+        .assumingMemoryBound(to: Hook?.self)
+)
+
+// Installation: redirect all global enqueues to MainActor
+swift_task_enqueueGlobal_hook = { job, _ in MainActor.shared.enqueue(job) }
+```
+
+This serializes ALL work (including default actor processing) onto the main
+thread in FIFO order. Deterministic but cannot explore different interleavings.
 
 ### Design: ConFuzz model adapted for Swift
 
-The approach: intercept all executor enqueues, buffer jobs, drain them
-single-threaded in fuzz-controlled order.
+Same approach as Point-Free but with fuzz-controlled ordering instead of FIFO.
 
-**Hook installation:**
+**Hook installation (Swift, using dlsym pattern):**
 
-```c
-// Hook signature (from Swift runtime):
-typedef void (*swift_task_enqueueOnExecutor_hook_t)(
-    Job *job,
-    ExecutorRef executor,
-    swift_task_enqueueOnExecutor_original original
-);
+```swift
+// Buffer jobs instead of dispatching immediately
+var pending: [(UnownedJob, Original)] = []
 
-// Our hook: buffer instead of dispatching
-void fuzz_enqueue_hook(Job *job, ExecutorRef executor, Original original) {
-    pending_queue_append(job, executor);
-    signal_scheduler();
+swift_task_enqueueGlobal_hook = { job, original in
+    pending.append((job, original))
 }
 ```
 
@@ -268,11 +332,17 @@ void fuzz_enqueue_hook(Job *job, ExecutorRef executor, Original original) {
 scheduleBytes: [UInt8]  // from fuzz input
 index = 0
 
-while !pending.isEmpty {
-    let choice = Int(scheduleBytes[index]) % pending.count
+// Must run on MainActor — cannot use original(job) because it
+// re-enters the cooperative pool instead of executing synchronously.
+// MainActor.shared.enqueue + RunLoop.main.run executes each job inline.
+while !completion.isCompleted {
+    let count = pending.count
+    if count == 0 { RunLoop.main.run(briefly); continue }
+    let choice = Int(scheduleBytes[index]) % count
     index += 1
-    let (job, executor) = pending.remove(at: choice)
-    original(job, executor)  // execute on our thread
+    let job = pending.remove(at: choice)
+    MainActor.shared.enqueue(job)
+    RunLoop.main.run(briefly)
     // execution may enqueue more jobs via the hook → pending grows
 }
 ```
@@ -280,7 +350,6 @@ while !pending.isEmpty {
 **Concrete example with GenericTimerPoller:**
 
 ```swift
-// User writes the same test as today:
 await withTaskGroup(of: Void.self) { group in
     group.addTask { await executeLane(input.lane1, on: poller) }
     group.addTask { await executeLane(input.lane2, on: poller) }
@@ -293,14 +362,29 @@ With schedule bytes `[0, 1, 0, 1, ...]`:
 2. `addTask(lane2)` → hook fires, pending = `[lane1_start, lane2_start]`
 3. Parent suspends at `for await in group`
 4. Scheduler picks `byte[0]=0 → 0%2=0` → runs `lane1_start`
-5. Lane1 calls `await poller.subscribe()` → hook fires, pending =
-   `[lane2_start, subscribe_job]`
-6. Scheduler picks `byte[1]=1 → 1%2=1` → runs `subscribe_job`
-7. Actor processes subscribe, lane1 resumes, next op enqueued
+5. Lane1 calls `await poller.subscribe()` → job queued on actor → actor idle →
+   `scheduleActorProcessJob` → hook fires, pending =
+   `[lane2_start, actor_process_job]`
+6. Scheduler picks `byte[1]=1 → 1%2=1` → runs `actor_process_job`
+7. Actor drains its queue (processes subscribe), lane1 continuation resumes,
+   new job enqueued via hook
 8. ...and so on
 
 Different schedule bytes → different interleaving → different coverage.
 Deterministic replay: same bytes = same schedule = same coverage.
+
+### Limitation: intra-actor ordering
+
+When multiple jobs are queued on an already-busy default actor, they are
+drained in FIFO order by the existing processing thread — the global hook
+doesn't fire again for those jobs. This means:
+
+- **Inter-actor/inter-task ordering**: fully controllable via the hook
+- **Intra-actor job ordering**: FIFO, not controllable
+
+For GenericTimerPoller this is fine — the interesting nondeterminism is in the
+interleaving of concurrent lanes, not in the order of jobs within the actor's
+queue (which is serial by design).
 
 ### Schedule as implicit fuzz dimension
 
@@ -324,40 +408,133 @@ Internally, the fuzzer:
 - Coverage guides both data mutations and schedule mutations
 - Corpus entries store `(data_input, schedule_bytes)` for replay
 
+### Resolved questions
+
+1. **Can we hold a Job and dispatch it later?** ✅ Yes. Jobs are heap-allocated
+   and the runtime tolerates non-immediate dispatch. Use `original(job)` to
+   dispatch to the cooperative pool asynchronously.
+
+2. **Execution model.** ✅ Resolved empirically. `MainActor.shared.enqueue(job)`
+   does NOT work — it deadlocks when called from inside `MainActor.run` (holds
+   executor lock). `_runSynchronously(on:)` also fails. `original(job)` works:
+   dispatches to the cooperative pool, job runs on a pool thread. The drain loop
+   runs on a dedicated dispatch queue (NOT the cooperative pool) and uses a
+   `DispatchSemaphore` to synchronize. After each `original(job)`, the drain
+   waits until either new jobs appear in the pending buffer (meaning the job
+   suspended) or the test completes.
+
+3. **Reentrancy in the hook.** ✅ Not an issue. The hook just appends to the
+   lock-protected pending buffer and signals a semaphore. The drain loop picks
+   up new jobs on the next iteration.
+
+4. **When to enable.** Resolved: explicit flag `scheduleFuzzing: true`.
+
+5. **First-run warmup.** ⚠️ The first call to `ScheduleController.run` from
+   an async context may produce a different interleaving than subsequent calls
+   (cooperative pool initialization overhead). Subsequent calls are fully
+   deterministic. In the fuzz loop, the first iteration serves as warmup.
+
 ### Open questions
-
-1. **Can we hold a Job and dispatch it later?** The hook gives us the Job
-   pointer and original function. Buffering the Job and calling
-   `original(job, executor)` later should work (Job is heap-allocated), but
-   needs verification against runtime source. Point-Free's approach of
-   redirecting enqueues proves the runtime tolerates non-immediate dispatch.
-
-2. **Single-threaded execution.** Running everything on one thread means the
-   cooperative pool is empty. Point-Free's `withMainSerialExecutor` does this
-   successfully, suggesting the runtime doesn't assert on an empty pool.
-
-3. **Reentrancy in the hook.** When we dispatch a job via `original(job, executor)`,
-   that job may hit an `await` which fires the hook again inside our drain loop.
-   The hook must just append to pending and return — the drain loop picks it up
-   on the next iteration. Not reentrant, just queue-and-continue.
-
-4. **When to enable.** Not all fuzz tests are concurrent. Options:
-   - Explicit flag: `scheduleFuzzing: true`
-   - Auto-detect: if multiple enqueues observed during a test iteration, enable
-     for subsequent iterations
-   - Always-on: overhead of the hook when no concurrent work happens is minimal
 
 5. **Interaction with pathTrie.** If schedule is part of the input, different
    schedules for the same data input produce different paths — which is exactly
    what we want. The path captures the interleaving, and pathTrie deduplicates
-   by unique interleavings.
+   by unique interleavings. (Needs empirical verification.)
+
+6. **MainActor-targeted work.** Jobs going to MainActor use a separate hook
+   (`swift_task_enqueueMainExecutor_hook`). If the test involves MainActor
+   code, we'd need to hook both. For actor-only tests (like GenericTimerPoller),
+   the global hook is sufficient since actor processing goes through it.
+
+7. **Schedule bytes as explicit fuzz dimension.** Currently schedule bytes are
+   generated fresh each iteration from the RNG, not stored or mutated
+   independently. Making them a corpus dimension would enable replay and
+   targeted schedule mutation.
+
+## Implementation (completed)
+
+### Module: `ScheduleControl`
+
+Separate SPM target (`Sources/ScheduleControl/`) with NO `-sanitize-coverage` flags
+to avoid instrumenting the hook itself (same pattern as `EdgeHooks`).
+
+### Key implementation findings (empirically verified)
+
+1. **`MainActor.shared.enqueue(job)` does NOT work.** It deadlocks when called
+   from inside `MainActor.run` — the executor lock is held by the calling closure.
+   `_runSynchronously(on:)` also fails (deprecated, doesn't execute job body).
+   `CFRunLoopRunInMode` and `RunLoop.main.run` don't process MainActor-enqueued
+   jobs from synchronous contexts.
+
+2. **`original(job)` DOES work.** It dispatches the job to the cooperative pool
+   asynchronously. The job runs on a pool thread until it suspends, at which
+   point the hook captures the continuation. This is the correct drain mechanism.
+
+3. **`Task.detached` fires the hook synchronously; `Task {}` may not.**
+   `Task.detached` always goes through `swift_task_enqueueGlobal`. `Task {}`
+   from actor context may use `swift_task_enqueueMainExecutor` instead. The test
+   closure must be launched with `Task.detached`.
+
+4. **Drain loop must NOT run on the cooperative pool.** The drain loop blocks
+   on a `DispatchSemaphore` while waiting for jobs to complete. Blocking a
+   cooperative thread would steal a thread from the pool that the dispatched
+   job needs. Solution: run the drain loop on a dedicated `DispatchQueue`.
+   The async API uses `withCheckedThrowingContinuation` to bridge.
+
+5. **First-run warmup effect.** The first call from an async context may produce
+   a different interleaving (cooperative pool initialization). Subsequent calls
+   are fully deterministic with identical schedule bytes.
+
+6. **Hook pointer needs `@unchecked Sendable` wrapper.** `UnsafeMutablePointer`
+   is not `Sendable`. Wrapped in `SendablePointer` struct with safety justified
+   by single-writer (ScheduleController) access pattern.
+
+### Integration
+
+- `FuzzEngineConfig.scheduleFuzzing: Bool` (default `false`)
+- Public API: `fuzz(scheduleFuzzing: true)` on both overloads
+- `FuzzStateMachine` wraps each test execution:
+  ```swift
+  if config.scheduleFuzzing {
+      let scheduleBytes = (0..<64).map { _ in UInt8.random(in: 0...255, using: &rng) }
+      try await ScheduleController.run(scheduleBytes: scheduleBytes) {
+          try await testWithIssueCapture(input)
+      }
+  }
+  ```
+
+### Actual drain loop (verified working)
+
+```swift
+// Runs on dedicated DispatchQueue, NOT cooperative pool
+_hookPtr.ptr.pointee = _bufferHook      // install hook
+defer { _hookPtr.ptr.pointee = nil }
+
+Task.detached { try await test(); completion.markCompleted() }
+_jobArrived.wait()                       // wait for initial job
+
+while !completion.isCompleted && steps < maxDrainSteps {
+    let (count, original) = _state.withLock { ... }
+    if count == 0 { _jobArrived.wait(...); continue }
+
+    let choice = Int(scheduleBytes[byteIndex]) % count
+    let job = _state.withLock { $0.pending.remove(at: choice) }
+
+    original(job)                          // dispatch to cooperative pool
+    waitForStateChange(completion)         // wait for new pending OR completion
+}
+```
+
+The `waitForStateChange` loop checks `_state.pending.count > 0` before
+returning — it doesn't rely solely on semaphore signal count, which avoids
+issues with accumulated signals from runtime infrastructure jobs.
 
 ## Next steps
 
-- Verify `swift_task_enqueueOnExecutor_hook` signature and behavior against
-  Swift runtime source (look at `swift/stdlib/public/Concurrency/Task.cpp`)
-- Prototype: install hook, buffer one GenericTimerPoller iteration, drain
-  single-threaded with fixed schedule, verify deterministic coverage
-- If prototype works: integrate schedule bytes into `Mutator` and corpus format
-- Measure: does schedule-guided fuzzing find the subscribe callback edge (673)
-  reliably? Compare time-to-coverage vs uncontrolled scheduling
+- Phase 2: Make schedule bytes an explicit fuzz dimension in `Mutator`/corpus
+  format so they are mutated independently and stored with corpus entries for
+  replay
+- Test on GenericTimerPoller concurrent test: measure whether schedule-guided
+  fuzzing finds the subscribe callback edge (673) reliably
+- Consider hooking `swift_task_enqueueMainExecutor_hook` for tests that involve
+  MainActor-targeted work

@@ -21,6 +21,8 @@ import Dependencies
 import Foundation
 @testable import GenericTimerPoller
 @testable import PropertyTestingKit
+@testable import ScheduleControl
+import SanCovHooks
 import Synchronization
 import Testing
 
@@ -37,6 +39,32 @@ enum PollerOp: UInt8, Codable, Hashable, Sendable, CaseIterable {
     case updateIntervalLong = 7
     case updateIntervalClear = 8
 }
+
+// MARK: - Constant Input (for controlled experiments)
+
+/// A PollerFuzzInput wrapper whose mutator always returns the same fixed input.
+/// Used to isolate schedule-byte variation from input variation.
+struct ConstantPollerInput: Codable, Hashable, Sendable, MutatorProviding {
+    var lane1: [PollerOp]
+    var lane2: [PollerOp]
+
+    static var defaultMutator: Mutator<ConstantPollerInput> {
+        // Operations that exercise concurrent actor contention without
+        // unbounded timer loops (startPolling + ImmediateClock spins
+        // indefinitely, making iteration count timing-dependent).
+        let fixed = ConstantPollerInput(
+            lane1: [.subscribe, .subscribe, .cancelLast, .subscribe, .cancelLast, .cancelLast],
+            lane2: [.subscribe, .cancelLast, .subscribe, .subscribe, .cancelLast, .cancelLast]
+        )
+        return Mutator(
+            seeds: [fixed],
+            mutate: { _ in [fixed] },
+            generate: { _ in fixed }
+        )
+    }
+}
+
+// MARK: - Fuzz Input Model
 
 struct PollerFuzzInput: Codable, Hashable, Sendable, MutatorProviding {
     var lane1: [PollerOp]
@@ -207,7 +235,7 @@ struct GenericTimerPollerFuzzTests {
         try await withDependencies {
             $0.continuousClock = ImmediateClock()
         } operation: {
-            try await fuzz(
+            let result = try await fuzz(
                 duration: .seconds(30)
             ) { (input: PollerFuzzInput) in
                 let poller = GenericTimerPoller(defaultInterval: .microseconds(100))
@@ -223,6 +251,225 @@ struct GenericTimerPollerFuzzTests {
 
                 // Poller deinits here — deinit cancels task and finishes continuation
             }
+            for (i, entry) in result.corpus.entries.enumerated() {
+                let edges = entry.sparseCoverage.indices.sorted()
+                print("Entry \(i): \(edges.count) edges, input=\(entry.input)")
+            }
+        }
+    }
+
+    @Test("Schedule-fuzzed concurrent operations don't crash", .timeLimit(.minutes(2)))
+    func fuzzScheduledConcurrentOperations() async throws {
+        try await withDependencies {
+            $0.continuousClock = ImmediateClock()
+        } operation: {
+            let iterCounter = Atomic<Int>(0)
+            let result = try await fuzz(
+                duration: .seconds(3),
+                scheduleFuzzing: true
+            ) { (input: PollerFuzzInput) in
+                let iter = iterCounter.wrappingAdd(1, ordering: .relaxed).newValue
+                if iter <= 10 || iter % 500 == 0 {
+                    let l1 = input.lane1.map { "\($0)" }.joined(separator: ", ")
+                    let l2 = input.lane2.map { "\($0)" }.joined(separator: ", ")
+                    print("[INPUT iter=\(iter)] lane1=[\(l1)] lane2=[\(l2)]")
+                }
+
+                let poller = GenericTimerPoller(defaultInterval: .microseconds(100))
+
+                await withTaskGroup(of: Void.self) { group in
+                    group.addTask {
+                        await executeLane(input.lane1, on: poller)
+                    }
+                    group.addTask {
+                        await executeLane(input.lane2, on: poller)
+                    }
+                }
+            }
+            let allEdges = result.corpus.entries.reduce(into: Set<UInt32>()) { $0.formUnion($1.sparseCoverage.indices) }
+            print("Schedule fuzz: \(result.stats.totalInputs) iterations, \(result.corpus.entries.count) corpus entries, \(String(format: "%.1f", result.stats.inputsPerSecond)) iter/s, \(allEdges.count) unique edges total")
+        }
+    }
+
+    @Test("Fixed input with schedule fuzzing produces bounded unique paths", .timeLimit(.minutes(2)))
+    func fixedInputBoundedPaths() async throws {
+        try await withDependencies {
+            $0.continuousClock = ImmediateClock()
+        } operation: {
+            let result = try await fuzz(
+                duration: .milliseconds(100),
+                scheduleFuzzing: true
+            ) { (input: ConstantPollerInput) in
+                let poller = GenericTimerPoller(defaultInterval: .microseconds(100))
+
+                await withTaskGroup(of: Void.self) { group in
+                    group.addTask {
+                        await executeLane(input.lane1, on: poller)
+                    }
+                    group.addTask {
+                        await executeLane(input.lane2, on: poller)
+                    }
+                }
+            }
+
+            let corpusCount = result.corpus.entries.count
+            print("Fixed input: \(result.stats.totalInputs) iterations, \(corpusCount) corpus entries")
+
+            // Dump edge -> PC mapping for all edges seen
+            let allEdges = result.corpus.entries.reduce(into: Set<UInt32>()) { $0.formUnion($1.sparseCoverage.indices) }
+            for edge in allEdges.sorted() {
+                let pc = SanCovCounters.getPC(for: Int(edge))
+                print("[EDGE_PC] \(edge)|\(pc)")
+            }
+
+            #expect(
+                corpusCount <= 10,
+                "Expected at most ~5-10 unique paths for a fixed input, got \(corpusCount)"
+            )
+        }
+    }
+
+    // MARK: - Schedule control reproducibility
+
+    @Test("Uncontrolled: constant input produces many corpus entries (non-deterministic paths)",
+          .timeLimit(.minutes(1)))
+    func uncontrolledConstantInputManyPaths() async throws {
+        try await withDependencies {
+            $0.continuousClock = ImmediateClock()
+        } operation: {
+            // refuzzReplace forces fresh fuzzing (not regression replay). Without
+            // this, the fuzz engine auto-detects the saved corpus and runs only
+            // the saved entries — defeating the point of measuring uncontrolled
+            // non-determinism.
+            let result = try await fuzz(
+                duration: .seconds(3),
+                corpusMode: .refuzzReplace,
+                coverageStrategy: .pathTrie
+            ) { (input: ConstantPollerInput) in
+                let poller = GenericTimerPoller(defaultInterval: .microseconds(100))
+                await withTaskGroup(of: Void.self) { group in
+                    group.addTask { await executeLane(input.lane1, on: poller) }
+                    group.addTask { await executeLane(input.lane2, on: poller) }
+                }
+            }
+
+            let corpusCount = result.corpus.entries.count
+            print("Uncontrolled constant input: \(result.stats.totalInputs) iterations, \(corpusCount) corpus entries")
+
+            // Without schedule control, OS scheduling non-determinism means the
+            // same input produces different pathTrie paths on different runs.
+            // The main sources of variation here are teardown timing (deinit
+            // sometimes runs within the iteration window) and first-iteration
+            // one-shot metadata cache-miss edges. Actor-isolated method calls
+            // themselves share PCs across lanes and run atomically, so
+            // interleaving the two lanes doesn't produce edge variation.
+            #expect(
+                corpusCount > 1,
+                "Expected >1 corpus entries from scheduling non-determinism, got \(corpusCount)"
+            )
+        }
+    }
+
+    @Test("Controlled: constant input with schedule fuzzing produces reproducible entries",
+          .timeLimit(.minutes(1)))
+    func controlledConstantInputReproducible() async throws {
+        try await withDependencies {
+            $0.continuousClock = ImmediateClock()
+        } operation: {
+            // refuzzReplace so we measure fresh fuzzing behavior, not replay a
+            // previously saved corpus.
+            let result = try await fuzz(
+                duration: .seconds(2),
+                corpusMode: .refuzzReplace,
+                coverageStrategy: .pathTrie,
+                scheduleFuzzing: true
+            ) { (input: ConstantPollerInput) in
+                let poller = GenericTimerPoller(defaultInterval: .microseconds(100))
+                await withTaskGroup(of: Void.self) { group in
+                    group.addTask { await executeLane(input.lane1, on: poller) }
+                    group.addTask { await executeLane(input.lane2, on: poller) }
+                }
+            }
+
+            let corpusCount = result.corpus.entries.count
+            print("Controlled constant input: \(result.stats.totalInputs) iterations, \(corpusCount) corpus entries")
+
+            // With schedule fuzzing, different schedule bytes explore different
+            // interleavings, so we still expect multiple corpus entries.
+            #expect(
+                corpusCount > 1,
+                "Expected >1 corpus entries from schedule exploration, got \(corpusCount)"
+            )
+
+            // Verify reproducibility: replay each corpus entry TWICE with its
+            // saved schedule bytes and confirm both replays produce identical
+            // coverage. We compare replay-vs-replay (not original-vs-replay)
+            // because the fuzz engine uses CoverageInheritance (task-local) while
+            // replay uses g_target_context (thread-local), which capture
+            // slightly different edge sets.
+            let replayCtx = SanCovCounters.beginMeasurement()
+
+            var reproducible = 0
+            var nonReproducible = 0
+
+            for entry in result.corpus.entries {
+                guard let scheduleBytes = entry.scheduleBytes else {
+                    nonReproducible += 1
+                    continue
+                }
+
+                // Replay 1
+                SanCovCounters.resetCoverage(replayCtx)
+                try await ScheduleController.run(
+                    scheduleBytes: scheduleBytes,
+                    coverageContext: replayCtx.rawContext
+                ) {
+                    let poller = GenericTimerPoller(defaultInterval: .microseconds(100))
+                    await withTaskGroup(of: Void.self) { group in
+                        group.addTask { await executeLane(entry.input.lane1, on: poller) }
+                        group.addTask { await executeLane(entry.input.lane2, on: poller) }
+                    }
+                }
+                let replay1 = try SanCovCounters.snapshotCoveredArrays(with: replayCtx)
+
+                // Replay 2
+                SanCovCounters.resetCoverage(replayCtx)
+                try await ScheduleController.run(
+                    scheduleBytes: scheduleBytes,
+                    coverageContext: replayCtx.rawContext
+                ) {
+                    let poller = GenericTimerPoller(defaultInterval: .microseconds(100))
+                    await withTaskGroup(of: Void.self) { group in
+                        group.addTask { await executeLane(entry.input.lane1, on: poller) }
+                        group.addTask { await executeLane(entry.input.lane2, on: poller) }
+                    }
+                }
+                let replay2 = try SanCovCounters.snapshotCoveredArrays(with: replayCtx)
+
+                let set1 = Set(replay1.indices)
+                let set2 = Set(replay2.indices)
+
+                if set1 == set2 {
+                    reproducible += 1
+                } else {
+                    nonReproducible += 1
+                    if nonReproducible <= 2 {
+                        let missing = set1.subtracting(set2)
+                        let extra = set2.subtracting(set1)
+                        print("Non-reproducible: replay1 \(replay1.count) edges, replay2 \(replay2.count) edges")
+                        print("  only in replay1: \(missing.count), only in replay2: \(extra.count)")
+                    }
+                }
+            }
+
+            SanCovCounters.endMeasurement(replayCtx)
+
+            print("Reproducibility: \(reproducible)/\(corpusCount) reproducible, \(nonReproducible) non-reproducible")
+
+            #expect(
+                reproducible == corpusCount,
+                "All \(corpusCount) corpus entries should be reproducible, but \(nonReproducible) were not"
+            )
         }
     }
 
@@ -236,7 +483,7 @@ struct GenericTimerPollerFuzzTests {
         } operation: {
             var poller: GenericTimerPoller? = GenericTimerPoller(defaultInterval: .seconds(1))
             await poller?.onDeinit { deinited.withLock { $0 = true } }
-            var subscription: Task<Void, Never>? = await poller?.subscribe { }
+            var subscription: TaskCancellable? = await poller?.subscribe { }
             await poller?.startPolling()
 
             // Wait for the first handler call — startPolling fires an immediate
@@ -268,7 +515,7 @@ struct GenericTimerPollerFuzzTests {
 /// Each lane tracks its own subscriptions independently — when the lane ends,
 /// all remaining subscription tasks are cancelled.
 private func executeLane(_ ops: [PollerOp], on poller: GenericTimerPoller) async {
-    var subs: [Task<Void, Never>] = []
+    var subs: [TaskCancellable] = []
 
     for op in ops {
         switch op {
@@ -281,8 +528,8 @@ private func executeLane(_ ops: [PollerOp], on poller: GenericTimerPoller) async
         case .resumePolling:
             await poller.resumePolling()
         case .subscribe:
-            let task = await poller.subscribe { }
-            subs.append(task)
+            let cancellable = await poller.subscribe { }
+            subs.append(cancellable)
         case .cancelLast:
             if !subs.isEmpty {
                 subs.removeLast().cancel()

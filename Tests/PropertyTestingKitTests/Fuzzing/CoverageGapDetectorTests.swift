@@ -288,20 +288,24 @@ struct CoverageGapDetectorTests {
         func partiallyCoveredFunction(input: Int) {
             // Simple hash to defeat value profile guidance
             let hash = (input &* 31) ^ (input >> 4)
+            // Use side-effect-free branch markers so the fuzz body can be invoked
+            // millions of times concurrently without racing on Swift's `print`/Any
+            // existential boxing (not concurrency-safe under heavy parallel-fuzz
+            // load on this toolchain).
             if hash == 0x7FFFFFFE {
                 // This branch is effectively unreachable (requires specific input)
-                print("found magic!")  // Line 284 - expected uncovered
+                _ = hash &+ 0xDEAD  // Line 289 - expected uncovered
             } else if input < 0 {
-                print("negative")
+                _ = hash &- 1
             } else {
-                print("positive")
+                _ = hash &+ 1
             }
         }
 
         // This test intentionally creates a coverage gap to verify detection works
-        // We expect exactly: 75% coverage, uncovered edge at line 284
+        // We expect exactly: 75% coverage, uncovered edge at line 289
         // If the issue doesn't match these criteria, the test will fail as "unexpected issue"
-        let expectedLine = 284
+        let expectedLine = 289
 
         try await withKnownIssue("Expected coverage gap in partiallyCoveredFunction") {
             // mutation() is included by default via handlers

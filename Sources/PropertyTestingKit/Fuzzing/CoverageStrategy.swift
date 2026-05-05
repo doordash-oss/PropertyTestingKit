@@ -75,27 +75,41 @@ public enum CoverageStrategyKind: Sendable {
 /// Returns `true` if the input was interesting and added.
 typealias CoverageStrategyFn<each Input: Codable & Sendable> = (
     _ input: (repeat each Input),
+    _ scheduleBytes: [UInt8]?,
     _ context: SanCovCounters.MeasurementContext,
     _ coverageClient: CoverageCountersClient,
     _ corpus: Corpus<repeat each Input>
 ) -> Bool
 
-/// Creates a coverage strategy closure for the given kind.
+/// Called once with the measurement context before the first test execution.
+/// Strategies that need to attach to the context (e.g., pathTrie) use this
+/// to set up before any edges are recorded.
+typealias CoverageStrategySetup = (
+    _ context: SanCovCounters.MeasurementContext
+) -> Void
+
+/// A coverage strategy with an optional setup phase.
+struct CoverageStrategy<each Input: Codable & Sendable> {
+    let setup: CoverageStrategySetup?
+    let evaluate: CoverageStrategyFn<repeat each Input>
+}
+
+/// Creates a coverage strategy for the given kind.
 ///
-/// The returned closure encapsulates all interestingness logic and corpus addition.
+/// The returned strategy encapsulates all interestingness logic and corpus addition.
 /// It captures any mutable state it needs (e.g., the inverted index).
 func makeCoverageStrategy<each Input: Codable & Sendable>(
     _ kind: CoverageStrategyKind
-) -> CoverageStrategyFn<repeat each Input> {
+) -> CoverageStrategy<repeat each Input> {
     switch kind {
     case .signatureMatch:
-        return makeSignatureMatchStrategy()
+        return CoverageStrategy(setup: nil, evaluate: makeSignatureMatchStrategy())
     case .newEdge:
-        return makeNewEdgeStrategy()
+        return CoverageStrategy(setup: nil, evaluate: makeNewEdgeStrategy())
     case .pathTrie:
         return makePathTrieStrategy()
     case .alwaysInteresting:
-        return makeAlwaysInterestingStrategy()
+        return CoverageStrategy(setup: nil, evaluate: makeAlwaysInterestingStrategy())
     }
 }
 
@@ -186,7 +200,7 @@ private func makeSignatureMatchStrategy<each Input: Codable & Sendable>(
 ) -> CoverageStrategyFn<repeat each Input> {
     var index = SignatureIndex()
 
-    return { input, context, coverageClient, corpus in
+    return { input, scheduleBytes, context, coverageClient, corpus in
         // Zero-copy access to covered indices buffer
         let isDuplicate = coverageClient.withCoveredIndices(context) { buffer in
             index.isDuplicate(coveredIndices: buffer)
@@ -204,7 +218,7 @@ private func makeSignatureMatchStrategy<each Input: Codable & Sendable>(
         // Register in the inverted index
         index.addSignature(Array(sparse.indices))
 
-        corpus.mergeCoverageAndAdd(input: input, sparse: sparse)
+        corpus.mergeCoverageAndAdd(input: input, scheduleBytes: scheduleBytes, sparse: sparse)
         return true
     }
 }
@@ -216,7 +230,7 @@ private func makeSignatureMatchStrategy<each Input: Codable & Sendable>(
 /// Aligns with AFL/libFuzzer model.
 private func makeNewEdgeStrategy<each Input: Codable & Sendable>(
 ) -> CoverageStrategyFn<repeat each Input> {
-    return { input, context, coverageClient, corpus in
+    return { input, scheduleBytes, context, coverageClient, corpus in
         // Merge coverage directly into corpus bitmap - returns true if any new edge found
         let foundNewEdge = coverageClient.mergeCoverageIntoBitmap(
             context,
@@ -234,7 +248,7 @@ private func makeNewEdgeStrategy<each Input: Codable & Sendable>(
             return false
         }
 
-        corpus.addEntry(input: input, sparse: sparse)
+        corpus.addEntry(input: input, scheduleBytes: scheduleBytes, sparse: sparse)
         return true
     }
 }
@@ -247,38 +261,44 @@ private func makeNewEdgeStrategy<each Input: Codable & Sendable>(
 /// via `trie.isUniquePath` after each run. The trie is attached to the
 /// measurement context so each parallel engine gets its own trie.
 private func makePathTrieStrategy<each Input: Codable & Sendable>(
-) -> CoverageStrategyFn<repeat each Input> {
+) -> CoverageStrategy<repeat each Input> {
     let trie = PathTrie()
-    var attached = false
 
-    return { input, context, coverageClient, corpus in
-        // Attach the trie to the measurement context on first call.
-        // This binds it to the per-task context so the hook reads it
-        // from tls_cached_measurement_context — safe across task hops.
-        if !attached {
-            SanCovCounters.attachTrie(trie, to: context)
-            attached = true
+    let setup: CoverageStrategySetup = { context in
+        SanCovCounters.attachTrie(trie, to: context)
+    }
+
+    var iterationCount = 0
+
+    let evaluate: CoverageStrategyFn<repeat each Input> = { input, scheduleBytes, context, coverageClient, corpus in
+        iterationCount += 1
+        let iter = iterationCount
+        let isNovel = trie.isUniquePath
+
+        if iter <= 10 || iter % 500 == 0 {
+            trie.dump()
+            print("[pathTrie iter=\(iter)] novel=\(isNovel) corpus=\(corpus.entries.count)")
         }
 
         defer {
             trie.reset()
         }
 
-        guard trie.isUniquePath else {
+        guard isNovel else {
             return false
         }
 
         trie.markTerminal()
 
-        // Snapshot coverage for the corpus entry so regression and gap detection work.
-        // The trie handles uniqueness; coverage data is for serialization/analysis.
         if let sparse = try? coverageClient.snapshotCoveredArraysWithContext(context) {
-            corpus.mergeCoverageAndAdd(input: input, sparse: sparse)
+            corpus.mergeCoverageAndAdd(input: input, scheduleBytes: scheduleBytes, sparse: sparse)
         } else {
-            corpus.addEntry(input: input, sparse: SparseCoverage())
+            corpus.addEntry(input: input, scheduleBytes: scheduleBytes, sparse: SparseCoverage())
         }
         return true
     }
+
+    return CoverageStrategy(setup: setup, evaluate: evaluate)
 }
 
 // MARK: - Always Interesting Strategy
@@ -286,11 +306,11 @@ private func makePathTrieStrategy<each Input: Codable & Sendable>(
 /// Always interesting strategy: every input is added unconditionally.
 private func makeAlwaysInterestingStrategy<each Input: Codable & Sendable>(
 ) -> CoverageStrategyFn<repeat each Input> {
-    return { input, context, coverageClient, corpus in
+    return { input, scheduleBytes, context, coverageClient, corpus in
         if let sparse = try? coverageClient.snapshotCoveredArraysWithContext(context) {
-            corpus.mergeCoverageAndAdd(input: input, sparse: sparse)
+            corpus.mergeCoverageAndAdd(input: input, scheduleBytes: scheduleBytes, sparse: sparse)
         } else {
-            corpus.addEntry(input: input, sparse: SparseCoverage())
+            corpus.addEntry(input: input, scheduleBytes: scheduleBytes, sparse: SparseCoverage())
         }
         return true
     }
