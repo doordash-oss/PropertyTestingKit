@@ -13,7 +13,7 @@ permissions:
 
 jobs:
   CLAAssistant:
-    runs-on: ubuntu-latest
+    runs-on: oss-ubuntu-latest-m
     steps:
       - name: "CLA Assistant"
         if: (github.event.comment.body == 'recheck' || github.event.comment.body == 'I have read the CLA Document and I hereby sign the CLA') || github.event_name == 'pull_request_target'
@@ -22,9 +22,9 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           path-to-signatures: 'signatures/version1/cla.json'
-          path-to-document: 'https://github.com/alex-reilly-dd/PropertyTestingKit/blob/main/CONTRIBUTOR_LICENSE_AGREEMENT.md'
+          path-to-document: 'https://github.com/doordash-oss/PropertyTestingKit/blob/main/CONTRIBUTOR_LICENSE_AGREEMENT.md'
           branch: 'main'
           allowlist: alex-reilly-dd,dependabot[bot]
-          custom-notsigned-prcomment: 'Thanks for your contribution! Before we can merge this PR, please sign the [Contributor License Agreement](https://github.com/alex-reilly-dd/PropertyTestingKit/blob/main/CONTRIBUTOR_LICENSE_AGREEMENT.md) by posting the following comment on this PR:'
+          custom-notsigned-prcomment: 'Thanks for your contribution! Before we can merge this PR, please sign the [Contributor License Agreement](https://github.com/doordash-oss/PropertyTestingKit/blob/main/CONTRIBUTOR_LICENSE_AGREEMENT.md) by posting the following comment on this PR:'
           custom-pr-sign-comment: 'I have read the CLA Document and I hereby sign the CLA'
           custom-allsigned-prcomment: 'All contributors have signed the CLA. Thank you!'
