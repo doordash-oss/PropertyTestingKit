@@ -9,19 +9,7 @@ PropertyTestingKit brings coverage-guided fuzzing to Swift Testing:
 - **Coverage-guided fuzzing** - Automatically discover inputs that exercise new code paths
 - **Corpus persistence** - Save and replay interesting inputs across test runs
 - **Regression testing** - Replay saved corpus to catch regressions
-- **High throughput** - ~35M iterations/sec with full coverage isolation
-
-## Performance
-
-Benchmarked on Apple M3 Max (12 P-cores @ 4.05 GHz, 4 E-cores @ 2.75 GHz, 64 GB RAM):
-
-| Configuration | Throughput | Per Core Per GHz |
-|---------------|------------|------------------|
-| Single `fuzz()` call | ~35M iter/sec | ~587K iter/core/GHz/sec |
-| 8 concurrent `fuzz()` calls | ~33M iter/sec | ~554K iter/core/GHz/sec |
-| 16 concurrent `fuzz()` calls | ~32M iter/sec | ~537K iter/core/GHz/sec |
-
-Throughput scales nearly linearly — running 16 concurrent fuzz tests retains ~91% of single-call throughput. Coverage tracking uses lock-free data structures and SIMD-optimized scanning, ensuring minimal overhead even under heavy concurrency.
+- **High throughput** - ~35M iterations/sec with full per-test concurrent coverage isolation
 
 ## Requirements
 
@@ -447,67 +435,12 @@ Then run tests normally:
 swift test
 ```
 
-## API Reference
+## Performance
 
-### Fuzzing
+Benchmarked on Apple M3 Max (12 P-cores @ 4.05 GHz, 4 E-cores @ 2.75 GHz, 64 GB RAM):
 
-| Function | Description |
-|----------|-------------|
-| `fuzz(seeds:duration:corpusMode:test:)` | Coverage-guided fuzz testing (infers mutators from `MutatorProviding`) |
-| `fuzz(using:seeds:duration:corpusMode:test:)` | Fuzz testing with explicit mutators |
-
-### Core Types
-
-| Type | Description |
-|------|-------------|
-| `MutatorProviding` | Protocol for types that provide a default `Mutator` |
-| `Mutator<Value>` | Composable mutation strategy (seeds + mutate + generate) |
-| `FuzzResult` | Result of a fuzz run with corpus and stats |
-| `CorpusMode` | Controls corpus behavior (`.auto`, `.refuzzReplace`, `.refuzzExtend`, `.regressionOnly`) |
-| `FuzzPluginHandler` | Plugin handler with sync/async event processing |
-
-### Built-in Plugin Handlers
-
-| Handler | Description |
-|---------|-------------|
-| `.corpusMutation()` | AFL-style corpus mutation (default) |
-| `.energyMutation()` | Entropic energy-based mutation selection |
-| `.shrinking()` | Delta-debugging failure shrinking |
-| `.plateauDetector()` | Stops when coverage discovery plateaus |
-| `.stadsDetector()` | Statistical stopping (STADS) |
-| `.saturationDetector()` | Stops when coverage growth saturates |
-| `.coverageGap()` | Reports partially-covered functions |
-
-## How It Works
-
-PropertyTestingKit uses SanitizerCoverage with custom task-based isolation:
-
-1. **Edge Instrumentation**: Uses `-sanitize-coverage=edge` which inserts `__sanitizer_cov_trace_pc_guard` callbacks at every branch
-2. **Task-Keyed Isolation**: Coverage maps are keyed by `swift_task_getCurrent()`, providing true per-task isolation even when Swift Testing runs tasks on shared threads
-3. **Source Mapping**: DWARF debug info is parsed via LLVM to map program counters to file:line locations
-4. **Corpus Management**: Saves inputs that discover new coverage, replays them on subsequent runs
-
-The fuzzer follows an AFL-inspired approach:
-- Seeds with boundary values from `MutatorProviding.defaultMutator`
-- Captures coverage signature for each input
-- Adds inputs with new signatures to the corpus
-- Mutates corpus entries to discover more paths
-- Minimizes corpus to smallest set covering all paths
-
-## License
-
-Apache 2.0 License. See [LICENSE](LICENSE) for details.
-
-## Acknowledgments
-
-### Research
-
-- **Miller et al. 1990** - ["An Empirical Study of the Reliability of UNIX Utilities"](https://pages.cs.wisc.edu/~bart/fuzz/fuzz.html) - The original fuzz testing paper that introduced random input testing and timeout-based hang detection
-- **Zalewski (AFL)** - [American Fuzzy Lop](https://lcamtuf.coredump.cx/afl/) - Coverage-guided fuzzing techniques and corpus management strategies
-- **Elhage 2020** - ["Property Testing Like AFL"](https://blog.nelhage.com/post/property-testing-like-afl/) - Workflow combining property testing with coverage-guided fuzzing, including stopping when coverage stops improving
-
-### Libraries
-
-- **[ConcurrencyKit](https://github.com/concurrencykit/ck)** - Lock-free hash table (`ck_ht`) used for task-keyed coverage maps, enabling high-throughput concurrent fuzzing
-- Uses **SanitizerCoverage** (`__sanitizer_cov_trace_pc_guard`) for edge instrumentation with custom task-keyed isolation via `swift_task_getCurrent()`
-- **LLVM** for DWARF-based source symbolication (mapping PCs to file:line locations)
+| Configuration | Throughput | Per Core Per GHz |
+|---------------|------------|------------------|
+| Single `fuzz()` call | ~35M iter/sec | ~587K iter/GHz/sec |
+| 8 concurrent `fuzz()` calls | ~33M iter/sec | ~554K iter/GHz/sec |
+| 16 concurrent `fuzz()` calls | ~32M iter/sec | ~537K iter/GHz/sec |
