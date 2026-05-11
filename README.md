@@ -24,7 +24,7 @@ Add PropertyTestingKit to your `Package.swift`:
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/alex-reilly-dd/PropertyTestingKit.git", from: "1.0.0"),
+    .package(url: "https://github.com/alex-reilly-dd/PropertyTestingKit.git", from: "0.0.1"),
 ],
 targets: [
     .testTarget(
@@ -119,6 +119,8 @@ Control how the fuzzer interacts with saved corpora:
 
 **Suite-level control via environment:**
 
+Users may want to run background fuzzing campaigns outside of the standard CI loop uising `FUZZ_CORPUS_MODE=refuzzextend`. This allows a balance to be struck between fast deterministic test runs and thorough testing. 
+
 ```bash
 # Re-fuzz all tests, replacing existing corpora
 FUZZ_CORPUS_MODE=refuzzreplace swift test
@@ -199,11 +201,6 @@ Use domain-specific mutation strategies instead of the default `MutatorProviding
 - `.special` - NaN, infinity, ulp
 - `.percentages` - Values in 0-1 range with edge cases
 
-**Bool:**
-```swift
-try await fuzz(using: Bool.mutator()) { flag in ... }
-```
-
 Strategies can be composed — mutations from all strategies are applied to seeds from all strategies, enabling cross-strategy fuzzing (e.g., SQL mutations applied to XSS seeds).
 
 ### MutatorProviding Protocol
@@ -248,24 +245,6 @@ let mutator = Mutator<Int>(
     mutate: { [$0 + 1, $0 - 1, $0 * 2] }
 )
 ```
-
-### Configuration
-
-```swift
-try await fuzz(
-    seeds: [...],                  // Domain-specific seed values
-    duration: .seconds(60),        // Max fuzzing time (default: 60s)
-    corpusMode: .auto,             // Corpus behavior (default: .auto)
-    parallelism: 8                 // Parallel engines (default: CPU count)
-) { input in
-    // test
-}
-```
-
-Environment variables:
-- `FUZZ_VERBOSE=1` - Enable detailed logging
-- `FUZZ_DURATION=N` - Override max duration (seconds)
-- `FUZZ_CORPUS_MODE=<mode>` - Control corpus behavior (see [Corpus Modes](#corpus-modes))
 
 ### When Fuzzing Finds a Bug
 
@@ -324,7 +303,7 @@ See [Plugins](#plugins) for more details on the plugin system.
 
 ### Plugins
 
-The fuzzer uses a plugin handler system to customize behavior. Plugins are passed via the `makeHandlers` parameter, which is a factory that creates a fresh set of handlers per parallel engine:
+The fuzzer uses a plugin handler system to customize behavior:
 
 ```swift
 try await fuzz(
@@ -348,34 +327,6 @@ Each `FuzzPluginHandler` receives synchronous events (per-iteration) and async e
 | `.stadsDetector()` | Stopping | Statistical stopping using STADS methodology |
 | `.saturationDetector()` | Stopping | Stops when coverage growth saturates |
 | `.coverageGap()` | Analysis | Reports partially-covered functions after fuzzing completes |
-
-#### Stopping Condition Examples
-
-```swift
-// Default: only time limit applies
-try await fuzz { input in ... }
-
-// Stop early when coverage plateaus
-try await fuzz(
-    makeHandlers: { [.corpusMutation(), .plateauDetector()] }
-) { input in ... }
-
-// Statistical stopping with custom config
-try await fuzz(
-    makeHandlers: { [
-        .corpusMutation(),
-        .stadsDetector(minDiscoveryProbability: 0.001, confirmationChecks: 3, checkInterval: 100)
-    ] }
-) { input in ... }
-
-// Saturation-based stopping
-try await fuzz(
-    makeHandlers: { [
-        .corpusMutation(),
-        .saturationDetector(minSaturation: 0.99, windowSize: 500)
-    ] }
-) { input in ... }
-```
 
 #### Custom Plugin Handlers
 
