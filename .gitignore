@@ -11,6 +11,9 @@ DerivedData/
 # Ignore literal ~ directory (created when LLVM_PROFILE_FILE contains unexpanded ~)
 /~
 .claude
+.mcp.json
+notes/
+research/
 traces
 call_trees
 __BenchmarkBoilerplate*

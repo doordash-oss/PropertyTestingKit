@@ -1,8 +1,0 @@
-{
-  "mcpServers": {
-    "propertytestingkit": {
-      "command": "/Users/alex.reilly/Documents/Swift/PropertyTestingKit/scripts/mcp-server/.venv/bin/python",
-      "args": ["/Users/alex.reilly/Documents/Swift/PropertyTestingKit/scripts/mcp-server/server.py"]
-    }
-  }
-}
