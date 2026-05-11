@@ -395,3 +395,17 @@ Benchmarked on Apple M3 Max (12 P-cores @ 4.05 GHz, 4 E-cores @ 2.75 GHz, 64 GB 
 | Single `fuzz()` call | ~35M iter/sec | ~587K iter/GHz/sec |
 | 8 concurrent `fuzz()` calls | ~33M iter/sec | ~554K iter/GHz/sec |
 | 16 concurrent `fuzz()` calls | ~32M iter/sec | ~537K iter/GHz/sec |
+
+## License
+
+This project is licensed under the Apache License 2.0.
+See [LICENSE](LICENSE) for details.
+
+## Notices
+
+See [NOTICE.txt](NOTICE.txt) for third-party components and attributions.
+
+## Contributor License Agreement (CLA)
+
+Contributions to this project require agreeing to the DoorDash Contributor License Agreement.
+See [CONTRIBUTOR_LICENSE_AGREEMENT.md](CONTRIBUTOR_LICENSE_AGREEMENT.md).
