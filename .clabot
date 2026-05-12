@@ -1,0 +1,7 @@
+
+{
+  "contributors": [],
+  "label": "cla-signed",
+  "message": "We require that all contributors sign the `CONTRIBUTOR_LICENSE_AGREEMENT.md`. You may do so by adding your github username to `.clabot`",
+  "recheckComment": "cla-bot-recheck"
+}
