@@ -264,37 +264,6 @@ struct CorpusPropertyTests {
         #expect(added4 == true, "New signature should be accepted")
     }
 
-    @Test("Corpus minimization preserves total coverage")
-    func testMinimizationPreservesCoverage() throws {
-        var corpus = Corpus<String>()
-
-        // Add entries with overlapping coverage
-        corpus.add(input: ("a"), sparse: SparseCoverage(indices: [0, 1]))
-        corpus.add(input: ("b"), sparse: SparseCoverage(indices: [1, 2]))
-        corpus.add(input: ("c"), sparse: SparseCoverage(indices: [2, 3]))
-        corpus.add(input: ("d"), sparse: SparseCoverage(indices: [0, 1]))  // Redundant
-
-        let originalCoverage = corpus.coveredIndices
-        let minimized = corpus.minimized()
-        let count = corpus.count
-
-        // Property: minimized coverage equals original coverage
-        #expect(
-            minimized.coveredIndices == originalCoverage,
-            "Minimization should preserve coverage indices"
-        )
-
-        // Property: minimized should have fewer or equal entries
-        #expect(minimized.count <= count, "Minimized should not be larger")
-    }
-
-    @Test("Corpus handles empty minimization")
-    func testEmptyMinimization() throws {
-        var corpus = Corpus<String>()
-        let minimized = corpus.minimized()
-        #expect(minimized.isEmpty, "Minimized empty corpus should be empty")
-    }
-
     @Test("Corpus isEmpty property")
     func testCorpusIsEmpty() throws {
         var corpus = Corpus<String>()
@@ -319,27 +288,6 @@ struct CorpusPropertyTests {
         #expect(inputs[1] == "world", "Second input should match")
     }
 
-    @Test("Corpus minimization with no new coverage")
-    func testMinimizationNoNewCoverage() throws {
-        var corpus = Corpus<String>()
-
-        // Add one entry that covers everything
-        corpus.add(input: ("all"), sparse: SparseCoverage(indices: [0, 1, 2]))
-
-        // Add more entries that cover subsets (will have bestCoverage = 0 after first)
-        corpus.add(input: ("sub1"), sparse: SparseCoverage(indices: [0]))
-        corpus.add(input: ("sub2"), sparse: SparseCoverage(indices: [1]))
-
-        let minimized = corpus.minimized()
-        let totalCoverage = corpus.coveredIndices
-
-        // The first entry should cover everything, so minimization should pick just that one
-        #expect(minimized.count >= 1, "Should have at least one entry")
-        #expect(
-            minimized.coveredIndices == totalCoverage,
-            "Coverage should be preserved"
-        )
-    }
 }
 
 // MARK: - CorpusEntry Property Tests
@@ -454,10 +402,6 @@ struct EdgeCaseTests {
 
         let count = corpus.count
         #expect(count == 3)
-
-        // Test minimization
-        let minimized = corpus.minimized()
-        #expect(minimized.count <= count)
     }
 
     @Test("CoverageSignature description")

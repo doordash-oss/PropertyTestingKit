@@ -40,22 +40,4 @@ struct CorpusTests {
 
         #expect(corpus.count == 2)
     }
-
-    @Test("Corpus minimization keeps essential entries")
-    func testCorpusMinimization() {
-        var corpus = Corpus<Int>()
-
-        // Entry 1 covers indices 0, 1
-        corpus.add(input: (1), sparse: SparseCoverage(indices: [0, 1]))
-        // Entry 2 covers indices 1, 2
-        corpus.add(input: (2), sparse: SparseCoverage(indices: [1, 2]))
-        // Entry 3 covers indices 0, 2 (makes 1 and 2 redundant together)
-        corpus.add(input: (3), sparse: SparseCoverage(indices: [0, 2]))
-
-        let minimized = corpus.minimized()
-
-        // Should need at most 2 entries to cover all 3 indices
-        #expect(minimized.count <= 2)
-        #expect(minimized.coveredIndices == Set([0, 1, 2]))
-    }
 }

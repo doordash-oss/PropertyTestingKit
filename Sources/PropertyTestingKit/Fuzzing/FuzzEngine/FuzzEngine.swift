@@ -273,20 +273,9 @@ final class FuzzEngine<each Input: Codable & Sendable>: @unchecked Sendable {
         // Extract copyable fields
         let stats = stateMachineResult.stats
         let failures = stateMachineResult.failures
-        var resultCorpus = stateMachineResult.corpus
+        let resultCorpus = stateMachineResult.corpus
 
-        // Phase 3: Minimize corpus
-        let corpusCountBeforeMinimize = resultCorpus.count
-        if config.minimizeCorpus && corpusCountBeforeMinimize > 1 {
-            let minimizedSnapshot = resultCorpus.minimized()
-            resultCorpus = Corpus(from: minimizedSnapshot)
-            if config.verbose {
-                let finalCount = resultCorpus.count
-                print("[Fuzz] Minimized corpus: \(corpusCountBeforeMinimize) -> \(finalCount)")
-            }
-        }
-
-        // Phase 4: Save corpus
+        // Save corpus
         if let directory = corpusDirectory {
             do {
                 let snapshotToSave = resultCorpus.snapshot()
