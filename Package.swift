@@ -21,7 +21,7 @@ let package = Package(
         .package(url: "https://github.com/apple/swift-collections.git", from: "1.1.0"),
         .package(url: "https://github.com/apple/swift-atomics.git", from: "1.2.0"),
         .package(url: "https://github.com/pointfreeco/swift-clocks.git", from: "1.0.0"),
-        .package(path: "../../../Documents/OpenSource/package-benchmark"),
+        .package(url: "https://github.com/alex-reilly-dd/package-benchmark.git", branch: "runtime_forwarding"),
     ],
     targets: [
         // C module for SanitizerCoverage hooks
