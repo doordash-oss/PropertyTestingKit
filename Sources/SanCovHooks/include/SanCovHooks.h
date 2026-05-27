@@ -229,6 +229,9 @@ void sancov_trie_mark_terminal(SanCovPathTrie* trie);
 /// Reset the trie pointer to root and clear the novel flag.
 void sancov_trie_reset(SanCovPathTrie* trie);
 
+/// Dump all terminal paths in the trie to stderr.
+void sancov_trie_dump(SanCovPathTrie* trie);
+
 /// Advance the trie for a given edge index.
 /// If the child exists, advance. If not, create child and set novel flag.
 /// This is the low-level trie operation — does NOT touch the coverage map.
@@ -243,6 +246,39 @@ void sancov_record_edge_trie(uint32_t *guard);
 /// The hook is a C function pointer called on every edge hit.
 /// Pass NULL to restore the default (sancov_swift_trampoline → sancov_record_edge).
 void sancov_install_swift_hook(void (*hook)(uint32_t*));
+
+// MARK: - Schedule-Aware Coverage
+//
+// When schedule fuzzing is active, test code runs in a different Swift task
+// from the engine. The target context mechanism bypasses the task-keyed lookup
+// and writes coverage directly to a specified measurement context.
+
+/// Set a target measurement context for schedule-aware coverage recording.
+/// When non-NULL, `sancov_record_edge_to_target` writes to this context
+/// instead of using the task-keyed lookup.
+/// Pass NULL to disable.
+void sancov_set_target_context(SanCovMeasurementContext* context);
+
+// MARK: - Coverage Inheritance (Task-Local Propagation)
+
+/// Set the task-local key used for coverage inheritance lookup.
+void sancov_set_coverage_inheritance_key(const void* key);
+
+/// Get the current Swift task pointer (wraps swift_task_getCurrent).
+void* sancov_get_current_task(void);
+
+/// Walk a task's task-local chain to find the key whose value matches expected_value.
+const void* sancov_capture_key_by_value(const void* task, uintptr_t expected_value);
+
+/// Scan the bitmap and rebuild covered_indices from it.
+/// Call after schedule-controlled drain completes (single-threaded) so that
+/// strategies using covered_indices see the correct data.
+void sancov_rebuild_covered_indices_from_map(SanCovMeasurementContext* context);
+
+/// Edge recording that writes to the target context set by `sancov_set_target_context`.
+/// Falls back to `sancov_record_edge` if no target context is set.
+/// Use as the hook via `sancov_install_swift_hook(sancov_record_edge_to_target)`.
+void sancov_record_edge_to_target(uint32_t *guard);
 
 // MARK: - Edge Filter
 //
@@ -273,6 +309,40 @@ void sancov_apply_edge_filter(void);
 
 /// Return the number of edges disabled by sancov_apply_edge_filter().
 size_t sancov_get_filtered_count(void);
+
+/// Check if a symbol name matches compiler-generated patterns.
+/// Exposed for testing the filter logic.
+bool sancov_is_compiler_generated(const char* sname);
+
+/// Enable/disable debug logging for trie advances.
+void sancov_trie_set_debug(bool enable);
+
+/// Diagnostic: per-routing-path counters maintained inside get_current_coverage_map.
+/// Pure atomic loads — safe to call from anywhere; concurrent reads are consistent
+/// even if increments are interleaved.
+typedef struct {
+    uint64_t target_ctx;
+    uint64_t tls_cache_inheritance_active;
+    uint64_t inherited_runtime;
+    uint64_t inherited_manualwalk;
+    uint64_t per_task_registry;
+    uint64_t tls_fallback_inheritance_active;
+    uint64_t tls_fallback_no_inheritance;
+    /// Sub-categorization of `tls_fallback_inheritance_active`: synchronous
+    /// caller (swift_task_getCurrent returned NULL).
+    uint64_t tlsfb_sync_pseudo_task;
+    /// Sub-categorization: real Swift task whose task-local chain HEAD
+    /// (offset 136) is NULL — the task has no inherited locals.
+    uint64_t tlsfb_real_task_no_head;
+    /// Sub-categorization: real Swift task with non-NULL HEAD whose chain
+    /// walk did NOT match the captured key or any registered active
+    /// measurement context. This bucket would indicate a routing bug if
+    /// non-zero for tasks that should have inherited.
+    uint64_t tlsfb_real_task_no_match;
+} SanCovRouteCounters;
+
+/// Read the current routing-path counters into `out`. Safe to call concurrently.
+void sancov_read_route_counters(SanCovRouteCounters* out);
 
 #ifdef __cplusplus
 }
