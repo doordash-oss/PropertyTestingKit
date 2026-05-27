@@ -33,6 +33,11 @@ LOCAL_SWIFT_TEST="$SWIFTPM_BUILD/swift-test"
 # -I flag makes our Testing.swiftmodule take precedence
 TESTING_FLAGS="-Xswiftc -I$SWIFTTESTING_BUILD/swift"
 
+# package-benchmark transitively depends on package-jemalloc, which requires
+# system jemalloc headers. Skip it unless the user has jemalloc installed and
+# explicitly opts in by setting BENCHMARK_DISABLE_JEMALLOC=0.
+export BENCHMARK_DISABLE_JEMALLOC="${BENCHMARK_DISABLE_JEMALLOC:-1}"
+
 cd "$(dirname "$0")/.."
 
 # Clean build artifacts if they exist from a different toolchain
