@@ -43,7 +43,7 @@ struct PathTrieStrategyTests {
         sancov_record_edge(&g2)
 
         // Evaluate the strategy
-        let didAdd = strategy.evaluate(42, context, coverageClient, corpus)
+        let didAdd = strategy.evaluate(42, nil, context, coverageClient, corpus)
 
         #expect(didAdd, "First iteration should be interesting")
         #expect(corpus.entries.count == 1, "Should have one corpus entry")
@@ -56,7 +56,7 @@ struct PathTrieStrategyTests {
         sancov_record_edge(&g1)
         sancov_record_edge(&g2)
 
-        let didAddSecond = strategy.evaluate(42, context, coverageClient, corpus)
+        let didAddSecond = strategy.evaluate(42, nil, context, coverageClient, corpus)
 
         #expect(
             !didAddSecond,

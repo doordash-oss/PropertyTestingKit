@@ -21,19 +21,28 @@ settings:
 packages:
   swift-dependencies:
     url: https://github.com/pointfreeco/swift-dependencies.git
-    version: 1.10.0
+    from: 1.6.0
   swift-collections:
     url: https://github.com/apple/swift-collections.git
-    version: 1.1.0
+    from: 1.1.0
   swift-atomics:
     url: https://github.com/apple/swift-atomics.git
-    version: 1.2.0
+    from: 1.2.0
+  swift-clocks:
+    url: https://github.com/pointfreeco/swift-clocks.git
+    from: 1.0.0
+  swift-concurrency-extras:
+    url: https://github.com/pointfreeco/swift-concurrency-extras.git
+    from: 1.0.0
+  xctest-dynamic-overlay:
+    url: https://github.com/pointfreeco/xctest-dynamic-overlay.git
+    from: 1.0.0
   FunctionSpy:
     url: https://github.com/twof/FunctionSpy.git
-    version: 1.2.0
+    from: 1.2.0
   package-benchmark:
     url: https://github.com/ordo-one/package-benchmark.git
-    version: 1.27.3
+    from: 1.27.3
 targets:
   # C target for value profile hooks
   SanCovHooks:
@@ -77,6 +86,62 @@ targets:
         GCC_ENABLE_CPP_EXCEPTIONS: NO
         GCC_ENABLE_CPP_RTTI: NO
 
+  # Swift target for safe edge hooks (no sanitizer coverage on these functions)
+  EdgeHooks:
+    type: framework
+    platform: macOS
+    sources:
+      - path: Sources/EdgeHooks
+    dependencies:
+      - target: SanCovHooks
+        link: true
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_NAME: EdgeHooks
+        PRODUCT_BUNDLE_IDENTIFIER: com.propertytestingkit.edgehooks
+        SWIFT_INCLUDE_PATHS:
+          - $(SRCROOT)/Sources/SanCovHooks/include
+
+  # C target for Swift runtime ABI helpers (job flags, task locals, actor pointers)
+  CScheduleHooks:
+    type: library.static
+    platform: macOS
+    sources:
+      - path: Sources/CScheduleHooks
+        excludes:
+          - "**/include/**"
+      - path: Sources/CScheduleHooks/include
+        buildPhase: none
+    settings:
+      base:
+        PRODUCT_NAME: CScheduleHooks
+        PUBLIC_HEADERS_FOLDER_PATH: $(CONTENTS_FOLDER_PATH)/Headers
+        MODULEMAP_FILE: $(SRCROOT)/Sources/CScheduleHooks/include/module.modulemap
+        HEADER_SEARCH_PATHS:
+          - $(SRCROOT)/Sources/CScheduleHooks/include
+
+  # Schedule control for concurrency fuzzing — intercepts swift_task_enqueueGlobal_hook
+  # No -sanitize-coverage to avoid instrumenting the hook itself
+  ScheduleControl:
+    type: framework
+    platform: macOS
+    sources:
+      - path: Sources/ScheduleControl
+    dependencies:
+      - target: CScheduleHooks
+        link: true
+      - target: SanCovHooks
+        link: true
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_NAME: ScheduleControl
+        PRODUCT_BUNDLE_IDENTIFIER: com.propertytestingkit.schedulecontrol
+        SWIFT_INCLUDE_PATHS:
+          - $(SRCROOT)/Sources/CScheduleHooks/include
+          - $(SRCROOT)/Sources/SanCovHooks/include
+
   # Build the main library without sanitizer flags
   PropertyTestingKit:
     type: framework
@@ -86,6 +151,10 @@ targets:
     dependencies:
       - target: SanCovHooks
         link: true
+      - target: EdgeHooks
+        link: true
+      - target: ScheduleControl
+        link: true
       - target: CLLVMSymbolizer
         link: true
       - package: swift-dependencies
@@ -94,6 +163,8 @@ targets:
         product: DequeModule
       - package: swift-atomics
         product: Atomics
+      - package: xctest-dynamic-overlay
+        product: IssueReporting
     settings:
       base:
         GENERATE_INFOPLIST_FILE: YES
@@ -102,6 +173,7 @@ targets:
         HEADER_SEARCH_PATHS:
           - $(SRCROOT)/Sources/CLLVMSymbolizer/include
           - $(SRCROOT)/Sources/SanCovHooks/include
+          - $(SRCROOT)/Sources/CScheduleHooks/include
         LIBRARY_SEARCH_PATHS:
           - /opt/homebrew/opt/llvm/lib
         LD_RUNPATH_SEARCH_PATHS: >-
@@ -113,6 +185,7 @@ targets:
         SWIFT_INCLUDE_PATHS:
           - $(SRCROOT)/Sources/CLLVMSymbolizer/include
           - $(SRCROOT)/Sources/SanCovHooks/include
+          - $(SRCROOT)/Sources/CScheduleHooks/include
           - $(TOOLCHAIN_DIR)/usr/lib/swift/macosx
         OTHER_SWIFT_FLAGS: >-
           $(inherited)
@@ -121,6 +194,30 @@ targets:
         GCC_ENABLE_CPP_EXCEPTIONS: NO
         GCC_ENABLE_CPP_RTTI: NO
         # NO sanitizer flags for the library itself - only for tests
+
+  # GenericTimerPoller — production code under test (Swift 5 language mode + sanitizer coverage)
+  GenericTimerPoller:
+    type: framework
+    platform: macOS
+    sources:
+      - path: Sources/GenericTimerPoller
+    dependencies:
+      - target: SanCovHooks
+        link: true
+      - package: swift-dependencies
+        product: Dependencies
+      - package: swift-clocks
+        product: Clocks
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_NAME: GenericTimerPoller
+        PRODUCT_BUNDLE_IDENTIFIER: com.propertytestingkit.generictimerpoller
+        SWIFT_VERSION: "5.0"
+        OTHER_SWIFT_FLAGS: >-
+          $(inherited)
+          -sanitize=undefined
+          -sanitize-coverage=edge,pc-table
 
   # Test target WITH sanitizer flags
   PropertyTestingKitTests:
@@ -133,6 +230,10 @@ targets:
           - "**/FuzzableMacroTests.swift"
     dependencies:
       - target: PropertyTestingKit
+      - package: swift-dependencies
+        product: Dependencies
+      - package: swift-clocks
+        product: Clocks
       - package: FunctionSpy
         product: FunctionSpy
     settings:
@@ -151,6 +252,7 @@ targets:
         SWIFT_INCLUDE_PATHS:
           - $(SRCROOT)/Sources/CLLVMSymbolizer/include
           - $(SRCROOT)/Sources/SanCovHooks/include
+          - $(SRCROOT)/Sources/CScheduleHooks/include
           - $(TOOLCHAIN_DIR)/usr/lib/swift/macosx
         # Link against UBSan runtime and Testing framework
         LIBRARY_SEARCH_PATHS:
@@ -166,6 +268,131 @@ targets:
           $(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin
         PRODUCT_NAME: PropertyTestingKitTests
         PRODUCT_BUNDLE_IDENTIFIER: com.propertytestingkit.tests
+
+  # ScheduleControl tests
+  ScheduleControlTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - path: Tests/ScheduleControlTests
+        excludes:
+          - "**/Corpus/**"
+    dependencies:
+      - target: ScheduleControl
+      - target: PropertyTestingKit
+      - target: GenericTimerPoller
+      - package: swift-dependencies
+        product: Dependencies
+      - package: swift-clocks
+        product: Clocks
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        OTHER_SWIFT_FLAGS: >-
+          $(inherited)
+          -g
+          -sanitize=undefined
+          -sanitize-coverage=edge,pc-table
+          -plugin-path $(TOOLCHAIN_DIR)/usr/lib/swift/host/plugins/testing
+        SWIFT_INCLUDE_PATHS:
+          - $(SRCROOT)/Sources/CLLVMSymbolizer/include
+          - $(SRCROOT)/Sources/SanCovHooks/include
+          - $(SRCROOT)/Sources/CScheduleHooks/include
+          - $(TOOLCHAIN_DIR)/usr/lib/swift/macosx
+        LIBRARY_SEARCH_PATHS:
+          - $(TOOLCHAIN_DIR)/usr/lib/swift/macosx
+          - $(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin
+        OTHER_LDFLAGS: >-
+          $(inherited)
+          -lTesting
+          -lclang_rt.ubsan_osx_dynamic
+        LD_RUNPATH_SEARCH_PATHS: >-
+          $(inherited)
+          $(TOOLCHAIN_DIR)/usr/lib/swift/macosx
+          $(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin
+        PRODUCT_NAME: ScheduleControlTests
+        PRODUCT_BUNDLE_IDENTIFIER: com.propertytestingkit.schedulecontroltests
+
+  # GenericTimerPoller tests (no sanitizer — matches Package.swift)
+  GenericTimerPollerTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - path: Tests/GenericTimerPollerTests
+        excludes:
+          - "**/Corpus/**"
+    dependencies:
+      - target: GenericTimerPoller
+      - target: PropertyTestingKit
+      - target: ScheduleControl
+      - package: swift-dependencies
+        product: Dependencies
+      - package: swift-clocks
+        product: Clocks
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        OTHER_SWIFT_FLAGS: >-
+          $(inherited)
+          -g
+          -plugin-path $(TOOLCHAIN_DIR)/usr/lib/swift/host/plugins/testing
+        SWIFT_INCLUDE_PATHS:
+          - $(SRCROOT)/Sources/CLLVMSymbolizer/include
+          - $(SRCROOT)/Sources/SanCovHooks/include
+          - $(SRCROOT)/Sources/CScheduleHooks/include
+          - $(TOOLCHAIN_DIR)/usr/lib/swift/macosx
+        LIBRARY_SEARCH_PATHS:
+          - $(TOOLCHAIN_DIR)/usr/lib/swift/macosx
+        OTHER_LDFLAGS: >-
+          $(inherited)
+          -lTesting
+        LD_RUNPATH_SEARCH_PATHS: >-
+          $(inherited)
+          $(TOOLCHAIN_DIR)/usr/lib/swift/macosx
+        PRODUCT_NAME: GenericTimerPollerTests
+        PRODUCT_BUNDLE_IDENTIFIER: com.propertytestingkit.generictimerpollertests
+
+  # ScratchPad — experimental tests
+  ScratchPad:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - path: Tests/ScratchPad
+        excludes:
+          - "**/Corpus/**"
+    dependencies:
+      - target: PropertyTestingKit
+      - package: swift-dependencies
+        product: Dependencies
+      - package: FunctionSpy
+        product: FunctionSpy
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        OTHER_SWIFT_FLAGS: >-
+          $(inherited)
+          -g
+          -sanitize=undefined
+          -sanitize-coverage=edge,pc-table
+          -plugin-path $(TOOLCHAIN_DIR)/usr/lib/swift/host/plugins/testing
+        SWIFT_INCLUDE_PATHS:
+          - $(SRCROOT)/Sources/CLLVMSymbolizer/include
+          - $(SRCROOT)/Sources/SanCovHooks/include
+          - $(SRCROOT)/Sources/CScheduleHooks/include
+          - $(TOOLCHAIN_DIR)/usr/lib/swift/macosx
+        LIBRARY_SEARCH_PATHS:
+          - $(TOOLCHAIN_DIR)/usr/lib/swift/macosx
+          - $(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin
+        OTHER_LDFLAGS: >-
+          $(inherited)
+          -lTesting
+          -lclang_rt.ubsan_osx_dynamic
+        LD_RUNPATH_SEARCH_PATHS: >-
+          $(inherited)
+          $(TOOLCHAIN_DIR)/usr/lib/swift/macosx
+          $(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin
+        PRODUCT_NAME: ScratchPad
+        PRODUCT_BUNDLE_IDENTIFIER: com.propertytestingkit.scratchpad
 
   # SanCov isolation tests
   SanCovTests:
@@ -187,6 +414,7 @@ targets:
         SWIFT_INCLUDE_PATHS:
           - $(SRCROOT)/Sources/CLLVMSymbolizer/include
           - $(SRCROOT)/Sources/SanCovHooks/include
+          - $(SRCROOT)/Sources/CScheduleHooks/include
           - $(TOOLCHAIN_DIR)/usr/lib/swift/macosx
         LIBRARY_SEARCH_PATHS:
           - $(TOOLCHAIN_DIR)/usr/lib/swift/macosx
@@ -222,6 +450,7 @@ targets:
         SWIFT_INCLUDE_PATHS:
           - $(SRCROOT)/Sources/CLLVMSymbolizer/include
           - $(SRCROOT)/Sources/SanCovHooks/include
+          - $(SRCROOT)/Sources/CScheduleHooks/include
           - $(TOOLCHAIN_DIR)/usr/lib/swift/macosx
         LIBRARY_SEARCH_PATHS:
           - $(TOOLCHAIN_DIR)/usr/lib/swift/macosx
@@ -261,6 +490,7 @@ targets:
         SWIFT_INCLUDE_PATHS:
           - $(SRCROOT)/Sources/CLLVMSymbolizer/include
           - $(SRCROOT)/Sources/SanCovHooks/include
+          - $(SRCROOT)/Sources/CScheduleHooks/include
         OTHER_LDFLAGS: >-
           $(inherited)
           -L$(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin
@@ -291,6 +521,7 @@ targets:
         SWIFT_INCLUDE_PATHS:
           - $(SRCROOT)/Sources/CLLVMSymbolizer/include
           - $(SRCROOT)/Sources/SanCovHooks/include
+          - $(SRCROOT)/Sources/CScheduleHooks/include
         OTHER_LDFLAGS: >-
           $(inherited)
           -L$(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin
@@ -307,11 +538,15 @@ schemes:
         PropertyTestingKitTests: [test]
         SanCovTests: [test]
         TSanTests: [test]
+        ScheduleControlTests: [test]
+        GenericTimerPollerTests: [test]
     test:
       targets:
         - PropertyTestingKitTests
         - SanCovTests
         - TSanTests
+        - ScheduleControlTests
+        - GenericTimerPollerTests
       gatherCoverageData: false
   CoverageBenchmarks:
     build:

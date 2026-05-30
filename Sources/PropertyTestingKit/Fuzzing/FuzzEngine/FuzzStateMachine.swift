@@ -15,6 +15,8 @@
 import Foundation
 import Dependencies
 import Testing
+import SanCovHooks
+import ScheduleControl
 
 /// Manages the fuzzing loop state. Not thread-safe - only used from a single task.
 final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendable {
@@ -53,6 +55,9 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
 
     // Simple loop state (replaces WorkerPool)
     private var pendingInputs: SimpleRingBuffer<(repeat each Input)>
+    /// Parallel to `pendingInputs` — schedule bytes for each pending input.
+    /// Always kept in sync: append/remove both together.
+    private var pendingScheduleBytes: SimpleRingBuffer<[UInt8]?>
     private var halted: Bool = false
     private var haltReason: FuzzStats.StopReason = .timeLimit
 
@@ -82,6 +87,7 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
         self.corpus = corpus
         self.test = test
         self.pendingInputs = SimpleRingBuffer(minimumCapacity: 16)
+        self.pendingScheduleBytes = SimpleRingBuffer(minimumCapacity: 16)
     }
 
     private func recordFailure(input: (repeat each Input), error: any Error) {
@@ -101,6 +107,15 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
 
         // Initialize pending inputs with seeds
         pendingInputs = SimpleRingBuffer(seeds)
+        // When schedule fuzzing, seeds need random schedule bytes so they run
+        // under ScheduleController.run. Without this, seeds take the non-scheduled
+        // path and their coverage reflects uncontrolled FIFO ordering.
+        var seedRng = FastRNG()
+        pendingScheduleBytes = SimpleRingBuffer(seeds.map { _ in
+            config.scheduleFuzzing
+                ? ScheduleByteMutator.generate(using: &seedRng) as [UInt8]?
+                : nil
+        })
 
         // Setup for test execution
         let coverageCountersClient = Self.fetchCoverageCounters()
@@ -155,13 +170,18 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
 
                 // Get input: from pending queue or generate random
                 let input: (repeat each Input)
+                let currentScheduleBytes: [UInt8]?
                 let fromMutationQueue: Bool
                 if !pendingInputs.isEmpty {
                     input = pendingInputs.removeFirstUnchecked()
+                    currentScheduleBytes = pendingScheduleBytes.removeFirstUnchecked()
                     fromMutationQueue = true
                 } else {
                     // Generate directly - no closure indirection
                     input = (repeat (each mutators).generate(&rng))
+                    currentScheduleBytes = config.scheduleFuzzing
+                        ? ScheduleByteMutator.generate(using: &rng)
+                        : nil
                     generatedCount += 1
                     fromMutationQueue = false
                 }
@@ -172,11 +192,30 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
                 // Run test with coverage measurement
                 do {
                     // Will throw if either the test throws or if it logs an Issue
-                    try await testWithIssueCapture(input)
+                    if let bytes = currentScheduleBytes {
+                        try await ScheduleController.run(
+                            scheduleBytes: bytes,
+                            coverageContext: coverageContext.rawContext
+                        ) {
+                            try await testWithIssueCapture(input)
+                        }
+                    } else {
+                        // Wrap in coverage inheritance so child tasks (TaskGroup,
+                        // Task {}) write edges to this engine's coverage map.
+                        let ctxBits = UInt(bitPattern: coverageContext.rawContext)
+                        try await CoverageInheritance.$context.withValue(ctxBits) {
+                            CoverageInheritance.captureKeyIfNeeded(contextBits: ctxBits)
+                            try await testWithIssueCapture(input)
+                        }
+                        // Rebuild covered_indices from bitmap — child tasks wrote
+                        // to the map but skipped covered_indices to avoid races.
+                        sancov_rebuild_covered_indices_from_map(coverageContext.rawContext)
+                    }
 
                     // Delegate interestingness check to the coverage strategy
                     let didAdd = coverageStrategy.evaluate(
                         input,
+                        currentScheduleBytes,
                         coverageContext,
                         coverageCountersClient,
                         corpus
@@ -193,6 +232,7 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
                         .iteration(.init(
                             discoveredNewCoverage: didAdd,
                             input: input,
+                            scheduleBytes: currentScheduleBytes,
                             fromMutationQueue: fromMutationQueue,
                             sparseCoverage: sparseCoverage
                         ))
@@ -217,6 +257,7 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
                         .failureFound(
                             .init(
                                 input: input,
+                                scheduleBytes: currentScheduleBytes,
                                 test: testWithIssueCapture,
                                 sourceLocation: sourceLocation,
                                 sparseCoverage: sparseCoverage
@@ -287,16 +328,34 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
 
         case .queueInputs(let queueAction):
             pendingInputs.append(contentsOf: queueAction.inputs)
+            // Pad schedule bytes if shorter than inputs (defensive)
+            let bytesCount = queueAction.scheduleBytes.count
+            for i in 0..<queueAction.inputs.count {
+                pendingScheduleBytes.append(i < bytesCount ? queueAction.scheduleBytes[i] : nil)
+            }
 
         case .selectForMutation(let mutationAction):
-            // Generate mutations directly - no closure indirection
-            let mutations = generateMutations(mutationAction.input)
-            pendingInputs.append(contentsOf: mutations)
+            // Generate input mutations paired with original schedule bytes
+            let inputMutations = generateMutations(mutationAction.input)
+            for _ in inputMutations {
+                pendingScheduleBytes.append(mutationAction.scheduleBytes)
+            }
+            pendingInputs.append(contentsOf: inputMutations)
+
+            // Generate schedule byte mutations paired with original input
+            if let bytes = mutationAction.scheduleBytes {
+                let scheduleMutations = ScheduleByteMutator.mutate(bytes)
+                for _ in scheduleMutations {
+                    pendingInputs.append(mutationAction.input)
+                }
+                pendingScheduleBytes.append(contentsOf: scheduleMutations.map { $0 as [UInt8]? })
+            }
             mutationsCount += 1
 
         case .submitToCorpus(let corpusAction):
             addToCorpus(
                 corpusAction.input,
+                scheduleBytes: corpusAction.scheduleBytes,
                 sparse: corpusAction.sparseCoverage,
                 type: corpusAction.entryType,
                 failureInfo: corpusAction.failureInfo
@@ -309,8 +368,8 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
         haltReason = reason
     }
 
-    private func addToCorpus(_ input: (repeat each Input), sparse: SparseCoverage, type: CorpusEntryType, failureInfo: FailureInfo?) {
-        corpus.add(input: input, sparse: sparse, entryType: type, failure: failureInfo)
+    private func addToCorpus(_ input: (repeat each Input), scheduleBytes: [UInt8]? = nil, sparse: SparseCoverage, type: CorpusEntryType, failureInfo: FailureInfo?) {
+        corpus.add(input: input, scheduleBytes: scheduleBytes, sparse: sparse, entryType: type, failure: failureInfo)
     }
 
     /// Generate mutations for an input by mutating one position at a time.

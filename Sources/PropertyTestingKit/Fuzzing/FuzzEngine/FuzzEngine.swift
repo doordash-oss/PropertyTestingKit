@@ -17,6 +17,7 @@
 
 import Dependencies
 import Foundation
+import ScheduleControl
 import Testing
 
 // MARK: - FuzzEngine
@@ -170,7 +171,7 @@ final class FuzzEngine<each Input: Codable & Sendable>: @unchecked Sendable {
             var allSeeds = additionalSeeds
             if corpusExists, let directory = corpusDirectory {
                 do {
-                    let savedSnapshot: CorpusSnapshot<repeat each Input> = try corpusPersistenceClient.loadSnapshot(from: directory)
+                    let savedSnapshot: CorpusSnapshot<repeat each Input> = try corpusPersistenceClient.loadSnapshot(from: directory, scheduleFuzzing: config.scheduleFuzzing)
                     if config.verbose {
                         print("[Fuzz] Mode: refuzzExtend - loaded \(savedSnapshot.count) existing corpus entries as seeds")
                     }
@@ -193,7 +194,7 @@ final class FuzzEngine<each Input: Codable & Sendable>: @unchecked Sendable {
                 return .empty
             }
             do {
-                let savedSnapshot: CorpusSnapshot<repeat each Input> = try corpusPersistenceClient.loadSnapshot(from: directory)
+                let savedSnapshot: CorpusSnapshot<repeat each Input> = try corpusPersistenceClient.loadSnapshot(from: directory, scheduleFuzzing: config.scheduleFuzzing)
                 return await runRegression(snapshot: savedSnapshot, processSyncPlugins: processSyncPlugins, processAsyncPlugins: processAsyncPlugins, test: test)
             } catch {
                 if config.verbose {
@@ -206,7 +207,7 @@ final class FuzzEngine<each Input: Codable & Sendable>: @unchecked Sendable {
         // Default (auto): regression if corpus exists, otherwise fuzz
         if corpusExists, let directory = corpusDirectory {
             do {
-                let savedSnapshot: CorpusSnapshot<repeat each Input> = try corpusPersistenceClient.loadSnapshot(from: directory)
+                let savedSnapshot: CorpusSnapshot<repeat each Input> = try corpusPersistenceClient.loadSnapshot(from: directory, scheduleFuzzing: config.scheduleFuzzing)
                 return await runRegression(snapshot: savedSnapshot, processSyncPlugins: processSyncPlugins, processAsyncPlugins: processAsyncPlugins, test: test)
             } catch {
                 if config.verbose {
@@ -279,7 +280,7 @@ final class FuzzEngine<each Input: Codable & Sendable>: @unchecked Sendable {
         if let directory = corpusDirectory {
             do {
                 let snapshotToSave = resultCorpus.snapshot()
-                try corpusPersistenceClient.save(snapshotToSave, to: directory)
+                try corpusPersistenceClient.save(snapshotToSave, to: directory, scheduleFuzzing: config.scheduleFuzzing)
                 if config.verbose {
                     print("[Fuzz] Saved corpus to \(directory.path)")
                 }
@@ -357,7 +358,13 @@ final class FuzzEngine<each Input: Codable & Sendable>: @unchecked Sendable {
             coverageCounters.resetCoverage(context)
 
             do {
-                try await test(entry.input)
+                if let bytes = entry.scheduleBytes {
+                    try await ScheduleController.run(scheduleBytes: bytes) {
+                        try await test(entry.input)
+                    }
+                } else {
+                    try await test(entry.input)
+                }
             } catch {
                 failures.append((entry.input, error, startTime.distance(to: dateClient.now())))
             }
