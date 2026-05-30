@@ -1,0 +1,39 @@
+# lldb command script for catching an intermittent crash.
+#
+# This script reads paths from environment variables, so the same file
+# works whether driven by scripts/loop-until-crash.sh (which sets the
+# vars) or invoked manually:
+#
+#   export PTK_BUNDLE=$PROJECT_ROOT/.build/.../PropertyTestingKitPackageTests
+#   export PTK_FILTER=test16ParallelFuzzTiming
+#   export PTK_DYLD_LIB=$BUILD_ROOT/swift-macosx-arm64/lib/swift/macosx:...
+#   export PTK_DYLD_FW=/Applications/Xcode.app/.../Frameworks:...
+#   lldb -b -s scripts/lldb-loop.lldb $BUILD_ROOT/.../swiftpm-testing-helper
+#
+# Why the signal handlers: by default lldb forwards SIGSEGV/SIGBUS/SIGABRT
+# to the debuggee, which then exits before we can collect a backtrace.
+# `--stop true --pass false` makes lldb halt on the signal and suppresses
+# delivery, so `bt all` runs against the still-live process state.
+#
+# Why `process launch -X false`: disables shell expansion so debugserver
+# doesn't try to attach to the hardened /bin/sh (would fail with
+# macOSTaskPolicy: get-task-allow denied).
+
+script import os
+script _bundle = os.environ.get('PTK_BUNDLE', '')
+script _filter = os.environ.get('PTK_FILTER', '')
+script _dyld_lib = os.environ.get('PTK_DYLD_LIB', '')
+script _dyld_fw = os.environ.get('PTK_DYLD_FW', '')
+script lldb.debugger.HandleCommand('settings set -- target.run-args "--test-bundle-path" "%s" "--filter" "%s" "%s" "--testing-library" "swift-testing"' % (_bundle, _filter, _bundle))
+script lldb.debugger.HandleCommand('env DYLD_LIBRARY_PATH=%s' % _dyld_lib)
+script lldb.debugger.HandleCommand('env DYLD_FRAMEWORK_PATH=%s' % _dyld_fw)
+
+settings set target.output-path /tmp/lldb-target.out
+settings set target.error-path /tmp/lldb-target.err
+process handle SIGSEGV --stop true --pass false --notify true
+process handle SIGBUS  --stop true --pass false --notify true
+process handle SIGABRT --stop true --pass false --notify true
+process launch -X false
+process status
+bt all
+quit
