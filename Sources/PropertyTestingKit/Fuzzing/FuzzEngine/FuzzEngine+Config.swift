@@ -89,10 +89,3 @@ struct FuzzEngineConfig: Sendable {
         )
     }
 }
-
-import Dependencies
-
-func fooBar() {
-    @Dependency(\.uuid) var idGen
-    print(idGen())
-}

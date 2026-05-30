@@ -56,10 +56,11 @@ struct InterleavingContrastTest {
     @Test("UNCONTROLLED: OS scheduling produces many unique pathTrie paths",
           .timeLimit(.minutes(1)))
     func uncontrolledHasManyPaths() async throws {
-        let hookPtr = dlsym(dlopen(nil, 0), "swift_task_enqueueGlobal_hook")!
-            .assumingMemoryBound(to: UnsafeRawPointer?.self)
-        #expect(hookPtr.pointee == nil, "Scheduler hook should not be installed")
-
+        // NOTE: We deliberately do not assert the global enqueue hook is nil.
+        // That pointer is process-global and shared with any other suite that
+        // may be mid-`ScheduleController.run`, so the check races. This test's
+        // validity does not depend on it: with no SessionTag/TLS set, this
+        // task's enqueues pass through `original` regardless of installation.
         SanCovCounters.applyEdgeFilter()
 
         let trie = PathTrie()

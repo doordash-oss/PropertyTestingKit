@@ -91,5 +91,11 @@ struct ScheduleDeterminismTest {
         // Both should contain all 6 entries
         #expect(Set(log1) == Set(["A1", "A2", "A3", "B1", "B2", "B3"]))
         #expect(Set(log2) == Set(["A1", "A2", "A3", "B1", "B2", "B3"]))
+
+        // The whole point of schedule bytes: "always pick first" and "always
+        // pick second" must produce different *interleavings*. Without this the
+        // test passes even if scheduleBytes were ignored entirely.
+        #expect(log1 != log2,
+                "Different schedule bytes should produce different execution order: \(log1) vs \(log2)")
     }
 }

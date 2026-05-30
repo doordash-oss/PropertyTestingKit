@@ -8,10 +8,14 @@ import SanCovHooks
 private typealias OriginalFn = @convention(thin) (UnownedJob) -> Void
 private typealias HookFn = @convention(thin) (UnownedJob, OriginalFn) -> Void
 
-private let _hookPtr = SendablePointer(
-    dlsym(dlopen(nil, 0), "swift_task_enqueueGlobal_hook")!
-        .assumingMemoryBound(to: Optional<HookFn>.self)
-)
+private let _hookPtr = SendablePointer(resolveEnqueueHookPointer())
+
+private func resolveEnqueueHookPointer() -> UnsafeMutablePointer<HookFn?> {
+    guard let symbol = dlsym(dlopen(nil, 0), "swift_task_enqueueGlobal_hook") else {
+        fatalError("swift_task_enqueueGlobal_hook not found in the Swift runtime — schedule control requires a runtime exposing this hook.")
+    }
+    return symbol.assumingMemoryBound(to: Optional<HookFn>.self)
+}
 
 /// Per-session state for the drain loop.
 final class SessionState: @unchecked Sendable {
@@ -302,6 +306,22 @@ public enum SessionTag {
     @TaskLocal public static var id: Int?
 }
 
+// MARK: - Errors
+
+/// Errors thrown by `ScheduleController.run`.
+public enum ScheduleControlError: Error, CustomStringConvertible {
+    /// The drain loop processed `limit` jobs without the test completing,
+    /// indicating a probable deadlock or runaway enqueue.
+    case drainStepLimitExceeded(Int)
+
+    public var description: String {
+        switch self {
+        case .drainStepLimitExceeded(let limit):
+            return "Schedule drain loop exceeded \(limit) steps without completing — possible deadlock or runaway enqueue."
+        }
+    }
+}
+
 // MARK: - ScheduleController
 
 /// Controls Swift concurrency task scheduling order during fuzz testing.
@@ -347,7 +367,7 @@ public enum ScheduleController {
             _hookPtr.ptr.pointee = _routingHook
 
             // Launch test — Task {} inherits session task local
-            Task {
+            let testTask = Task {
                 do {
                     try await test()
                 } catch {
@@ -386,11 +406,21 @@ public enum ScheduleController {
                 waitForStateChange(session: session, completion: completion)
             }
 
+            let drainCompleted = completion.isCompleted
+
             _sessions.withLock { sessions in
                 sessions[sessionID] = nil
                 if sessions.isEmpty {
                     _hookPtr.ptr.pointee = nil
                 }
+            }
+
+            if !drainCompleted {
+                // The drain loop hit `maxDrainSteps` without the test finishing —
+                // likely a deadlock or runaway enqueue. Cancel the orphaned test
+                // task and surface the failure rather than reporting false success.
+                testTask.cancel()
+                throw ScheduleControlError.drainStepLimitExceeded(maxDrainSteps)
             }
 
             if let error = completion.error {
