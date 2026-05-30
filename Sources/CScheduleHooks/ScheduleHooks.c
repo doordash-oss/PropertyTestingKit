@@ -136,13 +136,17 @@ const void *schedule_capture_session_key(const void *task) {
 // MARK: - Thread-local session marker
 
 static pthread_key_t tls_session_key;
-static bool tls_initialized = false;
+static pthread_once_t tls_once = PTHREAD_ONCE_INIT;
+
+static void schedule_tls_create_key(void) {
+    pthread_key_create(&tls_session_key, NULL);
+}
 
 void schedule_tls_init(void) {
-    if (!tls_initialized) {
-        pthread_key_create(&tls_session_key, NULL);
-        tls_initialized = true;
-    }
+    // pthread_once guarantees the key is created exactly once even when
+    // multiple sessions call run() concurrently. A plain bool guard races:
+    // two threads could both observe it false and create the key twice.
+    pthread_once(&tls_once, schedule_tls_create_key);
 }
 
 void schedule_tls_set_session(int64_t session_id) {

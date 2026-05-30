@@ -54,19 +54,26 @@ enum ScheduleByteMutator {
 
         // Block swap: swap two small blocks to reorder scheduling decisions
         if bytes.count >= 4 {
-            var blockSwap = bytes
             let blockSize = Int.random(in: 2...min(4, bytes.count / 2), using: &rng)
             let maxStart = bytes.count - blockSize
-            let a = Int.random(in: 0...maxStart, using: &rng)
+            // Re-roll BOTH endpoints until the blocks are non-overlapping. Only
+            // re-rolling `b` can spin forever (e.g. count == 4, blockSize == 2,
+            // a == 1 leaves no valid `b`), so vary `a` too and cap attempts.
+            var a = Int.random(in: 0...maxStart, using: &rng)
             var b = Int.random(in: 0...maxStart, using: &rng)
-            // Ensure non-overlapping
-            while abs(a - b) < blockSize {
+            var attempts = 0
+            while abs(a - b) < blockSize && attempts < 16 {
+                a = Int.random(in: 0...maxStart, using: &rng)
                 b = Int.random(in: 0...maxStart, using: &rng)
+                attempts += 1
             }
-            for i in 0..<blockSize {
-                blockSwap.swapAt(a + i, b + i)
+            if abs(a - b) >= blockSize {
+                var blockSwap = bytes
+                for i in 0..<blockSize {
+                    blockSwap.swapAt(a + i, b + i)
+                }
+                results.append(blockSwap)
             }
-            results.append(blockSwap)
         }
 
         return results
