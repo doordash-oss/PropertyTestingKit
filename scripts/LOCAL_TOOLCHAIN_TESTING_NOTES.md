@@ -4,49 +4,104 @@ This guide explains how to build and use a local Swift toolchain that includes y
 
 ## Prerequisites
 
-- Swift source checkout at `~/Documents/OpenSource/swift`
-- Your swift-testing fork at `~/Documents/OpenSource/swift-testing`
-- Xcode-beta installed
+- Swift compiler fork checked out somewhere on disk (this guide uses `~/Documents/OpenSourceDev/swift` — adjust the `BUILD_ROOT` env var below if your layout differs).
+- Your swift-testing fork checked out as a **sibling** of the swift checkout (e.g. `~/Documents/OpenSourceDev/swift-testing`). Stock `release/6.3` is missing `Issue.onRecordCallback` (used by `Sources/PropertyTestingKit/Fuzzing/IssueDetection.swift`), so PropertyTestingKit will fail to compile against it.
+- Xcode-beta installed at `/Applications/Xcode-beta.app`.
+- Homebrew tools: `cmake`, `ninja` (`brew install ninja`).
+
+Sibling repos (`swift-testing`, `swiftpm`, `llvm-project`, `cmark`, `swift-syntax`, etc.) are fetched by `update-checkout` — see Step 0.
 
 ## Build Variables
 
 ```bash
-export BUILD="$HOME/Documents/OpenSource/build/Ninja-RelWithDebInfoAssert"
-export TOOLCHAIN_BIN="$BUILD/toolchain-macosx-arm64/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin"
-export LOCAL_SWIFTC="$BUILD/swift-macosx-arm64/bin/swiftc"
-export LOCAL_RUNTIME="$BUILD/swift-macosx-arm64/lib/swift/macosx"
-export LOCAL_SWIFTPM="$BUILD/swiftpm-macosx-arm64/arm64-apple-macosx/release"
-export SWIFTTESTING_BUILD="$BUILD/swifttesting-macosx-arm64"
+# Adjust BUILD_ROOT to wherever you want intermediate/install output to live.
+# Everything else is derived from it. Build artifacts will land alongside the
+# swift checkout (build-script puts them at ../build relative to swift/).
+export BUILD_ROOT="$HOME/Documents/OpenSourceDev/build/Ninja-RelWithDebInfoAssert"
+export SWIFT_SRC="$HOME/Documents/OpenSourceDev/swift"
+export SWIFTPM_SRC="$HOME/Documents/OpenSourceDev/swiftpm"
+
+export TOOLCHAIN_BIN="$BUILD_ROOT/toolchain-macosx-arm64/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin"
+export LOCAL_SWIFTC="$BUILD_ROOT/swift-macosx-arm64/bin/swiftc"
+export LOCAL_RUNTIME="$BUILD_ROOT/swift-macosx-arm64/lib/swift/macosx"
+export LOCAL_SWIFTPM="$BUILD_ROOT/swiftpm-macosx-arm64/arm64-apple-macosx/release"
+export SWIFTTESTING_BUILD="$BUILD_ROOT/swifttesting-macosx-arm64"
+
+# Xcode-beta is used as the host toolchain (host clang/clang++, SDK).
+# DEVELOPER_DIR is passed per-command rather than via `sudo xcode-select -s`
+# so we don't disturb the rest of the system.
+export DEVELOPER_DIR=/Applications/Xcode-beta.app/Contents/Developer
+```
+
+## Step 0: Fetch Sibling Repos
+
+From the swift checkout, fetch every sibling repo Swift's build expects:
+
+```bash
+cd "$SWIFT_SRC"
+utils/update-checkout --scheme release/6.3 --clone --skip-repository swift
+```
+
+`--skip-repository swift` leaves your fork branch alone. Pick the scheme that matches your fork's base (e.g. `release/6.3` if you rebased on 6.3).
+
+If `llvm-project` ends up empty or `.git/refs` is missing (clone interrupted mid-flight), wipe and clone it directly:
+
+```bash
+rm -rf "$HOME/Documents/OpenSourceDev/llvm-project"
+git -c http.postBuffer=524288000 clone --branch swift/release/6.3 --single-branch \
+  https://github.com/swiftlang/llvm-project.git \
+  "$HOME/Documents/OpenSourceDev/llvm-project"
 ```
 
 ## Step 1: Build the Swift Toolchain
 
-Build Swift with swift-testing support:
-
 ```bash
-cd ~/Documents/OpenSource/swift
-
+cd "$SWIFT_SRC"
 utils/build-script \
   --skip-build-benchmarks \
   --swift-darwin-supported-archs "$(uname -m)" \
   --release-debuginfo \
-  --bootstrapping=bootstrapping \
+  --swift-disable-dead-stripping \
+  --bootstrapping=hosttools \
   --swift-testing \
   --install-swift
 ```
 
-This builds your modified swift-testing fork (located as a sibling directory) with the `@_spi(ForToolsIntegrationOnly)` APIs.
+**Important flag notes:**
+- `--bootstrapping=hosttools` (not `bootstrapping`). Every official preset uses `hosttools`; using `bootstrapping` triggers a CMake-configure-ordering bug in release/6.3 where `lib/SwiftDemangle` and `lib/Tooling/libSwiftScan` reference `HostCompatibilityLibs` before `stdlib/toolchain` has defined it.
+- `--swift-disable-dead-stripping` — matches `docs/HowToGuides/GettingStarted.md`.
+
+## Step 1a: Symlink clang/clang++ into the installed toolchain (must happen during Step 1)
+
+The swift-testing CMake configure inside the main build references `$TOOLCHAIN_BIN/clang++`, but the swift build doesn't install clang there (clang lives in Xcode). Step 1 will fail at the swift-testing configure with:
+
+```
+CMake Error at CMakeLists.txt:24 (project):
+  The CMAKE_CXX_COMPILER:
+    .../toolchain-macosx-arm64/.../usr/bin/clang++
+  is not a full path to an existing compiler tool.
+```
+
+When you hit that, symlink Xcode-beta's clang into the toolchain bin and re-run Step 1 — it will pick up where it left off (~75s to rebuild just swift-testing):
+
+```bash
+XB="/Applications/Xcode-beta.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin"
+ln -sf "$XB/clang"   "$TOOLCHAIN_BIN/clang"
+ln -sf "$XB/clang++" "$TOOLCHAIN_BIN/clang++"
+```
 
 ## Step 2: Build TestingMacros
 
-The initial build may not include TestingMacros. Build it separately:
+The initial build doesn't include TestingMacros. Build them separately:
 
 ```bash
+cd "$SWIFT_SRC"
 utils/build-script \
   --skip-build-benchmarks \
   --swift-darwin-supported-archs "$(uname -m)" \
   --release-debuginfo \
-  --bootstrapping=bootstrapping \
+  --swift-disable-dead-stripping \
+  --bootstrapping=hosttools \
   --swift-testing-macros \
   --install-swift-testing-macros \
   --skip-build-swift \
@@ -57,23 +112,20 @@ utils/build-script \
 
 ## Step 3: Copy Testing Components to Compiler Directory
 
-The build installs components to different directories. Copy them to where the compiler looks:
+The build installs to `toolchain-macosx-arm64/...`, but the compiler at `swift-macosx-arm64/` looks for its own copies. Copy them across:
 
 ```bash
-# Copy TestingMacros plugin
-mkdir -p "$BUILD/swift-macosx-arm64/lib/swift/host/plugins/testing"
-cp "$TOOLCHAIN_BIN/../lib/swift/host/plugins/testing/libTestingMacros.dylib" \
-   "$BUILD/swift-macosx-arm64/lib/swift/host/plugins/testing/"
+mkdir -p "$BUILD_ROOT/swift-macosx-arm64/lib/swift/host/plugins/testing"
+cp "$BUILD_ROOT/swifttestingmacros-macosx-arm64/libTestingMacros.dylib" \
+   "$BUILD_ROOT/swift-macosx-arm64/lib/swift/host/plugins/testing/"
 
-# Copy Testing module and library
-cp "$SWIFTTESTING_BUILD/swift/Testing.swiftmodule" "$LOCAL_RUNTIME/"
+cp "$SWIFTTESTING_BUILD/swift/Testing.swiftmodule"            "$LOCAL_RUNTIME/"
 cp "$SWIFTTESTING_BUILD/swift/Testing.private.swiftinterface" "$LOCAL_RUNTIME/"
 cp "$SWIFTTESTING_BUILD/swift/Testing.package.swiftinterface" "$LOCAL_RUNTIME/"
-cp "$SWIFTTESTING_BUILD/lib/libTesting.dylib" "$LOCAL_RUNTIME/"
+cp "$SWIFTTESTING_BUILD/lib/libTesting.dylib"                 "$LOCAL_RUNTIME/"
 
-# Copy _Testing_Foundation (optional, may be needed)
 cp -r "$SWIFTTESTING_BUILD/swift/_Testing_Foundation.swiftmodule" "$LOCAL_RUNTIME/" 2>/dev/null
-cp "$SWIFTTESTING_BUILD/lib/lib_Testing_Foundation.dylib" "$LOCAL_RUNTIME/" 2>/dev/null
+cp    "$SWIFTTESTING_BUILD/lib/lib_Testing_Foundation.dylib"      "$LOCAL_RUNTIME/" 2>/dev/null
 ```
 
 ## Step 4: Code Sign the Testing Libraries
@@ -81,33 +133,68 @@ cp "$SWIFTTESTING_BUILD/lib/lib_Testing_Foundation.dylib" "$LOCAL_RUNTIME/" 2>/d
 Locally built libraries aren't code signed. macOS will kill the test process with `SIGKILL (Code Signature Invalid)` if you skip this step.
 
 ```bash
-# Ad-hoc sign the Testing libraries
 codesign -s - "$LOCAL_RUNTIME/libTesting.dylib"
 codesign -s - "$LOCAL_RUNTIME/lib_Testing_Foundation.dylib"
-codesign -s - "$BUILD/swift-macosx-arm64/lib/swift/host/plugins/testing/libTestingMacros.dylib"
+codesign -s - "$BUILD_ROOT/swift-macosx-arm64/lib/swift/host/plugins/testing/libTestingMacros.dylib"
 ```
 
-## Step 5: Symlink System Clang into Toolchain
+## Step 5: Bootstrap SwiftPM with the Local Toolchain
 
-SwiftPM bootstrap requires clang in the toolchain:
+The locally built compiler (an assertion build) hits two issues when it tries to compile swift-build / swift-bootstrap:
 
-```bash
-ln -sf /Applications/Xcode-beta.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang "$TOOLCHAIN_BIN/clang"
-ln -sf /Applications/Xcode-beta.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang++ "$TOOLCHAIN_BIN/clang++"
+1. **IRGen debug-types round-trip assertion.** Patches that touch type mangling/canonical type uniquing (parameter-pack work in particular) can trigger
+   ```
+   Assertion failed: (type1->getDecl() != type2->getDecl()),
+   function visitNominalType, file TypeDifferenceVisitor.h, line 209.
+   ```
+   in `EqualUpToDebugDifferences` while emitting debug info for `SWBChannel.swift`. Workaround flag: `-Xfrontend -disable-round-trip-debug-types`.
+
+2. **swift-driver batch-mode single-file confusion** in `-emit-executable -incremental` builds for single-source-file executables (`swift-help`, `swift-bootstrap`). Fails with
+   ```
+   error: cannotResolveTempPath(main-1.swiftmodule)
+   ```
+   Workaround flag: `-disable-batch-mode`.
+
+Patch `swiftpm/Utilities/bootstrap` once to inject both flags. Apply these two edits:
+
+```python
+# Around line 630 (build_with_cmake): seed swift_flags with the workarounds.
+        swift_flags = "-Xfrontend -disable-round-trip-debug-types -disable-batch-mode"
+        if args.sysroot:
+            swift_flags += " -sdk %s" % args.sysroot
 ```
 
-## Step 6: Build SwiftPM with Local Toolchain
+```python
+# Around line 996 (final swift-bootstrap invocation): inject the same flags
+# via -Xswiftc / -Xbuild-tools-swiftc.
+    for modifier in ["-Xswiftc", "-Xbuild-tools-swiftc"]:
+        build_flags.extend([modifier, "-module-cache-path", modifier, local_module_cache_path])
+        build_flags.extend([modifier, "-Xfrontend", modifier, "-disable-round-trip-debug-types"])
+        build_flags.extend([modifier, "-disable-batch-mode"])
+```
+
+Then bootstrap:
 
 ```bash
-~/Documents/OpenSource/swiftpm/Utilities/bootstrap build --release \
+cd "$SWIFTPM_SRC"
+./Utilities/bootstrap build --release \
   --swiftc-path "$TOOLCHAIN_BIN/swiftc" \
-  --clang-path "$TOOLCHAIN_BIN/clang" \
+  --clang-path  "$TOOLCHAIN_BIN/clang"  \
   --cmake-path /opt/homebrew/bin/cmake \
   --ninja-path /opt/homebrew/bin/ninja \
-  --build-dir "$BUILD/swiftpm-macosx-arm64"
+  --build-dir "$BUILD_ROOT/swiftpm-macosx-arm64"
 ```
 
-## Step 7: Configure Package.swift
+If a previous failed run leaves stale `swift-driver` or `bootstrap` subdirs, wipe them before retrying:
+
+```bash
+rm -rf "$BUILD_ROOT/swiftpm-macosx-arm64/arm64-apple-macosx/swift-driver" \
+       "$BUILD_ROOT/swiftpm-macosx-arm64/arm64-apple-macosx/bootstrap"
+```
+
+Successful bootstrap produces `$LOCAL_SWIFTPM/swift-build` and `$LOCAL_SWIFTPM/swift-test`.
+
+## Step 6: Configure Package.swift
 
 Remove the swift-testing package dependency since we're using the toolchain's version:
 
@@ -124,28 +211,30 @@ Use this command to run tests with the local toolchain:
 
 ```bash
 cd /path/to/PropertyTestingKit
-
+DEVELOPER_DIR=/Applications/Xcode-beta.app/Contents/Developer \
 DYLD_LIBRARY_PATH="$LOCAL_RUNTIME" \
 SWIFT_EXEC="$LOCAL_SWIFTC" \
 "$LOCAL_SWIFTPM/swift-test" \
   -Xswiftc -I"$SWIFTTESTING_BUILD/swift"
 ```
 
-**Important:** The `-Xswiftc -I` flag is required to make our Testing module take precedence over Xcode's built-in Testing.framework.
+**Important:**
+- The `-Xswiftc -I` flag is required to make our Testing module take precedence over Xcode's built-in Testing.framework.
+- `DEVELOPER_DIR` is required so clang++ (used to compile `CLLVMSymbolizer`) finds the SDK's C++ stdlib. Without it the build fails with `'type_traits' file not found`.
 
 ### Convenience Script
 
 Use `scripts/build-local-toolchain.sh`:
 
 ```bash
+# Build (override BUILD_ROOT if your install isn't at the default OpenSource path)
+BUILD_ROOT="$BUILD_ROOT" ./scripts/build-local-toolchain.sh build
+
 # Run tests
-./scripts/build-local-toolchain.sh test
+BUILD_ROOT="$BUILD_ROOT" ./scripts/build-local-toolchain.sh test
 
 # Run specific tests
-./scripts/build-local-toolchain.sh test --filter "MyTests"
-
-# Build only
-./scripts/build-local-toolchain.sh build
+BUILD_ROOT="$BUILD_ROOT" ./scripts/build-local-toolchain.sh test --filter "MyTests"
 ```
 
 The script validates that all required components are in place and provides helpful error messages if something is missing.
@@ -156,7 +245,7 @@ The script validates that all required components are in place and provides help
 
 Ensure TestingMacros was built and copied:
 ```bash
-ls "$BUILD/swift-macosx-arm64/lib/swift/host/plugins/testing/libTestingMacros.dylib"
+ls "$BUILD_ROOT/swift-macosx-arm64/lib/swift/host/plugins/testing/libTestingMacros.dylib"
 ```
 
 ### "@_spi import of 'Testing' will not include any SPI symbols"
@@ -165,6 +254,14 @@ This warning means the compiler is finding Xcode's Testing instead of ours. Ensu
 ```bash
 -Xswiftc -I"$SWIFTTESTING_BUILD/swift"
 ```
+
+### "type 'Issue' has no member 'onRecordCallback'"
+
+PropertyTestingKit uses `@_spi(ForToolsIntegrationOnly)` APIs that only exist in your modified swift-testing fork — not in stock `release/6.3`. Make sure your fork is checked out at `~/Documents/OpenSourceDev/swift-testing` (sibling of the swift checkout) before running Step 1. If you've already built against stock, re-run Step 1 after swapping the sibling — Step 1 will rebuild only swift-testing.
+
+### "'type_traits' file not found" when compiling CLLVMSymbolizer
+
+clang++ (Xcode-beta's) can't find the C++ stdlib without an `-isysroot`. Pass `DEVELOPER_DIR=/Applications/Xcode-beta.app/Contents/Developer` to every build/test command (or `export` it for the shell). Don't `sudo xcode-select -s` system-wide.
 
 ### "cannot find 'Configuration' in scope"
 
@@ -187,11 +284,24 @@ If tests crash immediately with a code signing error, the locally built librarie
 
 Fix by running Step 4 (code signing) again after rebuilding swift-testing.
 
+### CMake error: "could not find TARGET HostCompatibilityLibs"
+
+You used `--bootstrapping=bootstrapping`. Use `--bootstrapping=hosttools` instead (Step 1).
+
+### Compiler crash building swift-build: "Assertion failed: (type1->getDecl() != type2->getDecl())"
+
+You haven't applied the `-disable-round-trip-debug-types` workaround to `swiftpm/Utilities/bootstrap`. See Step 5.
+
+### swift-driver error: "cannotResolveTempPath(main-1.swiftmodule)"
+
+You haven't applied the `-disable-batch-mode` workaround to `swiftpm/Utilities/bootstrap`, or you have a stale build dir. See Step 5 (apply patch + wipe `swift-driver` and `bootstrap` subdirs).
+
 ## Why This Setup Works
 
 1. **SwiftPM** is compiled with the local compiler and links against system paths
 2. **DYLD_LIBRARY_PATH** overrides runtime library loading to use local versions
 3. **SWIFT_EXEC** tells SwiftPM to use the local compiler for building packages
-4. **-Xswiftc -I** makes our Testing module take precedence over Xcode's
-5. **TestingMacros** in the compiler's plugin path allows all packages to use Testing macros
-6. **Testing.private.swiftinterface** contains the `@_spi(ForToolsIntegrationOnly)` API declarations
+4. **DEVELOPER_DIR** tells clang/clang++ which SDK to use without disturbing system `xcode-select`
+5. **-Xswiftc -I** makes our Testing module take precedence over Xcode's
+6. **TestingMacros** in the compiler's plugin path allows all packages to use Testing macros
+7. **Testing.private.swiftinterface** contains the `@_spi(ForToolsIntegrationOnly)` API declarations (from your swift-testing fork)
