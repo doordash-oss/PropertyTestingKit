@@ -48,8 +48,8 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
 
     private var mutationsCount: Int = 0
 
-    /// The coverage strategy closure that determines interestingness.
-    private let coverageStrategy: CoverageStrategyFn<repeat each Input>
+    /// The coverage strategy that determines interestingness.
+    private let coverageStrategy: CoverageStrategy<repeat each Input>
 
     // Simple loop state (replaces WorkerPool)
     private var pendingInputs: SimpleRingBuffer<(repeat each Input)>
@@ -61,7 +61,7 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
         mutators: (repeat Mutator<each Input>),
         inputSize: Int,
         corpus: Corpus<repeat each Input>,
-        coverageStrategy: @escaping CoverageStrategyFn<repeat each Input>,
+        coverageStrategy: CoverageStrategy<repeat each Input>,
         processSyncPlugins: @escaping SyncPluginProcessorFn,
         processAsyncPlugins: @escaping AsyncPluginProcessorFn,
         config: FuzzEngineConfig,
@@ -128,6 +128,11 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
             let coverageContext = coverageCountersClient.beginMeasurement()
             defer { coverageCountersClient.endMeasurement(coverageContext) }
 
+            // Set up the coverage strategy before the first test execution.
+            // pathTrie needs to attach its trie to the context so edges
+            // advance the trie during the very first iteration.
+            coverageStrategy.setup?(coverageContext)
+
             // Check time limit every N iterations to avoid per-iteration Date.init() overhead.
             // With ~10M iterations/sec and default interval of 1000, this means ~10K checks/sec.
             // The interval is configurable via FuzzEngineConfig for tests that need precise control.
@@ -170,7 +175,7 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
                     try await testWithIssueCapture(input)
 
                     // Delegate interestingness check to the coverage strategy
-                    let didAdd = coverageStrategy(
+                    let didAdd = coverageStrategy.evaluate(
                         input,
                         coverageContext,
                         coverageCountersClient,

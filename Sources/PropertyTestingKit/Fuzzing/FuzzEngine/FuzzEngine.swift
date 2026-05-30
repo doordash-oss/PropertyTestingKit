@@ -253,7 +253,7 @@ final class FuzzEngine<each Input: Codable & Sendable>: @unchecked Sendable {
         }
 
         let corpus: Corpus<repeat each Input> = corpusRegistry.getCorpus()
-        let coverageStrategy: CoverageStrategyFn<repeat each Input> = makeCoverageStrategy(config.coverageStrategy)
+        let coverageStrategy: CoverageStrategy<repeat each Input> = makeCoverageStrategy(config.coverageStrategy)
 
         let stateMachine = FuzzStateMachine<repeat each Input>(
             seeds: allSeeds,
