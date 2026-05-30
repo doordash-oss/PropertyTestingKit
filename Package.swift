@@ -114,12 +114,13 @@ let package = Package(
             name: "SanCovTests",
             dependencies: [
                 "SanCovHooks",
+                "PropertyTestingKit",
             ],
             swiftSettings: [
                 // Enable sanitizer coverage for thread-local coverage testing
                 .unsafeFlags([
                     "-sanitize=undefined",
-                    "-sanitize-coverage=edge"
+                    "-sanitize-coverage=edge,pc-table"
                 ])
             ]
         ),
