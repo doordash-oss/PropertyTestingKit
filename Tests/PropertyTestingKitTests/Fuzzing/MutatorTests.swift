@@ -350,7 +350,7 @@ struct DoubleMutatorTests {
 struct MutatorFuzzEngineTests {
 
     @Test("FuzzEngine uses mutator seeds")
-    func engineUsesMutatorSeeds() async {
+    func engineUsesMutatorSeeds() async throws {
         let testedInputs = Synchronized([String]())
 
         let mutator = Mutator<String>(
@@ -358,28 +358,14 @@ struct MutatorFuzzEngineTests {
             mutate: { _ in [] }
         )
 
-        let config = FuzzEngineConfig(
-            maxDuration: .seconds(1),
+        // .refuzzReplace prevents stale on-disk corpus from short-circuiting
+        // the test into single-entry regression mode.
+        _ = try await fuzzWithMaxIterations(
+            maxIterations: 2,
+            using: mutator,
+            corpusMode: .refuzzReplace,
             coverageStrategy: .alwaysInteresting
-        )
-
-        let engine = FuzzEngine(mutators: mutator, config: config)
-        // Create default plugin processor (MutationPlugin)
-        let processor = PluginHandlerProcessor(handlers: [FuzzPluginHandler<String>.mutation()])
-        let processSyncPlugins: @Sendable (
-            consuming SyncPluginEvent<String>,
-            (FuzzPluginAction<String>) -> Void
-        ) -> Void = { event, execute in
-            processor.processSync(event: event, execute: execute)
-        }
-        let processAsyncPlugins: @Sendable (
-            isolated (any Actor)?,
-            consuming AsyncPluginEvent<String>,
-            (FuzzPluginAction<String>) -> Void
-        ) async -> Void = { isolation, event, execute in
-            await processor.processAsync(isolation: isolation, event: event, execute: execute)
-        }
-        _ = await engine.run(processSyncPlugins: processSyncPlugins, processAsyncPlugins: processAsyncPlugins) { input in
+        ) { input in
             await testedInputs.update { $0.append(input) }
         }
 
@@ -389,7 +375,7 @@ struct MutatorFuzzEngineTests {
     }
 
     @Test("FuzzEngine uses mutator with multiple seeds")
-    func engineUsesMutatorWithMultipleSeeds() async {
+    func engineUsesMutatorWithMultipleSeeds() async throws {
         let testedInputs = Synchronized([String]())
 
         let mutator = Mutator<String>(
@@ -397,32 +383,17 @@ struct MutatorFuzzEngineTests {
             mutate: { [$0 + "-mutated"] }
         )
 
-        let config = FuzzEngineConfig(
-            maxDuration: .seconds(2),
+        // .refuzzReplace prevents stale on-disk corpus from short-circuiting
+        // the test into single-entry regression mode.
+        _ = try await fuzzWithMaxIterations(
+            maxIterations: 3,
+            using: mutator,
+            corpusMode: .refuzzReplace,
             coverageStrategy: .alwaysInteresting
-        )
-
-        let engine = FuzzEngine(mutators: mutator, config: config)
-        // Create default plugin processor (MutationPlugin)
-        let processor = PluginHandlerProcessor(handlers: [FuzzPluginHandler<String>.mutation()])
-        let processSyncPlugins: @Sendable (
-            consuming SyncPluginEvent<String>,
-            (FuzzPluginAction<String>) -> Void
-        ) -> Void = { event, execute in
-            processor.processSync(event: event, execute: execute)
-        }
-        let processAsyncPlugins: @Sendable (
-            isolated (any Actor)?,
-            consuming AsyncPluginEvent<String>,
-            (FuzzPluginAction<String>) -> Void
-        ) async -> Void = { isolation, event, execute in
-            await processor.processAsync(isolation: isolation, event: event, execute: execute)
-        }
-        _ = await engine.run(processSyncPlugins: processSyncPlugins, processAsyncPlugins: processAsyncPlugins) { input in
+        ) { input in
             await testedInputs.update { $0.append(input) }
         }
 
-        // Should have tested all seeds
         let inputs = await testedInputs.value
         #expect(inputs.contains("first"))
         #expect(inputs.contains("second"))
