@@ -293,69 +293,6 @@ public final class Corpus<each Input: Codable & Sendable>: @unchecked Sendable {
         entries.append(entry)
         bitmapMergeSparse(sparse)
     }
-
-    // MARK: - Minimization
-
-    /// Minimize the corpus to the smallest set that covers all unique signatures.
-    func minimized() -> CorpusSnapshot<repeat each Input> {
-        guard !entries.isEmpty else { return snapshot() }
-
-        var minimizedEntries: [CorpusEntry<repeat each Input>] = []
-        var minimizedCoverage = Set<UInt32>()
-
-        // Get all covered indices from the bitmap
-        var uncovered: Set<UInt32> = bitmapExecutedIndices()
-
-        // First, preserve ALL failure entries
-        var remainingCoverage = entries.enumerated().map { ($0.offset, $0.element) }
-        var indicesToRemove: [Int] = []
-
-        for (i, (_, entry)) in remainingCoverage.enumerated() {
-            if entry.entryType == .failure {
-                minimizedEntries.append(entry)
-                for index in entry.sparseCoverage.indices {
-                    minimizedCoverage.insert(index)
-                }
-                entry.sparseCoverage.subtractIndices(from: &uncovered)
-                indicesToRemove.append(i)
-            }
-        }
-
-        for index in indicesToRemove.reversed() {
-            remainingCoverage.remove(at: index)
-        }
-
-        // Greedy algorithm for remaining entries
-        while !uncovered.isEmpty && !remainingCoverage.isEmpty {
-            var bestIndex = 0
-            var bestCoverageCount = 0
-
-            for (i, (_, entry)) in remainingCoverage.enumerated() {
-                let covers = entry.sparseCoverage.countIndicesIn(uncovered)
-                if covers > bestCoverageCount {
-                    bestCoverageCount = covers
-                    bestIndex = i
-                }
-            }
-
-            if bestCoverageCount == 0 {
-                break
-            }
-
-            let (_, bestEntry) = remainingCoverage.remove(at: bestIndex)
-            minimizedEntries.append(bestEntry)
-            for index in bestEntry.sparseCoverage.indices {
-                minimizedCoverage.insert(index)
-            }
-
-            bestEntry.sparseCoverage.subtractIndices(from: &uncovered)
-        }
-
-        return CorpusSnapshot(
-            entries: minimizedEntries,
-            coveredIndices: minimizedCoverage
-        )
-    }
 }
 
 // MARK: - Corpus Snapshot

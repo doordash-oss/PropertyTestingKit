@@ -81,7 +81,6 @@ struct FuzzEngineTests {
     func testFuzzEngineDiscoversPaths() async {
         let config = FuzzEngineConfig(
             maxDuration: .seconds(10),
-            minimizeCorpus: false,
             verbose: false,
             coverageStrategy: .alwaysInteresting
         )
@@ -180,7 +179,6 @@ struct FuzzEngineTests {
         } operation: {
             let config = FuzzEngineConfig(
                 maxDuration: .seconds(10),
-                minimizeCorpus: true,
                 verbose: true,
                 coverageStrategy: .alwaysInteresting
             )
@@ -375,7 +373,6 @@ struct FuzzEngineTests {
     func testNewCoverageVerboseInIterations() async {
         let config = FuzzEngineConfig(
             maxDuration: .seconds(10),
-            minimizeCorpus: false,
             verbose: true,
             coverageStrategy: .alwaysInteresting
         )
@@ -613,7 +610,6 @@ struct FuzzEngineTests {
         } operation: {
             let config = FuzzEngineConfig(
                 maxDuration: .seconds(10),
-                minimizeCorpus: false,
                 verbose: false
             )
 

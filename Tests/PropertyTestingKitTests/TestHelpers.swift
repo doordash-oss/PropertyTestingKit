@@ -118,7 +118,6 @@ func fuzzEngineWithMaxIterations<each Input: MutatorProviding & Codable & Sendab
         let effectiveConfig = config.map {
             FuzzEngineConfig(
                 maxDuration: $0.maxDuration,
-                minimizeCorpus: $0.minimizeCorpus,
                 verbose: $0.verbose,
                 corpusMode: $0.corpusMode,
                 timeLimitCheckInterval: $0.timeLimitCheckInterval,

@@ -20,9 +20,6 @@ struct FuzzEngineConfig: Sendable {
     /// Maximum time to spend fuzzing.
     var maxDuration: Duration
 
-    /// Whether to minimize the corpus before saving.
-    let minimizeCorpus: Bool
-
     /// Verbose logging.
     var verbose: Bool
 
@@ -58,7 +55,6 @@ struct FuzzEngineConfig: Sendable {
 
     init(
         maxDuration: Duration = .seconds(60),
-        minimizeCorpus: Bool = true,
         verbose: Bool = false,
         corpusMode: CorpusMode? = nil,
         projectPath: String? = nil,
@@ -71,7 +67,6 @@ struct FuzzEngineConfig: Sendable {
         column: Int = #column
     ) {
         self.maxDuration = maxDuration
-        self.minimizeCorpus = minimizeCorpus
         self.verbose = verbose
         // Use provided mode, or check environment, or default to auto
         self.corpusMode = corpusMode ?? CorpusMode.fromEnvironment()

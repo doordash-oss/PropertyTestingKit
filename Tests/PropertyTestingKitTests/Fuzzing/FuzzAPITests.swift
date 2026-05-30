@@ -40,7 +40,6 @@ struct FuzzAPITests {
         } operation: {
             let config = FuzzEngineConfig(
                 maxDuration: .seconds(10),
-                minimizeCorpus: true,
                 verbose: true
             )
 
