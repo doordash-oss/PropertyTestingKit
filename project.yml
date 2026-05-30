@@ -195,25 +195,6 @@ targets:
         GCC_ENABLE_CPP_RTTI: NO
         # NO sanitizer flags for the library itself - only for tests
 
-  # IFC machine benchmark library — port of FuzzChick's secure machine
-  IFCMachine:
-    type: framework
-    platform: macOS
-    sources:
-      - path: Sources/IFCMachine
-    dependencies:
-      - target: PropertyTestingKit
-        link: true
-    settings:
-      base:
-        GENERATE_INFOPLIST_FILE: YES
-        PRODUCT_NAME: IFCMachine
-        PRODUCT_BUNDLE_IDENTIFIER: com.propertytestingkit.ifcmachine
-        SWIFT_INCLUDE_PATHS:
-          - $(SRCROOT)/Sources/CLLVMSymbolizer/include
-          - $(SRCROOT)/Sources/SanCovHooks/include
-          - $(SRCROOT)/Sources/CScheduleHooks/include
-
   # GenericTimerPoller — production code under test (Swift 5 language mode + sanitizer coverage)
   GenericTimerPoller:
     type: framework
@@ -485,84 +466,6 @@ targets:
         PRODUCT_NAME: TSanTests
         PRODUCT_BUNDLE_IDENTIFIER: com.propertytestingkit.tsantests
 
-  # IFC machine tests
-  IFCMachineTests:
-    type: bundle.unit-test
-    platform: macOS
-    sources:
-      - path: Tests/IFCMachineTests
-        excludes:
-          - "**/Corpus/**"
-    dependencies:
-      - target: IFCMachine
-      - target: PropertyTestingKit
-    settings:
-      base:
-        GENERATE_INFOPLIST_FILE: YES
-        OTHER_SWIFT_FLAGS: >-
-          $(inherited)
-          -g
-          -sanitize=undefined
-          -sanitize-coverage=edge,pc-table
-          -plugin-path $(TOOLCHAIN_DIR)/usr/lib/swift/host/plugins/testing
-        SWIFT_INCLUDE_PATHS:
-          - $(SRCROOT)/Sources/CLLVMSymbolizer/include
-          - $(SRCROOT)/Sources/SanCovHooks/include
-          - $(SRCROOT)/Sources/CScheduleHooks/include
-          - $(TOOLCHAIN_DIR)/usr/lib/swift/macosx
-        LIBRARY_SEARCH_PATHS:
-          - $(TOOLCHAIN_DIR)/usr/lib/swift/macosx
-          - $(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin
-        OTHER_LDFLAGS: >-
-          $(inherited)
-          -lTesting
-          -lclang_rt.ubsan_osx_dynamic
-        LD_RUNPATH_SEARCH_PATHS: >-
-          $(inherited)
-          $(TOOLCHAIN_DIR)/usr/lib/swift/macosx
-          $(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin
-        PRODUCT_NAME: IFCMachineTests
-        PRODUCT_BUNDLE_IDENTIFIER: com.propertytestingkit.ifcmachinetests
-
-  # IFC benchmark tests — long-running, not in default test scheme
-  IFCBenchmarkTests:
-    type: bundle.unit-test
-    platform: macOS
-    sources:
-      - path: Tests/IFCBenchmarkTests
-        excludes:
-          - "**/Corpus/**"
-    dependencies:
-      - target: IFCMachine
-      - target: PropertyTestingKit
-    settings:
-      base:
-        GENERATE_INFOPLIST_FILE: YES
-        OTHER_SWIFT_FLAGS: >-
-          $(inherited)
-          -g
-          -sanitize=undefined
-          -sanitize-coverage=edge,pc-table
-          -plugin-path $(TOOLCHAIN_DIR)/usr/lib/swift/host/plugins/testing
-        SWIFT_INCLUDE_PATHS:
-          - $(SRCROOT)/Sources/CLLVMSymbolizer/include
-          - $(SRCROOT)/Sources/SanCovHooks/include
-          - $(SRCROOT)/Sources/CScheduleHooks/include
-          - $(TOOLCHAIN_DIR)/usr/lib/swift/macosx
-        LIBRARY_SEARCH_PATHS:
-          - $(TOOLCHAIN_DIR)/usr/lib/swift/macosx
-          - $(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin
-        OTHER_LDFLAGS: >-
-          $(inherited)
-          -lTesting
-          -lclang_rt.ubsan_osx_dynamic
-        LD_RUNPATH_SEARCH_PATHS: >-
-          $(inherited)
-          $(TOOLCHAIN_DIR)/usr/lib/swift/macosx
-          $(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin
-        PRODUCT_NAME: IFCBenchmarkTests
-        PRODUCT_BUNDLE_IDENTIFIER: com.propertytestingkit.ifcbenchmarktests
-
   # Coverage benchmarks
   CoverageBenchmarks:
     type: tool
@@ -579,39 +482,6 @@ targets:
       base:
         PRODUCT_NAME: CoverageBenchmarks
         # Enable sanitizer coverage instrumentation for fuzzing
-        OTHER_SWIFT_FLAGS: >-
-          $(inherited)
-          -g
-          -sanitize=undefined
-          -sanitize-coverage=edge,pc-table
-        SWIFT_INCLUDE_PATHS:
-          - $(SRCROOT)/Sources/CLLVMSymbolizer/include
-          - $(SRCROOT)/Sources/SanCovHooks/include
-          - $(SRCROOT)/Sources/CScheduleHooks/include
-        OTHER_LDFLAGS: >-
-          $(inherited)
-          -L$(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin
-          -lclang_rt.ubsan_osx_dynamic
-        LD_RUNPATH_SEARCH_PATHS: >-
-          $(inherited)
-          $(TOOLCHAIN_DIR)/usr/lib/clang/21/lib/darwin
-
-  # IFC benchmarks — long-running performance tests
-  IFCBenchmarks:
-    type: tool
-    platform: macOS
-    sources:
-      - path: Benchmarks/IFCBenchmarks
-        excludes:
-          - "**/Corpus/**"
-    dependencies:
-      - target: IFCMachine
-      - target: PropertyTestingKit
-      - package: package-benchmark
-        product: Benchmark
-    settings:
-      base:
-        PRODUCT_NAME: IFCBenchmarks
         OTHER_SWIFT_FLAGS: >-
           $(inherited)
           -g
@@ -670,7 +540,6 @@ schemes:
         TSanTests: [test]
         ScheduleControlTests: [test]
         GenericTimerPollerTests: [test]
-        IFCMachineTests: [test]
     test:
       targets:
         - PropertyTestingKitTests
@@ -678,18 +547,11 @@ schemes:
         - TSanTests
         - ScheduleControlTests
         - GenericTimerPollerTests
-        - IFCMachineTests
       gatherCoverageData: false
   CoverageBenchmarks:
     build:
       targets:
         CoverageBenchmarks: all
-    run:
-      config: Debug
-  IFCBenchmarks:
-    build:
-      targets:
-        IFCBenchmarks: all
     run:
       config: Debug
   ProfiledBenchmark:
