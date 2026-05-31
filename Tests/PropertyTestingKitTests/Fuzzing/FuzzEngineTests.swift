@@ -161,99 +161,6 @@ struct FuzzEngineTests {
         #expect(!result.failures.isEmpty, "Should have captured failures")
     }
 
-    @Test("FuzzEngine saves corpus to directory")
-    func testCorpusSaveToDirectory() async throws {
-        let corpusDir = URL(fileURLWithPath: "/test/fuzz-corpus")
-
-        let (saveSpy, saveFn) = spy { (_: Data, _: URL) in }
-
-        let result = await withDependencies {
-            // Explicitly set live coverage to prevent mock leakage from parallel tests
-            $0.coverageCounters = .liveValue
-            $0.corpusPersistence = CorpusPersistenceClient(
-                save: saveFn,
-                load: { _ in Data() },
-                exists: { _ in false },
-                delete: { _ in }
-            )
-        } operation: {
-            let config = FuzzEngineConfig(
-                maxDuration: .seconds(10),
-                verbose: true,
-                coverageStrategy: .alwaysInteresting
-            )
-
-            return await fuzzEngineWithMaxIterations(
-                maxIterations: 100,
-                config: config,
-                corpusDirectory: corpusDir,
-                additionalSeeds: [0, 1, -1, 42]
-            ) { (_: Int) in }
-        }
-
-        #expect(result.corpus.count > 0, "Should have corpus entries")
-        #expect(saveSpy.callCount == 1, "Corpus should be saved")
-    }
-
-    @Test("FuzzEngine loads existing corpus and runs regression")
-    func testRegressionMode() async throws {
-        let corpusDir = URL(fileURLWithPath: "/test/fuzz-regression")
-
-        // Regression is crash-only: replay inputs, check for failures, done.
-        let corpusJSON = "[[42]]"
-        let corpusData = Data(corpusJSON.utf8)
-
-        let (loadSpy, loadFn) = spy { (_: URL) -> Data in corpusData }
-        let (existsSpy, existsFn) = spy { (_: URL) -> Bool in true }
-
-        let result = await withDependencies {
-            $0.corpusPersistence = CorpusPersistenceClient(
-                save: { _, _ in },
-                load: loadFn,
-                exists: existsFn,
-                delete: { _ in }
-            )
-        } operation: {
-            await fuzzEngineWithMaxIterations(
-                maxIterations: 50,
-                corpusDirectory: corpusDir
-            ) { (_: Int) in }
-        }
-
-        #expect(existsSpy.callCount >= 1, "Should check if corpus exists")
-        #expect(loadSpy.callCount == 1, "Should have loaded corpus")
-        #expect(result.corpus.count > 0)
-        #expect(result.wasRegression, "Should be regression mode")
-    }
-
-    @Test("FuzzEngine handles corpus load failure")
-    func testCorpusLoadFailure() async throws {
-        let corpusDir = URL(fileURLWithPath: "/test/fuzz-loadfail")
-        let invalidJSON = Data("{ invalid json }".utf8)
-
-        let (loadSpy, loadFn) = spy { (_: URL) -> Data in invalidJSON }
-        let (existsSpy, existsFn) = spy { (_: URL) -> Bool in true }
-
-        let result = await withDependencies {
-            $0.corpusPersistence = CorpusPersistenceClient(
-                save: { _, _ in },
-                load: loadFn,
-                exists: existsFn,
-                delete: { _ in }
-            )
-        } operation: {
-            await fuzzEngineWithMaxIterations(
-                maxIterations: 50,
-                coverageStrategy: .alwaysInteresting,
-                corpusDirectory: corpusDir
-            ) { (_: Int) in }
-        }
-
-        #expect(existsSpy.callCount >= 1)
-        #expect(loadSpy.callCount == 1, "Should have attempted to load corpus")
-        #expect(!result.wasRegression, "Should fall back to fuzzing mode")
-    }
-
     @Test("FuzzEngine discovers new coverage during iteration")
     func testNewCoverageDuringIteration() async {
         let result = await withDependencies {
@@ -267,65 +174,6 @@ struct FuzzEngineTests {
         }
 
         #expect(result.corpus.count >= 1)
-    }
-
-    @Test("FuzzEngine handles corpus save failure")
-    func testCorpusSaveFailure() async throws {
-        let corpusDir = URL(fileURLWithPath: "/test/fuzz-savefail")
-
-        struct SaveError: Error {}
-
-        let (saveSpy, saveFn) = spy { (_: Data, _: URL) throws -> Void in
-            throw SaveError()
-        }
-
-        let result = await withDependencies {
-            $0.corpusPersistence = CorpusPersistenceClient(
-                save: saveFn,
-                load: { _ in Data() },
-                exists: { _ in false },
-                delete: { _ in }
-            )
-        } operation: {
-            await fuzzEngineWithMaxIterations(
-                maxIterations: 50,
-                coverageStrategy: .alwaysInteresting,
-                corpusDirectory: corpusDir
-            ) { (_: Int) in }
-        }
-
-        #expect(saveSpy.callCount == 1, "Should have attempted to save corpus")
-        #expect(!result.wasRegression)
-    }
-
-    @Test("FuzzEngine regression success with empty corpus")
-    func testRegressionSuccessPath() async throws {
-        let corpusDir = URL(fileURLWithPath: "/test/fuzz-regression-success")
-
-        // Empty corpus — regression replays zero inputs, succeeds immediately
-        let corpusJSON = "[]"
-        let corpusData = Data(corpusJSON.utf8)
-
-        let (loadSpy, loadFn) = spy { (_: URL) -> Data in corpusData }
-        let (existsSpy, existsFn) = spy { (_: URL) -> Bool in true }
-
-        let result = await withDependencies {
-            $0.corpusPersistence = CorpusPersistenceClient(
-                save: { _, _ in },
-                load: loadFn,
-                exists: existsFn,
-                delete: { _ in }
-            )
-        } operation: {
-            await fuzzEngineWithMaxIterations(
-                maxIterations: 50,
-                corpusDirectory: corpusDir
-            ) { (_: Int) in }
-        }
-
-        #expect(existsSpy.callCount >= 1)
-        #expect(loadSpy.callCount == 1, "Should have loaded corpus")
-        #expect(result.wasRegression, "Should be regression mode with empty corpus")
     }
 
     @Test("FuzzEngine handles coverage unavailable - test succeeds")
@@ -384,41 +232,6 @@ struct FuzzEngineTests {
 
         #expect(result.corpus.count >= 1, "Should have corpus entries")
         #expect(result.stats.totalInputs > 5, "Should test more than just seeds")
-    }
-
-    @Test("FuzzEngine regression captures failures during replay")
-    func testRegressionFailures() async throws {
-        let corpusDir = URL(fileURLWithPath: "/test/fuzz-regression-fail")
-
-        // Corpus with one entry (input=42)
-        let corpusJSON = "[[42]]"
-        let corpusData = Data(corpusJSON.utf8)
-
-        let (_, loadFn) = spy { (_: URL) -> Data in corpusData }
-
-        struct RegressionError: Error {}
-
-        let result = await withDependencies {
-            $0.corpusPersistence = CorpusPersistenceClient(
-                save: { _, _ in },
-                load: loadFn,
-                exists: { _ in true },
-                delete: { _ in }
-            )
-        } operation: {
-            await fuzzEngineWithMaxIterations(
-                maxIterations: 50,
-                corpusDirectory: corpusDir
-            ) { (input: Int) in
-                if input == 42 {
-                    throw RegressionError()
-                }
-            }
-        }
-
-        #expect(result.wasRegression, "Should be regression mode")
-        #expect(!result.failures.isEmpty, "Should capture failures during regression")
-        #expect(result.failures.first?.input == 42)
     }
 
     @Test("FuzzEngine handles empty fuzz array gracefully")

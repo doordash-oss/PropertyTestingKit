@@ -80,7 +80,7 @@ struct DeterministicTimingTests {
                     verbose: false
                 )
 
-                let engine = FuzzEngine(mutators: SingleSeedInt.defaultMutator, config: config, corpusDirectory: nil)
+                let engine = FuzzEngine(mutators: SingleSeedInt.defaultMutator, config: config)
                 // Create default plugin processor (MutationPlugin)
                 let processor = PluginHandlerProcessor(handlers: [FuzzPluginHandler<SingleSeedInt>.mutation()])
                 let processSyncPlugins: @Sendable (
@@ -96,7 +96,7 @@ struct DeterministicTimingTests {
                 ) async -> Void = { isolation, event, execute in
                     await processor.processAsync(isolation: isolation, event: event, execute: execute)
                 }
-                return await engine.run(processSyncPlugins: processSyncPlugins, processAsyncPlugins: processAsyncPlugins) { _ in
+                return await engine.run(seeds: mutatorSeeds(SingleSeedInt.defaultMutator), processSyncPlugins: processSyncPlugins, processAsyncPlugins: processAsyncPlugins) { _ in
                     // Advance time by 11 seconds each test (exceeds 10s limit after first test)
                     currentTime.update { $0 = $0.addingTimeInterval(11) }
                 }
@@ -128,7 +128,7 @@ struct DeterministicTimingTests {
                     verbose: false
                 )
 
-                let engine = FuzzEngine(mutators: SingleSeedInt.defaultMutator, config: config, corpusDirectory: nil)
+                let engine = FuzzEngine(mutators: SingleSeedInt.defaultMutator, config: config)
                 // Create default plugin processor (MutationPlugin)
                 let processor = PluginHandlerProcessor(handlers: [FuzzPluginHandler<SingleSeedInt>.mutation()])
                 let processSyncPlugins: @Sendable (
@@ -144,7 +144,7 @@ struct DeterministicTimingTests {
                 ) async -> Void = { isolation, event, execute in
                     await processor.processAsync(isolation: isolation, event: event, execute: execute)
                 }
-                return await engine.run(processSyncPlugins: processSyncPlugins, processAsyncPlugins: processAsyncPlugins) { _ in
+                return await engine.run(seeds: mutatorSeeds(SingleSeedInt.defaultMutator), processSyncPlugins: processSyncPlugins, processAsyncPlugins: processAsyncPlugins) { _ in
                     // Advance time by exactly 2.5 seconds each test
                     testCount.update { $0 += 1 }
                     currentTime.update { $0 = $0.addingTimeInterval(2.5) }

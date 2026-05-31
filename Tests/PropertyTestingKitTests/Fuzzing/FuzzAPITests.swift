@@ -38,15 +38,11 @@ struct FuzzAPITests {
                 delete: { _ in }
             )
         } operation: {
-            let config = FuzzEngineConfig(
-                maxDuration: .seconds(10),
-                verbose: true
-            )
-
-            return await fuzzEngineWithMaxIterations(
+            return await runCoordinatorWithMaxIterations(
                 maxIterations: 100,
-                config: config,
-                corpusDirectory: corpusDir,
+                corpusDir: corpusDir,
+                mode: .auto,
+                coverageStrategy: .pathTrie,
                 additionalSeeds: numberParserSeeds
             ) { input in
                 // Just call parse - coverage will be tracked automatically
@@ -91,16 +87,11 @@ struct FuzzAPITests {
             // Explicitly set live coverage to prevent mock leakage from parallel tests
             $0.coverageCounters = .liveValue
         } operation: {
-            let config = FuzzEngineConfig(
-                maxDuration: .seconds(10),
-                verbose: false,
-                coverageStrategy: .alwaysInteresting
-            )
-
-            return await fuzzEngineWithMaxIterations(
+            return await runCoordinatorWithMaxIterations(
                 maxIterations: 100,
-                config: config,
-                corpusDirectory: corpusDir,
+                corpusDir: corpusDir,
+                mode: .auto,
+                coverageStrategy: .alwaysInteresting,
                 additionalSeeds: numberParserSeeds
             ) { input in
                 _ = NumberParser.parse(input)

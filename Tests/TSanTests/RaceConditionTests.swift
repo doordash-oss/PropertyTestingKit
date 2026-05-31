@@ -87,8 +87,7 @@ struct FuzzEngineRaceTests {
             for _ in 0..<5 {
                 group.addTask {
                     let config = FuzzEngineConfig(
-                        verbose: false,
-                        corpusMode: .refuzzReplace
+                        verbose: false
                     )
                     let engine = FuzzEngine(mutators: Int.defaultMutator, config: config)
 
@@ -108,7 +107,7 @@ struct FuzzEngineRaceTests {
                         await processor.processAsync(isolation: isolation, event: event, execute: execute)
                     }
 
-                    _ = try await engine.run(processSyncPlugins: processSyncPlugins, processAsyncPlugins: processAsyncPlugins) { (input: Int) in
+                    _ = try await engine.run(seeds: mutatorSeeds(Int.defaultMutator), processSyncPlugins: processSyncPlugins, processAsyncPlugins: processAsyncPlugins) { (input: Int) in
                         // Simple test that doesn't fail
                         // Use overflow operators to avoid arithmetic overflow crashes
                         // when fuzzer generates extreme Int values

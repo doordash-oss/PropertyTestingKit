@@ -79,18 +79,15 @@ struct StopWhenQueueEmptyHandlerTests {
         )
         let config = FuzzEngineConfig(
             maxDuration: .seconds(60),
-            minimizeCorpus: false,
-            corpusMode: .refuzzReplace,
             timeLimitCheckInterval: 1
         )
         let engine = FuzzEngine(
             mutators: Int.defaultMutator,
-            config: config,
-            corpusDirectory: nil
+            config: config
         )
 
         let result = await engine.run(
-            additionalSeeds: seeds,
+            seeds: seeds,
             processSyncPlugins: { processor.processSync(event: $0, execute: $1) },
             processAsyncPlugins: { await processor.processAsync(isolation: $0, event: $1, execute: $2) },
             test: { input in

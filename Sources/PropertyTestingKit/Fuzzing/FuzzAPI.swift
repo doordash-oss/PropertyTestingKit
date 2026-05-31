@@ -152,127 +152,34 @@ func fuzzInternal<each Input: Codable & Sendable>(
     test: @escaping @Sendable ((repeat each Input)) async throws -> Void
 ) async throws -> FuzzResult<repeat each Input> {
     @Dependency(\.environment) var environment
-    @Dependency(\.corpusPersistence) var corpusPersistence
 
     let testFilePath = String(describing: filePath)
     let verbose = environment.environment()["FUZZ_VERBOSE"] != nil
-    let effectiveParallelism = max(1, parallelism)
     let corpusDir = corpusDirectory(filePath: filePath, function: function)
-    let effectiveCorpusMode = corpusMode ?? CorpusMode.fromEnvironment()
+    let mode = corpusMode ?? CorpusMode.fromEnvironment()
 
-    // Check if we should run regression (single engine with corpus)
-    // Regression mode runs single-threaded to properly handle corpus loading
-    let corpusExists = corpusPersistence.exists(corpusDir)
-    let shouldRunRegression = corpusExists && (effectiveCorpusMode == .auto || effectiveCorpusMode == .regressionOnly)
+    // All corpus policy (mode resolution, load/save/delete, regression replay, and
+    // parallel orchestration) lives in the coordinator. fuzzInternal just resolves the
+    // call-site context and reports failures.
+    let result = await runFuzzCampaign(
+        mutators: mutators,
+        userSeeds: seeds,
+        corpusDir: corpusDir,
+        mode: mode,
+        parallelism: max(1, parallelism),
+        duration: duration,
+        verbose: verbose,
+        coverageStrategy: coverageStrategy,
+        edgeHook: edgeHook,
+        projectPath: projectPath(from: filePath),
+        sourceFileID: testFilePath,
+        sourceFilePath: testFilePath,
+        line: line,
+        makeHandlers: makeHandlers,
+        test: test
+    )
 
-    if shouldRunRegression || effectiveParallelism == 1 {
-        // Single engine mode: create a fresh handler set for this engine.
-        let processor = PluginHandlerProcessor(handlers: makeHandlers())
-        let processSyncPlugins: @Sendable (consuming SyncPluginEvent<repeat each Input>, (FuzzPluginAction<repeat each Input>) -> Void) -> Void = {
-            processor.processSync(event: $0, execute: $1)
-        }
-        let processAsyncPlugins: @Sendable (isolated (any Actor)?, consuming AsyncPluginEvent<repeat each Input>, (FuzzPluginAction<repeat each Input>) -> Void) async -> Void = {
-            await processor.processAsync(isolation: $0, event: $1, execute: $2)
-        }
-
-        let config = FuzzEngineConfig(
-            maxDuration: duration,
-            verbose: verbose,
-            corpusMode: corpusMode,
-            projectPath: projectPath(from: filePath),
-            coverageStrategy: coverageStrategy,
-            edgeHook: edgeHook,
-            fileID: testFilePath,
-            filePath: testFilePath,
-            line: line,
-            column: 1
-        )
-
-        let engine = FuzzEngine<repeat each Input>(
-            mutators: mutators,
-            config: config,
-            corpusDirectory: corpusDir
-        )
-
-        let result = await engine.run(additionalSeeds: seeds, processSyncPlugins: processSyncPlugins, processAsyncPlugins: processAsyncPlugins, test: test)
-
-        return try reportFuzzResult(result, filePath: filePath, line: line)
-    }
-
-    // Parallel fuzz mode: run N engines and merge results
-    if verbose {
-        print("[Fuzz] Running \(effectiveParallelism) parallel fuzz engines")
-    }
-
-    // Distribute seeds round-robin across engines
-    var distributedSeeds: [[(repeat each Input)]] = Array(repeating: [], count: effectiveParallelism)
-    for (index, seed) in seeds.enumerated() {
-        distributedSeeds[index % effectiveParallelism].append(seed)
-    }
-
-    // Create and run N engines in parallel. Each engine calls makeHandlers() to get
-    // its own independent handler instances — handlers must never be shared across engines.
-    let results = await withTaskGroup(of: FuzzResult<repeat each Input>.self) { group in
-        for engineIndex in 0..<effectiveParallelism {
-            let engineSeeds = distributedSeeds[engineIndex]
-            group.addTask {
-                // Fresh handlers per engine — no shared mutable state.
-                let processor = PluginHandlerProcessor(handlers: makeHandlers())
-                let processSyncPlugins: @Sendable (consuming SyncPluginEvent<repeat each Input>, (FuzzPluginAction<repeat each Input>) -> Void) -> Void = {
-                    processor.processSync(event: $0, execute: $1)
-                }
-                let processAsyncPlugins: @Sendable (isolated (any Actor)?, consuming AsyncPluginEvent<repeat each Input>, (FuzzPluginAction<repeat each Input>) -> Void) async -> Void = {
-                    await processor.processAsync(isolation: $0, event: $1, execute: $2)
-                }
-
-                let config = FuzzEngineConfig(
-                    maxDuration: duration,
-                    verbose: verbose,
-                    corpusMode: .refuzzReplace, // Each engine fuzzes fresh
-                    projectPath: projectPath(from: filePath),
-                    coverageStrategy: coverageStrategy,
-                    edgeHook: edgeHook,
-                    fileID: testFilePath,
-                    filePath: testFilePath,
-                    line: line,
-                    column: 1
-                )
-
-                let engine = FuzzEngine<repeat each Input>(
-                    mutators: mutators,
-                    config: config,
-                    corpusDirectory: nil // Don't save individual engine corpora
-                )
-
-                return await engine.run(additionalSeeds: engineSeeds, processSyncPlugins: processSyncPlugins, processAsyncPlugins: processAsyncPlugins, test: test)
-            }
-        }
-
-        var allResults: [FuzzResult<repeat each Input>] = []
-        for await result in group {
-            allResults.append(result)
-        }
-        return allResults
-    }
-
-    // Merge results from all engines
-    let mergedResult = await mergeResults(results, verbose: verbose)
-
-    // Save merged corpus
-    if !mergedResult.corpus.entries.isEmpty {
-        do {
-            try corpusPersistence.save(mergedResult.corpus, to: corpusDir)
-            if verbose {
-                print("[Fuzz] Saved merged corpus to \(corpusDir.path)")
-            }
-        } catch {
-            if verbose {
-                print("[Fuzz] Failed to save corpus: \(error)")
-            }
-        }
-    }
-
-    return try reportFuzzResult(mergedResult, filePath: filePath, line: line)
+    return try reportFuzzResult(result, filePath: filePath, line: line)
 }
 
 /// Run a coverage-guided fuzz test using the type's default mutator.
@@ -324,99 +231,6 @@ public func fuzz<each Input: MutatorProviding & Codable & Sendable>(
         line: line,
         test: test
     )
-}
-
-// MARK: - Result Merging
-
-/// Merges results from multiple parallel fuzz engines.
-private func mergeResults<each Input: Codable & Sendable>(
-    _ results: [FuzzResult<repeat each Input>],
-    verbose: Bool
-) async -> FuzzResult<repeat each Input> {
-    guard let first = results.first else {
-        return .empty
-    }
-
-    guard results.count > 1 else {
-        return first
-    }
-
-    // Merge all failures
-    var allFailures: [(input: (repeat each Input), error: Error, timeElapsed: TimeInterval)] = []
-    for result in results {
-        allFailures.append(contentsOf: result.failures)
-    }
-
-    // Merge corpus: combine all entries, deduplicate by coverage
-    // Note: Use explicit closures instead of keypaths to avoid Swift runtime crashes with parameter packs
-    let mergedCorpus = mergeCorpusSnapshots(results.map { $0.corpus })
-
-    // Merge stats: sum counts, take max duration
-    let totalInputs = results.reduce(0) { $0 + $1.stats.totalInputs }
-    let totalMutations = results.reduce(0) { $0 + $1.stats.mutations }
-    let totalGenerations = results.reduce(0) { $0 + $1.stats.generations }
-    let maxDuration = results.map { $0.stats.duration }.max() ?? 0
-
-    // Determine stop reason - use timeLimit if any engine hit it
-    let stopReason: FuzzStats.StopReason = results.contains { $0.stats.stopReason == .timeLimit }
-        ? .timeLimit
-        : (results.first?.stats.stopReason ?? .timeLimit)
-
-    // Check if any was a regression run
-    let wasRegression = results.contains { $0.wasRegression }
-
-    let mergedStats = FuzzStats(
-        totalInputs: totalInputs,
-        mutations: totalMutations,
-        generations: totalGenerations,
-        duration: maxDuration,
-        stopReason: stopReason,
-        failures: allFailures.count
-    )
-
-    if verbose {
-        print("[Fuzz] Merged \(results.count) engines: \(totalInputs) total inputs, \(allFailures.count) failures")
-    }
-
-    return FuzzResult(
-        corpus: mergedCorpus,
-        failures: allFailures,
-        stats: mergedStats,
-        wasRegression: wasRegression
-    )
-}
-
-/// Merges multiple corpus snapshots into one, combining coverage.
-private func mergeCorpusSnapshots<each Input: Codable & Sendable>(
-    _ snapshots: [CorpusSnapshot<repeat each Input>]
-) -> CorpusSnapshot<repeat each Input> {
-    @Dependency(\.corpusRegistry) var corpusRegistry
-
-    guard let first = snapshots.first else {
-        return CorpusSnapshot<repeat each Input>(
-            entries: [],
-            coveredIndices: []
-        )
-    }
-
-    guard snapshots.count > 1 else {
-        return first
-    }
-
-    // Create a temporary corpus to deduplicate entries
-    let mergedCorpus: Corpus<repeat each Input> = corpusRegistry.getCorpus()
-
-    // Use a local signature hash set for deduplication
-    var signatureHashes = Set<Int>()
-
-    // Add all entries - addIfInteresting handles deduplication by coverage
-    for snapshot in snapshots {
-        for entry in snapshot.entries {
-            _ = mergedCorpus.addIfInteresting(input: entry.input, sparse: entry.sparseCoverage, signatureHashes: &signatureHashes)
-        }
-    }
-
-    return mergedCorpus.snapshot()
 }
 
 // MARK: - Fuzz Helpers
