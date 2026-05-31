@@ -62,10 +62,14 @@ import Dependencies
 ///     }
 /// }
 ///
-/// @Test func testWithGapDetection() throws {
-///     // Enable coverage gap detection
-///     try fuzz(plugins: CoverageGapPlugin()) { (input: String) in
-///         parse(input)
+/// @Test func testConcurrentOrdering() async throws {
+///     // Also fuzz the interleaving of concurrent tasks. The schedule bytes are
+///     // carried as a hidden input element; the test still receives only `input`.
+///     try await fuzz(scheduleFuzzing: true) { (input: Int) in
+///         await withTaskGroup(of: Void.self) { group in
+///             group.addTask { await stepA(input) }
+///             group.addTask { await stepB(input) }
+///         }
 ///     }
 /// }
 /// ```
@@ -94,14 +98,25 @@ import Dependencies
 ///     or `.extend` (load corpus as seeds, then fuzz). To verify a corpus without
 ///     fuzzing, use `regress(...)` instead. Can be overridden suite-wide via the
 ///     `FUZZ_CORPUS_MODE` environment variable.
+///   - coverageStrategy: How an input is judged "interesting" (default: `.pathTrie`).
+///   - edgeHook: Optional custom hook invoked on every edge hit; when `nil`, the
+///     default binary edge recording is used.
+///   - scheduleFuzzing: When `true`, also fuzz the interleaving order of concurrent
+///     tasks. The schedule bytes are folded into the input pack as element 0
+///     (`([UInt8], repeat each Input)`) and mutated/stored/persisted like any input;
+///     your `test` still receives only its own `(repeat each Input)`. Forces
+///     `parallelism` to 1, and uses the default `corpusMutation` plugin behavior
+///     (custom `plugins` are not applied to scheduled runs).
 ///   - parallelism: Number of parallel fuzz engines to run. Each engine runs
 ///     independently with its portion of seeds distributed round-robin.
 ///     Results are merged at the end. Defaults to the number of available processors.
+///     Ignored (treated as 1) when `scheduleFuzzing` is enabled.
 ///   - plugins: Factory for the per-engine plugins. Defaults to
 ///     `{ [.corpusMutation()] }`. Analysis plugins (`AnalysisPlugin`) can be lifted in
 ///     with `.asFuzzPlugin()`.
 ///   - filePath: Source file path (auto-filled).
 ///   - function: Test function name (auto-filled).
+///   - line: Source line (auto-filled).
 ///   - test: The test closure receiving fuzzed inputs.
 ///
 /// - Throws: Re-throws test failures, or throws if fuzzing finds failures.
@@ -283,10 +298,20 @@ func regressInternal<each Input: Codable & Sendable>(
 ///   - persistence: How the on-disk corpus is treated (`.auto`/`.replace`/`.extend`).
 ///     To verify a corpus without fuzzing, use `regress(...)`. Can be overridden
 ///     suite-wide via `FUZZ_CORPUS_MODE`.
-///   - parallelism: Number of parallel fuzz engines to run. Defaults to processor count.
+///   - coverageStrategy: How an input is judged "interesting" (default: `.pathTrie`).
+///   - edgeHook: Optional custom hook invoked on every edge hit; when `nil`, the
+///     default binary edge recording is used.
+///   - scheduleFuzzing: When `true`, also fuzz the interleaving order of concurrent
+///     tasks. The schedule bytes are folded into the input pack as element 0 and
+///     mutated/stored/persisted like any input; your `test` still receives only its
+///     own `(repeat each Input)`. Forces `parallelism` to 1 and uses the default
+///     `corpusMutation` plugin behavior.
+///   - parallelism: Number of parallel fuzz engines to run. Defaults to processor
+///     count. Ignored (treated as 1) when `scheduleFuzzing` is enabled.
 ///   - plugins: Factory for the per-engine plugins. Defaults to `{ [.corpusMutation()] }`.
 ///   - filePath: Source file path (auto-filled).
 ///   - function: Test function name (auto-filled).
+///   - line: Source line (auto-filled).
 ///   - test: The test closure receiving fuzzed inputs.
 ///
 /// - Throws: Re-throws test failures, or throws if fuzzing finds failures.
