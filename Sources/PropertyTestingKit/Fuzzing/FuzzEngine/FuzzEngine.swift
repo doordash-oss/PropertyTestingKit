@@ -102,17 +102,6 @@ final class FuzzEngine<each Input: Codable & Sendable>: @unchecked Sendable {
         processAsyncPlugins: @escaping AsyncPluginProcessorFn,
         test: @escaping @Sendable (InputTuple) async throws -> Void
     ) async -> FuzzResult<repeat each Input> {
-        return await runFuzzing(seeds: seeds, processSyncPlugins: processSyncPlugins, processAsyncPlugins: processAsyncPlugins, test: test)
-    }
-
-    // MARK: - Fuzz Mode
-
-    private func runFuzzing(
-        seeds: [InputTuple] = [],
-        processSyncPlugins: @escaping SyncPluginProcessorFn,
-        processAsyncPlugins: @escaping AsyncPluginProcessorFn,
-        test: @escaping @Sendable (InputTuple) async throws -> Void
-    ) async -> FuzzResult<repeat each Input> {
         // Filter compiler-generated edges before any measurement.
         // This is a one-time scan (~2s for large binaries), so we do it before
         // capturing startTime so it doesn't eat into the fuzz duration budget.

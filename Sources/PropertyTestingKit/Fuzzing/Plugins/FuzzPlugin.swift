@@ -26,16 +26,6 @@ public enum SyncPluginEvent<each T: Sendable>: Sendable {
     /// An iteration completed.
     case iteration(IterationContext)
 
-    /// The mutation queue has drained.
-    ///
-    /// Dispatched the moment the pending-input queue becomes empty, *before*
-    /// the engine falls back to generating a fresh random input. A handler can
-    /// respond by stopping the run (`.stop`) — used for regression replay, where
-    /// the corpus is loaded as seeds and the run ends once they're exhausted —
-    /// or by refilling the queue (`.queueInputs` / `.selectForMutation`). If no
-    /// handler does either, the engine proceeds to random generation as usual.
-    case queueEmpty
-
     /// Context provided after each iteration.
     public struct IterationContext: Sendable {
         /// Whether this iteration discovered new coverage.
@@ -47,6 +37,10 @@ public enum SyncPluginEvent<each T: Sendable>: Sendable {
         /// when the mutation queue has been exhausted and re-schedule corpus
         /// entries for mutation.
         public let fromMutationQueue: Bool
+        /// Number of inputs still queued after this one was taken. A handler can
+        /// use `queueCount == 0` to detect that the queue has drained — e.g. to
+        /// stop a regression replay once the seeded corpus is exhausted.
+        public let queueCount: Int
         /// The sparse coverage snapshot for this iteration.
         /// Only populated when `discoveredNewCoverage == true`; `nil` otherwise.
         public let sparseCoverage: SparseCoverage?
@@ -55,11 +49,13 @@ public enum SyncPluginEvent<each T: Sendable>: Sendable {
             discoveredNewCoverage: Bool,
             input: consuming (repeat each T),
             fromMutationQueue: Bool = false,
+            queueCount: Int = 0,
             sparseCoverage: SparseCoverage? = nil
         ) {
             self.discoveredNewCoverage = discoveredNewCoverage
             self.input = input
             self.fromMutationQueue = fromMutationQueue
+            self.queueCount = queueCount
             self.sparseCoverage = sparseCoverage
         }
     }

@@ -139,11 +139,6 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
             let timeLimitCheckInterval = config.timeLimitCheckInterval
             var iterationsSinceTimeCheck = timeLimitCheckInterval // Force check on first iteration
 
-            // Tracks whether we've already notified plugins about the current
-            // drain, so `.queueEmpty` fires once per non-empty→empty transition
-            // rather than on every generation iteration (this is the hot path).
-            var notifiedQueueEmpty = false
-
             while !Task.isCancelled && !halted {
                 // Check time limit periodically (avoids ~3.5s overhead from per-iteration Date.init)
                 iterationsSinceTimeCheck += 1
@@ -158,26 +153,12 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
                     }
                 }
 
-                // When the queue has just drained, notify plugins before falling
-                // back to random generation. A handler may stop the run (e.g.
-                // regression replay) or refill the queue; only if neither happens
-                // do we generate a fresh input below.
-                if pendingInputs.isEmpty, !notifiedQueueEmpty {
-                    notifiedQueueEmpty = true
-                    processSyncPlugins(.queueEmpty) { action in
-                        self.executeAction(action)
-                    }
-                    if halted { break }
-                }
-
                 // Get input: from pending queue or generate random
                 let input: (repeat each Input)
                 let fromMutationQueue: Bool
                 if !pendingInputs.isEmpty {
                     input = pendingInputs.removeFirstUnchecked()
                     fromMutationQueue = true
-                    // Queue has inputs again — re-arm the drain notification.
-                    notifiedQueueEmpty = false
                 } else {
                     // Generate directly - no closure indirection
                     input = (repeat (each mutators).generate(&rng))
@@ -185,16 +166,23 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
                     fromMutationQueue = false
                 }
 
+                // Inputs still queued after taking this one. A plugin can use
+                // `queueCount == 0` to detect that the queue has drained — e.g. to
+                // stop a regression replay before any fresh input is generated.
+                let queueCount = pendingInputs.count
+
                 // Reset coverage for this iteration (cheap memset instead of hash table ops)
                 coverageCountersClient.resetCoverage(coverageContext)
 
-                // Run test with coverage measurement
+                // Run the test, capturing coverage on success and recording failures.
+                var discoveredNewCoverage = false
+                var iterationCoverage: SparseCoverage? = nil
                 do {
                     // Will throw if either the test throws or if it logs an Issue
                     try await testWithIssueCapture(input)
 
                     // Delegate interestingness check to the coverage strategy
-                    let didAdd = coverageStrategy.evaluate(
+                    discoveredNewCoverage = coverageStrategy.evaluate(
                         input,
                         coverageContext,
                         coverageCountersClient,
@@ -203,32 +191,15 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
 
                     // Snapshot coverage only when new edges were found — amortizes
                     // allocation cost since new coverage is rare (~0.1% of iterations).
-                    let sparseCoverage: SparseCoverage? = didAdd
+                    iterationCoverage = discoveredNewCoverage
                         ? (try? coverageCountersClient.snapshotCoveredArraysWithContext(coverageContext))
                         : nil
-
-                    // Process iteration event synchronously (hot path - no async)
-                    processSyncPlugins(
-                        .iteration(.init(
-                            discoveredNewCoverage: didAdd,
-                            input: input,
-                            fromMutationQueue: fromMutationQueue,
-                            sparseCoverage: sparseCoverage
-                        ))
-                    ) { action in
-                        self.executeAction(action)
-                    }
                 } catch is CancellationError {
                     // Allow clean exit on cancellation
                     break
                 } catch {
-                    // On failure, we need the sparse coverage for recording
-                    let sparseCoverage: SparseCoverage
-                    if let sparse = try? coverageCountersClient.snapshotCoveredArraysWithContext(coverageContext) {
-                        sparseCoverage = sparse
-                    } else {
-                        sparseCoverage = SparseCoverage()
-                    }
+                    // On failure, snapshot coverage for the failure record.
+                    let failureCoverage = (try? coverageCountersClient.snapshotCoveredArraysWithContext(coverageContext)) ?? SparseCoverage()
                     recordFailure(input: input, error: error)
                     // Process failure event asynchronously (cold path - async OK)
                     await processAsyncPlugins(
@@ -238,13 +209,30 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
                                 input: input,
                                 test: testWithIssueCapture,
                                 sourceLocation: sourceLocation,
-                                sparseCoverage: sparseCoverage
+                                sparseCoverage: failureCoverage
                             )
                         )
                     ) { action in
                         self.executeAction(action)
                     }
                 }
+
+                // Emit one iteration event for every input — pass or fail — so plugins
+                // observe the whole run (queue-drain detection still works when the
+                // final queued input failed). A `.stop` here is caught by the loop
+                // condition before any further input is taken.
+                processSyncPlugins(
+                    .iteration(.init(
+                        discoveredNewCoverage: discoveredNewCoverage,
+                        input: input,
+                        fromMutationQueue: fromMutationQueue,
+                        queueCount: queueCount,
+                        sparseCoverage: iterationCoverage
+                    ))
+                ) { action in
+                    self.executeAction(action)
+                }
+
                 iterationCount += 1
             }
         }

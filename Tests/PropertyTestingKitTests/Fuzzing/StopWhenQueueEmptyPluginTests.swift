@@ -32,11 +32,12 @@ struct StopWhenQueueEmptyHandlerTests {
     func doesNotStopMidQueue() {
         let handler: FuzzPluginHandler<Int> = .stopWhenQueueEmpty()
 
-        // An ordinary iteration (input came from the queue) must not stop the run.
+        // An iteration with inputs still queued must not stop the run.
         let context = SyncPluginEvent<Int>.IterationContext(
             discoveredNewCoverage: false,
             input: 7,
-            fromMutationQueue: true
+            fromMutationQueue: true,
+            queueCount: 3
         )
         let actions = handler.handleSync(.iteration(context))
         #expect(actions.isEmpty)
@@ -46,7 +47,13 @@ struct StopWhenQueueEmptyHandlerTests {
     func stopsOnQueueEmpty() {
         let handler: FuzzPluginHandler<Int> = .stopWhenQueueEmpty()
 
-        let actions = handler.handleSync(.queueEmpty)
+        let context = SyncPluginEvent<Int>.IterationContext(
+            discoveredNewCoverage: false,
+            input: 7,
+            fromMutationQueue: true,
+            queueCount: 0
+        )
+        let actions = handler.handleSync(.iteration(context))
 
         #expect(actions.count == 1)
         guard case let .stop(stopAction) = actions.first else {
@@ -60,7 +67,13 @@ struct StopWhenQueueEmptyHandlerTests {
     func customStopReason() {
         let handler: FuzzPluginHandler<Int> = .stopWhenQueueEmpty(reason: .custom("done"))
 
-        let actions = handler.handleSync(.queueEmpty)
+        let context = SyncPluginEvent<Int>.IterationContext(
+            discoveredNewCoverage: false,
+            input: 7,
+            fromMutationQueue: true,
+            queueCount: 0
+        )
+        let actions = handler.handleSync(.iteration(context))
 
         guard case let .stop(stopAction) = actions.first else {
             Issue.record("Expected a .stop action, got \(actions)")

@@ -71,8 +71,6 @@ extension FuzzPluginHandler {
                         return [.selectForMutation(.init(input: context.input))]
                     }
                     return []
-                case .queueEmpty:
-                    return []
                 }
             }
         )
@@ -80,12 +78,12 @@ extension FuzzPluginHandler {
 
     /// Creates a handler that stops the run the moment the mutation queue drains.
     ///
-    /// Reacts to the `.queueEmpty` event, which fires before the engine falls
-    /// back to random generation — so the run halts without executing any
-    /// freshly-generated input. This is the building block for regression replay:
-    /// load the corpus into the seed list, run with no generators contributing new
-    /// work, and the engine replays exactly the seeded inputs (plus anything they
-    /// queue) and then stops.
+    /// Reacts to the iteration whose `queueCount` reaches zero — the last queued
+    /// input. The engine checks the stop before taking another input, so the run
+    /// halts without executing any freshly-generated one. This is the building
+    /// block for regression replay: load the corpus into the seed list, run with
+    /// no generators contributing new work, and the engine replays exactly the
+    /// seeded inputs (plus anything they queue) and then stops.
     ///
     /// - Parameter reason: The stop reason recorded in the run's stats. Defaults
     ///   to `.regression`.
@@ -96,10 +94,8 @@ extension FuzzPluginHandler {
             id: "stop_when_queue_empty",
             handleSync: { event in
                 switch event {
-                case .iteration:
-                    return []
-                case .queueEmpty:
-                    return [.stop(.init(reason: reason))]
+                case let .iteration(context):
+                    return context.queueCount == 0 ? [.stop(.init(reason: reason))] : []
                 }
             }
         )
@@ -141,8 +137,6 @@ extension FuzzPluginHandler {
                         return [.selectForMutation(.init(input: interestingInputs[idx]))]
                     }
 
-                    return []
-                case .queueEmpty:
                     return []
                 }
             }
@@ -232,8 +226,6 @@ extension FuzzPluginHandler {
                     }
 
                     return []
-                case .queueEmpty:
-                    return []
                 }
             }
         )
@@ -282,8 +274,6 @@ extension FuzzPluginHandler {
                         return [.stop(FuzzPluginAction<repeat each Input>.StopAction(reason: .custom("stads_plateau")))]
                     }
 
-                    return []
-                case .queueEmpty:
                     return []
                 }
             }
@@ -335,8 +325,6 @@ extension FuzzPluginHandler {
                         return [.stop(FuzzPluginAction<repeat each Input>.StopAction(reason: .custom("saturation_plateau")))]
                     }
 
-                    return []
-                case .queueEmpty:
                     return []
                 }
             }
@@ -421,8 +409,6 @@ extension FuzzPluginHandler {
                         return [.selectForMutation(.init(input: entryInputs[selectedIdx]))]
                     }
 
-                    return []
-                case .queueEmpty:
                     return []
                 }
             }
