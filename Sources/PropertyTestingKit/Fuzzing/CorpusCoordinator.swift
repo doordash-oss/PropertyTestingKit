@@ -93,6 +93,7 @@ func runFuzz<each Input: Codable & Sendable>(
     sourceFileID: String,
     sourceFilePath: String,
     line: Int,
+    scheduleBytesExtractor: @escaping @Sendable ((repeat each Input)) -> [UInt8]? = { _ in nil },
     makeHandlers: @escaping @Sendable () -> [FuzzPlugin<repeat each Input>],
     test: @escaping @Sendable ((repeat each Input)) async throws -> Void
 ) async -> FuzzResult<repeat each Input> {
@@ -125,6 +126,7 @@ func runFuzz<each Input: Codable & Sendable>(
                 mutators: mutators,
                 verbose: verbose,
                 config: config(strategy: .alwaysInteresting),
+                scheduleBytesExtractor: scheduleBytesExtractor,
                 plugins: { [] },
                 test: test
             )
@@ -137,6 +139,7 @@ func runFuzz<each Input: Codable & Sendable>(
             verbose: verbose,
             persist: true,
             config: config(strategy: coverageStrategy),
+            scheduleBytesExtractor: scheduleBytesExtractor,
             makeHandlers: makeHandlers,
             test: test
         )
@@ -156,6 +159,7 @@ func runFuzz<each Input: Codable & Sendable>(
             verbose: verbose,
             persist: true,
             config: config(strategy: coverageStrategy),
+            scheduleBytesExtractor: scheduleBytesExtractor,
             makeHandlers: makeHandlers,
             test: test
         )
@@ -177,6 +181,7 @@ func runFuzz<each Input: Codable & Sendable>(
             verbose: verbose,
             persist: true,
             config: config(strategy: coverageStrategy),
+            scheduleBytesExtractor: scheduleBytesExtractor,
             makeHandlers: makeHandlers,
             test: test
         )
@@ -191,6 +196,7 @@ func runFuzz<each Input: Codable & Sendable>(
             verbose: verbose,
             persist: false,
             config: config(strategy: coverageStrategy),
+            scheduleBytesExtractor: scheduleBytesExtractor,
             makeHandlers: makeHandlers,
             test: test
         )
@@ -265,6 +271,7 @@ private func replayRegression<each Input: Codable & Sendable>(
     mutators: (repeat Mutator<each Input>),
     verbose: Bool,
     config: FuzzEngineConfig,
+    scheduleBytesExtractor: @escaping @Sendable ((repeat each Input)) -> [UInt8]? = { _ in nil },
     plugins: @escaping @Sendable () -> [AnalysisPlugin<repeat each Input>],
     test: @escaping @Sendable ((repeat each Input)) async throws -> Void
 ) async -> FuzzResult<repeat each Input> {
@@ -278,6 +285,7 @@ private func replayRegression<each Input: Codable & Sendable>(
         parallelism: 1,
         verbose: verbose,
         config: config,
+        scheduleBytesExtractor: scheduleBytesExtractor,
         makeProcessor: {
             let lifted = (plugins() + [AnalysisPlugin<repeat each Input>.stopWhenQueueEmpty()])
                 .map { $0.asFuzzPlugin() }
@@ -308,6 +316,7 @@ private func fuzzCampaign<each Input: Codable & Sendable>(
     verbose: Bool,
     persist: Bool,
     config: FuzzEngineConfig,
+    scheduleBytesExtractor: @escaping @Sendable ((repeat each Input)) -> [UInt8]? = { _ in nil },
     makeHandlers: @escaping @Sendable () -> [FuzzPlugin<repeat each Input>],
     test: @escaping @Sendable ((repeat each Input)) async throws -> Void
 ) async -> FuzzResult<repeat each Input> {
@@ -328,6 +337,7 @@ private func fuzzCampaign<each Input: Codable & Sendable>(
         parallelism: max(1, parallelism),
         verbose: verbose,
         config: config,
+        scheduleBytesExtractor: scheduleBytesExtractor,
         makeProcessor: {
             PluginProcessor<repeat each Input>(plugins: makeHandlers())
         },
@@ -372,6 +382,7 @@ private func runEngines<each Input: Codable & Sendable>(
     parallelism: Int,
     verbose: Bool,
     config: FuzzEngineConfig,
+    scheduleBytesExtractor: @escaping @Sendable ((repeat each Input)) -> [UInt8]? = { _ in nil },
     makeProcessor: @escaping @Sendable () -> PluginProcessor<repeat each Input>,
     test: @escaping @Sendable ((repeat each Input)) async throws -> Void
 ) async -> FuzzResult<repeat each Input> {
@@ -389,7 +400,11 @@ private func runEngines<each Input: Codable & Sendable>(
             let engineSeeds = perEngineSeeds + distributedSeeds[engineIndex]
             group.addTask {
                 let processor = makeProcessor()
-                let engine = FuzzEngine<repeat each Input>(mutators: mutators, config: config)
+                let engine = FuzzEngine<repeat each Input>(
+                    mutators: repeat each mutators,
+                    config: config,
+                    scheduleBytesExtractor: scheduleBytesExtractor
+                )
                 return await engine.run(
                     seeds: engineSeeds,
                     processSyncPlugins: { processor.processSync(event: $0, execute: $1) },

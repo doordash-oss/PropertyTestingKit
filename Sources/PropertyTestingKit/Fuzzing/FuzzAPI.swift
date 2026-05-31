@@ -166,6 +166,31 @@ func fuzzInternal<each Input: Codable & Sendable>(
     let effectiveParallelism = scheduleFuzzing ? 1 : max(1, parallelism)
     let corpusDir = corpusDirectory(filePath: filePath, function: function)
 
+    // Schedule fuzzing runs over the flattened pack `([UInt8], repeat each Input)`:
+    // the schedule bytes become input element 0, generated/mutated/stored/persisted
+    // by the same coordinator machinery as user inputs; the `ScheduleController.run`
+    // wrapping is driven by the element-0 extractor inside `runFlattenedSchedule`.
+    // The call-site `persistence` is used directly (the suite-level env override does
+    // not apply to scheduled runs).
+    if scheduleFuzzing {
+        let peeled = await runFlattenedSchedule(
+            mutators: (repeat each mutators),
+            seeds: seeds,
+            corpusDir: corpusDir,
+            persistence: persistence,
+            duration: duration,
+            verbose: verbose,
+            coverageStrategy: coverageStrategy,
+            edgeHook: edgeHook,
+            projectPath: projectPath(from: filePath),
+            sourceFileID: testFilePath,
+            sourceFilePath: testFilePath,
+            line: line,
+            test: test
+        )
+        return try reportFuzzResult(peeled, filePath: filePath, line: line)
+    }
+
     // All corpus policy (load/save/delete, regression replay, parallel orchestration)
     // lives in the coordinator. fuzzInternal resolves the suite-level env override and
     // routes to the fuzz or (env-forced) replay path, then reports failures.
