@@ -26,6 +26,16 @@ public enum SyncPluginEvent<each T: Sendable>: Sendable {
     /// An iteration completed.
     case iteration(IterationContext)
 
+    /// The mutation queue has drained.
+    ///
+    /// Dispatched the moment the pending-input queue becomes empty, *before*
+    /// the engine falls back to generating a fresh random input. A handler can
+    /// respond by stopping the run (`.stop`) — used for regression replay, where
+    /// the corpus is loaded as seeds and the run ends once they're exhausted —
+    /// or by refilling the queue (`.queueInputs` / `.selectForMutation`). If no
+    /// handler does either, the engine proceeds to random generation as usual.
+    case queueEmpty
+
     /// Context provided after each iteration.
     public struct IterationContext: Sendable {
         /// Whether this iteration discovered new coverage.

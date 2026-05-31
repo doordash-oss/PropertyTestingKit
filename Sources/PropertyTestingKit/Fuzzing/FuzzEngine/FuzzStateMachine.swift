@@ -139,6 +139,11 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
             let timeLimitCheckInterval = config.timeLimitCheckInterval
             var iterationsSinceTimeCheck = timeLimitCheckInterval // Force check on first iteration
 
+            // Tracks whether we've already notified plugins about the current
+            // drain, so `.queueEmpty` fires once per non-empty→empty transition
+            // rather than on every generation iteration (this is the hot path).
+            var notifiedQueueEmpty = false
+
             while !Task.isCancelled && !halted {
                 // Check time limit periodically (avoids ~3.5s overhead from per-iteration Date.init)
                 iterationsSinceTimeCheck += 1
@@ -153,12 +158,26 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
                     }
                 }
 
+                // When the queue has just drained, notify plugins before falling
+                // back to random generation. A handler may stop the run (e.g.
+                // regression replay) or refill the queue; only if neither happens
+                // do we generate a fresh input below.
+                if pendingInputs.isEmpty, !notifiedQueueEmpty {
+                    notifiedQueueEmpty = true
+                    processSyncPlugins(.queueEmpty) { action in
+                        self.executeAction(action)
+                    }
+                    if halted { break }
+                }
+
                 // Get input: from pending queue or generate random
                 let input: (repeat each Input)
                 let fromMutationQueue: Bool
                 if !pendingInputs.isEmpty {
                     input = pendingInputs.removeFirstUnchecked()
                     fromMutationQueue = true
+                    // Queue has inputs again — re-arm the drain notification.
+                    notifiedQueueEmpty = false
                 } else {
                     // Generate directly - no closure indirection
                     input = (repeat (each mutators).generate(&rng))
