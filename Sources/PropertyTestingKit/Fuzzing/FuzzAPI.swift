@@ -62,14 +62,10 @@ import Dependencies
 ///     }
 /// }
 ///
-/// @Test func testConcurrentOrdering() async throws {
-///     // Also fuzz the interleaving of concurrent tasks. The schedule bytes are
-///     // carried as a hidden input element; the test still receives only `input`.
-///     try await fuzz(scheduleFuzzing: true) { (input: Int) in
-///         await withTaskGroup(of: Void.self) { group in
-///             group.addTask { await stepA(input) }
-///             group.addTask { await stepB(input) }
-///         }
+/// @Test func testWithGapDetection() throws {
+///     // Enable coverage gap detection alongside the default mutation behavior
+///     try fuzz(plugins: { [.corpusMutation(), .coverageGap()] }) { (input: String) in
+///         parse(input)
 ///     }
 /// }
 /// ```
