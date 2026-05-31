@@ -119,9 +119,12 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
         let coverageCountersClient = Self.fetchCoverageCounters()
         let sourceLocation = config.sourceLocation
 
-        // Cache RNG once here - passed to generate functions to avoid
-        // dependency injection overhead per call (millions of calls).
-        var rng = FastRNG()
+        // Resolve the RNG from the dependency once here, then pass it to the
+        // generate/mutate functions. Caching it avoids dependency-injection
+        // overhead per call (millions of calls) while still sourcing randomness
+        // from the injected `\.fastRNG`.
+        @Dependency(\.fastRNG) var fastRNG
+        var rng = fastRNG
 
         // Simple fuzz loop - no workers, just iterate
         var iterationCount = 0

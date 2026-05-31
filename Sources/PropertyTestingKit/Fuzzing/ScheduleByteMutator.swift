@@ -1,3 +1,5 @@
+import Dependencies
+
 /// Mutator for schedule bytes — the byte sequence that controls task
 /// interleaving order during schedule-fuzzed test execution.
 ///
@@ -22,7 +24,8 @@ enum ScheduleByteMutator {
     static func mutate(_ bytes: [UInt8]) -> [[UInt8]] {
         guard !bytes.isEmpty else { return [] }
         var results: [[UInt8]] = []
-        var rng = FastRNG()
+        @Dependency(\.fastRNG) var fastRNG
+        var rng = fastRNG
 
         // Bit flip: flip 1-4 bits in a random byte
         var bitFlip = bytes

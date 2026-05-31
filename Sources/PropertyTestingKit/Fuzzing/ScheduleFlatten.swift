@@ -12,22 +12,26 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+import Dependencies
 import Foundation
 
 // MARK: - Schedule-byte mutator
 
-/// A `Mutator` over schedule bytes, used as the element-0 mutator of the
+/// Builds a `Mutator` over schedule bytes, used as the element-0 mutator of the
 /// extended input pack when schedule fuzzing. Generation and mutation delegate
 /// to `ScheduleByteMutator`, so schedule bytes are generated/mutated by the same
 /// engine machinery as user inputs.
-let scheduleByteMutator: Mutator<[UInt8]> = {
-    var seedRng = FastRNG()
-    return Mutator<[UInt8]>(
+///
+/// - Parameter seedRng: RNG used to produce the mutator's initial seed schedule.
+///   Threaded in (rather than instantiated here) so the source of randomness is
+///   the injected `\.fastRNG` dependency.
+func makeScheduleByteMutator(using seedRng: inout FastRNG) -> Mutator<[UInt8]> {
+    Mutator<[UInt8]>(
         seeds: [ScheduleByteMutator.generate(using: &seedRng)],
         mutate: { ScheduleByteMutator.mutate($0) },
         generate: { rng in ScheduleByteMutator.generate(using: &rng) }
     )
-}()
+}
 
 // MARK: - Flattened-pack schedule fuzzing
 //
@@ -106,8 +110,12 @@ func runFlattenedSchedule<each Input: Codable & Sendable>(
     line: Int,
     test: @escaping @Sendable ((repeat each Input)) async throws -> Void
 ) async -> FuzzResult<repeat each Input> {
+    @Dependency(\.fastRNG) var fastRNG
+    var seedRng = fastRNG
+
+    let scheduleByteMutator = makeScheduleByteMutator(using: &seedRng)
+
     // Extend each user seed with a fresh random schedule as element 0.
-    var seedRng = FastRNG()
     var extendedSeeds: [([UInt8], repeat each Input)] = []
     extendedSeeds.reserveCapacity(seeds.count)
     for seed in seeds {
