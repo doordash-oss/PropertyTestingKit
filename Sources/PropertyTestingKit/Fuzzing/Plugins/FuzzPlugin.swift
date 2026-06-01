@@ -75,15 +75,11 @@ public enum AsyncPluginEvent<each T: Sendable>: Sendable {
     public struct StartContext: Sendable {
         /// Maximum duration in seconds.
         public let maxDuration: Duration
-        /// How the corpus is being handled.
-        public let corpusMode: CorpusMode
 
         public init(
-            maxDuration: Duration,
-            corpusMode: CorpusMode
+            maxDuration: Duration
         ) {
             self.maxDuration = maxDuration
-            self.corpusMode = corpusMode
         }
     }
 

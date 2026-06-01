@@ -34,8 +34,7 @@ struct ShrinkingHandlerTests {
 
         // Test start event (async)
         let startContext = AsyncPluginEvent<Int>.StartContext(
-            maxDuration: .seconds(60),
-            corpusMode: .auto
+            maxDuration: .seconds(60)
         )
         let startActions = try await handler.handleAsync(AsyncPluginEvent<Int>.start(startContext))
         #expect(startActions.isEmpty)

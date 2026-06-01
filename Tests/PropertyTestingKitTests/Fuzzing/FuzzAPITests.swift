@@ -38,10 +38,10 @@ struct FuzzAPITests {
                 delete: { _ in }
             )
         } operation: {
-            return await runCoordinatorWithMaxIterations(
+            return await runFuzzWithMaxIterations(
                 maxIterations: 100,
                 corpusDir: corpusDir,
-                mode: .auto,
+                persistence: .auto,
                 coverageStrategy: .pathTrie,
                 additionalSeeds: numberParserSeeds
             ) { input in
@@ -87,10 +87,10 @@ struct FuzzAPITests {
             // Explicitly set live coverage to prevent mock leakage from parallel tests
             $0.coverageCounters = .liveValue
         } operation: {
-            return await runCoordinatorWithMaxIterations(
+            return await runFuzzWithMaxIterations(
                 maxIterations: 100,
                 corpusDir: corpusDir,
-                mode: .auto,
+                persistence: .auto,
                 coverageStrategy: .alwaysInteresting,
                 additionalSeeds: numberParserSeeds
             ) { input in

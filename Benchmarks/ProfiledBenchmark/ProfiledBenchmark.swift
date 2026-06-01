@@ -49,7 +49,7 @@ let benchmarks: @Sendable () -> Void = {
             let startWall = DispatchTime.now().uptimeNanoseconds
 
             let result = try await fuzz(
-                duration: .seconds(0.1), corpusMode: .refuzzReplace, coverageStrategy: .pathTrie
+                duration: .seconds(0.1), persistence: .replace, coverageStrategy: .pathTrie
             ) { (input: Int) in
                 blackHole(input)
             }

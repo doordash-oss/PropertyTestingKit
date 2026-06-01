@@ -14,7 +14,7 @@
 
 //  Tests for corpus-mode policy: load/save/delete, regression replay, and the
 //  fuzz-vs-regress decision. This behavior moved out of FuzzEngine (a pure fuzz
-//  runner) into the coordinator (`runFuzzCampaign`).
+//  runner) into the coordinator (`runFuzz`/`runReplay`).
 //
 
 import Testing
@@ -40,10 +40,10 @@ struct CorpusCoordinatorTests {
                 delete: { _ in }
             )
         } operation: {
-            await runCoordinatorWithMaxIterations(
+            await runFuzzWithMaxIterations(
                 maxIterations: 100,
                 corpusDir: corpusDir,
-                mode: .auto,
+                persistence: .auto,
                 additionalSeeds: [0, 1, -1, 42]
             ) { (_: Int) in }
         }
@@ -70,10 +70,10 @@ struct CorpusCoordinatorTests {
                 delete: { _ in }
             )
         } operation: {
-            await runCoordinatorWithMaxIterations(
+            await runFuzzWithMaxIterations(
                 maxIterations: 50,
                 corpusDir: corpusDir,
-                mode: .auto
+                persistence: .auto
             ) { (_: Int) in }
         }
 
@@ -100,10 +100,10 @@ struct CorpusCoordinatorTests {
                 delete: { _ in }
             )
         } operation: {
-            await runCoordinatorWithMaxIterations(
+            await runFuzzWithMaxIterations(
                 maxIterations: 50,
                 corpusDir: corpusDir,
-                mode: .auto
+                persistence: .auto
             ) { (_: Int) in }
         }
 
@@ -130,10 +130,10 @@ struct CorpusCoordinatorTests {
                 delete: { _ in }
             )
         } operation: {
-            await runCoordinatorWithMaxIterations(
+            await runFuzzWithMaxIterations(
                 maxIterations: 50,
                 corpusDir: corpusDir,
-                mode: .auto,
+                persistence: .auto,
                 additionalSeeds: [0, 1, 42]
             ) { (_: Int) in }
         }
@@ -158,10 +158,10 @@ struct CorpusCoordinatorTests {
                 delete: { _ in }
             )
         } operation: {
-            await runCoordinatorWithMaxIterations(
+            await runFuzzWithMaxIterations(
                 maxIterations: 50,
                 corpusDir: corpusDir,
-                mode: .auto
+                persistence: .auto
             ) { (_: Int) in }
         }
 
@@ -187,10 +187,10 @@ struct CorpusCoordinatorTests {
                 delete: { _ in }
             )
         } operation: {
-            await runCoordinatorWithMaxIterations(
+            await runFuzzWithMaxIterations(
                 maxIterations: 50,
                 corpusDir: corpusDir,
-                mode: .auto
+                persistence: .auto
             ) { (input: Int) in
                 if input == 42 {
                     throw RegressionError()
@@ -217,10 +217,9 @@ struct CorpusCoordinatorTests {
                 delete: { _ in }
             )
         } operation: {
-            await runCoordinatorWithMaxIterations(
+            await runReplayWithMaxIterations(
                 maxIterations: 50,
-                corpusDir: corpusDir,
-                mode: .regressionOnly
+                corpusDir: corpusDir
             ) { (_: Int) in }
         }
 
@@ -245,10 +244,10 @@ struct CorpusCoordinatorTests {
                 delete: deleteFn
             )
         } operation: {
-            await runCoordinatorWithMaxIterations(
+            await runFuzzWithMaxIterations(
                 maxIterations: 50,
                 corpusDir: corpusDir,
-                mode: .refuzzReplace,
+                persistence: .replace,
                 additionalSeeds: [0, 1, 42]
             ) { (_: Int) in }
         }
@@ -276,10 +275,10 @@ struct CorpusCoordinatorTests {
                 delete: { _ in }
             )
         } operation: {
-            await runCoordinatorWithMaxIterations(
+            await runFuzzWithMaxIterations(
                 maxIterations: 50,
                 corpusDir: corpusDir,
-                mode: .refuzzExtend
+                persistence: .extend
             ) { (input: Int) in
                 replayed.update { $0.append(input) }
             }

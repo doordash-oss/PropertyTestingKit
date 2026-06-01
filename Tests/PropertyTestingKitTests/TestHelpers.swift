@@ -40,7 +40,7 @@ func fuzzWithMaxIterations<each Input: MutatorProviding & Codable & Sendable>(
     maxIterations: Int,
     seeds: [(repeat each Input)] = [],
     duration: Duration = .seconds(60),
-    corpusMode: CorpusMode? = nil,
+    persistence: CorpusPersistence = .auto,
     coverageStrategy: CoverageStrategyKind = .signatureMatch,
     parallelism: Int = 1,
     filePath: StaticString = #filePath,
@@ -64,7 +64,7 @@ func fuzzWithMaxIterations<each Input: MutatorProviding & Codable & Sendable>(
         try await fuzz(
             seeds: seeds,
             duration: .seconds(10),
-            corpusMode: corpusMode,
+            persistence: persistence,
             coverageStrategy: coverageStrategy,
             parallelism: parallelism,
             filePath: filePath,
@@ -86,7 +86,7 @@ func fuzzWithMaxIterations<each Input: MutatorProviding & Codable & Sendable>(
 /// and fast since they don't wait for real time to pass.
 ///
 /// The engine is a pure fuzz runner — it never loads or saves a corpus. For tests that
-/// exercise corpus modes/persistence, use `runCoordinatorWithMaxIterations` instead.
+/// exercise corpus modes/persistence, use `runFuzzWithMaxIterations` instead.
 ///
 /// - Parameters:
 ///   - maxIterations: The maximum number of iterations to run before the clock triggers timeout.
@@ -159,26 +159,17 @@ func fuzzEngineWithMaxIterations<each Input: MutatorProviding & Codable & Sendab
     })
 }
 
-/// Runs a full fuzz campaign through the corpus coordinator with a controlled number of
+/// Runs a fuzz campaign (the `fuzz(...)` coordinator path) with a controlled number of
 /// iterations using a test clock.
 ///
 /// Use this (rather than `fuzzEngineWithMaxIterations`) for tests that exercise corpus
-/// policy — mode resolution, load/save, and regression replay — since persistence and
-/// mode handling live in the coordinator, not the engine.
-///
-/// - Parameters:
-///   - maxIterations: Iterations before the virtual clock triggers the time limit.
-///   - corpusDir: Corpus directory used for load/save.
-///   - mode: The corpus mode to run.
-///   - coverageStrategy: Strategy for the fuzz path (regression overrides internally).
-///   - parallelism: Number of parallel engines on the fuzz path.
-///   - makeHandlers: Plugin handler factory.
-///   - additionalSeeds: Seed values for fuzzing.
-///   - test: The test closure to run for each input.
-func runCoordinatorWithMaxIterations<each Input: MutatorProviding & Codable & Sendable>(
+/// policy — persistence, load/save, and the `.auto` replay-if-exists branch — since
+/// persistence lives in the coordinator, not the engine. For pure regression replay,
+/// use `runReplayWithMaxIterations`.
+func runFuzzWithMaxIterations<each Input: MutatorProviding & Codable & Sendable>(
     maxIterations: Int,
     corpusDir: URL,
-    mode: CorpusMode,
+    persistence: CorpusPersistence,
     coverageStrategy: CoverageStrategyKind = .alwaysInteresting,
     parallelism: Int = 1,
     makeHandlers: @escaping @Sendable () -> [FuzzPluginHandler<repeat each Input>] = { [.corpusMutation()] },
@@ -195,11 +186,11 @@ func runCoordinatorWithMaxIterations<each Input: MutatorProviding & Codable & Se
             startDate.addingTimeInterval(virtualTime.value)
         })
     }, operation: {
-        await runFuzzCampaign(
+        await runFuzz(
             mutators: (repeat (each Input).defaultMutator),
             userSeeds: additionalSeeds,
             corpusDir: corpusDir,
-            mode: mode,
+            persistence: persistence,
             parallelism: parallelism,
             duration: .seconds(10),
             verbose: false,
@@ -210,6 +201,44 @@ func runCoordinatorWithMaxIterations<each Input: MutatorProviding & Codable & Se
             sourceFilePath: "PropertyTestingKitTests/TestHelpers.swift",
             line: 1,
             makeHandlers: makeHandlers,
+            test: { input in
+                defer {
+                    virtualTime.update { $0 += advancement }
+                }
+                try await test(input)
+            }
+        )
+    })
+}
+
+/// Runs a regression replay (the `regress(...)` coordinator path) with a controlled
+/// number of iterations using a test clock. Replays the saved corpus; no fuzzing.
+func runReplayWithMaxIterations<each Input: MutatorProviding & Codable & Sendable>(
+    maxIterations: Int,
+    corpusDir: URL,
+    makeHandlers: @escaping @Sendable () -> [AnalysisHandler<repeat each Input>] = { [] },
+    test: @escaping @Sendable ((repeat each Input)) async throws -> Void
+) async -> FuzzResult<repeat each Input> {
+    let advancement = 10.0 / Double(maxIterations)
+    let testClock = TestClock()
+    let virtualTime = SyncBox<TimeInterval>(0)
+    let startDate = Date()
+    return await withDependencies({
+        $0.continuousClockClient = testClock
+        $0.dateClient = DateClient(now: {
+            startDate.addingTimeInterval(virtualTime.value)
+        })
+    }, operation: {
+        await runReplay(
+            mutators: (repeat (each Input).defaultMutator),
+            corpusDir: corpusDir,
+            duration: .seconds(10),
+            verbose: false,
+            projectPath: nil,
+            sourceFileID: "PropertyTestingKitTests/TestHelpers.swift",
+            sourceFilePath: "PropertyTestingKitTests/TestHelpers.swift",
+            line: 1,
+            makeHandlers: { makeHandlers().map { $0.asFuzzPluginHandler() } },
             test: { input in
                 defer {
                     virtualTime.update { $0 += advancement }
@@ -238,7 +267,7 @@ func fuzzWithMaxIterations<each Input: Codable & Sendable>(
     maxIterations: Int,
     using mutators: repeat Mutator<each Input>,
     seeds: [(repeat each Input)] = [],
-    corpusMode: CorpusMode? = nil,
+    persistence: CorpusPersistence = .auto,
     coverageStrategy: CoverageStrategyKind = .signatureMatch,
     parallelism: Int = 1,
     filePath: StaticString = #filePath,
@@ -263,7 +292,7 @@ func fuzzWithMaxIterations<each Input: Codable & Sendable>(
             using: repeat each mutators,
             seeds: seeds,
             duration: .seconds(10),
-            corpusMode: corpusMode,
+            persistence: persistence,
             coverageStrategy: coverageStrategy,
             parallelism: parallelism,
             filePath: filePath,

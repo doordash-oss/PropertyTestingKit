@@ -15,7 +15,7 @@
 //  Corpus-mode coordination: the policy layer around the (mode-agnostic) FuzzEngine.
 //
 //  `FuzzEngine` is a pure fuzz runner — it builds an in-memory corpus and returns it.
-//  Everything about corpus *policy* lives here: resolving the `CorpusMode`, loading and
+//  Everything about corpus *policy* lives here: resolving the `CorpusPersistence` policy, loading and
 //  saving the on-disk corpus, regression replay, and parallel orchestration with result
 //  merging. Regression is unified with fuzzing: the corpus is loaded into the seed list
 //  and the run is terminated by the `stopWhenQueueEmpty()` plugin once those seeds drain.
@@ -53,19 +53,35 @@ func mutatorSeeds<each Input: Codable & Sendable>(
     return positionsExpanded.flatMap(cartesianProduct)
 }
 
-// MARK: - Campaign entry point
+// MARK: - Campaign entry points
 
-/// Run a complete fuzz campaign for the given corpus mode.
+private func loadSnapshot<each Input: Codable & Sendable>(
+    from corpusDir: URL,
+    verbose: Bool
+) -> CorpusSnapshot<repeat each Input>? {
+    @Dependency(\.corpusPersistence) var corpusPersistence
+    do {
+        return try corpusPersistence.loadSnapshot(from: corpusDir)
+    } catch {
+        if verbose {
+            print("[Fuzz] Failed to load corpus: \(error)")
+        }
+        return nil
+    }
+}
+
+/// Fuzz with the given persistence policy, then save the resulting corpus.
 ///
-/// This is the single place that decides — based on `mode` and whether a corpus already
-/// exists — whether to replay (regression) or fuzz, loads/saves the corpus, and fans out
-/// across parallel engines when fuzzing. The engine itself sees none of this.
+/// This is the `fuzz(...)` path. It decides — based on `persistence` and whether a corpus
+/// already exists — whether to replay an existing corpus (`.auto` hit), delete-then-fuzz
+/// (`.replace`), or load-as-seeds-then-fuzz (`.extend`), and fans out across parallel
+/// engines. The engine itself sees none of this.
 @usableFromInline
-func runFuzzCampaign<each Input: Codable & Sendable>(
+func runFuzz<each Input: Codable & Sendable>(
     mutators: (repeat Mutator<each Input>),
     userSeeds: [(repeat each Input)],
     corpusDir: URL,
-    mode: CorpusMode,
+    persistence: CorpusPersistence,
     parallelism: Int,
     duration: Duration,
     verbose: Bool,
@@ -94,39 +110,13 @@ func runFuzzCampaign<each Input: Codable & Sendable>(
         )
     }
 
-    func loadSnapshot() -> CorpusSnapshot<repeat each Input>? {
-        do {
-            return try corpusPersistence.loadSnapshot(from: corpusDir)
-        } catch {
-            if verbose {
-                print("[Fuzz] Failed to load corpus: \(error)")
-            }
-            return nil
-        }
-    }
-
     let corpusExists = corpusPersistence.exists(corpusDir)
 
-    switch mode {
-    case .regressionOnly:
-        guard corpusExists, let snapshot = loadSnapshot() else {
-            if verbose {
-                print("[Fuzz] Mode: regressionOnly - no corpus to regress")
-            }
-            return .empty
-        }
-        return await replayRegression(
-            snapshot: snapshot,
-            mutators: mutators,
-            verbose: verbose,
-            config: config(strategy: .alwaysInteresting),
-            makeHandlers: makeHandlers,
-            test: test
-        )
-
+    switch persistence {
     case .auto:
-        // Regression if a corpus exists and loads; otherwise fall through to fuzzing.
-        if corpusExists, let snapshot = loadSnapshot() {
+        // Replay if a corpus exists and loads; otherwise fall through to fuzzing.
+        if corpusExists,
+            let snapshot: CorpusSnapshot<repeat each Input> = loadSnapshot(from: corpusDir, verbose: verbose) {
             return await replayRegression(
                 snapshot: snapshot,
                 mutators: mutators,
@@ -147,10 +137,10 @@ func runFuzzCampaign<each Input: Codable & Sendable>(
             test: test
         )
 
-    case .refuzzReplace:
+    case .replace:
         if corpusExists {
             if verbose {
-                print("[Fuzz] Mode: refuzzReplace - deleting existing corpus")
+                print("[Fuzz] persistence: replace - deleting existing corpus")
             }
             try? corpusPersistence.delete(corpusDir)
         }
@@ -165,11 +155,12 @@ func runFuzzCampaign<each Input: Codable & Sendable>(
             test: test
         )
 
-    case .refuzzExtend:
+    case .extend:
         var seeds = userSeeds
-        if corpusExists, let snapshot = loadSnapshot() {
+        if corpusExists,
+            let snapshot: CorpusSnapshot<repeat each Input> = loadSnapshot(from: corpusDir, verbose: verbose) {
             if verbose {
-                print("[Fuzz] Mode: refuzzExtend - loaded \(snapshot.count) corpus entries as seeds")
+                print("[Fuzz] persistence: extend - loaded \(snapshot.count) corpus entries as seeds")
             }
             seeds.append(contentsOf: snapshot.entries.map(\.input))
         }
@@ -184,6 +175,58 @@ func runFuzzCampaign<each Input: Codable & Sendable>(
             test: test
         )
     }
+}
+
+/// Replay a saved corpus and verify it — the `regress(...)` path (and the env-forced
+/// regression of a `fuzz(...)` call, which passes no handlers).
+///
+/// No corpus on disk → returns `.empty` without throwing, so a suite-wide replay over
+/// not-yet-fuzzed tests doesn't fail. Coverage is measured via `.alwaysInteresting` so
+/// `.end` sees the union over every replayed input. The corpus is never re-saved.
+@usableFromInline
+func runReplay<each Input: Codable & Sendable>(
+    mutators: (repeat Mutator<each Input>),
+    corpusDir: URL,
+    duration: Duration,
+    verbose: Bool,
+    projectPath: String?,
+    sourceFileID: String,
+    sourceFilePath: String,
+    line: Int,
+    makeHandlers: @escaping @Sendable () -> [FuzzPluginHandler<repeat each Input>],
+    test: @escaping @Sendable ((repeat each Input)) async throws -> Void
+) async -> FuzzResult<repeat each Input> {
+    @Dependency(\.corpusPersistence) var corpusPersistence
+
+    guard corpusPersistence.exists(corpusDir),
+        let snapshot: CorpusSnapshot<repeat each Input> = loadSnapshot(from: corpusDir, verbose: verbose)
+    else {
+        if verbose {
+            print("[Fuzz] Replay - no corpus to regress")
+        }
+        return .empty
+    }
+
+    let config = FuzzEngineConfig(
+        maxDuration: duration,
+        verbose: verbose,
+        projectPath: projectPath,
+        coverageStrategy: .alwaysInteresting,
+        edgeHook: nil,
+        fileID: sourceFileID,
+        filePath: sourceFilePath,
+        line: line,
+        column: 1
+    )
+
+    return await replayRegression(
+        snapshot: snapshot,
+        mutators: mutators,
+        verbose: verbose,
+        config: config,
+        makeHandlers: makeHandlers,
+        test: test
+    )
 }
 
 // MARK: - Regression replay

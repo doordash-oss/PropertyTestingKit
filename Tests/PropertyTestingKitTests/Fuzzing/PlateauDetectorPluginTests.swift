@@ -33,8 +33,7 @@ struct PlateauDetectorHandlerTests {
         let handler: AnalysisHandler<Int> = .plateauDetector()
 
         let startContext = AsyncPluginEvent<Int>.StartContext(
-            maxDuration: .seconds(60),
-            corpusMode: .auto
+            maxDuration: .seconds(60)
         )
         let actions = try await handler.handleAsync(AsyncPluginEvent<Int>.start(startContext))
         #expect(actions.isEmpty)

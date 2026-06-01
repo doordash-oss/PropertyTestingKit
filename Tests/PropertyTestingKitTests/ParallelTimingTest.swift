@@ -28,7 +28,7 @@ struct ParallelTimingTest {
 
         let result = try await fuzz(
             duration: .milliseconds(100),
-            corpusMode: .refuzzReplace,
+            persistence: .replace,
             parallelism: 16  // Internal parallelism
         ) { (input: Int) in
             // Fast test - no work
@@ -52,7 +52,7 @@ struct ParallelTimingTest {
 
                     let result = try? await fuzz(
                         duration: .milliseconds(100),
-                        corpusMode: .refuzzReplace,
+                        persistence: .replace,
                         parallelism: 16  // Internal parallelism - 256 total engines!
                     ) { (input: Int) in
                         // Fast test - no work
