@@ -289,4 +289,35 @@ struct CorpusCoordinatorTests {
         #expect(replayed.value.contains(42), "Loaded corpus input should be replayed as a seed")
         #expect(saveSpy.callCount == 1, "Extended corpus should be saved")
     }
+
+    @Test("FUZZ_CORPUS_MODE overrides the fuzz path's persistence")
+    func envOverrideResolvesFuzzMode() {
+        func resolve(_ value: String?, callSite: CorpusPersistence) -> ResolvedFuzzMode {
+            withDependencies {
+                $0.environment = EnvironmentClient(
+                    environment: { value.map { ["FUZZ_CORPUS_MODE": $0] } ?? [:] })
+            } operation: {
+                CorpusPersistence.resolveForFuzz(callSite: callSite)
+            }
+        }
+
+        // Unset → honor the call site's persistence.
+        if case .fuzz(.replace) = resolve(nil, callSite: .replace) {} else {
+            Issue.record("unset env should honor the call site")
+        }
+        // regressiononly → a verify-only (handler-less) replay.
+        if case .forcedReplay = resolve("regressiononly", callSite: .auto) {} else {
+            Issue.record("regressiononly should force replay")
+        }
+        // refuzzreplace / refuzzextend / auto → force that persistence regardless of call site.
+        if case .fuzz(.replace) = resolve("refuzzreplace", callSite: .auto) {} else {
+            Issue.record("refuzzreplace should force .replace")
+        }
+        if case .fuzz(.extend) = resolve("refuzzextend", callSite: .auto) {} else {
+            Issue.record("refuzzextend should force .extend")
+        }
+        if case .fuzz(.auto) = resolve("auto", callSite: .replace) {} else {
+            Issue.record("auto should force .auto")
+        }
+    }
 }
