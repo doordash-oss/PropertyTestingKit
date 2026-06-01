@@ -204,17 +204,20 @@ private func replayRegression<each Input: Codable & Sendable>(
 ) async -> FuzzResult<repeat each Input> {
     let corpusInputs = snapshot.entries.map(\.input)
 
+    // Sync path is just queue-drain detection so corpus-mutation can't refill the queue; the
+    // async path keeps the user's handlers so `.end`/`.failureFound` analysis still runs.
     let syncProcessor = PluginHandlerProcessor<repeat each Input>(
         handlers: [.stopWhenQueueEmpty()]
     )
     let asyncProcessor = PluginHandlerProcessor<repeat each Input>(handlers: makeHandlers())
 
     // Replay exactly the saved corpus — no mutator seed values are mixed in.
-    let engine = FuzzEngine<repeat each Input>(mutators: mutators, config: config)
-    let raw = await engine.run(
+    let raw = await runSingleEngine(
+        mutators: mutators,
         seeds: corpusInputs,
-        processSyncPlugins: { syncProcessor.processSync(event: $0, execute: $1) },
-        processAsyncPlugins: { await asyncProcessor.processAsync(event: $0, execute: $1) },
+        config: config,
+        syncProcessor: syncProcessor,
+        asyncProcessor: asyncProcessor,
         test: test
     )
 
@@ -277,20 +280,26 @@ private func fuzzAndSave<each Input: Codable & Sendable>(
     return result
 }
 
-/// Run one engine with a single plugin processor shared across sync and async events.
+/// Construct and run one engine, dispatching sync (hot-path iteration) events through
+/// `syncProcessor` and async (start/end/failure) events through `asyncProcessor`.
+///
+/// Fuzzing passes the *same* processor instance for both so stateful handlers observe the
+/// whole run (iterations and the terminating `.end`); regression passes a queue-draining sync
+/// processor distinct from the analysis async processor. This is the only place the coordinator
+/// builds a `FuzzEngine`, so both replay and fuzz go through identical engine machinery.
 private func runSingleEngine<each Input: Codable & Sendable>(
     mutators: (repeat Mutator<each Input>),
     seeds: [(repeat each Input)],
     config: FuzzEngineConfig,
-    handlers: [FuzzPluginHandler<repeat each Input>],
+    syncProcessor: PluginHandlerProcessor<repeat each Input>,
+    asyncProcessor: PluginHandlerProcessor<repeat each Input>,
     test: @escaping @Sendable ((repeat each Input)) async throws -> Void
 ) async -> FuzzResult<repeat each Input> {
-    let processor = PluginHandlerProcessor<repeat each Input>(handlers: handlers)
     let engine = FuzzEngine<repeat each Input>(mutators: mutators, config: config)
     return await engine.run(
         seeds: seeds,
-        processSyncPlugins: { processor.processSync(event: $0, execute: $1) },
-        processAsyncPlugins: { await processor.processAsync(event: $0, execute: $1) },
+        processSyncPlugins: { syncProcessor.processSync(event: $0, execute: $1) },
+        processAsyncPlugins: { await asyncProcessor.processAsync(event: $0, execute: $1) },
         test: test
     )
 }
@@ -326,11 +335,15 @@ private func runEngines<each Input: Codable & Sendable>(
         for engineIndex in 0..<parallelism {
             let engineSeeds = perEngineSeeds + distributedSeeds[engineIndex]
             group.addTask {
-                await runSingleEngine(
+                // One processor instance per engine, shared across sync and async events;
+                // handler instances must never be shared across engines.
+                let processor = PluginHandlerProcessor<repeat each Input>(handlers: makeHandlers())
+                return await runSingleEngine(
                     mutators: mutators,
                     seeds: engineSeeds,
                     config: config,
-                    handlers: makeHandlers(),
+                    syncProcessor: processor,
+                    asyncProcessor: processor,
                     test: test
                 )
             }
