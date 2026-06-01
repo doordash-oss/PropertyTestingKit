@@ -121,31 +121,6 @@ extension FuzzPluginHandler {
         )
     }
 
-    /// Creates a handler that stops the run the moment the mutation queue drains.
-    ///
-    /// Reacts to the iteration whose `queueCount` reaches zero — the last queued
-    /// input. The engine checks the stop before taking another input, so the run
-    /// halts without executing any freshly-generated one. This is the building
-    /// block for regression replay: load the corpus into the seed list, run with
-    /// no generators contributing new work, and the engine replays exactly the
-    /// seeded inputs (plus anything they queue) and then stops.
-    ///
-    /// - Parameter reason: The stop reason recorded in the run's stats. Defaults
-    ///   to `.regression`.
-    public static func stopWhenQueueEmpty(
-        reason: FuzzStats.StopReason = .regression
-    ) -> FuzzPluginHandler<repeat each Input> {
-        FuzzPluginHandler(
-            id: "stop_when_queue_empty",
-            handleSync: { event in
-                switch event {
-                case let .iteration(context):
-                    return context.queueCount == 0 ? [.stop(.init(reason: reason))] : []
-                }
-            }
-        )
-    }
-
     /// Creates a corpus-cycling mutation handler.
     ///
     /// Extends the basic mutation handler with AFL-style corpus cycling:
@@ -250,132 +225,6 @@ extension FuzzPluginHandler {
         )
     }
 
-    /// Creates a simple plateau detector that stops when no new coverage is found.
-    ///
-    /// - Parameter config: Configuration for plateau detection.
-    /// - Returns: A configured plateau detector handler.
-    public static func plateauDetector(
-        config: SimpleCoveragePlateauDetector.Config = .init()
-    ) -> FuzzPluginHandler<repeat each Input> {
-        var detector = SimpleCoveragePlateauDetector(config: config)
-
-        return FuzzPluginHandler(
-            id: "plateau_detector",
-            handleSync: { event in
-                switch event {
-                case let .iteration(context):
-                    detector.record(discoveredNewCoverage: context.newCoverage != nil)
-
-                    if detector.hasPlateaued {
-                        return [.stop(FuzzPluginAction<repeat each Input>.StopAction(reason: .custom("coverage_plateaued")))]
-                    }
-
-                    return []
-                }
-            }
-        )
-    }
-
-    /// Creates a STADS plateau detector using Good-Turing estimator.
-    ///
-    /// Uses statistical principles from species discovery to estimate the
-    /// probability of finding new coverage. More principled than simple
-    /// window-based approaches.
-    ///
-    /// - Parameters:
-    ///   - minDiscoveryProbability: Minimum probability before declaring plateau. Default is 0.001.
-    ///   - confirmationChecks: Consecutive low-probability checks required. Default is 3.
-    ///   - checkInterval: Iterations between probability recalculations. Default is 100.
-    /// - Returns: A configured STADS plateau detector handler.
-    public static func stadsDetector(
-        minDiscoveryProbability: Double = 0.001,
-        confirmationChecks: Int = 3,
-        checkInterval: Int = 100
-    ) -> FuzzPluginHandler<repeat each Input> {
-        stadsDetector(config: .init(
-            minDiscoveryProbability: minDiscoveryProbability,
-            confirmationChecks: confirmationChecks,
-            checkInterval: checkInterval
-        ))
-    }
-
-    /// Creates a STADS plateau detector with custom configuration.
-    ///
-    /// - Parameter config: The STADS detector configuration.
-    /// - Returns: A configured STADS plateau detector handler.
-    public static func stadsDetector(
-        config: STADSPlateauDetector.Config
-    ) -> FuzzPluginHandler<repeat each Input> {
-        var detector = STADSPlateauDetector(config: config)
-
-        return FuzzPluginHandler(
-            id: "stads_detector",
-            handleSync: { event in
-                switch event {
-                case let .iteration(context):
-                    detector.record(discoveredNewCoverage: context.newCoverage != nil)
-
-                    if detector.hasPlateaued {
-                        return [.stop(FuzzPluginAction<repeat each Input>.StopAction(reason: .custom("stads_plateau")))]
-                    }
-
-                    return []
-                }
-            }
-        )
-    }
-
-    /// Creates a saturation plateau detector using saturation-based metrics.
-    ///
-    /// Models coverage growth as an asymptotic process and stops when saturation
-    /// approaches the estimated maximum coverage.
-    ///
-    /// - Parameters:
-    ///   - minSaturation: Saturation level (0-1) to declare plateau. Default is 0.99.
-    ///   - minGrowthRate: Minimum growth rate before plateau. Default is 0.0001.
-    ///   - windowSize: Window size for growth rate calculation. Default is 500.
-    ///   - confirmationWindows: Consecutive low-growth windows required. Default is 3.
-    /// - Returns: A configured saturation plateau detector handler.
-    public static func saturationDetector(
-        minSaturation: Double = 0.99,
-        minGrowthRate: Double = 0.0001,
-        windowSize: Int = 500,
-        confirmationWindows: Int = 3
-    ) -> FuzzPluginHandler<repeat each Input> {
-        saturationDetector(config: .init(
-            minSaturation: minSaturation,
-            minGrowthRate: minGrowthRate,
-            windowSize: windowSize,
-            confirmationWindows: confirmationWindows
-        ))
-    }
-
-    /// Creates a saturation plateau detector with custom configuration.
-    ///
-    /// - Parameter config: The saturation detector configuration.
-    /// - Returns: A configured saturation plateau detector handler.
-    public static func saturationDetector(
-        config: SaturationPlateauDetector.Config
-    ) -> FuzzPluginHandler<repeat each Input> {
-        var detector = SaturationPlateauDetector(config: config)
-
-        return FuzzPluginHandler(
-            id: "saturation_detector",
-            handleSync: { event in
-                switch event {
-                case let .iteration(context):
-                    detector.record(discoveredNewCoverage: context.newCoverage != nil)
-
-                    if detector.hasPlateaued {
-                        return [.stop(FuzzPluginAction<repeat each Input>.StopAction(reason: .custom("saturation_plateau")))]
-                    }
-
-                    return []
-                }
-            }
-        )
-    }
-
     /// Creates an energy-based mutation handler using the Entropic algorithm.
     ///
     /// Ports libFuzzer's Entropic energy scheduler. Each interesting input is
@@ -460,6 +309,165 @@ extension FuzzPluginHandler {
         )
     }
 
+}
+
+// MARK: - Built-in Analysis Handlers
+//
+// Handlers that emit only `AnalysisAction` (stop / recordIssue). They are valid in
+// both `fuzz(...)` and `regress(...)`; in `fuzz`, lift with `asFuzzPluginHandler()`.
+
+extension AnalysisHandler {
+    /// Creates a handler that stops the run the moment the mutation queue drains.
+    ///
+    /// Reacts to the iteration whose `queueCount` reaches zero — the last queued
+    /// input. The engine checks the stop before taking another input, so the run
+    /// halts without executing any freshly-generated one. This is the building
+    /// block for regression replay: load the corpus into the seed list, run with
+    /// no generators contributing new work, and the engine replays exactly the
+    /// seeded inputs (plus anything they queue) and then stops.
+    ///
+    /// - Parameter reason: The stop reason recorded in the run's stats. Defaults
+    ///   to `.regression`.
+    public static func stopWhenQueueEmpty(
+        reason: FuzzStats.StopReason = .regression
+    ) -> AnalysisHandler<repeat each Input> {
+        AnalysisHandler(
+            id: "stop_when_queue_empty",
+            handleSync: { event in
+                switch event {
+                case let .iteration(context):
+                    return context.queueCount == 0 ? [.stop(.init(reason: reason))] : []
+                }
+            }
+        )
+    }
+
+    /// Creates a simple plateau detector that stops when no new coverage is found.
+    ///
+    /// - Parameter config: Configuration for plateau detection.
+    /// - Returns: A configured plateau detector handler.
+    public static func plateauDetector(
+        config: SimpleCoveragePlateauDetector.Config = .init()
+    ) -> AnalysisHandler<repeat each Input> {
+        var detector = SimpleCoveragePlateauDetector(config: config)
+
+        return AnalysisHandler(
+            id: "plateau_detector",
+            handleSync: { event in
+                switch event {
+                case let .iteration(context):
+                    detector.record(discoveredNewCoverage: context.newCoverage != nil)
+
+                    if detector.hasPlateaued {
+                        return [.stop(FuzzPluginAction<repeat each Input>.StopAction(reason: .custom("coverage_plateaued")))]
+                    }
+
+                    return []
+                }
+            }
+        )
+    }
+
+    /// Creates a STADS plateau detector using Good-Turing estimator.
+    ///
+    /// Uses statistical principles from species discovery to estimate the
+    /// probability of finding new coverage. More principled than simple
+    /// window-based approaches.
+    ///
+    /// - Parameters:
+    ///   - minDiscoveryProbability: Minimum probability before declaring plateau. Default is 0.001.
+    ///   - confirmationChecks: Consecutive low-probability checks required. Default is 3.
+    ///   - checkInterval: Iterations between probability recalculations. Default is 100.
+    /// - Returns: A configured STADS plateau detector handler.
+    public static func stadsDetector(
+        minDiscoveryProbability: Double = 0.001,
+        confirmationChecks: Int = 3,
+        checkInterval: Int = 100
+    ) -> AnalysisHandler<repeat each Input> {
+        stadsDetector(config: .init(
+            minDiscoveryProbability: minDiscoveryProbability,
+            confirmationChecks: confirmationChecks,
+            checkInterval: checkInterval
+        ))
+    }
+
+    /// Creates a STADS plateau detector with custom configuration.
+    ///
+    /// - Parameter config: The STADS detector configuration.
+    /// - Returns: A configured STADS plateau detector handler.
+    public static func stadsDetector(
+        config: STADSPlateauDetector.Config
+    ) -> AnalysisHandler<repeat each Input> {
+        var detector = STADSPlateauDetector(config: config)
+
+        return AnalysisHandler(
+            id: "stads_detector",
+            handleSync: { event in
+                switch event {
+                case let .iteration(context):
+                    detector.record(discoveredNewCoverage: context.newCoverage != nil)
+
+                    if detector.hasPlateaued {
+                        return [.stop(FuzzPluginAction<repeat each Input>.StopAction(reason: .custom("stads_plateau")))]
+                    }
+
+                    return []
+                }
+            }
+        )
+    }
+
+    /// Creates a saturation plateau detector using saturation-based metrics.
+    ///
+    /// Models coverage growth as an asymptotic process and stops when saturation
+    /// approaches the estimated maximum coverage.
+    ///
+    /// - Parameters:
+    ///   - minSaturation: Saturation level (0-1) to declare plateau. Default is 0.99.
+    ///   - minGrowthRate: Minimum growth rate before plateau. Default is 0.0001.
+    ///   - windowSize: Window size for growth rate calculation. Default is 500.
+    ///   - confirmationWindows: Consecutive low-growth windows required. Default is 3.
+    /// - Returns: A configured saturation plateau detector handler.
+    public static func saturationDetector(
+        minSaturation: Double = 0.99,
+        minGrowthRate: Double = 0.0001,
+        windowSize: Int = 500,
+        confirmationWindows: Int = 3
+    ) -> AnalysisHandler<repeat each Input> {
+        saturationDetector(config: .init(
+            minSaturation: minSaturation,
+            minGrowthRate: minGrowthRate,
+            windowSize: windowSize,
+            confirmationWindows: confirmationWindows
+        ))
+    }
+
+    /// Creates a saturation plateau detector with custom configuration.
+    ///
+    /// - Parameter config: The saturation detector configuration.
+    /// - Returns: A configured saturation plateau detector handler.
+    public static func saturationDetector(
+        config: SaturationPlateauDetector.Config
+    ) -> AnalysisHandler<repeat each Input> {
+        var detector = SaturationPlateauDetector(config: config)
+
+        return AnalysisHandler(
+            id: "saturation_detector",
+            handleSync: { event in
+                switch event {
+                case let .iteration(context):
+                    detector.record(discoveredNewCoverage: context.newCoverage != nil)
+
+                    if detector.hasPlateaued {
+                        return [.stop(FuzzPluginAction<repeat each Input>.StopAction(reason: .custom("saturation_plateau")))]
+                    }
+
+                    return []
+                }
+            }
+        )
+    }
+
     /// Creates a coverage gap analysis handler.
     ///
     /// Analyzes coverage at the end of fuzzing and reports gaps in coverage
@@ -469,10 +477,10 @@ extension FuzzPluginHandler {
     /// - Returns: A configured coverage gap handler.
     public static func coverageGap(
         config: CoverageGapDetector.Config = .init()
-    ) -> FuzzPluginHandler<repeat each Input> {
+    ) -> AnalysisHandler<repeat each Input> {
         let detector = CoverageGapDetector(config: config)
 
-        return FuzzPluginHandler(
+        return AnalysisHandler(
             id: "coverage_gap",
             handleSync: { _ in [] },
             handleAsync: { event in
@@ -519,10 +527,10 @@ private func formatMinimizedInput<each T>(_ input: (repeat each T)) -> String {
 private func constructCoverageGapActions<each T: Sendable>(
     report: CoverageGapReport,
     endContext: AsyncPluginEvent<repeat each T>.EndContext
-) -> [FuzzPluginAction<repeat each T>] {
+) -> [AnalysisAction<repeat each T>] {
     guard !report.gaps.isEmpty else { return [] }
 
-    var actions: [FuzzPluginAction<repeat each T>] = []
+    var actions: [AnalysisAction<repeat each T>] = []
 
     for gap in report.gaps {
         let file = URL(fileURLWithPath: gap.filename).lastPathComponent

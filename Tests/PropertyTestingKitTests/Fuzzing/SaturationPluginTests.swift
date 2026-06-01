@@ -24,7 +24,7 @@ struct SaturationHandlerActionTests {
 
     @Test("Handler has correct ID")
     func testHandlerId() {
-        let handler: FuzzPluginHandler<Int> = .saturationDetector()
+        let handler: AnalysisHandler<Int> = .saturationDetector()
         #expect(handler.id == "saturation_detector")
     }
 
@@ -36,7 +36,7 @@ struct SaturationHandlerActionTests {
             windowSize: 10,
             confirmationWindows: 1
         )
-        let handler: FuzzPluginHandler<Int> = .saturationDetector(config: config)
+        let handler: AnalysisHandler<Int> = .saturationDetector(config: config)
 
         // Simulate iterations without discovery to reach saturation
         var stoppedAt: Int?

@@ -24,13 +24,13 @@ struct PlateauDetectorHandlerTests {
 
     @Test("Handler has correct ID")
     func testHandlerId() {
-        let handler: FuzzPluginHandler<Int> = .plateauDetector()
+        let handler: AnalysisHandler<Int> = .plateauDetector()
         #expect(handler.id == "plateau_detector")
     }
 
     @Test("Handler returns empty for async events")
     func testAsyncEventsReturnEmpty() async throws {
-        let handler: FuzzPluginHandler<Int> = .plateauDetector()
+        let handler: AnalysisHandler<Int> = .plateauDetector()
 
         let startContext = AsyncPluginEvent<Int>.StartContext(
             maxDuration: .seconds(60),
@@ -42,7 +42,7 @@ struct PlateauDetectorHandlerTests {
 
     @Test("Handler does not stop when coverage is being discovered")
     func testNoStopWithCoverageDiscovery() {
-        let handler: FuzzPluginHandler<Int> = .plateauDetector()
+        let handler: AnalysisHandler<Int> = .plateauDetector()
 
         // Simulate iterations with new coverage each time
         for i in 0..<50 {
@@ -65,7 +65,7 @@ struct PlateauDetectorHandlerTests {
             minDiscoveryRate: 0.01,   // 0 discoveries < 0.01, so window will be "low"
             confirmationWindows: 2     // Need 2 consecutive low-rate windows
         )
-        let handler: FuzzPluginHandler<Int> = .plateauDetector(config: config)
+        let handler: AnalysisHandler<Int> = .plateauDetector(config: config)
 
         // Simulate iterations without new coverage to trigger plateau
         // Need: 10 iterations to fill first window, then 2+ windows of low rate

@@ -208,7 +208,7 @@ struct SaturationHandlerTests {
 
     @Test("Handler has correct ID")
     func testHandlerId() {
-        let handler: FuzzPluginHandler<Int> = .saturationDetector()
+        let handler: AnalysisHandler<Int> = .saturationDetector()
         #expect(handler.id == "saturation_detector")
     }
 
@@ -220,7 +220,7 @@ struct SaturationHandlerTests {
             confirmationWindows: 2,
             enabled: true
         )
-        let handler: FuzzPluginHandler<Int> = .saturationDetector(config: config)
+        let handler: AnalysisHandler<Int> = .saturationDetector(config: config)
 
         // Record many non-discoveries via iteration events
         for i in 0..<50 {
@@ -244,7 +244,7 @@ struct SaturationHandlerTests {
 
     @Test("Convenience constructor creates handler")
     func testConvenienceConstructor() {
-        let handler: FuzzPluginHandler<Int> = .saturationDetector(
+        let handler: AnalysisHandler<Int> = .saturationDetector(
             minSaturation: 0.95,
             minGrowthRate: 0.0005,
             windowSize: 100,

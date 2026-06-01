@@ -24,13 +24,13 @@ struct STADSHandlerActionTests {
 
     @Test("Handler has correct ID")
     func testHandlerId() {
-        let handler: FuzzPluginHandler<Int> = .stadsDetector()
+        let handler: AnalysisHandler<Int> = .stadsDetector()
         #expect(handler.id == "stads_detector")
     }
 
     @Test("Handler returns empty for async events")
     func testAsyncEventsReturnEmpty() async throws {
-        let handler: FuzzPluginHandler<Int> = .stadsDetector()
+        let handler: AnalysisHandler<Int> = .stadsDetector()
 
         let endContext = AsyncPluginEvent<Int>.EndContext(
             totalCoveredIndices: Set([1, 2, 3]),
@@ -48,7 +48,7 @@ struct STADSHandlerActionTests {
             confirmationChecks: 1,
             checkInterval: 10
         )
-        let handler: FuzzPluginHandler<Int> = .stadsDetector(config: config)
+        let handler: AnalysisHandler<Int> = .stadsDetector(config: config)
 
         // Simulate many iterations without discovery to drop probability
         var stoppedAt: Int?

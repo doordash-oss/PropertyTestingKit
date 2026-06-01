@@ -24,13 +24,13 @@ struct CoverageGapHandlerActionTests {
 
     @Test("Handler has correct ID")
     func testHandlerId() {
-        let handler: FuzzPluginHandler<Int> = .coverageGap()
+        let handler: AnalysisHandler<Int> = .coverageGap()
         #expect(handler.id == "coverage_gap")
     }
 
     @Test("Handler returns empty for non-end events")
     func testNonEndEventsReturnEmpty() async throws {
-        let handler: FuzzPluginHandler<Int> = .coverageGap()
+        let handler: AnalysisHandler<Int> = .coverageGap()
 
         // Sync events should always return empty
         let iterationContext = SyncPluginEvent<Int>.IterationContext(

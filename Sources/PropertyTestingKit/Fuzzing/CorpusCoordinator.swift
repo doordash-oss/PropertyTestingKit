@@ -218,7 +218,8 @@ private func replayRegression<each Input: Codable & Sendable>(
         config: config,
         makeProcessors: {
             (
-                sync: PluginHandlerProcessor<repeat each Input>(handlers: [.stopWhenQueueEmpty()]),
+                sync: PluginHandlerProcessor<repeat each Input>(
+                    handlers: [AnalysisHandler<repeat each Input>.stopWhenQueueEmpty().asFuzzPluginHandler()]),
                 async: PluginHandlerProcessor<repeat each Input>(handlers: makeHandlers())
             )
         },
