@@ -54,6 +54,51 @@ public struct FuzzPluginHandler<each Input: Sendable>: @unchecked Sendable {
     }
 }
 
+/// A plugin handler restricted to *analysis* — it can only emit `AnalysisAction`
+/// (`stop` / `recordIssue`), never a write action.
+///
+/// This is the handler type `regress(...)` accepts. Because its closures return
+/// `[AnalysisAction]`, and `AnalysisAction` has no write cases, a handler used in a
+/// replay cannot mutate the run or the corpus — the restriction is enforced by the
+/// type, with no runtime check. Analysis handlers are also usable inside `fuzz(...)`
+/// by lifting them with `asFuzzPluginHandler()`.
+public struct AnalysisHandler<each Input: Sendable>: @unchecked Sendable {
+    public let id: String
+
+    /// Synchronous event handler — hot path. Always invoked synchronously on the
+    /// engine task that owns this handler.
+    public let handleSync: (SyncPluginEvent<repeat each Input>) -> [AnalysisAction<repeat each Input>]
+
+    /// Asynchronous event handler — cold path, called rarely.
+    public let handleAsync: @Sendable (AsyncPluginEvent<repeat each Input>) async throws -> [AnalysisAction<repeat each Input>]
+
+    @inlinable
+    public init(
+        id: String,
+        handleSync: @escaping (SyncPluginEvent<repeat each Input>) -> [AnalysisAction<repeat each Input>],
+        handleAsync: @escaping @Sendable (AsyncPluginEvent<repeat each Input>) async throws -> [AnalysisAction<repeat each Input>] = { _ in [] }
+    ) {
+        self.id = id
+        self.handleSync = handleSync
+        self.handleAsync = handleAsync
+    }
+}
+
+extension AnalysisHandler {
+    /// Lift this analysis handler into a full `FuzzPluginHandler` so it can run in a
+    /// `fuzz(...)` campaign alongside exploration handlers. Each emitted action is
+    /// widened via `AnalysisAction.lifted()`, which only ever yields `.stop` /
+    /// `.recordIssue`.
+    @inlinable
+    public func asFuzzPluginHandler() -> FuzzPluginHandler<repeat each Input> {
+        FuzzPluginHandler(
+            id: id,
+            handleSync: { event in handleSync(event).map { $0.lifted() } },
+            handleAsync: { event in try await handleAsync(event).map { $0.lifted() } }
+        )
+    }
+}
+
 // MARK: - Built-in Handlers
 
 extension FuzzPluginHandler {

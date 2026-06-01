@@ -215,3 +215,36 @@ public enum FuzzPluginAction<each T: Sendable>: Sendable {
         }
     }
 }
+
+// MARK: - Analysis Actions (regression-valid subset)
+
+/// The subset of `FuzzPluginAction` that is valid during a regression replay.
+///
+/// A replay runs a fixed set of inputs (the saved corpus) and treats the on-disk
+/// corpus as authoritative, so the only meaningful actions are *control* and
+/// *observation* — `stop` and `recordIssue`. The *write* actions that mutate the
+/// run (`queueInputs`, `selectForMutation`, `submitToCorpus`) are deliberately
+/// absent: a handler typed to emit `AnalysisAction` literally cannot name them, so
+/// `regress(...)` can only ever be handed plugins that emit valid actions. This is
+/// the compile-time guarantee — there is no runtime gate.
+///
+/// The payloads are reused from `FuzzPluginAction` so there is one source of truth
+/// and `lifted()` is a pure re-tag with no copying.
+public enum AnalysisAction<each T: Sendable>: Sendable {
+    /// Stop the run.
+    case stop(FuzzPluginAction<repeat each T>.StopAction)
+    /// Record an issue to Swift Testing.
+    case recordIssue(FuzzPluginAction<repeat each T>.IssueAction)
+
+    /// Widen this analysis action into the full `FuzzPluginAction`. Total and
+    /// lossless — the only direction that exists. There is intentionally no
+    /// `FuzzPluginAction -> AnalysisAction`, since that would be the partial,
+    /// write-discarding direction this type is designed to forbid.
+    @inlinable
+    public func lifted() -> FuzzPluginAction<repeat each T> {
+        switch self {
+        case .stop(let action): return .stop(action)
+        case .recordIssue(let action): return .recordIssue(action)
+        }
+    }
+}
