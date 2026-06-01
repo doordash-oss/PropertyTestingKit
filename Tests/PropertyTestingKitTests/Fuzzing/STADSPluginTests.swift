@@ -54,7 +54,6 @@ struct STADSHandlerActionTests {
         var stoppedAt: Int?
         for i in 0..<500 {
             let context = SyncPluginEvent<Int>.IterationContext(
-                discoveredNewCoverage: false,
                 input: i
             )
             let actions = handler.handleSync(SyncPluginEvent<Int>.iteration(context))

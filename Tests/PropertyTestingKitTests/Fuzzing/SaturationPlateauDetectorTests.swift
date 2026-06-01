@@ -225,7 +225,6 @@ struct SaturationHandlerTests {
         // Record many non-discoveries via iteration events
         for i in 0..<50 {
             let iterationContext = SyncPluginEvent<Int>.IterationContext(
-                discoveredNewCoverage: false,
                 input: i
             )
             let actions = handler.handleSync(SyncPluginEvent<Int>.iteration(iterationContext))

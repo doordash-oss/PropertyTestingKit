@@ -214,7 +214,7 @@ private func replayRegression<each Input: Codable & Sendable>(
     let raw = await engine.run(
         seeds: corpusInputs,
         processSyncPlugins: { syncProcessor.processSync(event: $0, execute: $1) },
-        processAsyncPlugins: { await asyncProcessor.processAsync(isolation: $0, event: $1, execute: $2) },
+        processAsyncPlugins: { await asyncProcessor.processAsync(event: $0, execute: $1) },
         test: test
     )
 
@@ -302,7 +302,7 @@ private func runSingleEngine<each Input: Codable & Sendable>(
     return await engine.run(
         seeds: seeds,
         processSyncPlugins: { processor.processSync(event: $0, execute: $1) },
-        processAsyncPlugins: { await processor.processAsync(isolation: $0, event: $1, execute: $2) },
+        processAsyncPlugins: { await processor.processAsync(event: $0, execute: $1) },
         test: test
     )
 }

@@ -90,11 +90,10 @@ struct DeterministicTimingTests {
                     processor.processSync(event: event, execute: execute)
                 }
                 let processAsyncPlugins: @Sendable (
-                    isolated (any Actor)?,
                     consuming AsyncPluginEvent<SingleSeedInt>,
                     (FuzzPluginAction<SingleSeedInt>) -> Void
-                ) async -> Void = { isolation, event, execute in
-                    await processor.processAsync(isolation: isolation, event: event, execute: execute)
+                ) async -> Void = { event, execute in
+                    await processor.processAsync(event: event, execute: execute)
                 }
                 return await engine.run(seeds: mutatorSeeds(SingleSeedInt.defaultMutator), processSyncPlugins: processSyncPlugins, processAsyncPlugins: processAsyncPlugins) { _ in
                     // Advance time by 11 seconds each test (exceeds 10s limit after first test)
@@ -138,11 +137,10 @@ struct DeterministicTimingTests {
                     processor.processSync(event: event, execute: execute)
                 }
                 let processAsyncPlugins: @Sendable (
-                    isolated (any Actor)?,
                     consuming AsyncPluginEvent<SingleSeedInt>,
                     (FuzzPluginAction<SingleSeedInt>) -> Void
-                ) async -> Void = { isolation, event, execute in
-                    await processor.processAsync(isolation: isolation, event: event, execute: execute)
+                ) async -> Void = { event, execute in
+                    await processor.processAsync(event: event, execute: execute)
                 }
                 return await engine.run(seeds: mutatorSeeds(SingleSeedInt.defaultMutator), processSyncPlugins: processSyncPlugins, processAsyncPlugins: processAsyncPlugins) { _ in
                     // Advance time by exactly 2.5 seconds each test

@@ -51,7 +51,6 @@ final class FuzzEngine<each Input: Codable & Sendable>: @unchecked Sendable {
 
     /// Asynchronous plugin processor for rare events (cold path).
     typealias AsyncPluginProcessorFn = @Sendable (
-        isolated (any Actor)?,
         consuming AsyncPluginEvent<repeat each Input>,
         (FuzzPluginAction<repeat each Input>) -> Void
     ) async -> Void
@@ -170,7 +169,7 @@ final class FuzzEngine<each Input: Codable & Sendable>: @unchecked Sendable {
             projectPath: config.projectPath,
             sourceLocation: config.sourceLocation
         )
-        await processAsyncPlugins(nil, .end(endContext)) { action in
+        await processAsyncPlugins(.end(endContext)) { action in
             self.executeEndAction(action)
         }
 

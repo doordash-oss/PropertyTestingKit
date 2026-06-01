@@ -28,8 +28,6 @@ public enum SyncPluginEvent<each T: Sendable>: Sendable {
 
     /// Context provided after each iteration.
     public struct IterationContext: Sendable {
-        /// Whether this iteration discovered new coverage.
-        public let discoveredNewCoverage: Bool
         /// The input that was tested in this iteration.
         public let input: (repeat each T)
         /// Whether this input came from the pending mutation queue (`true`)
@@ -41,22 +39,20 @@ public enum SyncPluginEvent<each T: Sendable>: Sendable {
         /// use `queueCount == 0` to detect that the queue has drained — e.g. to
         /// stop a regression replay once the seeded corpus is exhausted.
         public let queueCount: Int
-        /// The sparse coverage snapshot for this iteration.
-        /// Only populated when `discoveredNewCoverage == true`; `nil` otherwise.
-        public let sparseCoverage: SparseCoverage?
+        /// The new coverage this iteration discovered, or `nil` if it covered
+        /// nothing new. A non-nil value *is* the "discovered new coverage" signal.
+        public let newCoverage: SparseCoverage?
 
         public init(
-            discoveredNewCoverage: Bool,
             input: consuming (repeat each T),
             fromMutationQueue: Bool = false,
             queueCount: Int = 0,
-            sparseCoverage: SparseCoverage? = nil
+            newCoverage: SparseCoverage? = nil
         ) {
-            self.discoveredNewCoverage = discoveredNewCoverage
             self.input = input
             self.fromMutationQueue = fromMutationQueue
             self.queueCount = queueCount
-            self.sparseCoverage = sparseCoverage
+            self.newCoverage = newCoverage
         }
     }
 }
@@ -133,6 +129,11 @@ public enum AsyncPluginEvent<each T: Sendable>: Sendable {
             self.sparseCoverage = sparseCoverage
         }
     }
+}
+
+enum PluginEvent<each T: Sendable>: Sendable {
+    case sync(SyncPluginEvent<repeat each T>)
+    case async(AsyncPluginEvent<repeat each T>)
 }
 
 // MARK: - Plugin Actions

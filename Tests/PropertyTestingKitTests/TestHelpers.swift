@@ -145,11 +145,10 @@ func fuzzEngineWithMaxIterations<each Input: MutatorProviding & Codable & Sendab
             processor.processSync(event: event, execute: execute)
         }
         let processAsyncPlugins: @Sendable (
-            isolated (any Actor)?,
             consuming AsyncPluginEvent<repeat each Input>,
             (FuzzPluginAction<repeat each Input>) -> Void
-        ) async -> Void = { isolation, event, execute in
-            await processor.processAsync(isolation: isolation, event: event, execute: execute)
+        ) async -> Void = { event, execute in
+            await processor.processAsync(event: event, execute: execute)
         }
         return await engine.run(seeds: seeds, processSyncPlugins: processSyncPlugins, processAsyncPlugins: processAsyncPlugins) { input in
             defer {

@@ -34,7 +34,6 @@ struct StopWhenQueueEmptyHandlerTests {
 
         // An iteration with inputs still queued must not stop the run.
         let context = SyncPluginEvent<Int>.IterationContext(
-            discoveredNewCoverage: false,
             input: 7,
             fromMutationQueue: true,
             queueCount: 3
@@ -48,7 +47,6 @@ struct StopWhenQueueEmptyHandlerTests {
         let handler: FuzzPluginHandler<Int> = .stopWhenQueueEmpty()
 
         let context = SyncPluginEvent<Int>.IterationContext(
-            discoveredNewCoverage: false,
             input: 7,
             fromMutationQueue: true,
             queueCount: 0
@@ -68,7 +66,6 @@ struct StopWhenQueueEmptyHandlerTests {
         let handler: FuzzPluginHandler<Int> = .stopWhenQueueEmpty(reason: .custom("done"))
 
         let context = SyncPluginEvent<Int>.IterationContext(
-            discoveredNewCoverage: false,
             input: 7,
             fromMutationQueue: true,
             queueCount: 0
@@ -102,7 +99,7 @@ struct StopWhenQueueEmptyHandlerTests {
         let result = await engine.run(
             seeds: seeds,
             processSyncPlugins: { processor.processSync(event: $0, execute: $1) },
-            processAsyncPlugins: { await processor.processAsync(isolation: $0, event: $1, execute: $2) },
+            processAsyncPlugins: { await processor.processAsync(event: $0, execute: $1) },
             test: { input in
                 executed.update { $0.append(input) }
             }

@@ -100,11 +100,10 @@ struct FuzzEngineRaceTests {
                         processor.processSync(event: event, execute: execute)
                     }
                     let processAsyncPlugins: @Sendable (
-                        isolated (any Actor)?,
                         consuming AsyncPluginEvent<Int>,
                         (FuzzPluginAction<Int>) -> Void
-                    ) async -> Void = { isolation, event, execute in
-                        await processor.processAsync(isolation: isolation, event: event, execute: execute)
+                    ) async -> Void = { event, execute in
+                        await processor.processAsync(event: event, execute: execute)
                     }
 
                     _ = try await engine.run(seeds: mutatorSeeds(Int.defaultMutator), processSyncPlugins: processSyncPlugins, processAsyncPlugins: processAsyncPlugins) { (input: Int) in

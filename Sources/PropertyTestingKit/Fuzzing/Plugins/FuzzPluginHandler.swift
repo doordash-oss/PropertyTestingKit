@@ -67,7 +67,7 @@ extension FuzzPluginHandler {
             handleSync: { event in
                 switch event {
                 case let .iteration(context):
-                    if context.discoveredNewCoverage {
+                    if context.newCoverage != nil {
                         return [.selectForMutation(.init(input: context.input))]
                     }
                     return []
@@ -123,7 +123,7 @@ extension FuzzPluginHandler {
             handleSync: { event in
                 switch event {
                 case let .iteration(context):
-                    if context.discoveredNewCoverage {
+                    if context.newCoverage != nil {
                         interestingInputs.append(context.input)
                         return [.selectForMutation(.init(input: context.input))]
                     }
@@ -219,7 +219,7 @@ extension FuzzPluginHandler {
             handleSync: { event in
                 switch event {
                 case let .iteration(context):
-                    detector.record(discoveredNewCoverage: context.discoveredNewCoverage)
+                    detector.record(discoveredNewCoverage: context.newCoverage != nil)
 
                     if detector.hasPlateaued {
                         return [.stop(FuzzPluginAction<repeat each Input>.StopAction(reason: .custom("coverage_plateaued")))]
@@ -268,7 +268,7 @@ extension FuzzPluginHandler {
             handleSync: { event in
                 switch event {
                 case let .iteration(context):
-                    detector.record(discoveredNewCoverage: context.discoveredNewCoverage)
+                    detector.record(discoveredNewCoverage: context.newCoverage != nil)
 
                     if detector.hasPlateaued {
                         return [.stop(FuzzPluginAction<repeat each Input>.StopAction(reason: .custom("stads_plateau")))]
@@ -319,7 +319,7 @@ extension FuzzPluginHandler {
             handleSync: { event in
                 switch event {
                 case let .iteration(context):
-                    detector.record(discoveredNewCoverage: context.discoveredNewCoverage)
+                    detector.record(discoveredNewCoverage: context.newCoverage != nil)
 
                     if detector.hasPlateaued {
                         return [.stop(FuzzPluginAction<repeat each Input>.StopAction(reason: .custom("saturation_plateau")))]
@@ -368,7 +368,7 @@ extension FuzzPluginHandler {
             handleSync: { event in
                 switch event {
                 case let .iteration(context):
-                    if context.discoveredNewCoverage, let coverage = context.sparseCoverage {
+                    if let coverage = context.newCoverage {
                         // Register new entry with its features.
                         for feature in coverage.indices {
                             globalFeatureFreqs[feature, default: 0] += 1
@@ -646,7 +646,6 @@ struct PluginHandlerProcessor<each Input: Sendable>: @unchecked Sendable {
     /// Process an asynchronous event - cold path.
     @inlinable
     func processAsync(
-        isolation: isolated (any Actor)? = #isolation,
         event: consuming AsyncPluginEvent<repeat each Input>,
         execute: (FuzzPluginAction<repeat each Input>) -> Void
     ) async {

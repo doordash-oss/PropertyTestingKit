@@ -42,8 +42,8 @@ struct ShrinkingHandlerTests {
 
         // Test iteration event (sync)
         let iterationContext = SyncPluginEvent<Int>.IterationContext(
-            discoveredNewCoverage: true,
-            input: 42
+            input: 42,
+            newCoverage: SparseCoverage()
         )
         let iterationActions = handler.handleSync(SyncPluginEvent<Int>.iteration(iterationContext))
         #expect(iterationActions.isEmpty)
