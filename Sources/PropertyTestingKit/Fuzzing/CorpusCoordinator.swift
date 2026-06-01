@@ -247,30 +247,18 @@ private func fuzzAndSave<each Input: Codable & Sendable>(
     // the fuzz seed list, assembled here alongside the caller's seeds.
     let baseSeeds = mutatorSeeds(mutators)
 
-    let result: FuzzResult<repeat each Input>
-    if parallelism <= 1 {
-        result = await runSingleEngine(
-            mutators: mutators,
-            seeds: baseSeeds + seeds,
-            config: config,
-            handlers: makeHandlers(),
-            test: test
-        )
-    } else {
-        if verbose {
-            print("[Fuzz] Running \(parallelism) parallel fuzz engines")
-        }
-        result = await runParallelEngines(
-            mutators: mutators,
-            seeds: seeds,
-            perEngineSeeds: baseSeeds,
-            parallelism: parallelism,
-            verbose: verbose,
-            config: config,
-            makeHandlers: makeHandlers,
-            test: test
-        )
-    }
+    // A single engine is just the N-engine path with N == 1: the seed split collapses to
+    // one bucket and the merge short-circuits, so there's no separate single-engine branch.
+    let result = await runEngines(
+        mutators: mutators,
+        seeds: seeds,
+        perEngineSeeds: baseSeeds,
+        parallelism: max(1, parallelism),
+        verbose: verbose,
+        config: config,
+        makeHandlers: makeHandlers,
+        test: test
+    )
 
     // Persist only a non-empty corpus, so a refuzz that finds nothing leaves no stale file.
     if !result.corpus.entries.isEmpty {
@@ -307,13 +295,15 @@ private func runSingleEngine<each Input: Codable & Sendable>(
     )
 }
 
-/// Run N independent engines, then merge. The round-robin-split `seeds` are distributed
-/// one share per engine; `perEngineSeeds` (the mutators' seed values) are given to every
-/// engine so each explores from the same starting points.
+/// Run `parallelism` independent engines, then merge. The round-robin-split `seeds` are
+/// distributed one share per engine; `perEngineSeeds` (the mutators' seed values) are given to
+/// every engine so each explores from the same starting points. With `parallelism == 1` the
+/// split collapses to a single bucket and `mergeResults` returns that engine's result unchanged,
+/// so this is also the single-engine path. `parallelism` must be >= 1.
 ///
 /// Each engine builds its own handler instances via `makeHandlers()` — handlers must never
 /// be shared across engines. Engines never persist; the merged corpus is saved by the caller.
-private func runParallelEngines<each Input: Codable & Sendable>(
+private func runEngines<each Input: Codable & Sendable>(
     mutators: (repeat Mutator<each Input>),
     seeds: [(repeat each Input)],
     perEngineSeeds: [(repeat each Input)],
@@ -323,6 +313,10 @@ private func runParallelEngines<each Input: Codable & Sendable>(
     makeHandlers: @escaping @Sendable () -> [FuzzPluginHandler<repeat each Input>],
     test: @escaping @Sendable ((repeat each Input)) async throws -> Void
 ) async -> FuzzResult<repeat each Input> {
+    if verbose {
+        print("[Fuzz] Running \(parallelism) fuzz engine\(parallelism == 1 ? "" : "s")")
+    }
+
     var distributedSeeds: [[(repeat each Input)]] = Array(repeating: [], count: parallelism)
     for (index, seed) in seeds.enumerated() {
         distributedSeeds[index % parallelism].append(seed)
