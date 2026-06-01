@@ -118,6 +118,7 @@ func runFuzzCampaign<each Input: Codable & Sendable>(
         return await replayRegression(
             snapshot: snapshot,
             mutators: mutators,
+            verbose: verbose,
             config: config(strategy: .alwaysInteresting),
             makeHandlers: makeHandlers,
             test: test
@@ -129,6 +130,7 @@ func runFuzzCampaign<each Input: Codable & Sendable>(
             return await replayRegression(
                 snapshot: snapshot,
                 mutators: mutators,
+                verbose: verbose,
                 config: config(strategy: .alwaysInteresting),
                 makeHandlers: makeHandlers,
                 test: test
@@ -198,26 +200,28 @@ func runFuzzCampaign<each Input: Codable & Sendable>(
 private func replayRegression<each Input: Codable & Sendable>(
     snapshot: CorpusSnapshot<repeat each Input>,
     mutators: (repeat Mutator<each Input>),
+    verbose: Bool,
     config: FuzzEngineConfig,
     makeHandlers: @escaping @Sendable () -> [FuzzPluginHandler<repeat each Input>],
     test: @escaping @Sendable ((repeat each Input)) async throws -> Void
 ) async -> FuzzResult<repeat each Input> {
-    let corpusInputs = snapshot.entries.map(\.input)
-
-    // Sync path is just queue-drain detection so corpus-mutation can't refill the queue; the
-    // async path keeps the user's handlers so `.end`/`.failureFound` analysis still runs.
-    let syncProcessor = PluginHandlerProcessor<repeat each Input>(
-        handlers: [.stopWhenQueueEmpty()]
-    )
-    let asyncProcessor = PluginHandlerProcessor<repeat each Input>(handlers: makeHandlers())
-
-    // Replay exactly the saved corpus — no mutator seed values are mixed in.
-    let raw = await runSingleEngine(
+    // Replay exactly the saved corpus through one engine — no mutator seed values mixed in,
+    // no parallel fan-out. The sync path is just queue-drain detection so corpus-mutation
+    // can't refill the queue; the async path keeps the user's handlers so `.end`/`.failureFound`
+    // analysis still runs.
+    let raw = await runEngines(
         mutators: mutators,
-        seeds: corpusInputs,
+        seeds: snapshot.entries.map(\.input),
+        perEngineSeeds: [],
+        parallelism: 1,
+        verbose: verbose,
         config: config,
-        syncProcessor: syncProcessor,
-        asyncProcessor: asyncProcessor,
+        makeProcessors: {
+            (
+                sync: PluginHandlerProcessor<repeat each Input>(handlers: [.stopWhenQueueEmpty()]),
+                async: PluginHandlerProcessor<repeat each Input>(handlers: makeHandlers())
+            )
+        },
         test: test
     )
 
@@ -252,6 +256,8 @@ private func fuzzAndSave<each Input: Codable & Sendable>(
 
     // A single engine is just the N-engine path with N == 1: the seed split collapses to
     // one bucket and the merge short-circuits, so there's no separate single-engine branch.
+    // Fuzzing shares one processor across sync and async events so stateful handlers see the
+    // whole run.
     let result = await runEngines(
         mutators: mutators,
         seeds: seeds,
@@ -259,7 +265,10 @@ private func fuzzAndSave<each Input: Codable & Sendable>(
         parallelism: max(1, parallelism),
         verbose: verbose,
         config: config,
-        makeHandlers: makeHandlers,
+        makeProcessors: {
+            let processor = PluginHandlerProcessor<repeat each Input>(handlers: makeHandlers())
+            return (sync: processor, async: processor)
+        },
         test: test
     )
 
@@ -280,38 +289,18 @@ private func fuzzAndSave<each Input: Codable & Sendable>(
     return result
 }
 
-/// Construct and run one engine, dispatching sync (hot-path iteration) events through
-/// `syncProcessor` and async (start/end/failure) events through `asyncProcessor`.
-///
-/// Fuzzing passes the *same* processor instance for both so stateful handlers observe the
-/// whole run (iterations and the terminating `.end`); regression passes a queue-draining sync
-/// processor distinct from the analysis async processor. This is the only place the coordinator
-/// builds a `FuzzEngine`, so both replay and fuzz go through identical engine machinery.
-private func runSingleEngine<each Input: Codable & Sendable>(
-    mutators: (repeat Mutator<each Input>),
-    seeds: [(repeat each Input)],
-    config: FuzzEngineConfig,
-    syncProcessor: PluginHandlerProcessor<repeat each Input>,
-    asyncProcessor: PluginHandlerProcessor<repeat each Input>,
-    test: @escaping @Sendable ((repeat each Input)) async throws -> Void
-) async -> FuzzResult<repeat each Input> {
-    let engine = FuzzEngine<repeat each Input>(mutators: mutators, config: config)
-    return await engine.run(
-        seeds: seeds,
-        processSyncPlugins: { syncProcessor.processSync(event: $0, execute: $1) },
-        processAsyncPlugins: { await asyncProcessor.processAsync(event: $0, execute: $1) },
-        test: test
-    )
-}
-
 /// Run `parallelism` independent engines, then merge. The round-robin-split `seeds` are
 /// distributed one share per engine; `perEngineSeeds` (the mutators' seed values) are given to
 /// every engine so each explores from the same starting points. With `parallelism == 1` the
 /// split collapses to a single bucket and `mergeResults` returns that engine's result unchanged,
-/// so this is also the single-engine path. `parallelism` must be >= 1.
+/// so this is also the single- and regression-replay engine path. `parallelism` must be >= 1.
 ///
-/// Each engine builds its own handler instances via `makeHandlers()` — handlers must never
-/// be shared across engines. Engines never persist; the merged corpus is saved by the caller.
+/// `makeProcessors` builds a fresh (sync, async) plugin-processor pair per engine. Fuzzing
+/// returns the *same* instance for both so stateful handlers observe the whole run (iterations
+/// and the terminating `.end`); regression returns a queue-draining sync processor distinct from
+/// its analysis async processor. Processor and handler instances must never be shared across
+/// engines. This is the only place the coordinator builds a `FuzzEngine`; engines never persist,
+/// so the merged corpus is saved by the caller.
 private func runEngines<each Input: Codable & Sendable>(
     mutators: (repeat Mutator<each Input>),
     seeds: [(repeat each Input)],
@@ -319,7 +308,10 @@ private func runEngines<each Input: Codable & Sendable>(
     parallelism: Int,
     verbose: Bool,
     config: FuzzEngineConfig,
-    makeHandlers: @escaping @Sendable () -> [FuzzPluginHandler<repeat each Input>],
+    makeProcessors: @escaping @Sendable () -> (
+        sync: PluginHandlerProcessor<repeat each Input>,
+        async: PluginHandlerProcessor<repeat each Input>
+    ),
     test: @escaping @Sendable ((repeat each Input)) async throws -> Void
 ) async -> FuzzResult<repeat each Input> {
     if verbose {
@@ -335,15 +327,14 @@ private func runEngines<each Input: Codable & Sendable>(
         for engineIndex in 0..<parallelism {
             let engineSeeds = perEngineSeeds + distributedSeeds[engineIndex]
             group.addTask {
-                // One processor instance per engine, shared across sync and async events;
-                // handler instances must never be shared across engines.
-                let processor = PluginHandlerProcessor<repeat each Input>(handlers: makeHandlers())
-                return await runSingleEngine(
-                    mutators: mutators,
+                let processors = makeProcessors()
+                let engine = FuzzEngine<repeat each Input>(mutators: mutators, config: config)
+                return await engine.run(
                     seeds: engineSeeds,
-                    config: config,
-                    syncProcessor: processor,
-                    asyncProcessor: processor,
+                    processSyncPlugins: { processors.sync.processSync(event: $0, execute: $1) },
+                    processAsyncPlugins: {
+                        await processors.async.processAsync(event: $0, execute: $1)
+                    },
                     test: test
                 )
             }
