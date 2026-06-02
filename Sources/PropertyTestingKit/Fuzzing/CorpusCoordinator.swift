@@ -275,11 +275,10 @@ private func replayRegression<each Input: Codable & Sendable>(
         parallelism: 1,
         verbose: verbose,
         config: config,
-        makeProcessors: {
+        makeProcessor: {
             let lifted = (plugins() + [AnalysisPlugin<repeat each Input>.stopWhenQueueEmpty()])
                 .map { $0.asFuzzPlugin() }
-            let processor = PluginProcessor<repeat each Input>(plugins: lifted)
-            return (sync: processor, async: processor)
+            return PluginProcessor<repeat each Input>(plugins: lifted)
         },
         test: test
     )
@@ -326,9 +325,8 @@ private func fuzzCampaign<each Input: Codable & Sendable>(
         parallelism: max(1, parallelism),
         verbose: verbose,
         config: config,
-        makeProcessors: {
-            let processor = PluginProcessor<repeat each Input>(plugins: makeHandlers())
-            return (sync: processor, async: processor)
+        makeProcessor: {
+            PluginProcessor<repeat each Input>(plugins: makeHandlers())
         },
         test: test
     )
@@ -357,12 +355,13 @@ private func fuzzCampaign<each Input: Codable & Sendable>(
 /// split collapses to a single bucket and `mergeResults` returns that engine's result unchanged,
 /// so this is also the single- and regression-replay engine path. `parallelism` must be >= 1.
 ///
-/// `makeProcessors` builds a fresh (sync, async) plugin-processor pair per engine. Fuzzing
-/// returns the *same* instance for both so stateful handlers observe the whole run (iterations
-/// and the terminating `.end`); regression returns a queue-draining sync processor distinct from
-/// its analysis async processor. Processor and handler instances must never be shared across
-/// engines. This is the only place the coordinator builds a `FuzzEngine`; engines never persist,
-/// so the merged corpus is saved by the caller.
+/// `makeProcessor` builds a fresh plugin processor per engine (called inside each engine's
+/// task). It must be a factory, not a value: plugins are stateful and not thread-safe, so
+/// every parallel engine needs its own instances — they must never be shared across engines.
+/// The one processor handles both the sync (`.iteration`) and async (`.start`/`.end`/
+/// `.failureFound`) paths, so a stateful plugin observes the whole run. This is the only place
+/// the coordinator builds a `FuzzEngine`; engines never persist, so the merged corpus is saved
+/// by the caller.
 private func runEngines<each Input: Codable & Sendable>(
     mutators: (repeat Mutator<each Input>),
     seeds: [(repeat each Input)],
@@ -370,10 +369,7 @@ private func runEngines<each Input: Codable & Sendable>(
     parallelism: Int,
     verbose: Bool,
     config: FuzzEngineConfig,
-    makeProcessors: @escaping @Sendable () -> (
-        sync: PluginProcessor<repeat each Input>,
-        async: PluginProcessor<repeat each Input>
-    ),
+    makeProcessor: @escaping @Sendable () -> PluginProcessor<repeat each Input>,
     test: @escaping @Sendable ((repeat each Input)) async throws -> Void
 ) async -> FuzzResult<repeat each Input> {
     if verbose {
@@ -389,14 +385,12 @@ private func runEngines<each Input: Codable & Sendable>(
         for engineIndex in 0..<parallelism {
             let engineSeeds = perEngineSeeds + distributedSeeds[engineIndex]
             group.addTask {
-                let processors = makeProcessors()
+                let processor = makeProcessor()
                 let engine = FuzzEngine<repeat each Input>(mutators: mutators, config: config)
                 return await engine.run(
                     seeds: engineSeeds,
-                    processSyncPlugins: { processors.sync.processSync(event: $0, execute: $1) },
-                    processAsyncPlugins: {
-                        await processors.async.processAsync(event: $0, execute: $1)
-                    },
+                    processSyncPlugins: { processor.processSync(event: $0, execute: $1) },
+                    processAsyncPlugins: { await processor.processAsync(event: $0, execute: $1) },
                     test: test
                 )
             }
