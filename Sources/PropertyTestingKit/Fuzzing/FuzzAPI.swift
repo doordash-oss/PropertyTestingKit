@@ -97,8 +97,8 @@ import Dependencies
 ///   - parallelism: Number of parallel fuzz engines to run. Each engine runs
 ///     independently with its portion of seeds distributed round-robin.
 ///     Results are merged at the end. Defaults to the number of available processors.
-///   - makeHandlers: Factory for the per-engine plugin handlers. Defaults to
-///     `{ [.corpusMutation()] }`. Analysis handlers (`AnalysisHandler`) can be lifted in
+///   - plugins: Factory for the per-engine plugins. Defaults to
+///     `{ [.corpusMutation()] }`. Analysis plugins (`AnalysisHandler`) can be lifted in
 ///     with `.asFuzzPluginHandler()`.
 ///   - filePath: Source file path (auto-filled).
 ///   - function: Test function name (auto-filled).
@@ -116,7 +116,7 @@ public func fuzz<each Input: Codable & Sendable>(
     coverageStrategy: CoverageStrategyKind = .pathTrie,
     edgeHook: EdgeHook? = nil,
     parallelism: Int = ProcessInfo.processInfo.processorCount,
-    makeHandlers: @escaping @Sendable () -> [FuzzPluginHandler<repeat each Input>] = { [.corpusMutation()] },
+    plugins: @escaping @Sendable () -> [FuzzPluginHandler<repeat each Input>] = { [.corpusMutation()] },
     filePath: StaticString = #filePath,
     function: StaticString = #function,
     line: Int = #line,
@@ -130,7 +130,7 @@ public func fuzz<each Input: Codable & Sendable>(
         coverageStrategy: coverageStrategy,
         edgeHook: edgeHook,
         parallelism: parallelism,
-        makeHandlers: makeHandlers,
+        plugins: plugins,
         filePath: filePath,
         function: function,
         line: line,
@@ -148,7 +148,7 @@ func fuzzInternal<each Input: Codable & Sendable>(
     coverageStrategy: CoverageStrategyKind,
     edgeHook: EdgeHook?,
     parallelism: Int,
-    makeHandlers: @escaping @Sendable () -> [FuzzPluginHandler<repeat each Input>],
+    plugins: @escaping @Sendable () -> [FuzzPluginHandler<repeat each Input>],
     filePath: StaticString,
     function: StaticString,
     line: Int,
@@ -180,12 +180,12 @@ func fuzzInternal<each Input: Codable & Sendable>(
             sourceFileID: testFilePath,
             sourceFilePath: testFilePath,
             line: line,
-            makeHandlers: makeHandlers,
+            makeHandlers: plugins,
             test: test
         )
     case .forcedReplay:
         // FUZZ_CORPUS_MODE=regressiononly forces this fuzz call to a verify-only replay.
-        // It runs with NO user handlers, so the write-emitting exploration handlers a
+        // It runs with NO user plugins, so the write-emitting exploration plugins a
         // fuzz call carries never run during the forced regression — the no-write
         // guarantee holds structurally. For analysis during regression, call regress(...).
         result = await runReplay(
@@ -210,7 +210,7 @@ func fuzzInternal<each Input: Codable & Sendable>(
 func regressInternal<each Input: Codable & Sendable>(
     mutators: (repeat Mutator<each Input>),
     duration: Duration,
-    makeHandlers: @escaping @Sendable () -> [AnalysisHandler<repeat each Input>],
+    plugins: @escaping @Sendable () -> [AnalysisHandler<repeat each Input>],
     filePath: StaticString,
     function: StaticString,
     line: Int,
@@ -222,7 +222,7 @@ func regressInternal<each Input: Codable & Sendable>(
     let verbose = environment.environment()["FUZZ_VERBOSE"] != nil
     let corpusDir = corpusDirectory(filePath: filePath, function: function)
 
-    // Replay only — the analysis handlers are lifted into the engine's handler plumbing.
+    // Replay only — the analysis plugins are lifted into the engine's plugin plumbing.
     // They emit only stop/recordIssue, so no write action can reach the replay.
     let result = await runReplay(
         mutators: mutators,
@@ -233,7 +233,7 @@ func regressInternal<each Input: Codable & Sendable>(
         sourceFileID: testFilePath,
         sourceFilePath: testFilePath,
         line: line,
-        makeHandlers: { makeHandlers().map { $0.asFuzzPluginHandler() } },
+        makeHandlers: { plugins().map { $0.asFuzzPluginHandler() } },
         test: test
     )
 
@@ -252,7 +252,7 @@ func regressInternal<each Input: Codable & Sendable>(
 ///     To verify a corpus without fuzzing, use `regress(...)`. Can be overridden
 ///     suite-wide via `FUZZ_CORPUS_MODE`.
 ///   - parallelism: Number of parallel fuzz engines to run. Defaults to processor count.
-///   - makeHandlers: Factory for the per-engine plugin handlers. Defaults to `{ [.corpusMutation()] }`.
+///   - plugins: Factory for the per-engine plugins. Defaults to `{ [.corpusMutation()] }`.
 ///   - filePath: Source file path (auto-filled).
 ///   - function: Test function name (auto-filled).
 ///   - test: The test closure receiving fuzzed inputs.
@@ -268,7 +268,7 @@ public func fuzz<each Input: MutatorProviding & Codable & Sendable>(
     coverageStrategy: CoverageStrategyKind = .pathTrie,
     edgeHook: EdgeHook? = nil,
     parallelism: Int = ProcessInfo.processInfo.processorCount,
-    makeHandlers: @escaping @Sendable () -> [FuzzPluginHandler<repeat each Input>] = { [.corpusMutation()] },
+    plugins: @escaping @Sendable () -> [FuzzPluginHandler<repeat each Input>] = { [.corpusMutation()] },
     filePath: StaticString = #filePath,
     function: StaticString = #function,
     line: Int = #line,
@@ -282,7 +282,7 @@ public func fuzz<each Input: MutatorProviding & Codable & Sendable>(
         coverageStrategy: coverageStrategy,
         edgeHook: edgeHook,
         parallelism: parallelism,
-        makeHandlers: makeHandlers,
+        plugins: plugins,
         filePath: filePath,
         function: function,
         line: line,
@@ -297,7 +297,7 @@ public func fuzz<each Input: MutatorProviding & Codable & Sendable>(
 /// Unlike `fuzz(...)`, this never explores: it runs exactly the inputs in the saved
 /// corpus and fails if any of them now trips the test. Because it only replays, it
 /// takes none of the fuzz-only knobs (`seeds`, `coverageStrategy`, `parallelism`,
-/// `edgeHook`) — they would be meaningless here. Its handlers are `AnalysisHandler`s,
+/// `edgeHook`) — they would be meaningless here. Its plugins are `AnalysisHandler`s,
 /// which can only emit `stop`/`recordIssue`, so a replay can never be handed a plugin
 /// that would mutate the run or the corpus. If no corpus exists, the run is a no-op
 /// (it does not fail), so a suite-wide regression pass tolerates not-yet-fuzzed tests.
@@ -306,7 +306,7 @@ public func fuzz<each Input: MutatorProviding & Codable & Sendable>(
 ///   - mutators: Mutators for each input type (used only for type binding; replay does
 ///     not generate inputs).
 ///   - duration: Maximum replay time in seconds (default: 60).
-///   - makeHandlers: Factory for analysis handlers (e.g. `[.coverageGap()]`). Defaults
+///   - plugins: Factory for analysis plugins (e.g. `[.coverageGap()]`). Defaults
 ///     to none.
 ///   - test: The test closure receiving the replayed inputs.
 @discardableResult
@@ -314,7 +314,7 @@ public func fuzz<each Input: MutatorProviding & Codable & Sendable>(
 public func regress<each Input: Codable & Sendable>(
     using mutators: repeat Mutator<each Input>,
     duration: Duration = .seconds(60),
-    makeHandlers: @escaping @Sendable () -> [AnalysisHandler<repeat each Input>] = { [] },
+    plugins: @escaping @Sendable () -> [AnalysisHandler<repeat each Input>] = { [] },
     filePath: StaticString = #filePath,
     function: StaticString = #function,
     line: Int = #line,
@@ -323,7 +323,7 @@ public func regress<each Input: Codable & Sendable>(
     try await regressInternal(
         mutators: (repeat each mutators),
         duration: duration,
-        makeHandlers: makeHandlers,
+        plugins: plugins,
         filePath: filePath,
         function: function,
         line: line,
@@ -333,12 +333,12 @@ public func regress<each Input: Codable & Sendable>(
 
 /// Replay a saved corpus using each type's `MutatorProviding.defaultMutator`.
 ///
-/// See `regress(using:duration:makeHandlers:...)` for details.
+/// See `regress(using:duration:plugins:...)` for details.
 @discardableResult
 @inlinable
 public func regress<each Input: MutatorProviding & Codable & Sendable>(
     duration: Duration = .seconds(60),
-    makeHandlers: @escaping @Sendable () -> [AnalysisHandler<repeat each Input>] = { [] },
+    plugins: @escaping @Sendable () -> [AnalysisHandler<repeat each Input>] = { [] },
     filePath: StaticString = #filePath,
     function: StaticString = #function,
     line: Int = #line,
@@ -347,7 +347,7 @@ public func regress<each Input: MutatorProviding & Codable & Sendable>(
     try await regress(
         using: repeat (each Input).defaultMutator,
         duration: duration,
-        makeHandlers: makeHandlers,
+        plugins: plugins,
         filePath: filePath,
         function: function,
         line: line,
@@ -533,7 +533,7 @@ public enum FuzzError: Error, LocalizedError {
 ///   - `refuzzreplace`: Force `.replace` — fuzz fresh, replacing existing corpus
 ///   - `refuzzextend`: Force `.extend` — load corpus as seeds, continue fuzzing
 ///   - `regressiononly`: Force every `fuzz(...)` call to a verify-only replay (no
-///     handlers run, so it never explores); tests with no corpus are a no-op.
+///     plugins run, so it never explores); tests with no corpus are a no-op.
 ///     `regress(...)` calls always replay and ignore this variable.
 ///
 /// Example usage:
