@@ -324,6 +324,45 @@ struct CorpusCoordinatorTests {
         }
     }
 
+    @Test("Regression runs the user's sync analysis plugins on every replayed input")
+    func regressionRunsSyncAnalysisPlugins() async throws {
+        let corpusDir = URL(fileURLWithPath: "/test/coord-replay-sync-plugin")
+        let corpusData = Data("[[1],[2],[3]]".utf8)
+        let (_, loadFn) = spy { (_: URL) -> Data in corpusData }
+        let iterationCount = SyncBox<Int>(0)
+
+        let result = await withDependencies {
+            $0.corpusPersistence = CorpusPersistenceClient(
+                save: { _, _ in },
+                load: loadFn,
+                exists: { _ in true },
+                delete: { _ in }
+            )
+        } operation: {
+            await runReplayWithMaxIterations(
+                maxIterations: 50,
+                corpusDir: corpusDir,
+                makeHandlers: {
+                    [
+                        AnalysisPlugin<Int>(
+                            id: "iteration_counter",
+                            handleSync: { event in
+                                if case .iteration = event { iterationCount.update { $0 += 1 } }
+                                return []
+                            }
+                        )
+                    ]
+                }
+            ) { (_: Int) in }
+        }
+
+        #expect(result.wasRegression)
+        // The plugin's handleSync fired for each replayed corpus input — previously it would
+        // not have, since the user's plugins were confined to the async (non-iteration) path.
+        #expect(iterationCount.value == result.corpus.count)
+        #expect(iterationCount.value == 3)
+    }
+
     @Test("Ephemeral fuzzing never touches the corpus on disk")
     func ephemeralDoesNotPersist() async throws {
         let corpusDir = URL(fileURLWithPath: "/test/coord-ephemeral")

@@ -238,7 +238,7 @@ func runReplayWithMaxIterations<each Input: MutatorProviding & Codable & Sendabl
             sourceFileID: "PropertyTestingKitTests/TestHelpers.swift",
             sourceFilePath: "PropertyTestingKitTests/TestHelpers.swift",
             line: 1,
-            makeHandlers: { makeHandlers().map { $0.asFuzzPlugin() } },
+            plugins: makeHandlers,
             test: { input in
                 defer {
                     virtualTime.update { $0 += advancement }

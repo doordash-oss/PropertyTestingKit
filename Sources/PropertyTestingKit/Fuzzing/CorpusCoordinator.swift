@@ -113,6 +113,8 @@ func runFuzz<each Input: Codable & Sendable>(
     switch persistence {
     case .auto:
         // Replay if a corpus exists and loads; otherwise fall through to fuzzing.
+        // The replay is a pure verification: the fuzz plugins (which can emit write actions)
+        // do not run during it — run `regress(...)` for replay-plus-analysis.
         if corpusPersistence.exists(corpusDir),
             let snapshot: CorpusSnapshot<repeat each Input> = loadSnapshot(from: corpusDir, verbose: verbose) {
             return await replayRegression(
@@ -120,7 +122,7 @@ func runFuzz<each Input: Codable & Sendable>(
                 mutators: mutators,
                 verbose: verbose,
                 config: config(strategy: .alwaysInteresting),
-                makeHandlers: makeHandlers,
+                plugins: { [] },
                 test: test
             )
         }
@@ -208,7 +210,7 @@ func runReplay<each Input: Codable & Sendable>(
     sourceFileID: String,
     sourceFilePath: String,
     line: Int,
-    makeHandlers: @escaping @Sendable () -> [FuzzPlugin<repeat each Input>],
+    plugins: @escaping @Sendable () -> [AnalysisPlugin<repeat each Input>],
     test: @escaping @Sendable ((repeat each Input)) async throws -> Void
 ) async -> FuzzResult<repeat each Input> {
     @Dependency(\.corpusPersistence) var corpusPersistence
@@ -239,7 +241,7 @@ func runReplay<each Input: Codable & Sendable>(
         mutators: mutators,
         verbose: verbose,
         config: config,
-        makeHandlers: makeHandlers,
+        plugins: plugins,
         test: test
     )
 }
@@ -249,24 +251,23 @@ func runReplay<each Input: Codable & Sendable>(
 /// Replay a saved corpus by seeding the engine with it and stopping when the queue drains.
 ///
 /// The corpus inputs are the engine's only seeds (no mutator seed values are mixed in), so
-/// exactly the saved inputs run. The sync plugin path is
-/// just `stopWhenQueueEmpty()` — it terminates the run the instant the seeds are exhausted
-/// and never lets corpus-mutation refill the queue. The async path keeps the user's handlers
-/// so analysis (`coverageGap` at `.end`, `shrinking` on failures) still runs. The returned
-/// corpus is the loaded snapshot (unchanged, not re-saved); coverage is measured via the
-/// `.alwaysInteresting` strategy so `.end` sees the union over every replayed input.
+/// exactly the saved inputs run. The plugins are analysis-only (`AnalysisPlugin`), so they
+/// cannot emit write actions and cannot refill the queue — they run on *both* the sync and
+/// async paths (one shared processor, so a stateful plugin sees iterations and `.end`), with
+/// an appended `stopWhenQueueEmpty()` that terminates the run the instant the seeds drain.
+/// The returned corpus is the loaded snapshot (unchanged, not re-saved); coverage is measured
+/// via the `.alwaysInteresting` strategy so `.end` sees the union over every replayed input.
 private func replayRegression<each Input: Codable & Sendable>(
     snapshot: CorpusSnapshot<repeat each Input>,
     mutators: (repeat Mutator<each Input>),
     verbose: Bool,
     config: FuzzEngineConfig,
-    makeHandlers: @escaping @Sendable () -> [FuzzPlugin<repeat each Input>],
+    plugins: @escaping @Sendable () -> [AnalysisPlugin<repeat each Input>],
     test: @escaping @Sendable ((repeat each Input)) async throws -> Void
 ) async -> FuzzResult<repeat each Input> {
     // Replay exactly the saved corpus through one engine — no mutator seed values mixed in,
-    // no parallel fan-out. The sync path is just queue-drain detection so corpus-mutation
-    // can't refill the queue; the async path keeps the user's handlers so `.end`/`.failureFound`
-    // analysis still runs.
+    // no parallel fan-out. Analysis plugins can't write, so running them on the sync path is
+    // safe; stopWhenQueueEmpty (appended) halts the run once the seeded inputs are exhausted.
     let raw = await runEngines(
         mutators: mutators,
         seeds: snapshot.entries.map(\.input),
@@ -275,11 +276,10 @@ private func replayRegression<each Input: Codable & Sendable>(
         verbose: verbose,
         config: config,
         makeProcessors: {
-            (
-                sync: PluginProcessor<repeat each Input>(
-                    plugins: [AnalysisPlugin<repeat each Input>.stopWhenQueueEmpty().asFuzzPlugin()]),
-                async: PluginProcessor<repeat each Input>(plugins: makeHandlers())
-            )
+            let lifted = (plugins() + [AnalysisPlugin<repeat each Input>.stopWhenQueueEmpty()])
+                .map { $0.asFuzzPlugin() }
+            let processor = PluginProcessor<repeat each Input>(plugins: lifted)
+            return (sync: processor, async: processor)
         },
         test: test
     )

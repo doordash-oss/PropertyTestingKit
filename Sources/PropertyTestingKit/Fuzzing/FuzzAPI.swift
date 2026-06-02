@@ -197,7 +197,7 @@ func fuzzInternal<each Input: Codable & Sendable>(
             sourceFileID: testFilePath,
             sourceFilePath: testFilePath,
             line: line,
-            makeHandlers: { [] },
+            plugins: { [] },
             test: test
         )
     }
@@ -222,8 +222,8 @@ func regressInternal<each Input: Codable & Sendable>(
     let verbose = environment.environment()["FUZZ_VERBOSE"] != nil
     let corpusDir = corpusDirectory(filePath: filePath, function: function)
 
-    // Replay only — the analysis plugins are lifted into the engine's plugin plumbing.
-    // They emit only stop/recordIssue, so no write action can reach the replay.
+    // Replay only — the analysis plugins (which emit only stop/recordIssue) run on both the
+    // sync and async paths inside the coordinator; no write action can reach the replay.
     let result = await runReplay(
         mutators: mutators,
         corpusDir: corpusDir,
@@ -233,7 +233,7 @@ func regressInternal<each Input: Codable & Sendable>(
         sourceFileID: testFilePath,
         sourceFilePath: testFilePath,
         line: line,
-        makeHandlers: { plugins().map { $0.asFuzzPlugin() } },
+        plugins: plugins,
         test: test
     )
 
