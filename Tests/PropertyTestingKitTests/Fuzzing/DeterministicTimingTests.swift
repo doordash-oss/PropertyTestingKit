@@ -82,7 +82,7 @@ struct DeterministicTimingTests {
 
                 let engine = FuzzEngine(mutators: SingleSeedInt.defaultMutator, config: config)
                 // Create default plugin processor (MutationPlugin)
-                let processor = PluginProcessor(handlers: [FuzzPlugin<SingleSeedInt>.mutation()])
+                let processor = PluginProcessor(plugins: [FuzzPlugin<SingleSeedInt>.mutation()])
                 let processSyncPlugins: @Sendable (
                     consuming SyncPluginEvent<SingleSeedInt>,
                     (FuzzPluginAction<SingleSeedInt>) -> Void
@@ -129,7 +129,7 @@ struct DeterministicTimingTests {
 
                 let engine = FuzzEngine(mutators: SingleSeedInt.defaultMutator, config: config)
                 // Create default plugin processor (MutationPlugin)
-                let processor = PluginProcessor(handlers: [FuzzPlugin<SingleSeedInt>.mutation()])
+                let processor = PluginProcessor(plugins: [FuzzPlugin<SingleSeedInt>.mutation()])
                 let processSyncPlugins: @Sendable (
                     consuming SyncPluginEvent<SingleSeedInt>,
                     (FuzzPluginAction<SingleSeedInt>) -> Void

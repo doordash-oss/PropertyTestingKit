@@ -137,7 +137,7 @@ func fuzzEngineWithMaxIterations<each Input: MutatorProviding & Codable & Sendab
         // values plus any caller-provided seeds, mirroring a fuzz campaign.
         let seeds = mutatorSeeds(mutators) + additionalSeeds
         // Create default plugin processor (mutation handler)
-        let processor = PluginProcessor(handlers: [FuzzPlugin<repeat each Input>.mutation()])
+        let processor = PluginProcessor(plugins: [FuzzPlugin<repeat each Input>.mutation()])
         let processSyncPlugins: @Sendable (
             consuming SyncPluginEvent<repeat each Input>,
             (FuzzPluginAction<repeat each Input>) -> Void

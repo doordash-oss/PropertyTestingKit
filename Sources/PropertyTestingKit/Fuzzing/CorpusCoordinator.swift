@@ -277,8 +277,8 @@ private func replayRegression<each Input: Codable & Sendable>(
         makeProcessors: {
             (
                 sync: PluginProcessor<repeat each Input>(
-                    handlers: [AnalysisPlugin<repeat each Input>.stopWhenQueueEmpty().asFuzzPlugin()]),
-                async: PluginProcessor<repeat each Input>(handlers: makeHandlers())
+                    plugins: [AnalysisPlugin<repeat each Input>.stopWhenQueueEmpty().asFuzzPlugin()]),
+                async: PluginProcessor<repeat each Input>(plugins: makeHandlers())
             )
         },
         test: test
@@ -327,7 +327,7 @@ private func fuzzCampaign<each Input: Codable & Sendable>(
         verbose: verbose,
         config: config,
         makeProcessors: {
-            let processor = PluginProcessor<repeat each Input>(handlers: makeHandlers())
+            let processor = PluginProcessor<repeat each Input>(plugins: makeHandlers())
             return (sync: processor, async: processor)
         },
         test: test

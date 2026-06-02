@@ -92,7 +92,7 @@ struct FuzzEngineRaceTests {
                     let engine = FuzzEngine(mutators: Int.defaultMutator, config: config)
 
                     // Create default plugin processor (mutation handler)
-                    let processor = PluginProcessor(handlers: [FuzzPlugin<Int>.mutation()])
+                    let processor = PluginProcessor(plugins: [FuzzPlugin<Int>.mutation()])
                     let processSyncPlugins: @Sendable (
                         consuming SyncPluginEvent<Int>,
                         (FuzzPluginAction<Int>) -> Void

@@ -674,11 +674,11 @@ private func weightedRandomIndex(weights: [Double], using rng: inout some Random
 @usableFromInline
 struct PluginProcessor<each Input: Sendable>: @unchecked Sendable {
     @usableFromInline
-    let handlers: [FuzzPlugin<repeat each Input>]
+    let plugins: [FuzzPlugin<repeat each Input>]
 
     @inlinable
-    init(handlers: [FuzzPlugin<repeat each Input>]) {
-        self.handlers = handlers
+    init(plugins: [FuzzPlugin<repeat each Input>]) {
+        self.plugins = plugins
     }
 
     /// Process a synchronous event - hot path.
@@ -687,8 +687,8 @@ struct PluginProcessor<each Input: Sendable>: @unchecked Sendable {
         event: consuming SyncPluginEvent<repeat each Input>,
         execute: (FuzzPluginAction<repeat each Input>) -> Void
     ) {
-        for handler in handlers {
-            let actions = handler.handleSync(copy event)
+        for plugin in plugins {
+            let actions = plugin.handleSync(copy event)
             for action in actions {
                 execute(action)
             }
@@ -702,9 +702,9 @@ struct PluginProcessor<each Input: Sendable>: @unchecked Sendable {
         event: consuming AsyncPluginEvent<repeat each Input>,
         execute: (FuzzPluginAction<repeat each Input>) -> Void
     ) async {
-        for handler in handlers {
+        for plugin in plugins {
             do {
-                let actions = try await handler.handleAsync(copy event)
+                let actions = try await plugin.handleAsync(copy event)
                 for action in actions {
                     execute(action)
                 }

@@ -85,7 +85,7 @@ struct StopWhenQueueEmptyHandlerTests {
         let seeds = [101, 102, 103]
 
         let processor = PluginProcessor(
-            handlers: [AnalysisPlugin<Int>.stopWhenQueueEmpty().asFuzzPlugin()]
+            plugins: [AnalysisPlugin<Int>.stopWhenQueueEmpty().asFuzzPlugin()]
         )
         let config = FuzzEngineConfig(
             maxDuration: .seconds(60),
