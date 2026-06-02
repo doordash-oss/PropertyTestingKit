@@ -363,7 +363,7 @@ struct MutatorFuzzEngineTests {
         _ = try await fuzzWithMaxIterations(
             maxIterations: 2,
             using: mutator,
-            corpusMode: .refuzzReplace,
+            persistence: .replace,
             coverageStrategy: .alwaysInteresting
         ) { input in
             await testedInputs.update { $0.append(input) }
@@ -388,7 +388,7 @@ struct MutatorFuzzEngineTests {
         _ = try await fuzzWithMaxIterations(
             maxIterations: 3,
             using: mutator,
-            corpusMode: .refuzzReplace,
+            persistence: .replace,
             coverageStrategy: .alwaysInteresting
         ) { input in
             await testedInputs.update { $0.append(input) }

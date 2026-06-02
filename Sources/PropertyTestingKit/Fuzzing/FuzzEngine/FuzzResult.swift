@@ -70,14 +70,16 @@ public struct FuzzStats: Sendable {
     /// Reason for stopping the fuzz run.
     public enum StopReason: RawRepresentable, Sendable {
         case timeLimit
-        case regression
+        /// The run replayed every queued input and stopped because the queue drained —
+        /// e.g. a regression replay finished. This is a normal completion, not a failure.
+        case regressionTestCompleted
         case noSeedsAvailable
         case custom(String)
 
         public init?(rawValue: String) {
             switch rawValue {
             case "time_limit": self = .timeLimit
-            case "regression": self = .regression
+            case "regression_test_completed": self = .regressionTestCompleted
             case "no_seeds_available": self = .noSeedsAvailable
             default: self = .custom(rawValue)
             }
@@ -86,7 +88,7 @@ public struct FuzzStats: Sendable {
         public var rawValue: String {
             switch self {
             case .timeLimit: "time_limit"
-            case .regression: "regression"
+            case .regressionTestCompleted: "regression_test_completed"
             case .noSeedsAvailable: "no_seeds_available"
             case let .custom(reason): reason
             }
@@ -123,7 +125,7 @@ extension FuzzResult {
             mutations: 0,
             generations: 0,
             duration: 0,
-            stopReason: .regression,
+            stopReason: .regressionTestCompleted,
         )
         return FuzzResult(
             corpus: emptySnapshot,

@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-import Foundation
 import Dependencies
+import Foundation
 import Testing
 
 /// Manages the fuzzing loop state. Not thread-safe - only used from a single task.
@@ -27,7 +27,6 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
 
     /// Asynchronous plugin processor for rare events (cold path).
     typealias AsyncPluginProcessorFn = @Sendable (
-        isolated (any Actor)?,
         consuming AsyncPluginEvent<repeat each Input>,
         (FuzzPluginAction<repeat each Input>) -> Void
     ) async -> Void
@@ -43,7 +42,8 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
     private let seeds: [(repeat each Input)]
     private let startTime: Date
     private let dateClient: DateClient
-    private var failures: [(input: (repeat each Input), error: Error, timeElapsed: TimeInterval)] = []
+    private var failures: [(input: (repeat each Input), error: Error, timeElapsed: TimeInterval)] =
+        []
     private let test: @Sendable ((repeat each Input)) async throws -> Void
 
     private var mutationsCount: Int = 0
@@ -53,8 +53,7 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
 
     // Simple loop state (replaces WorkerPool)
     private var pendingInputs: SimpleRingBuffer<(repeat each Input)>
-    private var halted: Bool = false
-    private var haltReason: FuzzStats.StopReason = .timeLimit
+    private var haltReason: FuzzStats.StopReason?
 
     init(
         seeds: [(repeat each Input)],
@@ -85,7 +84,8 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
     }
 
     private func recordFailure(input: (repeat each Input), error: any Error) {
-        failures.append((input: input, error: error, timeElapsed: startTime.distance(to: dateClient.now())))
+        failures.append(
+            (input: input, error: error, timeElapsed: startTime.distance(to: dateClient.now())))
     }
 
     struct FuzzStateMachineResult {
@@ -115,7 +115,6 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
         var generatedCount = 0
 
         // Wrap entire loop in issue capture context to avoid per-iteration TaskLocal overhead.
-        // This saves ~12s over millions of iterations by doing one TaskLocal push/pop instead of millions.
         await withIssueCaptureContext { issueCaptureContext in
             let testWithIssueCapture = Self.captureIssues(
                 context: issueCaptureContext,
@@ -137,45 +136,62 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
             // With ~10M iterations/sec and default interval of 1000, this means ~10K checks/sec.
             // The interval is configurable via FuzzEngineConfig for tests that need precise control.
             let timeLimitCheckInterval = config.timeLimitCheckInterval
-            var iterationsSinceTimeCheck = timeLimitCheckInterval // Force check on first iteration
+            var iterationsSinceTimeCheck = timeLimitCheckInterval  // Force check on first iteration
 
-            while !Task.isCancelled && !halted {
-                // Check time limit periodically (avoids ~3.5s overhead from per-iteration Date.init)
-                iterationsSinceTimeCheck += 1
-                if iterationsSinceTimeCheck >= timeLimitCheckInterval {
-                    iterationsSinceTimeCheck = 0
-                    // Yield to allow other tasks to run (enables parallel fuzz runs)
-                    await Task.yield()
-                    let elapsed = Duration.seconds(dateClient.now().timeIntervalSince(startTime))
-                    if elapsed >= config.maxDuration {
-                        haltReason = .timeLimit
-                        break
+            // Establish coverage inheritance for the whole loop so that edges
+            // recorded by child tasks (TaskGroup.addTask / Task {}) spawned inside
+            // the test body are attributed to this engine's measurement context.
+            // Set once outside the per-iteration hot path — the context is hoisted.
+            let coverageContextBits = UInt(bitPattern: coverageContext.rawContext)
+            await CoverageInheritance.$context.withValue(coverageContextBits) {
+                CoverageInheritance.captureKeyIfNeeded(contextBits: coverageContextBits)
+
+                while !Task.isCancelled && haltReason == nil {
+                    // Check time limit periodically (avoids overhead from per-iteration Date.init)
+                    iterationsSinceTimeCheck += 1
+                    if iterationsSinceTimeCheck >= timeLimitCheckInterval {
+                        iterationsSinceTimeCheck = 0
+                        if await haltIfTimeExceeded() {
+                            break
+                        }
                     }
-                }
 
-                // Get input: from pending queue or generate random
-                let input: (repeat each Input)
-                let fromMutationQueue: Bool
-                if !pendingInputs.isEmpty {
-                    input = pendingInputs.removeFirstUnchecked()
-                    fromMutationQueue = true
-                } else {
-                    // Generate directly - no closure indirection
-                    input = (repeat (each mutators).generate(&rng))
-                    generatedCount += 1
-                    fromMutationQueue = false
-                }
+                    // Get input: from pending queue or generate random
+                    let input: (repeat each Input)
+                    let fromMutationQueue: Bool
+                    if !pendingInputs.isEmpty {
+                        input = pendingInputs.removeFirstUnchecked()
+                        fromMutationQueue = true
+                    } else {
+                        // Generate directly - no closure indirection
+                        input = (repeat (each mutators).generate(&rng))
+                        generatedCount += 1
+                        fromMutationQueue = false
+                    }
 
-                // Reset coverage for this iteration (cheap memset instead of hash table ops)
-                coverageCountersClient.resetCoverage(coverageContext)
+                    // Inputs still queued after taking this one. A plugin can use
+                    // `queueCount == 0` to detect that the queue has drained — e.g. to
+                    // stop a regression replay before any fresh input is generated.
+                    let queueCount = pendingInputs.count
 
-                // Run test with coverage measurement
-                do {
-                    // Will throw if either the test throws or if it logs an Issue
-                    try await testWithIssueCapture(input)
+                    // Reset coverage for this iteration
+                    coverageCountersClient.resetCoverage(coverageContext)
 
-                    // Delegate interestingness check to the coverage strategy
-                    let didAdd = coverageStrategy.evaluate(
+                    // Run the test, capturing coverage on success and recording failures.
+                    var failureRecorded = false
+                    do {
+                        // Will throw if either the test throws or if it logs an Issue
+                        try await testWithIssueCapture(input)
+                    } catch is CancellationError {
+                        // Allow clean exit on cancellation
+                        break
+                    } catch {
+                        recordFailure(input: input, error: error)
+                        failureRecorded = true
+                    }
+
+                    // Delegate interestingness check to the coverage strategy (O(1) for trie strategy)
+                    let discoveredNewCoverage = coverageStrategy.evaluate(
                         input,
                         coverageContext,
                         coverageCountersClient,
@@ -184,54 +200,54 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
 
                     // Snapshot coverage only when new edges were found — amortizes
                     // allocation cost since new coverage is rare (~0.1% of iterations).
-                    let sparseCoverage: SparseCoverage? = didAdd
+                    let iterationCoverage =
+                        discoveredNewCoverage
                         ? (try? coverageCountersClient.snapshotCoveredArraysWithContext(coverageContext))
                         : nil
 
-                    // Process iteration event synchronously (hot path - no async)
-                    processSyncPlugins(
-                        .iteration(.init(
-                            discoveredNewCoverage: didAdd,
-                            input: input,
-                            fromMutationQueue: fromMutationQueue,
-                            sparseCoverage: sparseCoverage
-                        ))
-                    ) { action in
-                        self.executeAction(action)
-                    }
-                } catch is CancellationError {
-                    // Allow clean exit on cancellation
-                    break
-                } catch {
-                    // On failure, we need the sparse coverage for recording
-                    let sparseCoverage: SparseCoverage
-                    if let sparse = try? coverageCountersClient.snapshotCoveredArraysWithContext(coverageContext) {
-                        sparseCoverage = sparse
-                    } else {
-                        sparseCoverage = SparseCoverage()
-                    }
-                    recordFailure(input: input, error: error)
-                    // Process failure event asynchronously (cold path - async OK)
-                    await processAsyncPlugins(
-                        nil,
-                        .failureFound(
-                            .init(
-                                input: input,
-                                test: testWithIssueCapture,
-                                sourceLocation: sourceLocation,
-                                sparseCoverage: sparseCoverage
+                    // Process iteration event before failure event
+                    var events = [
+                        PluginEvent.sync(
+                            .iteration(
+                                .init(
+                                    input: input,
+                                    fromMutationQueue: fromMutationQueue,
+                                    queueCount: queueCount,
+                                    newCoverage: iterationCoverage
+                                )
+                            ))
+                    ]
+
+                    if failureRecorded {
+                        events.append(
+                            .async(
+                                .failureFound(
+                                    .init(
+                                        input: input,
+                                        test: testWithIssueCapture,
+                                        sourceLocation: sourceLocation,
+                                        // TODO: This should probably throw if we can't gather coverage
+                                        sparseCoverage: iterationCoverage
+                                            ?? (try? coverageCountersClient
+                                                .snapshotCoveredArraysWithContext(coverageContext))
+                                            ?? SparseCoverage()
+                                    )
+                                )
                             )
                         )
-                    ) { action in
-                        self.executeAction(action)
                     }
+
+                    await process(events: events)
+
+                    iterationCount += 1
                 }
-                iterationCount += 1
             }
         }
 
         if config.verbose {
-            print("[FUZZ] Fuzz loop finished: iterations=\(iterationCount), generated=\(generatedCount), halted=\(halted)")
+            print(
+                "[FUZZ] Fuzz loop finished: iterations=\(iterationCount), generated=\(generatedCount), haltReason=\(String(describing: haltReason))"
+            )
         }
 
         let stats = FuzzStats(
@@ -239,18 +255,29 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
             mutations: mutationsCount,
             generations: generatedCount,
             duration: startTime.distance(to: dateClient.now()),
-            stopReason: haltReason,
+            stopReason: haltReason ?? .timeLimit,
             failures: failures.count
         )
 
         if config.verbose {
-            print("[FUZZ] FuzzStateMachine.start() finished: totalInputs=\(stats.totalInputs), duration=\(stats.duration), stopReason=\(stats.stopReason)")
+            print(
+                "[FUZZ] FuzzStateMachine.start() finished: totalInputs=\(stats.totalInputs), duration=\(stats.duration), stopReason=\(stats.stopReason)"
+            )
         }
         return FuzzStateMachineResult(
             stats: stats,
             corpus: corpus,
             failures: failures
         )
+    }
+
+    private func process(events: [PluginEvent<repeat each Input>]) async {
+        for event in events {
+            switch event {
+            case let .sync(event): processSyncPlugins(event, executeAction)
+            case let .async(event): await processAsyncPlugins(event, executeAction)
+            }
+        }
     }
 
     /// Takes a test case and throws an error if any expectations failed.
@@ -269,6 +296,19 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
                 try await test(input)
             }
         }
+    }
+
+    /// Halts the run if the configured time budget has elapsed. The caller gates how
+    /// often this runs (every `timeLimitCheckInterval` iterations).
+    private func haltIfTimeExceeded() async -> Bool {
+        // Yield to allow other tasks to run (enables parallel fuzz runs)
+        await Task.yield()
+        let elapsed = Duration.seconds(dateClient.now().timeIntervalSince(startTime))
+        if elapsed >= config.maxDuration {
+            haltReason = .timeLimit
+            return true
+        }
+        return false
     }
 
     private static func fetchCoverageCounters() -> CoverageCountersClient {
@@ -305,11 +345,13 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
     }
 
     private func halt(reason: FuzzStats.StopReason) {
-        halted = true
         haltReason = reason
     }
 
-    private func addToCorpus(_ input: (repeat each Input), sparse: SparseCoverage, type: CorpusEntryType, failureInfo: FailureInfo?) {
+    private func addToCorpus(
+        _ input: (repeat each Input), sparse: SparseCoverage, type: CorpusEntryType,
+        failureInfo: FailureInfo?
+    ) {
         corpus.add(input: input, sparse: sparse, entryType: type, failure: failureInfo)
     }
 
@@ -318,16 +360,16 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
     private func generateMutations(_ input: (repeat each Input)) -> [(repeat each Input)] {
         let positionsMutated: [(repeat [each Input])] = (0..<inputSize).map { replacementIndex in
             var currentIndex = 0
-            return (repeat {
-                defer { currentIndex += 1 }
-                if currentIndex == replacementIndex {
-                    return (each mutators).mutate(each input)
-                } else {
-                    return [(each input)]
-                }
-            }())
+            return
+                (repeat {
+                    defer { currentIndex += 1 }
+                    if currentIndex == replacementIndex {
+                        return (each mutators).mutate(each input)
+                    } else {
+                        return [(each input)]
+                    }
+                }())
         }
         return positionsMutated.flatMap(cartesianProduct)
     }
 }
-

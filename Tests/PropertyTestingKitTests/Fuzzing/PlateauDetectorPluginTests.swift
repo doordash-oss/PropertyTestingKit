@@ -24,17 +24,16 @@ struct PlateauDetectorHandlerTests {
 
     @Test("Handler has correct ID")
     func testHandlerId() {
-        let handler: FuzzPluginHandler<Int> = .plateauDetector()
+        let handler: AnalysisPlugin<Int> = .plateauDetector()
         #expect(handler.id == "plateau_detector")
     }
 
     @Test("Handler returns empty for async events")
     func testAsyncEventsReturnEmpty() async throws {
-        let handler: FuzzPluginHandler<Int> = .plateauDetector()
+        let handler: AnalysisPlugin<Int> = .plateauDetector()
 
         let startContext = AsyncPluginEvent<Int>.StartContext(
-            maxDuration: .seconds(60),
-            corpusMode: .auto
+            maxDuration: .seconds(60)
         )
         let actions = try await handler.handleAsync(AsyncPluginEvent<Int>.start(startContext))
         #expect(actions.isEmpty)
@@ -42,13 +41,13 @@ struct PlateauDetectorHandlerTests {
 
     @Test("Handler does not stop when coverage is being discovered")
     func testNoStopWithCoverageDiscovery() {
-        let handler: FuzzPluginHandler<Int> = .plateauDetector()
+        let handler: AnalysisPlugin<Int> = .plateauDetector()
 
         // Simulate iterations with new coverage each time
         for i in 0..<50 {
             let context = SyncPluginEvent<Int>.IterationContext(
-                discoveredNewCoverage: true,
-                input: i
+                input: i,
+                newCoverage: SparseCoverage()
             )
             let actions = handler.handleSync(SyncPluginEvent<Int>.iteration(context))
             #expect(actions.isEmpty, "Should not stop when discovering coverage")
@@ -65,14 +64,13 @@ struct PlateauDetectorHandlerTests {
             minDiscoveryRate: 0.01,   // 0 discoveries < 0.01, so window will be "low"
             confirmationWindows: 2     // Need 2 consecutive low-rate windows
         )
-        let handler: FuzzPluginHandler<Int> = .plateauDetector(config: config)
+        let handler: AnalysisPlugin<Int> = .plateauDetector(config: config)
 
         // Simulate iterations without new coverage to trigger plateau
         // Need: 10 iterations to fill first window, then 2+ windows of low rate
         var stoppedAt: Int?
         for i in 0..<100 {
             let context = SyncPluginEvent<Int>.IterationContext(
-                discoveredNewCoverage: false,
                 input: i
             )
             let actions = handler.handleSync(SyncPluginEvent<Int>.iteration(context))

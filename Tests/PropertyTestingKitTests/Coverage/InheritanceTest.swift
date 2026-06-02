@@ -312,12 +312,16 @@ struct InheritanceTest {
 
     @Test("fuzz() captures child task coverage via newEdge strategy")
     func fuzzIntegrationCapturesChildEdges() async throws {
-        // Run a minimal fuzz with a test body that does concurrent work.
-        // If inheritance works, the corpus should grow beyond the initial seed
-        // because different inputs produce different child task edge sets.
-        let result = try await fuzz(
+        // Run a bounded fuzz (deterministic iteration count via the test clock,
+        // single engine) with a test body that does concurrent work. Force a fresh
+        // fuzz with `.refuzzReplace` so we actually exercise inheritance rather than
+        // regression-replaying a saved corpus. If inheritance works, the corpus grows
+        // beyond the initial seed because different inputs produce different child
+        // task edge sets.
+        let result = try await fuzzWithMaxIterations(
+            maxIterations: 100,
             seeds: [(1,), (2,), (3,)],
-            duration: .seconds(5),
+            persistence: .replace,
             coverageStrategy: .newEdge
         ) { (input: Int) in
             await withTaskGroup(of: Void.self) { group in

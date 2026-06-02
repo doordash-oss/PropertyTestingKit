@@ -88,30 +88,44 @@ Tests/
 
 Commit the `Corpus/` directory to version control for deterministic CI runs.
 
-### Corpus Modes
+### Fuzzing vs. regression
 
-Control how the fuzzer interacts with saved corpora:
+There are two entry points. `fuzz(...)` explores inputs and maintains a corpus;
+`regress(...)` only replays a saved corpus to verify it still passes. The split is
+deliberate: regression takes none of the fuzz-only knobs (`seeds`, `coverageStrategy`,
+`parallelism`), and its plugins are `AnalysisHandler`s that can only observe (`stop` /
+`recordIssue`) — so it's impossible, at compile time, to hand a replay a configuration or
+a plugin that would explore or mutate the corpus.
 
-| Mode | Behavior |
+`fuzz(...)` takes a `persistence:` policy controlling how it treats an existing corpus:
+
+| `CorpusPersistence` | Behavior |
 |------|----------|
-| `.auto` | Run regression if corpus exists, otherwise fuzz (default) |
-| `.refuzzReplace` | Always fuzz fresh, replacing existing corpus |
-| `.refuzzExtend` | Load corpus as seeds, continue fuzzing to find more |
-| `.regressionOnly` | Only run regression, skip tests with no corpus |
+| `.auto` | Replay the corpus if one exists, otherwise fuzz fresh and save (default) |
+| `.replace` | Delete any existing corpus, fuzz fresh, and save |
+| `.extend` | Load the existing corpus as seeds, fuzz, and save |
+| `.ephemeral` | Fuzz in memory only — ignore any existing corpus and don't save (nothing touches disk) |
 
 **Per-test control:**
 
 ```swift
 @Test func testParser() async throws {
-    // Force re-fuzzing even if corpus exists
-    try await fuzz(corpusMode: .refuzzReplace) { (input: String) in
+    // Force re-fuzzing even if a corpus exists
+    try await fuzz(persistence: .replace) { (input: String) in
         parse(input)
     }
 }
 
 @Test func testExtendCorpus() async throws {
-    // Build on existing corpus with a longer duration
-    try await fuzz(corpusMode: .refuzzExtend, duration: .seconds(120)) { (input: String) in
+    // Build on the existing corpus with a longer duration
+    try await fuzz(persistence: .extend, duration: .seconds(120)) { (input: String) in
+        parse(input)
+    }
+}
+
+@Test func testParserRegression() async throws {
+    // Replay the saved corpus only — fails if any saved input now trips the test
+    try await regress { (input: String) in
         parse(input)
     }
 }
@@ -128,7 +142,8 @@ FUZZ_CORPUS_MODE=refuzzreplace swift test
 # Extend existing corpora with more fuzzing (2 minute duration)
 FUZZ_CORPUS_MODE=refuzzextend FUZZ_DURATION=120 swift test
 
-# CI mode: only run regression tests (fast, deterministic)
+# CI mode: force every fuzz test to replay-only — no exploration (fast, deterministic).
+# regress(...) tests always replay regardless of this variable.
 FUZZ_CORPUS_MODE=regressiononly swift test
 ```
 

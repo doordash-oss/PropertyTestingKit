@@ -87,13 +87,12 @@ struct FuzzEngineRaceTests {
             for _ in 0..<5 {
                 group.addTask {
                     let config = FuzzEngineConfig(
-                        verbose: false,
-                        corpusMode: .refuzzReplace
+                        verbose: false
                     )
                     let engine = FuzzEngine(mutators: Int.defaultMutator, config: config)
 
                     // Create default plugin processor (mutation handler)
-                    let processor = PluginHandlerProcessor(handlers: [FuzzPluginHandler<Int>.mutation()])
+                    let processor = PluginProcessor(plugins: [FuzzPlugin<Int>.mutation()])
                     let processSyncPlugins: @Sendable (
                         consuming SyncPluginEvent<Int>,
                         (FuzzPluginAction<Int>) -> Void
@@ -101,14 +100,13 @@ struct FuzzEngineRaceTests {
                         processor.processSync(event: event, execute: execute)
                     }
                     let processAsyncPlugins: @Sendable (
-                        isolated (any Actor)?,
                         consuming AsyncPluginEvent<Int>,
                         (FuzzPluginAction<Int>) -> Void
-                    ) async -> Void = { isolation, event, execute in
-                        await processor.processAsync(isolation: isolation, event: event, execute: execute)
+                    ) async -> Void = { event, execute in
+                        await processor.processAsync(event: event, execute: execute)
                     }
 
-                    _ = try await engine.run(processSyncPlugins: processSyncPlugins, processAsyncPlugins: processAsyncPlugins) { (input: Int) in
+                    _ = try await engine.run(seeds: mutatorSeeds(Int.defaultMutator), processSyncPlugins: processSyncPlugins, processAsyncPlugins: processAsyncPlugins) { (input: Int) in
                         // Simple test that doesn't fail
                         // Use overflow operators to avoid arithmetic overflow crashes
                         // when fuzzer generates extreme Int values

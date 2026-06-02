@@ -47,7 +47,7 @@ let benchmarks: @Sendable () -> Void = {
 
             let result = try await fuzz(
                 duration: .seconds(0.1),
-                corpusMode: .refuzzReplace,
+                persistence: .replace,
                 parallelism: 16
             ) { (input: Int) in
                 blackHole(input)
@@ -93,7 +93,7 @@ let benchmarks: @Sendable () -> Void = {
 
             let result = try await fuzz(
                 duration: .seconds(0.1),
-                corpusMode: .refuzzReplace,
+                persistence: .replace,
                 coverageStrategy: .newEdge,
                 parallelism: 16
             ) { (input: Int) in
@@ -136,7 +136,7 @@ let benchmarks: @Sendable () -> Void = {
 
             let result = try await fuzz(
                 duration: .seconds(0.1),
-                corpusMode: .refuzzReplace,
+                persistence: .replace,
                 edgeHook: countingEdgeHook,
                 parallelism: 16
             ) { (input: Int) in
@@ -179,7 +179,7 @@ let benchmarks: @Sendable () -> Void = {
 
             let result = try await fuzz(
                 duration: .seconds(0.1),
-                corpusMode: .refuzzReplace,
+                persistence: .replace,
                 coverageStrategy: .pathTrie,
                 parallelism: 16
             ) { (input: Int) in
@@ -225,7 +225,7 @@ let benchmarks: @Sendable () -> Void = {
                     group.addTask {
                         let result = try? await fuzz(
                             duration: .seconds(0.1),
-                            corpusMode: .refuzzReplace,
+                            persistence: .replace,
                             parallelism: 16
                         ) { (input: Int) in
                             blackHole(input)
@@ -277,7 +277,7 @@ let benchmarks: @Sendable () -> Void = {
                     group.addTask {
                         let result = try? await fuzz(
                             duration: .seconds(0.1),
-                            corpusMode: .refuzzReplace,
+                            persistence: .replace,
                             parallelism: 16
                         ) { (input: Int) in
                             blackHole(input)
@@ -326,7 +326,7 @@ let benchmarks: @Sendable () -> Void = {
 //
 //                let result = try await fuzz(
 //                    duration: .seconds(0.1),
-//                    corpusMode: .refuzzReplace,
+//                    persistence: .replace,
 //                    parallelism: p
 //                ) { (input: Int) in
 //                    blackHole(input)

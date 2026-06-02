@@ -23,11 +23,6 @@ struct FuzzEngineConfig: Sendable {
     /// Verbose logging.
     var verbose: Bool
 
-    /// Controls how the fuzzer handles existing corpus files.
-    /// Defaults to checking the `FUZZ_CORPUS_MODE` environment variable,
-    /// then falling back to `.auto`.
-    let corpusMode: CorpusMode
-
     /// Project root path for filtering coverage gaps to project files only.
     /// When set, only reports gaps in files under this path.
     let projectPath: String?
@@ -56,7 +51,6 @@ struct FuzzEngineConfig: Sendable {
     init(
         maxDuration: Duration = .seconds(60),
         verbose: Bool = false,
-        corpusMode: CorpusMode? = nil,
         projectPath: String? = nil,
         timeLimitCheckInterval: Int = 1000,
         coverageStrategy: CoverageStrategyKind = .pathTrie,
@@ -68,8 +62,6 @@ struct FuzzEngineConfig: Sendable {
     ) {
         self.maxDuration = maxDuration
         self.verbose = verbose
-        // Use provided mode, or check environment, or default to auto
-        self.corpusMode = corpusMode ?? CorpusMode.fromEnvironment()
         self.projectPath = projectPath
         self.timeLimitCheckInterval = timeLimitCheckInterval
         self.coverageStrategy = coverageStrategy

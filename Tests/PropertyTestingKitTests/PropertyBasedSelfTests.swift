@@ -462,7 +462,7 @@ struct FuzzAPIPropertyTests {
             try await fuzzWithMaxIterations(
                 maxIterations: 50,
                 seeds: ["custom1", "custom2", "custom3"],
-                corpusMode: .refuzzReplace,
+                persistence: .replace,
                 coverageStrategy: .alwaysInteresting
             ) { (input: String) in
                 // Just exercise the input - no actor involvement

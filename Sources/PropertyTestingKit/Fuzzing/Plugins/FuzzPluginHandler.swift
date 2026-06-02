@@ -12,31 +12,31 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//  Closure-based plugin handler that eliminates protocol witness overhead.
+//  Closure-based plugins that eliminate protocol witness overhead.
 //
 
 import Testing
 import Foundation
 import Dependencies
 
-/// A plugin handler with closures specialized for specific input types.
+/// A plugin with closures specialized for specific input types.
 ///
-/// This replaces `FuzzPlugin` protocol for the hot path. Instead of generic
+/// Holds closures already specialized for the input types, rather than generic
 /// protocol methods that require runtime dispatch, this struct holds closures
 /// that are already specialized for the input types.
 ///
 /// ## Ownership
 ///
-/// Each fuzz engine creates its own handler instances via the `makeHandlers`
-/// factory. Handlers are never shared across engines, so `handleSync` does not
+/// Each fuzz engine creates its own plugin instances via the plugins
+/// factory. Plugins are never shared across engines, so `handleSync` does not
 /// need to be `@Sendable` — it always runs synchronously on the owning engine's
 /// task. Mutable state can be captured directly as `var` in the closure without
 /// a wrapper.
-public struct FuzzPluginHandler<each Input: Sendable>: @unchecked Sendable {
+public struct FuzzPlugin<each Input: Sendable>: @unchecked Sendable {
     public let id: String
 
     /// Synchronous event handler - hot path, called millions of times.
-    /// Always invoked synchronously on the engine task that owns this handler.
+    /// Always invoked synchronously on the engine task that owns this plugin.
     public let handleSync: (SyncPluginEvent<repeat each Input>) -> [FuzzPluginAction<repeat each Input>]
 
     /// Asynchronous event handler - cold path, called rarely.
@@ -54,20 +54,65 @@ public struct FuzzPluginHandler<each Input: Sendable>: @unchecked Sendable {
     }
 }
 
-// MARK: - Built-in Handlers
+/// A plugin restricted to *analysis* — it can only emit `AnalysisAction`
+/// (`stop` / `recordIssue`), never a write action.
+///
+/// This is the plugin type `regress(...)` accepts. Because its closures return
+/// `[AnalysisAction]`, and `AnalysisAction` has no write cases, a plugin used in a
+/// replay cannot mutate the run or the corpus — the restriction is enforced by the
+/// type, with no runtime check. Analysis plugins are also usable inside `fuzz(...)`
+/// by lifting them with `asFuzzPlugin()`.
+public struct AnalysisPlugin<each Input: Sendable>: @unchecked Sendable {
+    public let id: String
 
-extension FuzzPluginHandler {
-    /// Creates the mutation handler - selects inputs for mutation when they discover new coverage.
-    ///
-    /// This is the default handler that implements the core fuzzing feedback loop.
+    /// Synchronous event handler — hot path. Always invoked synchronously on the
+    /// engine task that owns this plugin.
+    public let handleSync: (SyncPluginEvent<repeat each Input>) -> [AnalysisAction<repeat each Input>]
+
+    /// Asynchronous event handler — cold path, called rarely.
+    public let handleAsync: @Sendable (AsyncPluginEvent<repeat each Input>) async throws -> [AnalysisAction<repeat each Input>]
+
     @inlinable
-    public static func mutation() -> FuzzPluginHandler<repeat each Input> {
-        FuzzPluginHandler(
+    public init(
+        id: String,
+        handleSync: @escaping (SyncPluginEvent<repeat each Input>) -> [AnalysisAction<repeat each Input>],
+        handleAsync: @escaping @Sendable (AsyncPluginEvent<repeat each Input>) async throws -> [AnalysisAction<repeat each Input>] = { _ in [] }
+    ) {
+        self.id = id
+        self.handleSync = handleSync
+        self.handleAsync = handleAsync
+    }
+}
+
+extension AnalysisPlugin {
+    /// Lift this analysis plugin into a full `FuzzPlugin` so it can run in a
+    /// `fuzz(...)` campaign alongside exploration plugins. Each emitted action is
+    /// widened via `AnalysisAction.lifted()`, which only ever yields `.stop` /
+    /// `.recordIssue`.
+    @inlinable
+    public func asFuzzPlugin() -> FuzzPlugin<repeat each Input> {
+        FuzzPlugin(
+            id: id,
+            handleSync: { event in handleSync(event).map { $0.lifted() } },
+            handleAsync: { event in try await handleAsync(event).map { $0.lifted() } }
+        )
+    }
+}
+
+// MARK: - Built-in Plugins
+
+extension FuzzPlugin {
+    /// Creates the mutation plugin - selects inputs for mutation when they discover new coverage.
+    ///
+    /// This is the default plugin that implements the core fuzzing feedback loop.
+    @inlinable
+    public static func mutation() -> FuzzPlugin<repeat each Input> {
+        FuzzPlugin(
             id: "mutation",
             handleSync: { event in
                 switch event {
                 case let .iteration(context):
-                    if context.discoveredNewCoverage {
+                    if context.newCoverage != nil {
                         return [.selectForMutation(.init(input: context.input))]
                     }
                     return []
@@ -76,29 +121,29 @@ extension FuzzPluginHandler {
         )
     }
 
-    /// Creates a corpus-cycling mutation handler.
+    /// Creates a corpus-cycling mutation plugin.
     ///
-    /// Extends the basic mutation handler with AFL-style corpus cycling:
+    /// Extends the basic mutation plugin with AFL-style corpus cycling:
     /// when the pending mutation queue is exhausted (the state machine fell back
-    /// to fresh generation), this handler picks a random previously-interesting
+    /// to fresh generation), this plugin picks a random previously-interesting
     /// input and re-queues its mutations. This keeps the fuzzer exploring the
     /// neighborhood of known-good inputs rather than relying on pure random
     /// generation to re-discover interesting territory.
     ///
-    /// The handler maintains its own list of interesting inputs independently of
+    /// The plugin maintains its own list of interesting inputs independently of
     /// the corpus, so it works correctly in parallel fuzz mode where each engine
     /// has its own plugin instance.
-    public static func corpusMutation() -> FuzzPluginHandler<repeat each Input> {
+    public static func corpusMutation() -> FuzzPlugin<repeat each Input> {
         var interestingInputs: [(repeat each Input)] = []
         @Dependency(\.fastRNG) var fastRNG: FastRNG
         let seedRNG: FastRNG = fastRNG
 
-        return FuzzPluginHandler(
+        return FuzzPlugin(
             id: "corpus_mutation",
             handleSync: { event in
                 switch event {
                 case let .iteration(context):
-                    if context.discoveredNewCoverage {
+                    if context.newCoverage != nil {
                         interestingInputs.append(context.input)
                         return [.selectForMutation(.init(input: context.input))]
                     }
@@ -118,20 +163,20 @@ extension FuzzPluginHandler {
         )
     }
 
-    /// Creates a shrinking handler that minimizes failing inputs using delta debugging.
+    /// Creates a shrinking plugin that minimizes failing inputs using delta debugging.
     ///
-    /// When a test failure is found, this handler attempts to find a smaller
+    /// When a test failure is found, this plugin attempts to find a smaller
     /// input that still reproduces the failure, making debugging easier.
     ///
     /// - Parameters:
     ///   - config: Shrinking configuration.
     ///   - verbose: Whether to print verbose progress during shrinking.
-    /// - Returns: A configured shrinking handler.
+    /// - Returns: A configured shrinking plugin.
     public static func shrinking(
         config: ShrinkConfig = ShrinkConfig(),
         verbose: Bool = false
-    ) -> FuzzPluginHandler<repeat each Input> where repeat each Input: Sendable {
-        FuzzPluginHandler(
+    ) -> FuzzPlugin<repeat each Input> where repeat each Input: Sendable {
+        FuzzPlugin(
             id: "shrinking",
             handleSync: { _ in [] },
             handleAsync: { event in
@@ -180,133 +225,7 @@ extension FuzzPluginHandler {
         )
     }
 
-    /// Creates a simple plateau detector that stops when no new coverage is found.
-    ///
-    /// - Parameter config: Configuration for plateau detection.
-    /// - Returns: A configured plateau detector handler.
-    public static func plateauDetector(
-        config: SimpleCoveragePlateauDetector.Config = .init()
-    ) -> FuzzPluginHandler<repeat each Input> {
-        var detector = SimpleCoveragePlateauDetector(config: config)
-
-        return FuzzPluginHandler(
-            id: "plateau_detector",
-            handleSync: { event in
-                switch event {
-                case let .iteration(context):
-                    detector.record(discoveredNewCoverage: context.discoveredNewCoverage)
-
-                    if detector.hasPlateaued {
-                        return [.stop(FuzzPluginAction<repeat each Input>.StopAction(reason: .custom("coverage_plateaued")))]
-                    }
-
-                    return []
-                }
-            }
-        )
-    }
-
-    /// Creates a STADS plateau detector using Good-Turing estimator.
-    ///
-    /// Uses statistical principles from species discovery to estimate the
-    /// probability of finding new coverage. More principled than simple
-    /// window-based approaches.
-    ///
-    /// - Parameters:
-    ///   - minDiscoveryProbability: Minimum probability before declaring plateau. Default is 0.001.
-    ///   - confirmationChecks: Consecutive low-probability checks required. Default is 3.
-    ///   - checkInterval: Iterations between probability recalculations. Default is 100.
-    /// - Returns: A configured STADS plateau detector handler.
-    public static func stadsDetector(
-        minDiscoveryProbability: Double = 0.001,
-        confirmationChecks: Int = 3,
-        checkInterval: Int = 100
-    ) -> FuzzPluginHandler<repeat each Input> {
-        stadsDetector(config: .init(
-            minDiscoveryProbability: minDiscoveryProbability,
-            confirmationChecks: confirmationChecks,
-            checkInterval: checkInterval
-        ))
-    }
-
-    /// Creates a STADS plateau detector with custom configuration.
-    ///
-    /// - Parameter config: The STADS detector configuration.
-    /// - Returns: A configured STADS plateau detector handler.
-    public static func stadsDetector(
-        config: STADSPlateauDetector.Config
-    ) -> FuzzPluginHandler<repeat each Input> {
-        var detector = STADSPlateauDetector(config: config)
-
-        return FuzzPluginHandler(
-            id: "stads_detector",
-            handleSync: { event in
-                switch event {
-                case let .iteration(context):
-                    detector.record(discoveredNewCoverage: context.discoveredNewCoverage)
-
-                    if detector.hasPlateaued {
-                        return [.stop(FuzzPluginAction<repeat each Input>.StopAction(reason: .custom("stads_plateau")))]
-                    }
-
-                    return []
-                }
-            }
-        )
-    }
-
-    /// Creates a saturation plateau detector using saturation-based metrics.
-    ///
-    /// Models coverage growth as an asymptotic process and stops when saturation
-    /// approaches the estimated maximum coverage.
-    ///
-    /// - Parameters:
-    ///   - minSaturation: Saturation level (0-1) to declare plateau. Default is 0.99.
-    ///   - minGrowthRate: Minimum growth rate before plateau. Default is 0.0001.
-    ///   - windowSize: Window size for growth rate calculation. Default is 500.
-    ///   - confirmationWindows: Consecutive low-growth windows required. Default is 3.
-    /// - Returns: A configured saturation plateau detector handler.
-    public static func saturationDetector(
-        minSaturation: Double = 0.99,
-        minGrowthRate: Double = 0.0001,
-        windowSize: Int = 500,
-        confirmationWindows: Int = 3
-    ) -> FuzzPluginHandler<repeat each Input> {
-        saturationDetector(config: .init(
-            minSaturation: minSaturation,
-            minGrowthRate: minGrowthRate,
-            windowSize: windowSize,
-            confirmationWindows: confirmationWindows
-        ))
-    }
-
-    /// Creates a saturation plateau detector with custom configuration.
-    ///
-    /// - Parameter config: The saturation detector configuration.
-    /// - Returns: A configured saturation plateau detector handler.
-    public static func saturationDetector(
-        config: SaturationPlateauDetector.Config
-    ) -> FuzzPluginHandler<repeat each Input> {
-        var detector = SaturationPlateauDetector(config: config)
-
-        return FuzzPluginHandler(
-            id: "saturation_detector",
-            handleSync: { event in
-                switch event {
-                case let .iteration(context):
-                    detector.record(discoveredNewCoverage: context.discoveredNewCoverage)
-
-                    if detector.hasPlateaued {
-                        return [.stop(FuzzPluginAction<repeat each Input>.StopAction(reason: .custom("saturation_plateau")))]
-                    }
-
-                    return []
-                }
-            }
-        )
-    }
-
-    /// Creates an energy-based mutation handler using the Entropic algorithm.
+    /// Creates an energy-based mutation plugin using the Entropic algorithm.
     ///
     /// Ports libFuzzer's Entropic energy scheduler. Each interesting input is
     /// assigned an energy score based on how many globally-rare coverage edges it
@@ -328,7 +247,7 @@ extension FuzzPluginHandler {
     public static func energyMutation(
         rareFeatureThreshold: Int = 3,
         maxMutationFactor: Int = 20
-    ) -> FuzzPluginHandler<repeat each Input> {
+    ) -> FuzzPlugin<repeat each Input> {
         var entryInputs: [(repeat each Input)] = []
         var entryFeatures: [[UInt32]] = []
         var entryMutations: [Int] = []
@@ -338,12 +257,12 @@ extension FuzzPluginHandler {
         @Dependency(\.fastRNG) var fastRNG: FastRNG
         let seedRNG: FastRNG = fastRNG
 
-        return FuzzPluginHandler(
+        return FuzzPlugin(
             id: "energy_mutation",
             handleSync: { event in
                 switch event {
                 case let .iteration(context):
-                    if context.discoveredNewCoverage, let coverage = context.sparseCoverage {
+                    if let coverage = context.newCoverage {
                         // Register new entry with its features.
                         for feature in coverage.indices {
                             globalFeatureFreqs[feature, default: 0] += 1
@@ -390,19 +309,178 @@ extension FuzzPluginHandler {
         )
     }
 
-    /// Creates a coverage gap analysis handler.
+}
+
+// MARK: - Built-in Analysis Plugins
+//
+// Plugins that emit only `AnalysisAction` (stop / recordIssue). They are valid in
+// both `fuzz(...)` and `regress(...)`; in `fuzz`, lift with `asFuzzPlugin()`.
+
+extension AnalysisPlugin {
+    /// Creates a plugin that stops the run the moment the mutation queue drains.
+    ///
+    /// Reacts to the iteration whose `queueCount` reaches zero — the last queued
+    /// input. The engine checks the stop before taking another input, so the run
+    /// halts without executing any freshly-generated one. This is the building
+    /// block for regression replay: load the corpus into the seed list, run with
+    /// no generators contributing new work, and the engine replays exactly the
+    /// seeded inputs (plus anything they queue) and then stops.
+    ///
+    /// - Parameter reason: The stop reason recorded in the run's stats. Defaults
+    ///   to `.regressionTestCompleted`.
+    public static func stopWhenQueueEmpty(
+        reason: FuzzStats.StopReason = .regressionTestCompleted
+    ) -> AnalysisPlugin<repeat each Input> {
+        AnalysisPlugin(
+            id: "stop_when_queue_empty",
+            handleSync: { event in
+                switch event {
+                case let .iteration(context):
+                    return context.queueCount == 0 ? [.stop(.init(reason: reason))] : []
+                }
+            }
+        )
+    }
+
+    /// Creates a simple plateau detector that stops when no new coverage is found.
+    ///
+    /// - Parameter config: Configuration for plateau detection.
+    /// - Returns: A configured plateau detector plugin.
+    public static func plateauDetector(
+        config: SimpleCoveragePlateauDetector.Config = .init()
+    ) -> AnalysisPlugin<repeat each Input> {
+        var detector = SimpleCoveragePlateauDetector(config: config)
+
+        return AnalysisPlugin(
+            id: "plateau_detector",
+            handleSync: { event in
+                switch event {
+                case let .iteration(context):
+                    detector.record(discoveredNewCoverage: context.newCoverage != nil)
+
+                    if detector.hasPlateaued {
+                        return [.stop(FuzzPluginAction<repeat each Input>.StopAction(reason: .custom("coverage_plateaued")))]
+                    }
+
+                    return []
+                }
+            }
+        )
+    }
+
+    /// Creates a STADS plateau detector using Good-Turing estimator.
+    ///
+    /// Uses statistical principles from species discovery to estimate the
+    /// probability of finding new coverage. More principled than simple
+    /// window-based approaches.
+    ///
+    /// - Parameters:
+    ///   - minDiscoveryProbability: Minimum probability before declaring plateau. Default is 0.001.
+    ///   - confirmationChecks: Consecutive low-probability checks required. Default is 3.
+    ///   - checkInterval: Iterations between probability recalculations. Default is 100.
+    /// - Returns: A configured STADS plateau detector plugin.
+    public static func stadsDetector(
+        minDiscoveryProbability: Double = 0.001,
+        confirmationChecks: Int = 3,
+        checkInterval: Int = 100
+    ) -> AnalysisPlugin<repeat each Input> {
+        stadsDetector(config: .init(
+            minDiscoveryProbability: minDiscoveryProbability,
+            confirmationChecks: confirmationChecks,
+            checkInterval: checkInterval
+        ))
+    }
+
+    /// Creates a STADS plateau detector with custom configuration.
+    ///
+    /// - Parameter config: The STADS detector configuration.
+    /// - Returns: A configured STADS plateau detector plugin.
+    public static func stadsDetector(
+        config: STADSPlateauDetector.Config
+    ) -> AnalysisPlugin<repeat each Input> {
+        var detector = STADSPlateauDetector(config: config)
+
+        return AnalysisPlugin(
+            id: "stads_detector",
+            handleSync: { event in
+                switch event {
+                case let .iteration(context):
+                    detector.record(discoveredNewCoverage: context.newCoverage != nil)
+
+                    if detector.hasPlateaued {
+                        return [.stop(FuzzPluginAction<repeat each Input>.StopAction(reason: .custom("stads_plateau")))]
+                    }
+
+                    return []
+                }
+            }
+        )
+    }
+
+    /// Creates a saturation plateau detector using saturation-based metrics.
+    ///
+    /// Models coverage growth as an asymptotic process and stops when saturation
+    /// approaches the estimated maximum coverage.
+    ///
+    /// - Parameters:
+    ///   - minSaturation: Saturation level (0-1) to declare plateau. Default is 0.99.
+    ///   - minGrowthRate: Minimum growth rate before plateau. Default is 0.0001.
+    ///   - windowSize: Window size for growth rate calculation. Default is 500.
+    ///   - confirmationWindows: Consecutive low-growth windows required. Default is 3.
+    /// - Returns: A configured saturation plateau detector plugin.
+    public static func saturationDetector(
+        minSaturation: Double = 0.99,
+        minGrowthRate: Double = 0.0001,
+        windowSize: Int = 500,
+        confirmationWindows: Int = 3
+    ) -> AnalysisPlugin<repeat each Input> {
+        saturationDetector(config: .init(
+            minSaturation: minSaturation,
+            minGrowthRate: minGrowthRate,
+            windowSize: windowSize,
+            confirmationWindows: confirmationWindows
+        ))
+    }
+
+    /// Creates a saturation plateau detector with custom configuration.
+    ///
+    /// - Parameter config: The saturation detector configuration.
+    /// - Returns: A configured saturation plateau detector plugin.
+    public static func saturationDetector(
+        config: SaturationPlateauDetector.Config
+    ) -> AnalysisPlugin<repeat each Input> {
+        var detector = SaturationPlateauDetector(config: config)
+
+        return AnalysisPlugin(
+            id: "saturation_detector",
+            handleSync: { event in
+                switch event {
+                case let .iteration(context):
+                    detector.record(discoveredNewCoverage: context.newCoverage != nil)
+
+                    if detector.hasPlateaued {
+                        return [.stop(FuzzPluginAction<repeat each Input>.StopAction(reason: .custom("saturation_plateau")))]
+                    }
+
+                    return []
+                }
+            }
+        )
+    }
+
+    /// Creates a coverage gap analysis plugin.
     ///
     /// Analyzes coverage at the end of fuzzing and reports gaps in coverage
     /// as issues at the specific source locations.
     ///
     /// - Parameter config: Configuration for gap detection.
-    /// - Returns: A configured coverage gap handler.
+    /// - Returns: A configured coverage gap plugin.
     public static func coverageGap(
         config: CoverageGapDetector.Config = .init()
-    ) -> FuzzPluginHandler<repeat each Input> {
+    ) -> AnalysisPlugin<repeat each Input> {
         let detector = CoverageGapDetector(config: config)
 
-        return FuzzPluginHandler(
+        return AnalysisPlugin(
             id: "coverage_gap",
             handleSync: { _ in [] },
             handleAsync: { event in
@@ -424,6 +502,78 @@ extension FuzzPluginHandler {
                 }
             }
         )
+    }
+}
+
+// MARK: - Analysis Plugins Usable in fuzz()
+//
+// Every analysis plugin is also valid inside a `fuzz(...)` campaign. These mirror the
+// `AnalysisPlugin` factories and lift the result with `asFuzzPlugin()`, so a fuzz call can
+// just write `.coverageGap()` instead of `AnalysisPlugin.coverageGap().asFuzzPlugin()`.
+// (In a `regress(...)` context the same spelling resolves to the `AnalysisPlugin` factory.)
+
+extension FuzzPlugin {
+    /// Lifted `AnalysisPlugin.stopWhenQueueEmpty(reason:)` for use in `fuzz(...)`.
+    public static func stopWhenQueueEmpty(
+        reason: FuzzStats.StopReason = .regressionTestCompleted
+    ) -> FuzzPlugin<repeat each Input> {
+        AnalysisPlugin.stopWhenQueueEmpty(reason: reason).asFuzzPlugin()
+    }
+
+    /// Lifted `AnalysisPlugin.plateauDetector(config:)` for use in `fuzz(...)`.
+    public static func plateauDetector(
+        config: SimpleCoveragePlateauDetector.Config = .init()
+    ) -> FuzzPlugin<repeat each Input> {
+        AnalysisPlugin.plateauDetector(config: config).asFuzzPlugin()
+    }
+
+    /// Lifted `AnalysisPlugin.stadsDetector(...)` for use in `fuzz(...)`.
+    public static func stadsDetector(
+        minDiscoveryProbability: Double = 0.001,
+        confirmationChecks: Int = 3,
+        checkInterval: Int = 100
+    ) -> FuzzPlugin<repeat each Input> {
+        AnalysisPlugin.stadsDetector(
+            minDiscoveryProbability: minDiscoveryProbability,
+            confirmationChecks: confirmationChecks,
+            checkInterval: checkInterval
+        ).asFuzzPlugin()
+    }
+
+    /// Lifted `AnalysisPlugin.stadsDetector(config:)` for use in `fuzz(...)`.
+    public static func stadsDetector(
+        config: STADSPlateauDetector.Config
+    ) -> FuzzPlugin<repeat each Input> {
+        AnalysisPlugin.stadsDetector(config: config).asFuzzPlugin()
+    }
+
+    /// Lifted `AnalysisPlugin.saturationDetector(...)` for use in `fuzz(...)`.
+    public static func saturationDetector(
+        minSaturation: Double = 0.99,
+        minGrowthRate: Double = 0.0001,
+        windowSize: Int = 500,
+        confirmationWindows: Int = 3
+    ) -> FuzzPlugin<repeat each Input> {
+        AnalysisPlugin.saturationDetector(
+            minSaturation: minSaturation,
+            minGrowthRate: minGrowthRate,
+            windowSize: windowSize,
+            confirmationWindows: confirmationWindows
+        ).asFuzzPlugin()
+    }
+
+    /// Lifted `AnalysisPlugin.saturationDetector(config:)` for use in `fuzz(...)`.
+    public static func saturationDetector(
+        config: SaturationPlateauDetector.Config
+    ) -> FuzzPlugin<repeat each Input> {
+        AnalysisPlugin.saturationDetector(config: config).asFuzzPlugin()
+    }
+
+    /// Lifted `AnalysisPlugin.coverageGap(config:)` for use in `fuzz(...)`.
+    public static func coverageGap(
+        config: CoverageGapDetector.Config = .init()
+    ) -> FuzzPlugin<repeat each Input> {
+        AnalysisPlugin.coverageGap(config: config).asFuzzPlugin()
     }
 }
 
@@ -449,10 +599,10 @@ private func formatMinimizedInput<each T>(_ input: (repeat each T)) -> String {
 private func constructCoverageGapActions<each T: Sendable>(
     report: CoverageGapReport,
     endContext: AsyncPluginEvent<repeat each T>.EndContext
-) -> [FuzzPluginAction<repeat each T>] {
+) -> [AnalysisAction<repeat each T>] {
     guard !report.gaps.isEmpty else { return [] }
 
-    var actions: [FuzzPluginAction<repeat each T>] = []
+    var actions: [AnalysisAction<repeat each T>] = []
 
     for gap in report.gaps {
         let file = URL(fileURLWithPath: gap.filename).lastPathComponent
@@ -592,15 +742,15 @@ private func weightedRandomIndex(weights: [Double], using rng: inout some Random
 
 // MARK: - Processor
 
-/// Processes plugin handlers without protocol witness overhead.
+/// Processes plugins without protocol witness overhead.
 @usableFromInline
-struct PluginHandlerProcessor<each Input: Sendable>: @unchecked Sendable {
+struct PluginProcessor<each Input: Sendable>: @unchecked Sendable {
     @usableFromInline
-    let handlers: [FuzzPluginHandler<repeat each Input>]
+    let plugins: [FuzzPlugin<repeat each Input>]
 
     @inlinable
-    init(handlers: [FuzzPluginHandler<repeat each Input>]) {
-        self.handlers = handlers
+    init(plugins: [FuzzPlugin<repeat each Input>]) {
+        self.plugins = plugins
     }
 
     /// Process a synchronous event - hot path.
@@ -609,8 +759,8 @@ struct PluginHandlerProcessor<each Input: Sendable>: @unchecked Sendable {
         event: consuming SyncPluginEvent<repeat each Input>,
         execute: (FuzzPluginAction<repeat each Input>) -> Void
     ) {
-        for handler in handlers {
-            let actions = handler.handleSync(copy event)
+        for plugin in plugins {
+            let actions = plugin.handleSync(copy event)
             for action in actions {
                 execute(action)
             }
@@ -621,13 +771,12 @@ struct PluginHandlerProcessor<each Input: Sendable>: @unchecked Sendable {
     /// Process an asynchronous event - cold path.
     @inlinable
     func processAsync(
-        isolation: isolated (any Actor)? = #isolation,
         event: consuming AsyncPluginEvent<repeat each Input>,
         execute: (FuzzPluginAction<repeat each Input>) -> Void
     ) async {
-        for handler in handlers {
+        for plugin in plugins {
             do {
-                let actions = try await handler.handleAsync(copy event)
+                let actions = try await plugin.handleAsync(copy event)
                 for action in actions {
                     execute(action)
                 }

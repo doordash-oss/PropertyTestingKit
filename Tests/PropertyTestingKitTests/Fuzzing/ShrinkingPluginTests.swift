@@ -24,26 +24,25 @@ struct ShrinkingHandlerTests {
 
     @Test("Handler has correct ID")
     func testHandlerId() {
-        let handler: FuzzPluginHandler<Int> = .shrinking()
+        let handler: FuzzPlugin<Int> = .shrinking()
         #expect(handler.id == "shrinking")
     }
 
     @Test("Handler returns empty actions for non-failure events")
     func testNonFailureEventsReturnEmpty() async throws {
-        let handler: FuzzPluginHandler<Int> = .shrinking()
+        let handler: FuzzPlugin<Int> = .shrinking()
 
         // Test start event (async)
         let startContext = AsyncPluginEvent<Int>.StartContext(
-            maxDuration: .seconds(60),
-            corpusMode: .auto
+            maxDuration: .seconds(60)
         )
         let startActions = try await handler.handleAsync(AsyncPluginEvent<Int>.start(startContext))
         #expect(startActions.isEmpty)
 
         // Test iteration event (sync)
         let iterationContext = SyncPluginEvent<Int>.IterationContext(
-            discoveredNewCoverage: true,
-            input: 42
+            input: 42,
+            newCoverage: SparseCoverage()
         )
         let iterationActions = handler.handleSync(SyncPluginEvent<Int>.iteration(iterationContext))
         #expect(iterationActions.isEmpty)
@@ -60,7 +59,7 @@ struct ShrinkingHandlerTests {
 
     @Test("Handler returns actions for failure event")
     func testFailureEventReturnsActions() async throws {
-        let handler: FuzzPluginHandler<[Int]> = .shrinking()
+        let handler: FuzzPlugin<[Int]> = .shrinking()
 
         // Create a failure context with an array that can be shrunk
         let failureContext = AsyncPluginEvent<[Int]>.FailureFoundContext(
@@ -105,7 +104,7 @@ struct ShrinkingHandlerTests {
 
     @Test("Handler shrinks input to minimal failing case")
     func testShrinkingMinimizesInput() async throws {
-        let handler: FuzzPluginHandler<[Int]> = .shrinking()
+        let handler: FuzzPlugin<[Int]> = .shrinking()
 
         let failureContext = AsyncPluginEvent<[Int]>.FailureFoundContext(
             input: [1, 2, 3, 42, 5, 6, 7],

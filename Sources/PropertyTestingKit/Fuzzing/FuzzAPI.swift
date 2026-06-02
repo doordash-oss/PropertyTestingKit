@@ -89,14 +89,17 @@ import Dependencies
 ///   - seeds: Domain-specific seed values to guide the fuzzer. These are added
 ///     to the mutator's seed values. Use this to target specific edge cases.
 ///   - duration: Maximum fuzzing time in seconds (default: 60).
-///   - corpusMode: Controls corpus behavior. Use `.refuzzReplace` to start fresh,
-///     `.refuzzExtend` to add to existing corpus, or `.auto` for default behavior.
-///     Can also be set via `FUZZ_CORPUS_MODE` environment variable.
+///   - persistence: How the on-disk corpus is treated: `.auto` (replay if a corpus
+///     exists, else fuzz fresh and save — the default), `.replace` (delete then fuzz),
+///     or `.extend` (load corpus as seeds, then fuzz). To verify a corpus without
+///     fuzzing, use `regress(...)` instead. Can be overridden suite-wide via the
+///     `FUZZ_CORPUS_MODE` environment variable.
 ///   - parallelism: Number of parallel fuzz engines to run. Each engine runs
 ///     independently with its portion of seeds distributed round-robin.
 ///     Results are merged at the end. Defaults to the number of available processors.
-///   - defaultBehaviorPlugins: Core plugins that define fuzzing behavior. Defaults to `MutationPlugin()`.
-///   - plugins: Additional plugins to run alongside default behavior (e.g., `CoverageGapPlugin()`).
+///   - plugins: Factory for the per-engine plugins. Defaults to
+///     `{ [.corpusMutation()] }`. Analysis plugins (`AnalysisPlugin`) can be lifted in
+///     with `.asFuzzPlugin()`.
 ///   - filePath: Source file path (auto-filled).
 ///   - function: Test function name (auto-filled).
 ///   - test: The test closure receiving fuzzed inputs.
@@ -109,11 +112,11 @@ public func fuzz<each Input: Codable & Sendable>(
     using mutators: repeat Mutator<each Input>,
     seeds: [(repeat each Input)] = [],
     duration: Duration = .seconds(60),
-    corpusMode: CorpusMode? = nil,
+    persistence: CorpusPersistence = .auto,
     coverageStrategy: CoverageStrategyKind = .pathTrie,
     edgeHook: EdgeHook? = nil,
     parallelism: Int = ProcessInfo.processInfo.processorCount,
-    makeHandlers: @escaping @Sendable () -> [FuzzPluginHandler<repeat each Input>] = { [.corpusMutation()] },
+    plugins: @escaping @Sendable () -> [FuzzPlugin<repeat each Input>] = { [.corpusMutation()] },
     filePath: StaticString = #filePath,
     function: StaticString = #function,
     line: Int = #line,
@@ -123,11 +126,11 @@ public func fuzz<each Input: Codable & Sendable>(
         mutators: (repeat each mutators),
         seeds: seeds,
         duration: duration,
-        corpusMode: corpusMode,
+        persistence: persistence,
         coverageStrategy: coverageStrategy,
         edgeHook: edgeHook,
         parallelism: parallelism,
-        makeHandlers: makeHandlers,
+        plugins: plugins,
         filePath: filePath,
         function: function,
         line: line,
@@ -141,138 +144,100 @@ func fuzzInternal<each Input: Codable & Sendable>(
     mutators: (repeat Mutator<each Input>),
     seeds: [(repeat each Input)],
     duration: Duration,
-    corpusMode: CorpusMode?,
+    persistence: CorpusPersistence,
     coverageStrategy: CoverageStrategyKind,
     edgeHook: EdgeHook?,
     parallelism: Int,
-    makeHandlers: @escaping @Sendable () -> [FuzzPluginHandler<repeat each Input>],
+    plugins: @escaping @Sendable () -> [FuzzPlugin<repeat each Input>],
     filePath: StaticString,
     function: StaticString,
     line: Int,
     test: @escaping @Sendable ((repeat each Input)) async throws -> Void
 ) async throws -> FuzzResult<repeat each Input> {
     @Dependency(\.environment) var environment
-    @Dependency(\.corpusPersistence) var corpusPersistence
 
     let testFilePath = String(describing: filePath)
     let verbose = environment.environment()["FUZZ_VERBOSE"] != nil
-    let effectiveParallelism = max(1, parallelism)
     let corpusDir = corpusDirectory(filePath: filePath, function: function)
-    let effectiveCorpusMode = corpusMode ?? CorpusMode.fromEnvironment()
 
-    // Check if we should run regression (single engine with corpus)
-    // Regression mode runs single-threaded to properly handle corpus loading
-    let corpusExists = corpusPersistence.exists(corpusDir)
-    let shouldRunRegression = corpusExists && (effectiveCorpusMode == .auto || effectiveCorpusMode == .regressionOnly)
-
-    if shouldRunRegression || effectiveParallelism == 1 {
-        // Single engine mode: create a fresh handler set for this engine.
-        let processor = PluginHandlerProcessor(handlers: makeHandlers())
-        let processSyncPlugins: @Sendable (consuming SyncPluginEvent<repeat each Input>, (FuzzPluginAction<repeat each Input>) -> Void) -> Void = {
-            processor.processSync(event: $0, execute: $1)
-        }
-        let processAsyncPlugins: @Sendable (isolated (any Actor)?, consuming AsyncPluginEvent<repeat each Input>, (FuzzPluginAction<repeat each Input>) -> Void) async -> Void = {
-            await processor.processAsync(isolation: $0, event: $1, execute: $2)
-        }
-
-        let config = FuzzEngineConfig(
-            maxDuration: duration,
+    // All corpus policy (load/save/delete, regression replay, parallel orchestration)
+    // lives in the coordinator. fuzzInternal resolves the suite-level env override and
+    // routes to the fuzz or (env-forced) replay path, then reports failures.
+    let result: FuzzResult<repeat each Input>
+    switch CorpusPersistence.resolveForFuzz(callSite: persistence) {
+    case .fuzz(let resolved):
+        result = await runFuzz(
+            mutators: mutators,
+            userSeeds: seeds,
+            corpusDir: corpusDir,
+            persistence: resolved,
+            parallelism: max(1, parallelism),
+            duration: duration,
             verbose: verbose,
-            corpusMode: corpusMode,
-            projectPath: projectPath(from: filePath),
             coverageStrategy: coverageStrategy,
             edgeHook: edgeHook,
-            fileID: testFilePath,
-            filePath: testFilePath,
+            projectPath: projectPath(from: filePath),
+            sourceFileID: testFilePath,
+            sourceFilePath: testFilePath,
             line: line,
-            column: 1
+            makeHandlers: plugins,
+            test: test
         )
-
-        let engine = FuzzEngine<repeat each Input>(
+    case .forcedReplay:
+        // FUZZ_CORPUS_MODE=regressiononly forces this fuzz call to a verify-only replay.
+        // It runs with NO user plugins, so the write-emitting exploration plugins a
+        // fuzz call carries never run during the forced regression — the no-write
+        // guarantee holds structurally. For analysis during regression, call regress(...).
+        result = await runReplay(
             mutators: mutators,
-            config: config,
-            corpusDirectory: corpusDir
+            corpusDir: corpusDir,
+            duration: duration,
+            verbose: verbose,
+            projectPath: projectPath(from: filePath),
+            sourceFileID: testFilePath,
+            sourceFilePath: testFilePath,
+            line: line,
+            plugins: { [] },
+            test: test
         )
-
-        let result = await engine.run(additionalSeeds: seeds, processSyncPlugins: processSyncPlugins, processAsyncPlugins: processAsyncPlugins, test: test)
-
-        return try reportFuzzResult(result, filePath: filePath, line: line)
     }
 
-    // Parallel fuzz mode: run N engines and merge results
-    if verbose {
-        print("[Fuzz] Running \(effectiveParallelism) parallel fuzz engines")
-    }
+    return try reportFuzzResult(result, filePath: filePath, line: line)
+}
 
-    // Distribute seeds round-robin across engines
-    var distributedSeeds: [[(repeat each Input)]] = Array(repeating: [], count: effectiveParallelism)
-    for (index, seed) in seeds.enumerated() {
-        distributedSeeds[index % effectiveParallelism].append(seed)
-    }
+/// Internal implementation shared by all regress overloads.
+@usableFromInline
+func regressInternal<each Input: Codable & Sendable>(
+    mutators: (repeat Mutator<each Input>),
+    duration: Duration,
+    plugins: @escaping @Sendable () -> [AnalysisPlugin<repeat each Input>],
+    filePath: StaticString,
+    function: StaticString,
+    line: Int,
+    test: @escaping @Sendable ((repeat each Input)) async throws -> Void
+) async throws -> FuzzResult<repeat each Input> {
+    @Dependency(\.environment) var environment
 
-    // Create and run N engines in parallel. Each engine calls makeHandlers() to get
-    // its own independent handler instances — handlers must never be shared across engines.
-    let results = await withTaskGroup(of: FuzzResult<repeat each Input>.self) { group in
-        for engineIndex in 0..<effectiveParallelism {
-            let engineSeeds = distributedSeeds[engineIndex]
-            group.addTask {
-                // Fresh handlers per engine — no shared mutable state.
-                let processor = PluginHandlerProcessor(handlers: makeHandlers())
-                let processSyncPlugins: @Sendable (consuming SyncPluginEvent<repeat each Input>, (FuzzPluginAction<repeat each Input>) -> Void) -> Void = {
-                    processor.processSync(event: $0, execute: $1)
-                }
-                let processAsyncPlugins: @Sendable (isolated (any Actor)?, consuming AsyncPluginEvent<repeat each Input>, (FuzzPluginAction<repeat each Input>) -> Void) async -> Void = {
-                    await processor.processAsync(isolation: $0, event: $1, execute: $2)
-                }
+    let testFilePath = String(describing: filePath)
+    let verbose = environment.environment()["FUZZ_VERBOSE"] != nil
+    let corpusDir = corpusDirectory(filePath: filePath, function: function)
 
-                let config = FuzzEngineConfig(
-                    maxDuration: duration,
-                    verbose: verbose,
-                    corpusMode: .refuzzReplace, // Each engine fuzzes fresh
-                    projectPath: projectPath(from: filePath),
-                    coverageStrategy: coverageStrategy,
-                    edgeHook: edgeHook,
-                    fileID: testFilePath,
-                    filePath: testFilePath,
-                    line: line,
-                    column: 1
-                )
+    // Replay only — the analysis plugins (which emit only stop/recordIssue) run on both the
+    // sync and async paths inside the coordinator; no write action can reach the replay.
+    let result = await runReplay(
+        mutators: mutators,
+        corpusDir: corpusDir,
+        duration: duration,
+        verbose: verbose,
+        projectPath: projectPath(from: filePath),
+        sourceFileID: testFilePath,
+        sourceFilePath: testFilePath,
+        line: line,
+        plugins: plugins,
+        test: test
+    )
 
-                let engine = FuzzEngine<repeat each Input>(
-                    mutators: mutators,
-                    config: config,
-                    corpusDirectory: nil // Don't save individual engine corpora
-                )
-
-                return await engine.run(additionalSeeds: engineSeeds, processSyncPlugins: processSyncPlugins, processAsyncPlugins: processAsyncPlugins, test: test)
-            }
-        }
-
-        var allResults: [FuzzResult<repeat each Input>] = []
-        for await result in group {
-            allResults.append(result)
-        }
-        return allResults
-    }
-
-    // Merge results from all engines
-    let mergedResult = await mergeResults(results, verbose: verbose)
-
-    // Save merged corpus
-    if !mergedResult.corpus.entries.isEmpty {
-        do {
-            try corpusPersistence.save(mergedResult.corpus, to: corpusDir)
-            if verbose {
-                print("[Fuzz] Saved merged corpus to \(corpusDir.path)")
-            }
-        } catch {
-            if verbose {
-                print("[Fuzz] Failed to save corpus: \(error)")
-            }
-        }
-    }
-
-    return try reportFuzzResult(mergedResult, filePath: filePath, line: line)
+    return try reportFuzzResult(result, filePath: filePath, line: line)
 }
 
 /// Run a coverage-guided fuzz test using the type's default mutator.
@@ -283,12 +248,11 @@ func fuzzInternal<each Input: Codable & Sendable>(
 /// - Parameters:
 ///   - seeds: Domain-specific seed values to guide the fuzzer.
 ///   - duration: Maximum fuzzing time in seconds (default: 60).
-///   - corpusMode: Controls corpus behavior. Use `.refuzzReplace` to start fresh,
-///     `.refuzzExtend` to add to existing corpus, or `.auto` for default behavior.
-///     Can also be set via `FUZZ_CORPUS_MODE` environment variable.
+///   - persistence: How the on-disk corpus is treated (`.auto`/`.replace`/`.extend`).
+///     To verify a corpus without fuzzing, use `regress(...)`. Can be overridden
+///     suite-wide via `FUZZ_CORPUS_MODE`.
 ///   - parallelism: Number of parallel fuzz engines to run. Defaults to processor count.
-///   - defaultBehaviorPlugins: Core plugins that define fuzzing behavior. Defaults to `MutationPlugin()`.
-///   - plugins: Additional plugins to run alongside default behavior (e.g., `CoverageGapPlugin()`).
+///   - plugins: Factory for the per-engine plugins. Defaults to `{ [.corpusMutation()] }`.
 ///   - filePath: Source file path (auto-filled).
 ///   - function: Test function name (auto-filled).
 ///   - test: The test closure receiving fuzzed inputs.
@@ -300,11 +264,11 @@ func fuzzInternal<each Input: Codable & Sendable>(
 public func fuzz<each Input: MutatorProviding & Codable & Sendable>(
     seeds: [(repeat each Input)] = [],
     duration: Duration = .seconds(60),
-    corpusMode: CorpusMode? = nil,
+    persistence: CorpusPersistence = .auto,
     coverageStrategy: CoverageStrategyKind = .pathTrie,
     edgeHook: EdgeHook? = nil,
     parallelism: Int = ProcessInfo.processInfo.processorCount,
-    makeHandlers: @escaping @Sendable () -> [FuzzPluginHandler<repeat each Input>] = { [.corpusMutation()] },
+    plugins: @escaping @Sendable () -> [FuzzPlugin<repeat each Input>] = { [.corpusMutation()] },
     filePath: StaticString = #filePath,
     function: StaticString = #function,
     line: Int = #line,
@@ -314,11 +278,11 @@ public func fuzz<each Input: MutatorProviding & Codable & Sendable>(
         using: repeat (each Input).defaultMutator,
         seeds: seeds,
         duration: duration,
-        corpusMode: corpusMode,
+        persistence: persistence,
         coverageStrategy: coverageStrategy,
         edgeHook: edgeHook,
         parallelism: parallelism,
-        makeHandlers: makeHandlers,
+        plugins: plugins,
         filePath: filePath,
         function: function,
         line: line,
@@ -326,97 +290,45 @@ public func fuzz<each Input: MutatorProviding & Codable & Sendable>(
     )
 }
 
-// MARK: - Result Merging
+// MARK: - Public Regress API
 
-/// Merges results from multiple parallel fuzz engines.
-private func mergeResults<each Input: Codable & Sendable>(
-    _ results: [FuzzResult<repeat each Input>],
-    verbose: Bool
-) async -> FuzzResult<repeat each Input> {
-    guard let first = results.first else {
-        return .empty
-    }
-
-    guard results.count > 1 else {
-        return first
-    }
-
-    // Merge all failures
-    var allFailures: [(input: (repeat each Input), error: Error, timeElapsed: TimeInterval)] = []
-    for result in results {
-        allFailures.append(contentsOf: result.failures)
-    }
-
-    // Merge corpus: combine all entries, deduplicate by coverage
-    // Note: Use explicit closures instead of keypaths to avoid Swift runtime crashes with parameter packs
-    let mergedCorpus = mergeCorpusSnapshots(results.map { $0.corpus })
-
-    // Merge stats: sum counts, take max duration
-    let totalInputs = results.reduce(0) { $0 + $1.stats.totalInputs }
-    let totalMutations = results.reduce(0) { $0 + $1.stats.mutations }
-    let totalGenerations = results.reduce(0) { $0 + $1.stats.generations }
-    let maxDuration = results.map { $0.stats.duration }.max() ?? 0
-
-    // Determine stop reason - use timeLimit if any engine hit it
-    let stopReason: FuzzStats.StopReason = results.contains { $0.stats.stopReason == .timeLimit }
-        ? .timeLimit
-        : (results.first?.stats.stopReason ?? .timeLimit)
-
-    // Check if any was a regression run
-    let wasRegression = results.contains { $0.wasRegression }
-
-    let mergedStats = FuzzStats(
-        totalInputs: totalInputs,
-        mutations: totalMutations,
-        generations: totalGenerations,
-        duration: maxDuration,
-        stopReason: stopReason,
-        failures: allFailures.count
+/// Replay a saved corpus and verify it still passes — regression testing.
+///
+/// Unlike `fuzz(...)`, this never explores: it runs exactly the inputs in the saved
+/// corpus and fails if any of them now trips the test. Because it only replays, it
+/// takes none of the fuzz-only knobs (`seeds`, `coverageStrategy`, `parallelism`,
+/// `edgeHook`, mutators) — they would be meaningless here. Its plugins are
+/// `AnalysisPlugin`s, which can only emit `stop`/`recordIssue`, so a replay can never be
+/// handed a plugin that would mutate the run or the corpus. If no corpus exists, the run
+/// is a no-op (it does not fail), so a suite-wide regression pass tolerates not-yet-fuzzed
+/// tests. Input types are inferred from the `test` closure.
+///
+/// - Parameters:
+///   - duration: Maximum replay time in seconds (default: 60).
+///   - plugins: Factory for analysis plugins (e.g. `[.coverageGap()]`). Defaults
+///     to none.
+///   - test: The test closure receiving the replayed inputs.
+@discardableResult
+@inlinable
+public func regress<each Input: MutatorProviding & Codable & Sendable>(
+    duration: Duration = .seconds(60),
+    plugins: @escaping @Sendable () -> [AnalysisPlugin<repeat each Input>] = { [] },
+    filePath: StaticString = #filePath,
+    function: StaticString = #function,
+    line: Int = #line,
+    test: @escaping @Sendable ((repeat each Input)) async throws -> Void
+) async throws -> FuzzResult<repeat each Input> {
+    // Replay does not generate inputs, so the mutators are inert here — supply the
+    // type's default mutators purely to satisfy the engine's construction.
+    try await regressInternal(
+        mutators: (repeat (each Input).defaultMutator),
+        duration: duration,
+        plugins: plugins,
+        filePath: filePath,
+        function: function,
+        line: line,
+        test: test
     )
-
-    if verbose {
-        print("[Fuzz] Merged \(results.count) engines: \(totalInputs) total inputs, \(allFailures.count) failures")
-    }
-
-    return FuzzResult(
-        corpus: mergedCorpus,
-        failures: allFailures,
-        stats: mergedStats,
-        wasRegression: wasRegression
-    )
-}
-
-/// Merges multiple corpus snapshots into one, combining coverage.
-private func mergeCorpusSnapshots<each Input: Codable & Sendable>(
-    _ snapshots: [CorpusSnapshot<repeat each Input>]
-) -> CorpusSnapshot<repeat each Input> {
-    @Dependency(\.corpusRegistry) var corpusRegistry
-
-    guard let first = snapshots.first else {
-        return CorpusSnapshot<repeat each Input>(
-            entries: [],
-            coveredIndices: []
-        )
-    }
-
-    guard snapshots.count > 1 else {
-        return first
-    }
-
-    // Create a temporary corpus to deduplicate entries
-    let mergedCorpus: Corpus<repeat each Input> = corpusRegistry.getCorpus()
-
-    // Use a local signature hash set for deduplication
-    var signatureHashes = Set<Int>()
-
-    // Add all entries - addIfInteresting handles deduplication by coverage
-    for snapshot in snapshots {
-        for entry in snapshot.entries {
-            _ = mergedCorpus.addIfInteresting(input: entry.input, sparse: entry.sparseCoverage, signatureHashes: &signatureHashes)
-        }
-    }
-
-    return mergedCorpus.snapshot()
 }
 
 // MARK: - Fuzz Helpers
@@ -592,11 +504,13 @@ public enum FuzzError: Error, LocalizedError {
 ///
 /// - `FUZZ_VERBOSE=1`: Enable verbose logging
 /// - `FUZZ_DURATION=N`: Override max duration (seconds)
-/// - `FUZZ_CORPUS_MODE=<mode>`: Control corpus behavior for all tests:
-///   - `auto`: Run regression if corpus exists, otherwise fuzz (default)
-///   - `refuzzreplace`: Always fuzz fresh, replace existing corpus
-///   - `refuzzextend`: Load corpus as seeds, continue fuzzing to find more
-///   - `regressiononly`: Only run regression, skip tests with no corpus
+/// - `FUZZ_CORPUS_MODE=<mode>`: Suite-level override of `fuzz(...)` calls' persistence:
+///   - `auto`: Replay corpus if it exists, otherwise fuzz (default)
+///   - `refuzzreplace`: Force `.replace` — fuzz fresh, replacing existing corpus
+///   - `refuzzextend`: Force `.extend` — load corpus as seeds, continue fuzzing
+///   - `regressiononly`: Force every `fuzz(...)` call to a verify-only replay (no
+///     plugins run, so it never explores); tests with no corpus are a no-op.
+///     `regress(...)` calls always replay and ignore this variable.
 ///
 /// Example usage:
 /// ```bash

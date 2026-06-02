@@ -40,7 +40,7 @@ func fuzzWithMaxIterations<each Input: MutatorProviding & Codable & Sendable>(
     maxIterations: Int,
     seeds: [(repeat each Input)] = [],
     duration: Duration = .seconds(60),
-    corpusMode: CorpusMode? = nil,
+    persistence: CorpusPersistence = .auto,
     coverageStrategy: CoverageStrategyKind = .signatureMatch,
     parallelism: Int = 1,
     filePath: StaticString = #filePath,
@@ -64,7 +64,7 @@ func fuzzWithMaxIterations<each Input: MutatorProviding & Codable & Sendable>(
         try await fuzz(
             seeds: seeds,
             duration: .seconds(10),
-            corpusMode: corpusMode,
+            persistence: persistence,
             coverageStrategy: coverageStrategy,
             parallelism: parallelism,
             filePath: filePath,
@@ -85,10 +85,12 @@ func fuzzWithMaxIterations<each Input: MutatorProviding & Codable & Sendable>(
 /// This helper advances a test clock after each iteration, making tests deterministic
 /// and fast since they don't wait for real time to pass.
 ///
+/// The engine is a pure fuzz runner — it never loads or saves a corpus. For tests that
+/// exercise corpus modes/persistence, use `runFuzzWithMaxIterations` instead.
+///
 /// - Parameters:
 ///   - maxIterations: The maximum number of iterations to run before the clock triggers timeout.
 ///   - config: Optional custom config. If nil, uses default config with test clock duration.
-///   - corpusDirectory: Optional corpus directory for persistence.
 ///   - additionalSeeds: Additional seed values for fuzzing.
 ///   - test: The test closure to run for each input.
 /// - Returns: The fuzz result containing corpus, failures, and stats.
@@ -96,7 +98,6 @@ func fuzzEngineWithMaxIterations<each Input: MutatorProviding & Codable & Sendab
     maxIterations: Int,
     config: FuzzEngineConfig? = nil,
     coverageStrategy: CoverageStrategyKind? = nil,
-    corpusDirectory: URL? = nil,
     additionalSeeds: [(repeat each Input)] = [],
     test: @escaping @Sendable ((repeat each Input)) async throws -> Void
 ) async -> FuzzResult<repeat each Input> {
@@ -119,7 +120,6 @@ func fuzzEngineWithMaxIterations<each Input: MutatorProviding & Codable & Sendab
             FuzzEngineConfig(
                 maxDuration: $0.maxDuration,
                 verbose: $0.verbose,
-                corpusMode: $0.corpusMode,
                 timeLimitCheckInterval: $0.timeLimitCheckInterval,
                 coverageStrategy: effectiveStrategy
             )
@@ -128,13 +128,16 @@ func fuzzEngineWithMaxIterations<each Input: MutatorProviding & Codable & Sendab
             timeLimitCheckInterval: 1,
             coverageStrategy: effectiveStrategy
         )
+        let mutators = (repeat (each Input).defaultMutator)
         let engine = FuzzEngine(
-            mutators: (repeat (each Input).defaultMutator),
-            config: effectiveConfig,
-            corpusDirectory: corpusDirectory
+            mutators: mutators,
+            config: effectiveConfig
         )
+        // The engine runs exactly the seeds it's given — assemble the mutators' seed
+        // values plus any caller-provided seeds, mirroring a fuzz campaign.
+        let seeds = mutatorSeeds(mutators) + additionalSeeds
         // Create default plugin processor (mutation handler)
-        let processor = PluginHandlerProcessor(handlers: [FuzzPluginHandler<repeat each Input>.mutation()])
+        let processor = PluginProcessor(plugins: [FuzzPlugin<repeat each Input>.mutation()])
         let processSyncPlugins: @Sendable (
             consuming SyncPluginEvent<repeat each Input>,
             (FuzzPluginAction<repeat each Input>) -> Void
@@ -142,18 +145,107 @@ func fuzzEngineWithMaxIterations<each Input: MutatorProviding & Codable & Sendab
             processor.processSync(event: event, execute: execute)
         }
         let processAsyncPlugins: @Sendable (
-            isolated (any Actor)?,
             consuming AsyncPluginEvent<repeat each Input>,
             (FuzzPluginAction<repeat each Input>) -> Void
-        ) async -> Void = { isolation, event, execute in
-            await processor.processAsync(isolation: isolation, event: event, execute: execute)
+        ) async -> Void = { event, execute in
+            await processor.processAsync(event: event, execute: execute)
         }
-        return await engine.run(additionalSeeds: additionalSeeds, processSyncPlugins: processSyncPlugins, processAsyncPlugins: processAsyncPlugins) { input in
+        return await engine.run(seeds: seeds, processSyncPlugins: processSyncPlugins, processAsyncPlugins: processAsyncPlugins) { input in
             defer {
                 virtualTime.update { $0 += advancement }
             }
             try await test(input)
         }
+    })
+}
+
+/// Runs a fuzz campaign (the `fuzz(...)` coordinator path) with a controlled number of
+/// iterations using a test clock.
+///
+/// Use this (rather than `fuzzEngineWithMaxIterations`) for tests that exercise corpus
+/// policy — persistence, load/save, and the `.auto` replay-if-exists branch — since
+/// persistence lives in the coordinator, not the engine. For pure regression replay,
+/// use `runReplayWithMaxIterations`.
+func runFuzzWithMaxIterations<each Input: MutatorProviding & Codable & Sendable>(
+    maxIterations: Int,
+    corpusDir: URL,
+    persistence: CorpusPersistence,
+    coverageStrategy: CoverageStrategyKind = .alwaysInteresting,
+    parallelism: Int = 1,
+    makeHandlers: @escaping @Sendable () -> [FuzzPlugin<repeat each Input>] = { [.corpusMutation()] },
+    additionalSeeds: [(repeat each Input)] = [],
+    test: @escaping @Sendable ((repeat each Input)) async throws -> Void
+) async -> FuzzResult<repeat each Input> {
+    let advancement = 10.0 / Double(maxIterations)
+    let testClock = TestClock()
+    let virtualTime = SyncBox<TimeInterval>(0)
+    let startDate = Date()
+    return await withDependencies({
+        $0.continuousClockClient = testClock
+        $0.dateClient = DateClient(now: {
+            startDate.addingTimeInterval(virtualTime.value)
+        })
+    }, operation: {
+        await runFuzz(
+            mutators: (repeat (each Input).defaultMutator),
+            userSeeds: additionalSeeds,
+            corpusDir: corpusDir,
+            persistence: persistence,
+            parallelism: parallelism,
+            duration: .seconds(10),
+            verbose: false,
+            coverageStrategy: coverageStrategy,
+            edgeHook: nil,
+            projectPath: nil,
+            sourceFileID: "PropertyTestingKitTests/TestHelpers.swift",
+            sourceFilePath: "PropertyTestingKitTests/TestHelpers.swift",
+            line: 1,
+            makeHandlers: makeHandlers,
+            test: { input in
+                defer {
+                    virtualTime.update { $0 += advancement }
+                }
+                try await test(input)
+            }
+        )
+    })
+}
+
+/// Runs a regression replay (the `regress(...)` coordinator path) with a controlled
+/// number of iterations using a test clock. Replays the saved corpus; no fuzzing.
+func runReplayWithMaxIterations<each Input: MutatorProviding & Codable & Sendable>(
+    maxIterations: Int,
+    corpusDir: URL,
+    makeHandlers: @escaping @Sendable () -> [AnalysisPlugin<repeat each Input>] = { [] },
+    test: @escaping @Sendable ((repeat each Input)) async throws -> Void
+) async -> FuzzResult<repeat each Input> {
+    let advancement = 10.0 / Double(maxIterations)
+    let testClock = TestClock()
+    let virtualTime = SyncBox<TimeInterval>(0)
+    let startDate = Date()
+    return await withDependencies({
+        $0.continuousClockClient = testClock
+        $0.dateClient = DateClient(now: {
+            startDate.addingTimeInterval(virtualTime.value)
+        })
+    }, operation: {
+        await runReplay(
+            mutators: (repeat (each Input).defaultMutator),
+            corpusDir: corpusDir,
+            duration: .seconds(10),
+            verbose: false,
+            projectPath: nil,
+            sourceFileID: "PropertyTestingKitTests/TestHelpers.swift",
+            sourceFilePath: "PropertyTestingKitTests/TestHelpers.swift",
+            line: 1,
+            plugins: makeHandlers,
+            test: { input in
+                defer {
+                    virtualTime.update { $0 += advancement }
+                }
+                try await test(input)
+            }
+        )
     })
 }
 
@@ -175,7 +267,7 @@ func fuzzWithMaxIterations<each Input: Codable & Sendable>(
     maxIterations: Int,
     using mutators: repeat Mutator<each Input>,
     seeds: [(repeat each Input)] = [],
-    corpusMode: CorpusMode? = nil,
+    persistence: CorpusPersistence = .auto,
     coverageStrategy: CoverageStrategyKind = .signatureMatch,
     parallelism: Int = 1,
     filePath: StaticString = #filePath,
@@ -200,7 +292,7 @@ func fuzzWithMaxIterations<each Input: Codable & Sendable>(
             using: repeat each mutators,
             seeds: seeds,
             duration: .seconds(10),
-            corpusMode: corpusMode,
+            persistence: persistence,
             coverageStrategy: coverageStrategy,
             parallelism: parallelism,
             filePath: filePath,

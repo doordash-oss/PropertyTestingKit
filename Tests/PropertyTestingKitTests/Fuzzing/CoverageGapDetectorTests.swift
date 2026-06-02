@@ -311,10 +311,10 @@ struct CoverageGapDetectorTests {
             // mutation() is included by default via handlers
             _ = try await fuzz(
                 duration: .seconds(0.5),
-                corpusMode: .refuzzReplace,
+                persistence: .replace,
                 coverageStrategy: .signatureMatch,
                 parallelism: 1,
-                makeHandlers: { [.mutation(), .coverageGap()] }
+                plugins: { [.mutation(), .coverageGap()] }
             ) { (input: Int) in
                 partiallyCoveredFunction(input: input)
             }
