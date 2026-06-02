@@ -505,6 +505,78 @@ extension AnalysisPlugin {
     }
 }
 
+// MARK: - Analysis Plugins Usable in fuzz()
+//
+// Every analysis plugin is also valid inside a `fuzz(...)` campaign. These mirror the
+// `AnalysisPlugin` factories and lift the result with `asFuzzPlugin()`, so a fuzz call can
+// just write `.coverageGap()` instead of `AnalysisPlugin.coverageGap().asFuzzPlugin()`.
+// (In a `regress(...)` context the same spelling resolves to the `AnalysisPlugin` factory.)
+
+extension FuzzPlugin {
+    /// Lifted `AnalysisPlugin.stopWhenQueueEmpty(reason:)` for use in `fuzz(...)`.
+    public static func stopWhenQueueEmpty(
+        reason: FuzzStats.StopReason = .regressionTestCompleted
+    ) -> FuzzPlugin<repeat each Input> {
+        AnalysisPlugin.stopWhenQueueEmpty(reason: reason).asFuzzPlugin()
+    }
+
+    /// Lifted `AnalysisPlugin.plateauDetector(config:)` for use in `fuzz(...)`.
+    public static func plateauDetector(
+        config: SimpleCoveragePlateauDetector.Config = .init()
+    ) -> FuzzPlugin<repeat each Input> {
+        AnalysisPlugin.plateauDetector(config: config).asFuzzPlugin()
+    }
+
+    /// Lifted `AnalysisPlugin.stadsDetector(...)` for use in `fuzz(...)`.
+    public static func stadsDetector(
+        minDiscoveryProbability: Double = 0.001,
+        confirmationChecks: Int = 3,
+        checkInterval: Int = 100
+    ) -> FuzzPlugin<repeat each Input> {
+        AnalysisPlugin.stadsDetector(
+            minDiscoveryProbability: minDiscoveryProbability,
+            confirmationChecks: confirmationChecks,
+            checkInterval: checkInterval
+        ).asFuzzPlugin()
+    }
+
+    /// Lifted `AnalysisPlugin.stadsDetector(config:)` for use in `fuzz(...)`.
+    public static func stadsDetector(
+        config: STADSPlateauDetector.Config
+    ) -> FuzzPlugin<repeat each Input> {
+        AnalysisPlugin.stadsDetector(config: config).asFuzzPlugin()
+    }
+
+    /// Lifted `AnalysisPlugin.saturationDetector(...)` for use in `fuzz(...)`.
+    public static func saturationDetector(
+        minSaturation: Double = 0.99,
+        minGrowthRate: Double = 0.0001,
+        windowSize: Int = 500,
+        confirmationWindows: Int = 3
+    ) -> FuzzPlugin<repeat each Input> {
+        AnalysisPlugin.saturationDetector(
+            minSaturation: minSaturation,
+            minGrowthRate: minGrowthRate,
+            windowSize: windowSize,
+            confirmationWindows: confirmationWindows
+        ).asFuzzPlugin()
+    }
+
+    /// Lifted `AnalysisPlugin.saturationDetector(config:)` for use in `fuzz(...)`.
+    public static func saturationDetector(
+        config: SaturationPlateauDetector.Config
+    ) -> FuzzPlugin<repeat each Input> {
+        AnalysisPlugin.saturationDetector(config: config).asFuzzPlugin()
+    }
+
+    /// Lifted `AnalysisPlugin.coverageGap(config:)` for use in `fuzz(...)`.
+    public static func coverageGap(
+        config: CoverageGapDetector.Config = .init()
+    ) -> FuzzPlugin<repeat each Input> {
+        AnalysisPlugin.coverageGap(config: config).asFuzzPlugin()
+    }
+}
+
 // MARK: - Helper Functions
 
 /// Format minimized input for display.

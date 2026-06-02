@@ -314,7 +314,7 @@ struct CoverageGapDetectorTests {
                 persistence: .replace,
                 coverageStrategy: .signatureMatch,
                 parallelism: 1,
-                plugins: { [.mutation(), AnalysisPlugin<Int>.coverageGap().asFuzzPlugin()] }
+                plugins: { [.mutation(), .coverageGap()] }
             ) { (input: Int) in
                 partiallyCoveredFunction(input: input)
             }
