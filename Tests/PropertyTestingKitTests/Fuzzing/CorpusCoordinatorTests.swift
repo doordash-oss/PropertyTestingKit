@@ -319,5 +319,41 @@ struct CorpusCoordinatorTests {
         if case .fuzz(.auto) = resolve("auto", callSite: .replace) {} else {
             Issue.record("auto should force .auto")
         }
+        if case .fuzz(.ephemeral) = resolve("ephemeral", callSite: .auto) {} else {
+            Issue.record("ephemeral should force .ephemeral")
+        }
+    }
+
+    @Test("Ephemeral fuzzing never touches the corpus on disk")
+    func ephemeralDoesNotPersist() async throws {
+        let corpusDir = URL(fileURLWithPath: "/test/coord-ephemeral")
+        let (saveSpy, saveFn) = spy { (_: Data, _: URL) in }
+        let (loadSpy, loadFn) = spy { (_: URL) -> Data in Data() }
+        let (existsSpy, existsFn) = spy { (_: URL) -> Bool in true }
+        let (deleteSpy, deleteFn) = spy { (_: URL) in }
+
+        let result = await withDependencies {
+            $0.coverageCounters = .liveValue
+            $0.corpusPersistence = CorpusPersistenceClient(
+                save: saveFn,
+                load: loadFn,
+                exists: existsFn,
+                delete: deleteFn
+            )
+        } operation: {
+            await runFuzzWithMaxIterations(
+                maxIterations: 100,
+                corpusDir: corpusDir,
+                persistence: .ephemeral,
+                additionalSeeds: [0, 1, 42]
+            ) { (_: Int) in }
+        }
+
+        #expect(result.corpus.count > 0, "Ephemeral still fuzzes and builds an in-memory corpus")
+        #expect(!result.wasRegression, "Ephemeral is a fuzz run")
+        #expect(saveSpy.callCount == 0, "Ephemeral never saves")
+        #expect(loadSpy.callCount == 0, "Ephemeral never loads")
+        #expect(existsSpy.callCount == 0, "Ephemeral never checks the corpus on disk")
+        #expect(deleteSpy.callCount == 0, "Ephemeral never deletes")
     }
 }

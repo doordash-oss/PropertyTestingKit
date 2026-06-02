@@ -33,6 +33,11 @@ public enum CorpusPersistence: Sendable {
     /// Load the existing corpus as additional seeds, fuzz, and save.
     /// Use when you want to expand coverage beyond the current corpus.
     case extend
+
+    /// Fuzz in memory only — ignore any existing corpus and don't save. Nothing
+    /// touches disk. Use for throwaway runs (benchmarks, exploratory tests) that
+    /// care about the in-memory result, not a persisted corpus.
+    case ephemeral
 }
 
 // MARK: - Environment override
@@ -65,6 +70,7 @@ extension CorpusPersistence {
         case "regressiononly": return .forcedReplay
         case "refuzzreplace": return .fuzz(.replace)
         case "refuzzextend": return .fuzz(.extend)
+        case "ephemeral": return .fuzz(.ephemeral)
         case "auto": return .fuzz(.auto)
         default: return .fuzz(callSite)
         }

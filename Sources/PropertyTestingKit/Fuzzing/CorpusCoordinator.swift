@@ -110,12 +110,10 @@ func runFuzz<each Input: Codable & Sendable>(
         )
     }
 
-    let corpusExists = corpusPersistence.exists(corpusDir)
-
     switch persistence {
     case .auto:
         // Replay if a corpus exists and loads; otherwise fall through to fuzzing.
-        if corpusExists,
+        if corpusPersistence.exists(corpusDir),
             let snapshot: CorpusSnapshot<repeat each Input> = loadSnapshot(from: corpusDir, verbose: verbose) {
             return await replayRegression(
                 snapshot: snapshot,
@@ -126,30 +124,32 @@ func runFuzz<each Input: Codable & Sendable>(
                 test: test
             )
         }
-        return await fuzzAndSave(
+        return await fuzzCampaign(
             mutators: mutators,
             seeds: userSeeds,
             corpusDir: corpusDir,
             parallelism: parallelism,
             verbose: verbose,
+            persist: true,
             config: config(strategy: coverageStrategy),
             makeHandlers: makeHandlers,
             test: test
         )
 
     case .replace:
-        if corpusExists {
+        if corpusPersistence.exists(corpusDir) {
             if verbose {
                 print("[Fuzz] persistence: replace - deleting existing corpus")
             }
             try? corpusPersistence.delete(corpusDir)
         }
-        return await fuzzAndSave(
+        return await fuzzCampaign(
             mutators: mutators,
             seeds: userSeeds,
             corpusDir: corpusDir,
             parallelism: parallelism,
             verbose: verbose,
+            persist: true,
             config: config(strategy: coverageStrategy),
             makeHandlers: makeHandlers,
             test: test
@@ -157,19 +157,34 @@ func runFuzz<each Input: Codable & Sendable>(
 
     case .extend:
         var seeds = userSeeds
-        if corpusExists,
+        if corpusPersistence.exists(corpusDir),
             let snapshot: CorpusSnapshot<repeat each Input> = loadSnapshot(from: corpusDir, verbose: verbose) {
             if verbose {
                 print("[Fuzz] persistence: extend - loaded \(snapshot.count) corpus entries as seeds")
             }
             seeds.append(contentsOf: snapshot.entries.map(\.input))
         }
-        return await fuzzAndSave(
+        return await fuzzCampaign(
             mutators: mutators,
             seeds: seeds,
             corpusDir: corpusDir,
             parallelism: parallelism,
             verbose: verbose,
+            persist: true,
+            config: config(strategy: coverageStrategy),
+            makeHandlers: makeHandlers,
+            test: test
+        )
+
+    case .ephemeral:
+        // No persistence: ignore any existing corpus and never save. Nothing touches disk.
+        return await fuzzCampaign(
+            mutators: mutators,
+            seeds: userSeeds,
+            corpusDir: corpusDir,
+            parallelism: parallelism,
+            verbose: verbose,
+            persist: false,
             config: config(strategy: coverageStrategy),
             makeHandlers: makeHandlers,
             test: test
@@ -279,15 +294,17 @@ private func replayRegression<each Input: Codable & Sendable>(
     )
 }
 
-// MARK: - Fuzzing (single + parallel) with persistence
+// MARK: - Fuzzing (single + parallel)
 
-/// Run fuzzing (single-engine or N parallel engines) and persist the resulting corpus.
-private func fuzzAndSave<each Input: Codable & Sendable>(
+/// Run fuzzing (single-engine or N parallel engines). When `persist` is true, save the
+/// resulting corpus; when false (the `.ephemeral` policy), nothing touches disk.
+private func fuzzCampaign<each Input: Codable & Sendable>(
     mutators: (repeat Mutator<each Input>),
     seeds: [(repeat each Input)],
     corpusDir: URL,
     parallelism: Int,
     verbose: Bool,
+    persist: Bool,
     config: FuzzEngineConfig,
     makeHandlers: @escaping @Sendable () -> [FuzzPluginHandler<repeat each Input>],
     test: @escaping @Sendable ((repeat each Input)) async throws -> Void
@@ -317,7 +334,8 @@ private func fuzzAndSave<each Input: Codable & Sendable>(
     )
 
     // Persist only a non-empty corpus, so a refuzz that finds nothing leaves no stale file.
-    if !result.corpus.entries.isEmpty {
+    // The `.ephemeral` policy skips persistence entirely (persist == false).
+    if persist, !result.corpus.entries.isEmpty {
         do {
             try corpusPersistence.save(result.corpus, to: corpusDir)
             if verbose {

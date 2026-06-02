@@ -104,6 +104,7 @@ a plugin that would explore or mutate the corpus.
 | `.auto` | Replay the corpus if one exists, otherwise fuzz fresh and save (default) |
 | `.replace` | Delete any existing corpus, fuzz fresh, and save |
 | `.extend` | Load the existing corpus as seeds, fuzz, and save |
+| `.ephemeral` | Fuzz in memory only — ignore any existing corpus and don't save (nothing touches disk) |
 
 **Per-test control:**
 
