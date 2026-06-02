@@ -297,43 +297,17 @@ public func fuzz<each Input: MutatorProviding & Codable & Sendable>(
 /// Unlike `fuzz(...)`, this never explores: it runs exactly the inputs in the saved
 /// corpus and fails if any of them now trips the test. Because it only replays, it
 /// takes none of the fuzz-only knobs (`seeds`, `coverageStrategy`, `parallelism`,
-/// `edgeHook`) — they would be meaningless here. Its plugins are `AnalysisPlugin`s,
-/// which can only emit `stop`/`recordIssue`, so a replay can never be handed a plugin
-/// that would mutate the run or the corpus. If no corpus exists, the run is a no-op
-/// (it does not fail), so a suite-wide regression pass tolerates not-yet-fuzzed tests.
+/// `edgeHook`, mutators) — they would be meaningless here. Its plugins are
+/// `AnalysisPlugin`s, which can only emit `stop`/`recordIssue`, so a replay can never be
+/// handed a plugin that would mutate the run or the corpus. If no corpus exists, the run
+/// is a no-op (it does not fail), so a suite-wide regression pass tolerates not-yet-fuzzed
+/// tests. Input types are inferred from the `test` closure.
 ///
 /// - Parameters:
-///   - mutators: Mutators for each input type (used only for type binding; replay does
-///     not generate inputs).
 ///   - duration: Maximum replay time in seconds (default: 60).
 ///   - plugins: Factory for analysis plugins (e.g. `[.coverageGap()]`). Defaults
 ///     to none.
 ///   - test: The test closure receiving the replayed inputs.
-@discardableResult
-@inlinable
-public func regress<each Input: Codable & Sendable>(
-    using mutators: repeat Mutator<each Input>,
-    duration: Duration = .seconds(60),
-    plugins: @escaping @Sendable () -> [AnalysisPlugin<repeat each Input>] = { [] },
-    filePath: StaticString = #filePath,
-    function: StaticString = #function,
-    line: Int = #line,
-    test: @escaping @Sendable ((repeat each Input)) async throws -> Void
-) async throws -> FuzzResult<repeat each Input> {
-    try await regressInternal(
-        mutators: (repeat each mutators),
-        duration: duration,
-        plugins: plugins,
-        filePath: filePath,
-        function: function,
-        line: line,
-        test: test
-    )
-}
-
-/// Replay a saved corpus using each type's `MutatorProviding.defaultMutator`.
-///
-/// See `regress(using:duration:plugins:...)` for details.
 @discardableResult
 @inlinable
 public func regress<each Input: MutatorProviding & Codable & Sendable>(
@@ -344,8 +318,10 @@ public func regress<each Input: MutatorProviding & Codable & Sendable>(
     line: Int = #line,
     test: @escaping @Sendable ((repeat each Input)) async throws -> Void
 ) async throws -> FuzzResult<repeat each Input> {
-    try await regress(
-        using: repeat (each Input).defaultMutator,
+    // Replay does not generate inputs, so the mutators are inert here — supply the
+    // type's default mutators purely to satisfy the engine's construction.
+    try await regressInternal(
+        mutators: (repeat (each Input).defaultMutator),
         duration: duration,
         plugins: plugins,
         filePath: filePath,
