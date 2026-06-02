@@ -185,7 +185,7 @@ struct STADSHandlerTests {
 
     @Test("Handler has correct ID")
     func testHandlerId() {
-        let handler: AnalysisHandler<Int> = .stadsDetector()
+        let handler: AnalysisPlugin<Int> = .stadsDetector()
         #expect(handler.id == "stads_detector")
     }
 
@@ -197,7 +197,7 @@ struct STADSHandlerTests {
             checkInterval: 5,
             enabled: true
         )
-        let handler: AnalysisHandler<Int> = .stadsDetector(config: config)
+        let handler: AnalysisPlugin<Int> = .stadsDetector(config: config)
 
         // Record many non-discoveries via iteration events
         for i in 0..<50 {
@@ -221,7 +221,7 @@ struct STADSHandlerTests {
 
     @Test("Convenience constructor creates handler")
     func testConvenienceConstructor() {
-        let handler: AnalysisHandler<Int> = .stadsDetector(
+        let handler: AnalysisPlugin<Int> = .stadsDetector(
             minDiscoveryProbability: 0.005,
             confirmationChecks: 5,
             checkInterval: 50

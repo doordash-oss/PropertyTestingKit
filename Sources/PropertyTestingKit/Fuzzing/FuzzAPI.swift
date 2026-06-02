@@ -98,8 +98,8 @@ import Dependencies
 ///     independently with its portion of seeds distributed round-robin.
 ///     Results are merged at the end. Defaults to the number of available processors.
 ///   - plugins: Factory for the per-engine plugins. Defaults to
-///     `{ [.corpusMutation()] }`. Analysis plugins (`AnalysisHandler`) can be lifted in
-///     with `.asFuzzPluginHandler()`.
+///     `{ [.corpusMutation()] }`. Analysis plugins (`AnalysisPlugin`) can be lifted in
+///     with `.asFuzzPlugin()`.
 ///   - filePath: Source file path (auto-filled).
 ///   - function: Test function name (auto-filled).
 ///   - test: The test closure receiving fuzzed inputs.
@@ -116,7 +116,7 @@ public func fuzz<each Input: Codable & Sendable>(
     coverageStrategy: CoverageStrategyKind = .pathTrie,
     edgeHook: EdgeHook? = nil,
     parallelism: Int = ProcessInfo.processInfo.processorCount,
-    plugins: @escaping @Sendable () -> [FuzzPluginHandler<repeat each Input>] = { [.corpusMutation()] },
+    plugins: @escaping @Sendable () -> [FuzzPlugin<repeat each Input>] = { [.corpusMutation()] },
     filePath: StaticString = #filePath,
     function: StaticString = #function,
     line: Int = #line,
@@ -148,7 +148,7 @@ func fuzzInternal<each Input: Codable & Sendable>(
     coverageStrategy: CoverageStrategyKind,
     edgeHook: EdgeHook?,
     parallelism: Int,
-    plugins: @escaping @Sendable () -> [FuzzPluginHandler<repeat each Input>],
+    plugins: @escaping @Sendable () -> [FuzzPlugin<repeat each Input>],
     filePath: StaticString,
     function: StaticString,
     line: Int,
@@ -210,7 +210,7 @@ func fuzzInternal<each Input: Codable & Sendable>(
 func regressInternal<each Input: Codable & Sendable>(
     mutators: (repeat Mutator<each Input>),
     duration: Duration,
-    plugins: @escaping @Sendable () -> [AnalysisHandler<repeat each Input>],
+    plugins: @escaping @Sendable () -> [AnalysisPlugin<repeat each Input>],
     filePath: StaticString,
     function: StaticString,
     line: Int,
@@ -233,7 +233,7 @@ func regressInternal<each Input: Codable & Sendable>(
         sourceFileID: testFilePath,
         sourceFilePath: testFilePath,
         line: line,
-        makeHandlers: { plugins().map { $0.asFuzzPluginHandler() } },
+        makeHandlers: { plugins().map { $0.asFuzzPlugin() } },
         test: test
     )
 
@@ -268,7 +268,7 @@ public func fuzz<each Input: MutatorProviding & Codable & Sendable>(
     coverageStrategy: CoverageStrategyKind = .pathTrie,
     edgeHook: EdgeHook? = nil,
     parallelism: Int = ProcessInfo.processInfo.processorCount,
-    plugins: @escaping @Sendable () -> [FuzzPluginHandler<repeat each Input>] = { [.corpusMutation()] },
+    plugins: @escaping @Sendable () -> [FuzzPlugin<repeat each Input>] = { [.corpusMutation()] },
     filePath: StaticString = #filePath,
     function: StaticString = #function,
     line: Int = #line,
@@ -297,7 +297,7 @@ public func fuzz<each Input: MutatorProviding & Codable & Sendable>(
 /// Unlike `fuzz(...)`, this never explores: it runs exactly the inputs in the saved
 /// corpus and fails if any of them now trips the test. Because it only replays, it
 /// takes none of the fuzz-only knobs (`seeds`, `coverageStrategy`, `parallelism`,
-/// `edgeHook`) — they would be meaningless here. Its plugins are `AnalysisHandler`s,
+/// `edgeHook`) — they would be meaningless here. Its plugins are `AnalysisPlugin`s,
 /// which can only emit `stop`/`recordIssue`, so a replay can never be handed a plugin
 /// that would mutate the run or the corpus. If no corpus exists, the run is a no-op
 /// (it does not fail), so a suite-wide regression pass tolerates not-yet-fuzzed tests.
@@ -314,7 +314,7 @@ public func fuzz<each Input: MutatorProviding & Codable & Sendable>(
 public func regress<each Input: Codable & Sendable>(
     using mutators: repeat Mutator<each Input>,
     duration: Duration = .seconds(60),
-    plugins: @escaping @Sendable () -> [AnalysisHandler<repeat each Input>] = { [] },
+    plugins: @escaping @Sendable () -> [AnalysisPlugin<repeat each Input>] = { [] },
     filePath: StaticString = #filePath,
     function: StaticString = #function,
     line: Int = #line,
@@ -338,7 +338,7 @@ public func regress<each Input: Codable & Sendable>(
 @inlinable
 public func regress<each Input: MutatorProviding & Codable & Sendable>(
     duration: Duration = .seconds(60),
-    plugins: @escaping @Sendable () -> [AnalysisHandler<repeat each Input>] = { [] },
+    plugins: @escaping @Sendable () -> [AnalysisPlugin<repeat each Input>] = { [] },
     filePath: StaticString = #filePath,
     function: StaticString = #function,
     line: Int = #line,

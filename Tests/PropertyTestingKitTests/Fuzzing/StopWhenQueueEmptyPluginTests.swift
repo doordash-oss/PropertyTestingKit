@@ -24,13 +24,13 @@ struct StopWhenQueueEmptyHandlerTests {
 
     @Test("Handler has correct ID")
     func handlerId() {
-        let handler: AnalysisHandler<Int> = .stopWhenQueueEmpty()
+        let handler: AnalysisPlugin<Int> = .stopWhenQueueEmpty()
         #expect(handler.id == "stop_when_queue_empty")
     }
 
     @Test("Does not stop while the queue still has inputs")
     func doesNotStopMidQueue() {
-        let handler: AnalysisHandler<Int> = .stopWhenQueueEmpty()
+        let handler: AnalysisPlugin<Int> = .stopWhenQueueEmpty()
 
         // An iteration with inputs still queued must not stop the run.
         let context = SyncPluginEvent<Int>.IterationContext(
@@ -44,7 +44,7 @@ struct StopWhenQueueEmptyHandlerTests {
 
     @Test("Stops the run when the queue drains")
     func stopsOnQueueEmpty() {
-        let handler: AnalysisHandler<Int> = .stopWhenQueueEmpty()
+        let handler: AnalysisPlugin<Int> = .stopWhenQueueEmpty()
 
         let context = SyncPluginEvent<Int>.IterationContext(
             input: 7,
@@ -63,7 +63,7 @@ struct StopWhenQueueEmptyHandlerTests {
 
     @Test("Stop reason is configurable")
     func customStopReason() {
-        let handler: AnalysisHandler<Int> = .stopWhenQueueEmpty(reason: .custom("done"))
+        let handler: AnalysisPlugin<Int> = .stopWhenQueueEmpty(reason: .custom("done"))
 
         let context = SyncPluginEvent<Int>.IterationContext(
             input: 7,
@@ -84,8 +84,8 @@ struct StopWhenQueueEmptyHandlerTests {
         let executed = SyncBox<[Int]>([])
         let seeds = [101, 102, 103]
 
-        let processor = PluginHandlerProcessor(
-            handlers: [AnalysisHandler<Int>.stopWhenQueueEmpty().asFuzzPluginHandler()]
+        let processor = PluginProcessor(
+            handlers: [AnalysisPlugin<Int>.stopWhenQueueEmpty().asFuzzPlugin()]
         )
         let config = FuzzEngineConfig(
             maxDuration: .seconds(60),

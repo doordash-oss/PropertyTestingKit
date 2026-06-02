@@ -91,7 +91,7 @@ func runFuzz<each Input: Codable & Sendable>(
     sourceFileID: String,
     sourceFilePath: String,
     line: Int,
-    makeHandlers: @escaping @Sendable () -> [FuzzPluginHandler<repeat each Input>],
+    makeHandlers: @escaping @Sendable () -> [FuzzPlugin<repeat each Input>],
     test: @escaping @Sendable ((repeat each Input)) async throws -> Void
 ) async -> FuzzResult<repeat each Input> {
     @Dependency(\.corpusPersistence) var corpusPersistence
@@ -208,7 +208,7 @@ func runReplay<each Input: Codable & Sendable>(
     sourceFileID: String,
     sourceFilePath: String,
     line: Int,
-    makeHandlers: @escaping @Sendable () -> [FuzzPluginHandler<repeat each Input>],
+    makeHandlers: @escaping @Sendable () -> [FuzzPlugin<repeat each Input>],
     test: @escaping @Sendable ((repeat each Input)) async throws -> Void
 ) async -> FuzzResult<repeat each Input> {
     @Dependency(\.corpusPersistence) var corpusPersistence
@@ -260,7 +260,7 @@ private func replayRegression<each Input: Codable & Sendable>(
     mutators: (repeat Mutator<each Input>),
     verbose: Bool,
     config: FuzzEngineConfig,
-    makeHandlers: @escaping @Sendable () -> [FuzzPluginHandler<repeat each Input>],
+    makeHandlers: @escaping @Sendable () -> [FuzzPlugin<repeat each Input>],
     test: @escaping @Sendable ((repeat each Input)) async throws -> Void
 ) async -> FuzzResult<repeat each Input> {
     // Replay exactly the saved corpus through one engine — no mutator seed values mixed in,
@@ -276,9 +276,9 @@ private func replayRegression<each Input: Codable & Sendable>(
         config: config,
         makeProcessors: {
             (
-                sync: PluginHandlerProcessor<repeat each Input>(
-                    handlers: [AnalysisHandler<repeat each Input>.stopWhenQueueEmpty().asFuzzPluginHandler()]),
-                async: PluginHandlerProcessor<repeat each Input>(handlers: makeHandlers())
+                sync: PluginProcessor<repeat each Input>(
+                    handlers: [AnalysisPlugin<repeat each Input>.stopWhenQueueEmpty().asFuzzPlugin()]),
+                async: PluginProcessor<repeat each Input>(handlers: makeHandlers())
             )
         },
         test: test
@@ -306,7 +306,7 @@ private func fuzzCampaign<each Input: Codable & Sendable>(
     verbose: Bool,
     persist: Bool,
     config: FuzzEngineConfig,
-    makeHandlers: @escaping @Sendable () -> [FuzzPluginHandler<repeat each Input>],
+    makeHandlers: @escaping @Sendable () -> [FuzzPlugin<repeat each Input>],
     test: @escaping @Sendable ((repeat each Input)) async throws -> Void
 ) async -> FuzzResult<repeat each Input> {
     @Dependency(\.corpusPersistence) var corpusPersistence
@@ -327,7 +327,7 @@ private func fuzzCampaign<each Input: Codable & Sendable>(
         verbose: verbose,
         config: config,
         makeProcessors: {
-            let processor = PluginHandlerProcessor<repeat each Input>(handlers: makeHandlers())
+            let processor = PluginProcessor<repeat each Input>(handlers: makeHandlers())
             return (sync: processor, async: processor)
         },
         test: test
@@ -371,8 +371,8 @@ private func runEngines<each Input: Codable & Sendable>(
     verbose: Bool,
     config: FuzzEngineConfig,
     makeProcessors: @escaping @Sendable () -> (
-        sync: PluginHandlerProcessor<repeat each Input>,
-        async: PluginHandlerProcessor<repeat each Input>
+        sync: PluginProcessor<repeat each Input>,
+        async: PluginProcessor<repeat each Input>
     ),
     test: @escaping @Sendable ((repeat each Input)) async throws -> Void
 ) async -> FuzzResult<repeat each Input> {

@@ -24,13 +24,13 @@ struct ShrinkingHandlerTests {
 
     @Test("Handler has correct ID")
     func testHandlerId() {
-        let handler: FuzzPluginHandler<Int> = .shrinking()
+        let handler: FuzzPlugin<Int> = .shrinking()
         #expect(handler.id == "shrinking")
     }
 
     @Test("Handler returns empty actions for non-failure events")
     func testNonFailureEventsReturnEmpty() async throws {
-        let handler: FuzzPluginHandler<Int> = .shrinking()
+        let handler: FuzzPlugin<Int> = .shrinking()
 
         // Test start event (async)
         let startContext = AsyncPluginEvent<Int>.StartContext(
@@ -59,7 +59,7 @@ struct ShrinkingHandlerTests {
 
     @Test("Handler returns actions for failure event")
     func testFailureEventReturnsActions() async throws {
-        let handler: FuzzPluginHandler<[Int]> = .shrinking()
+        let handler: FuzzPlugin<[Int]> = .shrinking()
 
         // Create a failure context with an array that can be shrunk
         let failureContext = AsyncPluginEvent<[Int]>.FailureFoundContext(
@@ -104,7 +104,7 @@ struct ShrinkingHandlerTests {
 
     @Test("Handler shrinks input to minimal failing case")
     func testShrinkingMinimizesInput() async throws {
-        let handler: FuzzPluginHandler<[Int]> = .shrinking()
+        let handler: FuzzPlugin<[Int]> = .shrinking()
 
         let failureContext = AsyncPluginEvent<[Int]>.FailureFoundContext(
             input: [1, 2, 3, 42, 5, 6, 7],

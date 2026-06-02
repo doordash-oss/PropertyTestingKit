@@ -137,7 +137,7 @@ func fuzzEngineWithMaxIterations<each Input: MutatorProviding & Codable & Sendab
         // values plus any caller-provided seeds, mirroring a fuzz campaign.
         let seeds = mutatorSeeds(mutators) + additionalSeeds
         // Create default plugin processor (mutation handler)
-        let processor = PluginHandlerProcessor(handlers: [FuzzPluginHandler<repeat each Input>.mutation()])
+        let processor = PluginProcessor(handlers: [FuzzPlugin<repeat each Input>.mutation()])
         let processSyncPlugins: @Sendable (
             consuming SyncPluginEvent<repeat each Input>,
             (FuzzPluginAction<repeat each Input>) -> Void
@@ -172,7 +172,7 @@ func runFuzzWithMaxIterations<each Input: MutatorProviding & Codable & Sendable>
     persistence: CorpusPersistence,
     coverageStrategy: CoverageStrategyKind = .alwaysInteresting,
     parallelism: Int = 1,
-    makeHandlers: @escaping @Sendable () -> [FuzzPluginHandler<repeat each Input>] = { [.corpusMutation()] },
+    makeHandlers: @escaping @Sendable () -> [FuzzPlugin<repeat each Input>] = { [.corpusMutation()] },
     additionalSeeds: [(repeat each Input)] = [],
     test: @escaping @Sendable ((repeat each Input)) async throws -> Void
 ) async -> FuzzResult<repeat each Input> {
@@ -216,7 +216,7 @@ func runFuzzWithMaxIterations<each Input: MutatorProviding & Codable & Sendable>
 func runReplayWithMaxIterations<each Input: MutatorProviding & Codable & Sendable>(
     maxIterations: Int,
     corpusDir: URL,
-    makeHandlers: @escaping @Sendable () -> [AnalysisHandler<repeat each Input>] = { [] },
+    makeHandlers: @escaping @Sendable () -> [AnalysisPlugin<repeat each Input>] = { [] },
     test: @escaping @Sendable ((repeat each Input)) async throws -> Void
 ) async -> FuzzResult<repeat each Input> {
     let advancement = 10.0 / Double(maxIterations)
@@ -238,7 +238,7 @@ func runReplayWithMaxIterations<each Input: MutatorProviding & Codable & Sendabl
             sourceFileID: "PropertyTestingKitTests/TestHelpers.swift",
             sourceFilePath: "PropertyTestingKitTests/TestHelpers.swift",
             line: 1,
-            makeHandlers: { makeHandlers().map { $0.asFuzzPluginHandler() } },
+            makeHandlers: { makeHandlers().map { $0.asFuzzPlugin() } },
             test: { input in
                 defer {
                     virtualTime.update { $0 += advancement }
