@@ -327,9 +327,9 @@ extension AnalysisHandler {
     /// seeded inputs (plus anything they queue) and then stops.
     ///
     /// - Parameter reason: The stop reason recorded in the run's stats. Defaults
-    ///   to `.regression`.
+    ///   to `.regressionTestCompleted`.
     public static func stopWhenQueueEmpty(
-        reason: FuzzStats.StopReason = .regression
+        reason: FuzzStats.StopReason = .regressionTestCompleted
     ) -> AnalysisHandler<repeat each Input> {
         AnalysisHandler(
             id: "stop_when_queue_empty",

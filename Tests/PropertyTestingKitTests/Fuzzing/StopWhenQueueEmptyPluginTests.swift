@@ -58,7 +58,7 @@ struct StopWhenQueueEmptyHandlerTests {
             Issue.record("Expected a .stop action, got \(actions)")
             return
         }
-        #expect(stopAction.reason.rawValue == "regression")
+        #expect(stopAction.reason.rawValue == "regression_test_completed")
     }
 
     @Test("Stop reason is configurable")
@@ -108,7 +108,7 @@ struct StopWhenQueueEmptyHandlerTests {
         // No fresh random inputs were generated: the run stopped the instant the
         // queue drained, replaying only the seeded inputs.
         #expect(result.stats.generations == 0)
-        #expect(result.stats.stopReason.rawValue == "regression")
+        #expect(result.stats.stopReason.rawValue == "regression_test_completed")
         // Every seeded input ran, and nothing beyond the seeds did.
         #expect(executed.value.count == result.stats.totalInputs)
         #expect(Set(seeds).isSubset(of: Set(executed.value)))
