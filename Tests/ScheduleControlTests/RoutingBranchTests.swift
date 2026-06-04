@@ -122,6 +122,11 @@ struct RoutingBranchTests {
             }
         }
         Self.dumpAll("TaskGroup (8 children) + actor hops")
+        // The tagged TaskGroup children (and their actor-hop jobs) must be routed
+        // via method 1 (current task's session tag). Asserting > 0 is robust to the
+        // upward counter pollution noted below. Without this the test could only
+        // fail by crashing/timing out, not on a routing regression.
+        #expect(RoutingHookCounters.method1Hits > 0)
     }
 
     // Note: a `noSession` test that asserts global RoutingHookCounters
