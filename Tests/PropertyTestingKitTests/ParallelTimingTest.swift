@@ -44,8 +44,13 @@ struct ParallelTimingTest {
         fputs("[TEST] Starting 16 parallel fuzz() calls, each with parallelism=16 (256 total engines)\n", stderr)
         let start = DispatchTime.now().uptimeNanoseconds
 
+        // Engine counts are env-overridable to tune memory pressure under heap
+        // debuggers (e.g. libgmalloc) while keeping the default 16×16=256 stress.
+        let env = ProcessInfo.processInfo.environment
+        let outer = env["PTK_OUTER"].flatMap(Int.init) ?? 16
+        let inner = env["PTK_INNER"].flatMap(Int.init) ?? 16
         let totalIterations = await withTaskGroup(of: Int.self, returning: Int.self) { group in
-            for i in 0..<16 {
+            for i in 0..<outer {
                 group.addTask {
                     let taskStart = DispatchTime.now().uptimeNanoseconds
                     fputs("[TEST] Task \(i) starting fuzz() at \(taskStart / 1_000_000)ms\n", stderr)
@@ -53,7 +58,7 @@ struct ParallelTimingTest {
                     let result = try? await fuzz(
                         duration: .milliseconds(100),
                         persistence: .replace,
-                        parallelism: 16  // Internal parallelism - 256 total engines!
+                        parallelism: inner  // Internal parallelism
                     ) { (input: Int) in
                         // Fast test - no work
                     }

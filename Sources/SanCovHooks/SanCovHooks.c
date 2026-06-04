@@ -622,12 +622,22 @@ static void ctx_retain(SanCovMeasurementContext* ctx) {
     }
 }
 
+// Break the bidirectional context<->trie link as the context is being freed, so
+// a trie that outlives this context never writes through a dangling
+// owner_context in sancov_trie_destroy. Defined below (needs the SanCovPathTrie
+// definition and g_trie_lock); performs the unlink under g_trie_lock.
+static void detach_trie_from_dying_context(SanCovMeasurementContext* ctx);
+
 // Release a measurement context (decrement refcount, free if zero)
 static void ctx_release(SanCovMeasurementContext* ctx) {
     if (ctx) {
         int old_count = atomic_fetch_sub(&ctx->refcount, 1);
         if (old_count == 1) {
-            // Refcount dropped to zero, free the context
+            // Refcount dropped to zero, free the context. First sever the link
+            // with any attached trie: clear our forward pointer AND the trie's
+            // back-pointer to us, so a later trie destroy can't dereference this
+            // freed context (the root cause of the parallel-fuzz heap corruption).
+            detach_trie_from_dying_context(ctx);
             cleanup_task_map(ctx);
             free(ctx->covered_indices);
             free(ctx);
@@ -1497,8 +1507,26 @@ static void maybe_advance_trie(SanCovMeasurementContext* ctx, uint32_t edge_inde
 }
 
 void sancov_context_set_trie(SanCovMeasurementContext* context, SanCovPathTrie* trie) {
+    // Mutate the cross-pointers under g_trie_lock so a concurrent teardown
+    // (sancov_trie_destroy / detach_trie_from_dying_context) observes a
+    // consistent link and the two pointers never disagree.
+    os_unfair_lock_lock(&g_trie_lock);
     if (context) context->path_trie = trie;
     if (trie) trie->owner_context = context;
+    os_unfair_lock_unlock(&g_trie_lock);
+}
+
+// Sever the context<->trie link from the CONTEXT side as it is freed. After this
+// the trie's owner_context no longer points at the (about-to-be-freed) context,
+// so sancov_trie_destroy will not write through a dangling pointer.
+static void detach_trie_from_dying_context(SanCovMeasurementContext* ctx) {
+    os_unfair_lock_lock(&g_trie_lock);
+    SanCovPathTrie* trie = ctx->path_trie;
+    if (trie && trie->owner_context == ctx) {
+        trie->owner_context = NULL;
+    }
+    ctx->path_trie = NULL;
+    os_unfair_lock_unlock(&g_trie_lock);
 }
 
 SanCovPathTrie* sancov_trie_create(void) {
@@ -1512,12 +1540,35 @@ SanCovPathTrie* sancov_trie_create(void) {
 
 void sancov_trie_destroy(SanCovPathTrie* trie) {
     if (!trie) return;
-    // NULL out the context's pointer to prevent use-after-free
-    if (trie->owner_context) {
-        trie->owner_context->path_trie = NULL;
+    // Sever the link from BOTH sides under g_trie_lock before freeing: clear the
+    // owner context's forward pointer (so it won't use this freed trie) AND our
+    // own back-pointer. Holding the lock keeps this consistent with a concurrent
+    // detach_trie_from_dying_context / sancov_context_set_trie. The owner pointer
+    // is only dereferenced while linked under the lock, so it is never dangling
+    // here (a freed context clears this back-pointer via the detach path).
+    os_unfair_lock_lock(&g_trie_lock);
+    SanCovMeasurementContext* owner = trie->owner_context;
+    if (owner && owner->path_trie == trie) {
+        owner->path_trie = NULL;
     }
+    trie->owner_context = NULL;
+    os_unfair_lock_unlock(&g_trie_lock);
+
     trie_node_destroy(trie->root);
     free(trie);
+}
+
+// TESTING ONLY seams (see SanCovHooks.h).
+void sancov_release_for_testing(SanCovMeasurementContext* context) {
+    ctx_release(context);
+}
+
+SanCovMeasurementContext* sancov_trie_owner_context_for_testing(const SanCovPathTrie* trie) {
+    if (!trie) return NULL;
+    os_unfair_lock_lock(&g_trie_lock);
+    SanCovMeasurementContext* owner = trie->owner_context;
+    os_unfair_lock_unlock(&g_trie_lock);
+    return owner;
 }
 
 

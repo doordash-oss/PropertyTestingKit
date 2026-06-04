@@ -156,6 +156,17 @@ void sancov_unregister_inheritance_for_testing(SanCovMeasurementContext* context
 /// context live and active for inheritance-routing assertions.
 void sancov_remove_task_measurement_for_testing(void);
 
+/// TESTING ONLY: drop one reference from a context (mirrors the internal
+/// refcount release used by sancov_end_measurement), freeing it when the count
+/// reaches zero. Lets a test deterministically free a context that still has a
+/// trie attached, to exercise the context-freed-before-trie teardown ordering.
+void sancov_release_for_testing(SanCovMeasurementContext* context);
+
+/// TESTING ONLY: read a trie's owner-context back-pointer. Used to assert the
+/// back-pointer is cleared once the owning context is freed, so a later
+/// sancov_trie_destroy cannot write through a dangling owner_context.
+SanCovMeasurementContext* sancov_trie_owner_context_for_testing(const SanCovPathTrie* trie);
+
 /// The coverage-inheritance handle for a measurement context: a 64-bit value
 /// that packs the context's generation tag (high 16 bits) with its pointer
 /// (low 48 bits). Store THIS in the `CoverageInheritance.context` task-local
