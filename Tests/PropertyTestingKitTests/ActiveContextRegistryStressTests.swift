@@ -96,4 +96,38 @@ struct ActiveContextRegistryStressTests {
         #expect(routed >= total - (total / 100),
                 "expected nearly all iterations to route to their own live context; routed=\(routed)/\(total)")
     }
+
+    /// TOCTOU: a straggler firing inherited edges concurrently with the
+    /// endMeasurement that frees its context. The liveness gate confirms the
+    /// context is registered, but if endMeasurement frees it between that check
+    /// and the routing dereference (before the reader has retained it), the
+    /// straggler reads freed memory (review #52). Run under ThreadSanitizer
+    /// (scripts/run-tsan.sh) this surfaces as a heap-use-after-free; without the
+    /// fix the read of `ctx->coverage_map` races the free in ctx_release.
+    @Test("endMeasurement racing a straggler's edges is race-free", .timeLimit(.minutes(3)))
+    func concurrentEndVsStragglerEdges() async {
+        let rounds = 4000
+        for _ in 0..<rounds {
+            let ctx = SanCovCounters.beginMeasurement()
+            let bits = UInt(bitPattern: ctx.rawContext)
+
+            // Spawn a straggler that immediately fires inherited edges, then end
+            // the measurement WITHOUT awaiting — so the free in endMeasurement
+            // races the straggler's first routing through the liveness gate.
+            let straggler: Task<Void, Never> = CoverageInheritance.$context.withValue(bits) {
+                CoverageInheritance.captureKeyIfNeeded(contextBits: bits)
+                return Task {
+                    var acc = 0
+                    for i in 0..<32 { acc &+= stressWork(i) }
+                    blackholeStress(acc)
+                }
+            }
+            SanCovCounters.endMeasurement(ctx)
+            await straggler.value
+        }
+        #expect(Bool(true))
+    }
 }
+
+@inline(never)
+private func blackholeStress<T>(_ value: T) { withUnsafePointer(to: value) { _ in } }
