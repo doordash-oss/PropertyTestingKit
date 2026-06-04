@@ -98,54 +98,26 @@ static bool sancov_is_valid_pointer(const void *ptr) {
 // stale or unset (and to any case where swift_task_localValueGet returns NULL
 // even though the value is in the chain).
 //
-// The registry is a fixed-size array because (a) we don't expect more than a
-// handful of measurements live concurrently in a fuzz session, and (b) a fixed
-// array gives us lock-free reads via atomic loads (the routing hook is on the
-// hot path).
-#define SANCOV_ACTIVE_CTX_CAP 256
-static _Atomic(SanCovMeasurementContext*) g_active_ctx_slots[SANCOV_ACTIVE_CTX_CAP] = {0};
-static _Atomic uint32_t g_active_ctx_high_water = 0;
+// The registry is backed by the same resizable lock-free hash table (ck_ht)
+// used for the per-task coverage/measurement registries — keyed by the context
+// pointer, membership == "currently live". A hash set (rather than the former
+// fixed-size array) removes the capacity ceiling: under the parallel test suite
+// many stress tests each hold dozens of live contexts at once, and a fixed cap
+// silently dropped registrations, which made the liveness gate reject *live*
+// contexts and silently lose their child-task coverage. The hash table grows on
+// demand, so no live context is ever dropped, and reads stay lock-free (the
+// routing hook is on the per-edge hot path).
+//
+// Implementations live below `init_active_ctx_ht` (after the ck_ht
+// infrastructure is declared); these are forward declarations so the task-local
+// walk above can call the liveness oracle.
+static bool is_active_inheritance_context(SanCovMeasurementContext* candidate);
+static void register_active_inheritance_context(SanCovMeasurementContext* ctx);
+static void unregister_active_inheritance_context(SanCovMeasurementContext* ctx);
 
-static inline bool is_active_inheritance_context(SanCovMeasurementContext* candidate) {
-    // ITER-9 REPRO: disable iter-5 value-match path to recreate iter-4 state for SIGSEGV repro.
-    (void)candidate;
-    return 0;
-}
-
-static void register_active_inheritance_context(SanCovMeasurementContext* ctx) {
-    if (ctx == NULL) return;
-    for (uint32_t i = 0; i < SANCOV_ACTIVE_CTX_CAP; i++) {
-        SanCovMeasurementContext* expected = NULL;
-        if (atomic_compare_exchange_strong_explicit(
-                &g_active_ctx_slots[i], &expected, ctx,
-                memory_order_acq_rel, memory_order_acquire)) {
-            uint32_t cur_hw = atomic_load_explicit(&g_active_ctx_high_water, memory_order_acquire);
-            uint32_t want = i + 1;
-            while (want > cur_hw &&
-                   !atomic_compare_exchange_weak_explicit(
-                       &g_active_ctx_high_water, &cur_hw, want,
-                       memory_order_acq_rel, memory_order_acquire)) {}
-            return;
-        }
-    }
-    // Registry full — silently drop. Routing falls back to the runtime path,
-    // which is the previous behaviour. We don't abort because an oversubscribed
-    // registry should be a degraded mode, not a crash.
-}
-
-static void unregister_active_inheritance_context(SanCovMeasurementContext* ctx) {
-    if (ctx == NULL) return;
-    uint32_t hw = atomic_load_explicit(&g_active_ctx_high_water, memory_order_acquire);
-    if (hw > SANCOV_ACTIVE_CTX_CAP) hw = SANCOV_ACTIVE_CTX_CAP;
-    for (uint32_t i = 0; i < hw; i++) {
-        SanCovMeasurementContext* expected = ctx;
-        if (atomic_compare_exchange_strong_explicit(
-                &g_active_ctx_slots[i], &expected, NULL,
-                memory_order_acq_rel, memory_order_acquire)) {
-            return;
-        }
-    }
-}
+// Count of currently-registered (live) measurement contexts. Maintained
+// alongside the hash set purely as a cheap "is anything live?" early-out.
+static _Atomic uint64_t g_active_ctx_count = 0;
 
 /// Read the inherited measurement context from a task's task-local chain.
 /// Returns NULL if no inheritance key is set or the task local is not found.
@@ -218,7 +190,7 @@ static SanCovMeasurementContext* manual_walk_for_inherited_context(const void* t
 static SanCovMeasurementContext* read_inherited_context(void* task) {
     if (task == NULL) return NULL;
     bool key_known = (g_coverage_inheritance_key != NULL);
-    uint32_t active_count = atomic_load_explicit(&g_active_ctx_high_water, memory_order_acquire);
+    uint64_t active_count = atomic_load_explicit(&g_active_ctx_count, memory_order_acquire);
     if (!key_known && active_count == 0) return NULL;
 
     if (key_known) {
@@ -278,6 +250,12 @@ static struct ck_malloc ck_allocator = {
 // Coverage registry: task_id -> coverage_map
 static ck_ht_t g_coverage_ht;
 static pthread_once_t g_coverage_ht_once = PTHREAD_ONCE_INIT;
+
+// Active-context liveness set: live measurement context pointer -> itself.
+// Membership means the context is currently between begin/end_measurement (i.e.
+// safe to route inherited edges to). Resizable, so it never overflows.
+static ck_ht_t g_active_ctx_ht;
+static pthread_once_t g_active_ctx_ht_once = PTHREAD_ONCE_INIT;
 
 // Thread-local fallback for non-async contexts
 static _Thread_local uint8_t *tls_coverage_map = NULL;
@@ -371,6 +349,59 @@ static inline void ensure_measurement_ht(void) {
 
 static inline void ensure_coverage_ht(void) {
     pthread_once(&g_coverage_ht_once, init_coverage_ht);
+}
+
+static void init_active_ctx_ht(void) {
+    ck_ht_init(&g_active_ctx_ht, CK_HT_MODE_DIRECT, NULL, &ck_allocator, CK_HT_INITIAL_CAPACITY, 0);
+}
+
+static inline void ensure_active_ctx_ht(void) {
+    pthread_once(&g_active_ctx_ht_once, init_active_ctx_ht);
+}
+
+// MARK: - Active-Context Liveness Set (ck_ht-backed; see forward decls above)
+
+// Liveness oracle: a candidate measurement context is only safe to route to
+// while it is still registered (between begin_measurement's register and
+// end_measurement's unregister, which happens BEFORE the context is freed).
+// Lock-free read; compares the candidate pointer as a hash key only — it never
+// dereferences `candidate`, so it is safe to call with an already-freed pointer.
+static bool is_active_inheritance_context(SanCovMeasurementContext* candidate) {
+    if (candidate == NULL) return false;
+    ensure_active_ctx_ht();
+
+    ck_ht_entry_t entry;
+    ck_ht_hash_t h;
+    ck_ht_hash_direct(&h, &g_active_ctx_ht, (uintptr_t)candidate);
+    ck_ht_entry_key_set_direct(&entry, (uintptr_t)candidate);
+    return ck_ht_get_spmc(&g_active_ctx_ht, h, &entry);
+}
+
+static void register_active_inheritance_context(SanCovMeasurementContext* ctx) {
+    if (ctx == NULL) return;
+    ensure_active_ctx_ht();
+
+    ck_ht_entry_t entry;
+    ck_ht_hash_t h;
+    ck_ht_hash_direct(&h, &g_active_ctx_ht, (uintptr_t)ctx);
+    // Value is the pointer itself (must be non-zero); only membership matters.
+    ck_ht_entry_set_direct(&entry, h, (uintptr_t)ctx, (uintptr_t)ctx);
+    if (ck_ht_put_spmc(&g_active_ctx_ht, h, &entry)) {
+        atomic_fetch_add_explicit(&g_active_ctx_count, 1, memory_order_acq_rel);
+    }
+}
+
+static void unregister_active_inheritance_context(SanCovMeasurementContext* ctx) {
+    if (ctx == NULL) return;
+    ensure_active_ctx_ht();
+
+    ck_ht_entry_t entry;
+    ck_ht_hash_t h;
+    ck_ht_hash_direct(&h, &g_active_ctx_ht, (uintptr_t)ctx);
+    ck_ht_entry_key_set_direct(&entry, (uintptr_t)ctx);
+    if (ck_ht_remove_spmc(&g_active_ctx_ht, h, &entry)) {
+        atomic_fetch_sub_explicit(&g_active_ctx_count, 1, memory_order_acq_rel);
+    }
 }
 
 // MARK: - Measurement Context Registry Operations (lock-free with ck_ht)
@@ -1009,6 +1040,16 @@ static uint8_t* get_current_coverage_map(void) {
         // routing solely via the active-context registry.
         if (inherited == NULL) {
             inherited = manual_walk_for_inherited_context(task);
+        }
+        // Liveness gate (applies to BOTH the runtime task-local lookup and the
+        // manual walk): a task-local can outlive the measurement it captured —
+        // e.g. an unstructured poller task spawned inside a fuzz iteration keeps
+        // firing edges after that measurement has ended and its context was
+        // freed. Routing to such a stale pointer dereferences a freed
+        // `coverage_map` → SIGSEGV. Only trust an inherited context that is still
+        // registered as active. (Pointer comparison only; never derefs `inherited`.)
+        if (inherited != NULL && !is_active_inheritance_context(inherited)) {
+            inherited = NULL;
         }
     }
     if (inherited != NULL && inherited->coverage_map != NULL) {
