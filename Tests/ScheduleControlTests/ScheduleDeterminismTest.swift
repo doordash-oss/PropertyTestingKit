@@ -1,5 +1,6 @@
 import Testing
 import Foundation
+import Dependencies
 @testable import ScheduleControl
 @testable import PropertyTestingKit
 
@@ -72,6 +73,58 @@ struct ScheduleDeterminismTest {
         }
 
         print("Deterministic order: \(first)")
+    }
+
+    /// Original-vs-replay through persistence: the whole point of saving schedule
+    /// bytes to the corpus is that a discovered interleaving can be reproduced
+    /// later from disk. This captures an original interleaving, persists the
+    /// schedule the way a scheduled-fuzz corpus does (as element 0 of the extended
+    /// input pack) through the REAL on-disk save/load, recovers the bytes, and
+    /// replays them — asserting both that the bytes survive the round-trip and
+    /// that the disk-loaded schedule reproduces the original execution order.
+    @Test("A schedule persisted to disk replays to the same execution order")
+    func persistedScheduleReplaysIdentically() async throws {
+        @Dependency(\.corpusPersistence) var persistence
+
+        let bytes: [UInt8] = [
+            42, 17, 255, 0, 100, 73, 99, 201,
+            3, 88, 150, 44, 12, 77, 233, 56,
+        ]
+
+        // Warmup — the first scheduled run can differ due to cooperative-pool init.
+        _ = try await runWithSchedule(bytes: bytes)
+
+        // Original interleaving.
+        let original = try await runWithSchedule(bytes: bytes)
+        #expect(!original.isEmpty, "expected some operations recorded")
+
+        // Persist + reload through the live on-disk persistence client. Schedule
+        // bytes ride as element 0 of the extended pack, exactly as a scheduled
+        // fuzz corpus stores them.
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("ptk-schedule-replay-roundtrip")
+        try? persistence.delete(dir)
+        defer { try? persistence.delete(dir) }
+
+        let entry = CorpusEntry<[UInt8], Int>(
+            input: bytes, 0,
+            scheduleBytes: bytes,
+            sparseCoverage: SparseCoverage(indices: []),
+            entryType: .coverage,
+            failure: nil
+        )
+        let snapshot = CorpusSnapshot<[UInt8], Int>(entries: [entry], coveredIndices: [])
+        try persistence.save(snapshot, to: dir)
+        let reloaded: CorpusSnapshot<[UInt8], Int> = try persistence.loadSnapshot(from: dir)
+
+        try #require(reloaded.entries.count == 1)
+        let recovered = reloaded.entries[0].input.0
+        #expect(recovered == bytes, "schedule bytes must survive the on-disk round-trip")
+
+        // Replay the schedule loaded FROM DISK; it must reproduce the original.
+        let replay = try await runWithSchedule(bytes: recovered)
+        #expect(replay == original,
+                "a schedule loaded from disk must reproduce the original interleaving; original=\(original) replay=\(replay)")
     }
 
     @Test("Different schedule bytes can produce different execution order")
