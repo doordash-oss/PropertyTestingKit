@@ -172,9 +172,10 @@ func fuzzInternal<each Input: Codable & Sendable>(
 
     let testFilePath = String(describing: filePath)
     let verbose = environment.environment()["FUZZ_VERBOSE"] != nil
-    // Schedule fuzzing installs a process-global task-enqueue hook, so it cannot be
-    // shared across parallel engines — force a single engine when it's enabled.
-    let effectiveParallelism = scheduleFuzzing ? 1 : max(1, parallelism)
+    // Scheduled runs return early below (via runFlattenedSchedule, which forces a
+    // single engine itself because the task-enqueue hook is process-global), so this
+    // only governs the non-scheduled path.
+    let effectiveParallelism = max(1, parallelism)
     let corpusDir = corpusDirectory(filePath: filePath, function: function)
 
     // Schedule fuzzing runs over the flattened pack `([UInt8], repeat each Input)`:
