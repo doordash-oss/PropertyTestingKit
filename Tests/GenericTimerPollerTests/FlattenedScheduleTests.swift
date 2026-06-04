@@ -72,6 +72,39 @@ struct FlattenedScheduleTests {
         #expect(peeled.wasRegression == false)
     }
 
+    /// Round-trip contract: a corpus produced by a scheduled run must save and
+    /// reload intact. During schedule fuzzing the engine runs over the extended
+    /// pack `([UInt8], repeat each UserInput)` where element 0 is the schedule, and
+    /// `FuzzStateMachine` also populates the entry's `scheduleBytes` field from the
+    /// element-0 extractor. Persistence happens with `scheduleFuzzing: false` (to
+    /// the engine, element 0 is just a normal input). The schedule must survive as
+    /// element 0 and the user input must be recovered — without the schedule bytes
+    /// being written twice (which corrupts the entry and makes it fail to decode).
+    @Test("Scheduled corpus round-trips through save and reload")
+    func scheduledCorpusRoundTrips() throws {
+        let schedule: [UInt8] = [9, 8, 7, 6]
+        let entry = CorpusEntry<[UInt8], Int>(
+            input: schedule, 42,
+            // The engine sets this from the element-0 extractor during a scheduled run.
+            scheduleBytes: schedule,
+            sparseCoverage: SparseCoverage(indices: [1, 2]),
+            entryType: .coverage,
+            failure: nil
+        )
+        let snapshot = CorpusSnapshot<[UInt8], Int>(entries: [entry], coveredIndices: [])
+
+        // Mirror runFlattenedSchedule's persistence: scheduleFuzzing is false because
+        // element 0 is a normal input element to the engine.
+        let data = try JSONEncoder.corpusEncoder(scheduleFuzzing: false).encode(snapshot)
+        let reloaded = try JSONDecoder.corpusDecoder(scheduleFuzzing: false)
+            .decode(CorpusSnapshot<[UInt8], Int>.self, from: data)
+
+        try #require(reloaded.entries.count == 1)
+        let (bytes, value) = reloaded.entries[0].input
+        #expect(bytes == schedule, "schedule bytes must round-trip as input element 0")
+        #expect(value == 42, "user input must be recovered intact")
+    }
+
     /// Integration smoke: a scheduled fuzz over a multi-element pack `(Int, String)`
     /// exercises the peel end-to-end through the engine. The user closure is typed
     /// `(Int, String)`, so a leaked `[UInt8]` schedule element would be a compile
