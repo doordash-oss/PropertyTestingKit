@@ -149,6 +149,12 @@ public enum RoutingHookCounters {
     private static let _method3JobKind = OSAllocatedUnfairLock(initialState: [Int: Int]())
     private static let _passThroughJobKind = OSAllocatedUnfairLock(initialState: [Int: Int]())
 
+    /// Whether the routing hook records per-branch counters. Off by default so the
+    /// process-global hook does no per-enqueue counter work in production; `reset()`
+    /// turns it on (tests call `reset()` before reading the counters).
+    private static let _counting = OSAllocatedUnfairLock(initialState: false)
+    static var isCounting: Bool { _counting.withLock { $0 } }
+
     public static var method1Hits: Int { _method1.withLock { $0 } }
     public static var method2Hits: Int { _method2.withLock { $0 } }
     public static var method3Hits: Int { _method3.withLock { $0 } }
@@ -161,6 +167,7 @@ public enum RoutingHookCounters {
     public static var passThroughJobKinds: [Int: Int] { _passThroughJobKind.withLock { $0 } }
 
     public static func reset() {
+        _counting.withLock { $0 = true }
         _method1.withLock { $0 = 0 }
         _method2.withLock { $0 = 0 }
         _method3.withLock { $0 = 0 }
@@ -249,12 +256,15 @@ private let _routingHook: HookFn = { job, original in
         if o == nil { o = original }
     }
 
-    let kind = readJobKind(jobPtr)
+    // Counters are test-only; skip the per-enqueue job-kind read and recording
+    // entirely in production (when counting is disabled).
+    let counting = RoutingHookCounters.isCounting
+    let kind = counting ? readJobKind(jobPtr) : 0
 
     // Method 1: current task's session task local. Routes only — does
     // not stamp TLS (TLS is owned by `SessionState.dispatch`).
     if let sid = SessionTag.id {
-        RoutingHookCounters.recordMethod1(jobKind: kind)
+        if counting { RoutingHookCounters.recordMethod1(jobKind: kind) }
         routeToSession(sid, job)
         return
     }
@@ -264,7 +274,7 @@ private let _routingHook: HookFn = { job, original in
     if keyBits != 0 {
         let sid = schedule_read_session_from_task(jobPtr, UnsafeRawPointer(bitPattern: keyBits))
         if sid >= 0 {
-            RoutingHookCounters.recordMethod2(jobKind: kind)
+            if counting { RoutingHookCounters.recordMethod2(jobKind: kind) }
             routeToSession(Int(sid), job)
             return
         }
@@ -275,14 +285,14 @@ private let _routingHook: HookFn = { job, original in
     // the only code path that sets TLS.
     let tlsSid = schedule_tls_get_session()
     if tlsSid >= 0 {
-        RoutingHookCounters.recordMethod3(jobKind: kind)
+        if counting { RoutingHookCounters.recordMethod3(jobKind: kind) }
         if let session = _sessions.withLock({ $0[Int(tlsSid)] }) {
             session.appendFromMethod3(job)
             return
         }
         // Stale sid: session gone, pass through. Should be rare under
         // the new TLS-scope policy since dispatch always clears TLS.
-        RoutingHookCounters.recordMethod3StaleSid()
+        if counting { RoutingHookCounters.recordMethod3StaleSid() }
         if let original = _original.withLock({ $0 }) {
             original(job)
         }
@@ -290,7 +300,7 @@ private let _routingHook: HookFn = { job, original in
     }
 
     // No session — pass through
-    RoutingHookCounters.recordPassThrough(jobKind: kind)
+    if counting { RoutingHookCounters.recordPassThrough(jobKind: kind) }
     original(job)
 }
 
