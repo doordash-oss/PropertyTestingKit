@@ -555,6 +555,38 @@ static void set_tls_measurement_context(SanCovMeasurementContext* new_ctx) {
     }
 }
 
+// Liveness gate WITH a safe retain, closing the TOCTOU between the membership
+// check and the dereference (review #52). Returns true and leaves `ctx`
+// retained (the caller MUST ctx_release it) iff `ctx` was registered as active
+// at the time of the check.
+//
+// Correctness: sancov_end_measurement unregisters a context (which takes the
+// active-ctx WRITE lock) STRICTLY BEFORE it drops the owner reference / frees
+// the context. By holding the READ lock across both the membership test and the
+// ctx_retain, we guarantee that if the context is still registered, unregister
+// (and therefore the free) cannot have run yet — so the context is alive and the
+// retain is safe. After this returns true the caller holds a reference, so the
+// context cannot be freed out from under the subsequent dereference. The retain
+// itself is a bare atomic increment (no nested lock), so no lock-ordering hazard
+// is introduced. Never dereferences `ctx` unless it is provably alive.
+static bool retain_if_active_inheritance_context(SanCovMeasurementContext* ctx) {
+    if (ctx == NULL) return false;
+    ensure_active_ctx_ht();
+
+    ck_ht_entry_t entry;
+    ck_ht_hash_t h;
+    ck_ht_hash_direct(&h, &g_active_ctx_ht, (uintptr_t)ctx);
+    ck_ht_entry_key_set_direct(&entry, (uintptr_t)ctx);
+
+    pthread_rwlock_rdlock(&g_active_ctx_ht_lock);
+    bool found = ck_ht_get_spmc(&g_active_ctx_ht, h, &entry);
+    if (found) {
+        ctx_retain(ctx);  // safe: still registered ⇒ not yet unregistered ⇒ alive
+    }
+    pthread_rwlock_unlock(&g_active_ctx_ht_lock);
+    return found;
+}
+
 SanCovMeasurementContext* sancov_begin_measurement(void) {
     SanCovMeasurementContext* ctx = (SanCovMeasurementContext*)xmalloc(sizeof(SanCovMeasurementContext));
     ctx->coverage_map = NULL;
@@ -1049,27 +1081,40 @@ static uint8_t* get_current_coverage_map(void) {
         if (inherited == NULL) {
             inherited = manual_walk_for_inherited_context(task);
         }
-        // Liveness gate (applies to BOTH the runtime task-local lookup and the
-        // manual walk): a task-local can outlive the measurement it captured —
-        // e.g. an unstructured poller task spawned inside a fuzz iteration keeps
-        // firing edges after that measurement has ended and its context was
-        // freed. Routing to such a stale pointer dereferences a freed
-        // `coverage_map` → SIGSEGV. Only trust an inherited context that is still
-        // registered as active. (Pointer comparison only; never derefs `inherited`.)
-        if (inherited != NULL && !is_active_inheritance_context(inherited)) {
+        // Liveness gate WITH a safe retain (applies to BOTH the runtime
+        // task-local lookup and the manual walk): a task-local can outlive the
+        // measurement it captured — e.g. an unstructured poller task spawned
+        // inside a fuzz iteration keeps firing edges after that measurement has
+        // ended and its context was freed. Routing to such a stale pointer would
+        // dereference a freed `coverage_map`. retain_if_active rejects an ended
+        // context AND, for a still-live one, takes a reference under the lock so
+        // it cannot be freed before we dereference it below (closes the TOCTOU,
+        // review #52). If it returns true, `inherited` is retained and the caller
+        // path below MUST ctx_release it on every exit.
+        if (inherited != NULL && !retain_if_active_inheritance_context(inherited)) {
             inherited = NULL;
         }
     }
-    if (inherited != NULL && inherited->coverage_map != NULL) {
-        if (inherited_via_runtime) {
-            atomic_fetch_add_explicit(&g_route_inherited_runtime, 1, memory_order_relaxed);
-        } else {
-            atomic_fetch_add_explicit(&g_route_inherited_manualwalk, 1, memory_order_relaxed);
+    if (inherited != NULL) {
+        // We hold a temporary reference (from retain_if_active above), so these
+        // dereferences are safe even if the owning session is ending concurrently.
+        if (inherited->coverage_map != NULL) {
+            if (inherited_via_runtime) {
+                atomic_fetch_add_explicit(&g_route_inherited_runtime, 1, memory_order_relaxed);
+            } else {
+                atomic_fetch_add_explicit(&g_route_inherited_manualwalk, 1, memory_order_relaxed);
+            }
+            uint8_t* map = inherited->coverage_map;
+            tls_cached_task = task;
+            tls_cached_task_map = map;
+            set_tls_measurement_context(inherited);  // takes its own reference
+            ctx_release(inherited);                   // drop our temporary reference
+            return map;
         }
-        tls_cached_task = task;
-        tls_cached_task_map = inherited->coverage_map;
-        set_tls_measurement_context(inherited);
-        return inherited->coverage_map;
+        // Live but no coverage_map yet: drop the temporary reference and fall
+        // through to the per-task registry / TLS fallback.
+        ctx_release(inherited);
+        inherited = NULL;
     }
 
     // Fallback: per-task registry (for synchronous code / engine root tasks).

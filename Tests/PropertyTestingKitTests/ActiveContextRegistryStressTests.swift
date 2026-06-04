@@ -106,7 +106,9 @@ struct ActiveContextRegistryStressTests {
     /// fix the read of `ctx->coverage_map` races the free in ctx_release.
     @Test("endMeasurement racing a straggler's edges is race-free", .timeLimit(.minutes(3)))
     func concurrentEndVsStragglerEdges() async {
-        let rounds = 4000
+        // Kept modest so the run fits the time limit even under ThreadSanitizer
+        // (~5-10x slower); still thousands of begin/route/end races per run.
+        let rounds = 1500
         for _ in 0..<rounds {
             let ctx = SanCovCounters.beginMeasurement()
             let bits = UInt(bitPattern: ctx.rawContext)
