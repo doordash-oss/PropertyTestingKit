@@ -4,7 +4,7 @@ import Testing
 /// Unit tests for the pure schedule-decision function that drives the drain loop.
 /// One byte must be consumed per decision so the byte at position k governs the
 /// k-th dispatched job regardless of transient queue depth (deterministic replay).
-@Suite("Schedule Choice")
+@Suite("Schedule Choice", .timeLimit(.minutes(1)))
 struct ScheduleChoiceTests {
 
     @Test("Consumes one byte per decision even when only one job is pending")

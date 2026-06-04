@@ -23,7 +23,7 @@ import Testing
 /// over the extended pack `([UInt8], repeat each UserInput)`, but the user's test
 /// and the returned result must see only the user's own inputs, with the schedule
 /// bytes surfaced separately via `entry.scheduleBytes`.
-@Suite("Flattened Schedule Pack")
+@Suite("Flattened Schedule Pack", .timeLimit(.minutes(1)))
 struct FlattenedScheduleTests {
 
     private struct PeelTestError: Error {}

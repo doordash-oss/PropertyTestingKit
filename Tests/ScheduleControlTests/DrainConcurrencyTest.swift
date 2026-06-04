@@ -4,7 +4,7 @@ import os
 @testable import ScheduleControl
 
 /// Minimal test to determine if the drain loop allows concurrent job execution.
-@Suite("Drain Loop Concurrency", .serialized)
+@Suite("Drain Loop Concurrency", .serialized, .timeLimit(.minutes(1)))
 struct DrainConcurrencyTest {
 
     final class SharedState: Sendable {
@@ -82,6 +82,26 @@ struct DrainConcurrencyTest {
                 await Task.yield()
             }.value
         }
+    }
+
+    @Test("Many sessions run back-to-back without parking the cooperative pool")
+    func manySequentialSessionsComplete() async throws {
+        // Each ScheduleController.run drains on a dedicated thread and `await`s its
+        // completion, so the cooperative worker running this loop is released (not
+        // parked on a blocking semaphore) for the duration of every drain. Running
+        // many sessions in a row exercises repeated dedicated-thread setup/teardown
+        // and would stall here if a drain ever blocked the awaiting worker.
+        var completed = 0
+        for _ in 0..<30 {
+            try await ScheduleController.run(scheduleBytes: [0, 1, 0, 1, 0, 1, 0, 1]) {
+                await withTaskGroup(of: Void.self) { inner in
+                    inner.addTask { var s = 0; for i in 0..<50 { s += i }; _ = s }
+                    inner.addTask { var s = 0; for i in 0..<50 { s += i }; _ = s }
+                }
+            }
+            completed += 1
+        }
+        #expect(completed == 30, "all sessions should complete")
     }
 
     @Test("Two schedule-controlled sessions run in parallel without deadlock")

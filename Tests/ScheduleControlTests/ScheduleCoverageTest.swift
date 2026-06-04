@@ -4,7 +4,7 @@ import SanCovHooks
 @testable import ScheduleControl
 @testable import PropertyTestingKit
 
-@Suite("Schedule Coverage", .serialized)
+@Suite("Schedule Coverage", .serialized, .timeLimit(.minutes(1)))
 struct ScheduleCoverageTest {
 
     /// Function with distinct branches, only called from scheduled test bodies.

@@ -8,7 +8,7 @@ import Foundation
 @testable import ScheduleControl
 import Testing
 
-@Suite("Routing hook branch verification", .serialized)
+@Suite("Routing hook branch verification", .serialized, .timeLimit(.minutes(1)))
 struct RoutingBranchTests {
 
     private static let scheduleBytes: [UInt8] = [42, 17, 255, 0, 100, 73, 99, 201]

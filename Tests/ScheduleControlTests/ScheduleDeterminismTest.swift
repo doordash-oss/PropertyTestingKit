@@ -5,7 +5,7 @@ import Foundation
 
 /// Verify that ScheduleController produces deterministic execution order
 /// given the same schedule bytes.
-@Suite("Schedule Determinism", .serialized)
+@Suite("Schedule Determinism", .serialized, .timeLimit(.minutes(1)))
 struct ScheduleDeterminismTest {
 
     /// Simple actor that logs the order of method calls.

@@ -26,7 +26,7 @@ private func logEntry(_ label: String) {
 @inline(never) private func workB1() -> Int { logEntry("B1"); var s = 1; for i in 0..<6 { s &*= (i|1)*2 }; return s }
 @inline(never) private func workB2() -> Int { logEntry("B2"); var s = 1; for i in 0..<7 { s &*= (i|1)*3 }; return s }
 
-@Suite("Interleaving Contrast", .serialized)
+@Suite("Interleaving Contrast", .serialized, .timeLimit(.minutes(1)))
 struct InterleavingContrastTest {
 
     private static func body() async {

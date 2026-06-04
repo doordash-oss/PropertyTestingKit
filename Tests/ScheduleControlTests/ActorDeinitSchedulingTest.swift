@@ -5,7 +5,7 @@ import Synchronization
 
 /// Test whether an actor's deinit runs through the scheduler hook
 /// (as an enqueued job) or inline on the deallocating thread.
-@Suite("Actor Deinit Scheduling", .serialized)
+@Suite("Actor Deinit Scheduling", .serialized, .timeLimit(.minutes(1)))
 struct ActorDeinitSchedulingTest {
 
     /// Simple actor that records when its deinit runs.

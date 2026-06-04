@@ -32,7 +32,7 @@ private func blockOnSemaphore(_ sem: DispatchSemaphore) {
     sem.wait()
 }
 
-@Suite("Cross-session TLS contamination", .serialized)
+@Suite("Cross-session TLS contamination", .serialized, .timeLimit(.minutes(1)))
 struct CrossSessionContaminationTest {
 
     private actor HopActor {

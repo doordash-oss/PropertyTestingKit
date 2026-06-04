@@ -217,7 +217,7 @@ private func measureDeterminism(
     return uniqueCount
 }
 
-@Suite("Determinism Isolation", .serialized)
+@Suite("Determinism Isolation", .serialized, .timeLimit(.minutes(1)))
 struct DeterminismIsolationTest {
 
     private static let scheduleBytes: [UInt8] = [
@@ -390,7 +390,7 @@ struct DeterminismIsolationTest {
 
 // MARK: - PathTrie reset/reuse bug isolation
 
-@Suite("PathTrie Reuse")
+@Suite("PathTrie Reuse", .timeLimit(.minutes(1)))
 struct PathTrieReuseTest {
 
     @inline(never)
