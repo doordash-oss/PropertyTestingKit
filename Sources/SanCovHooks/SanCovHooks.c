@@ -241,6 +241,15 @@ static ck_ht_t g_active_ctx_ht;
 static pthread_once_t g_active_ctx_ht_once = PTHREAD_ONCE_INIT;
 static pthread_rwlock_t g_active_ctx_ht_lock = PTHREAD_RWLOCK_INITIALIZER;
 
+// Bumped on every register/unregister, i.e. whenever the set of live measurement
+// contexts changes. The per-edge hot path caches its resolved coverage map per
+// thread and, while inheritance is active, trusts that cache only as long as the
+// epoch is unchanged: an unchanged epoch means no measurement has begun or ended
+// since the cache was filled, so the cached context is still the right one AND
+// still alive (so the routing dereference is safe WITHOUT re-taking the liveness
+// lock or a reference). Any begin/end forces a full, lock-protected re-resolve.
+static _Atomic uint64_t g_active_ctx_epoch = 0;
+
 // Thread-local fallback for non-async contexts
 static _Thread_local uint8_t *tls_coverage_map = NULL;
 
@@ -377,6 +386,8 @@ static void register_active_inheritance_context(SanCovMeasurementContext* ctx) {
     pthread_rwlock_wrlock(&g_active_ctx_ht_lock);
     ck_ht_put_spmc(&g_active_ctx_ht, h, &entry);
     pthread_rwlock_unlock(&g_active_ctx_ht_lock);
+    // Invalidate every thread's hot-path cache: a new live context exists.
+    atomic_fetch_add_explicit(&g_active_ctx_epoch, 1, memory_order_release);
 }
 
 static void unregister_active_inheritance_context(SanCovMeasurementContext* ctx) {
@@ -390,6 +401,9 @@ static void unregister_active_inheritance_context(SanCovMeasurementContext* ctx)
     pthread_rwlock_wrlock(&g_active_ctx_ht_lock);
     ck_ht_remove_spmc(&g_active_ctx_ht, h, &entry);
     pthread_rwlock_unlock(&g_active_ctx_ht_lock);
+    // Invalidate every thread's hot-path cache: a context just stopped being live,
+    // so any cache that resolved to it must be re-validated before the next deref.
+    atomic_fetch_add_explicit(&g_active_ctx_epoch, 1, memory_order_release);
 }
 
 // MARK: - Measurement Context Registry Operations (lock-free with ck_ht)
@@ -1027,23 +1041,28 @@ static uint8_t* get_current_coverage_map(void) {
     void* task = get_current_task_for_measurement();
     bool inheritance_active = (g_coverage_inheritance_key != NULL);
 
+    // Snapshot the liveness epoch up front. The cached resolution below is only
+    // trustworthy while inheritance is active if NO begin/end has happened since
+    // it was filled (see g_active_ctx_epoch).
+    uint64_t resolve_epoch = atomic_load_explicit(&g_active_ctx_epoch, memory_order_acquire);
+
 #if !SANCOV_DISABLE_TLS_CACHE
-    // FAST PATH: Check if we have a cached map for this exact task
-    // This avoids the O(512) scans in the common case where the task hasn't changed
+    // FAST PATH: cached map for this exact task. Avoids the per-edge runtime
+    // task-local lookup + liveness lock in the common case.
+    //
+    // When inheritance is active the cache is trusted ONLY while the epoch is
+    // unchanged. An unchanged epoch means no measurement began or ended since we
+    // resolved this task, so (a) the cached context is still the correct routing
+    // target and (b) it is still alive (held by this thread's
+    // tls_cached_measurement_context reference) — so returning its map needs no
+    // re-validation and no reference dance. Any begin/end bumps the epoch and
+    // forces the full, lock-protected re-resolve below (which closes TOCTOU/ABA).
     if (task == tls_cached_task && tls_cached_task_map != NULL) {
-        // When coverage inheritance is active, NEVER trust the per-task cache.
-        // Task pointers can be reused across tests (Swift task allocator reuses
-        // freed task memory), and a stale cache entry from a previous test on
-        // this thread can route a new task's edges into the prior measurement
-        // context's bitmap — silently dropping coverage for the current test.
-        // The slow path costs one swift_task_localValueGet call, paid only
-        // while inheritance is active (i.e. during fuzz iterations).
-        if (inheritance_active) {
-            atomic_fetch_add_explicit(&g_route_tls_cache_inheritance_active, 1, memory_order_relaxed);
-            // Fall through to full lookup
-        } else {
+        if (!inheritance_active || resolve_epoch == tls_cached_generation) {
             return tls_cached_task_map;
         }
+        // Epoch changed → a begin/end occurred; re-resolve.
+        atomic_fetch_add_explicit(&g_route_tls_cache_inheritance_active, 1, memory_order_relaxed);
     }
 #endif
 
@@ -1107,6 +1126,7 @@ static uint8_t* get_current_coverage_map(void) {
             uint8_t* map = inherited->coverage_map;
             tls_cached_task = task;
             tls_cached_task_map = map;
+            tls_cached_generation = resolve_epoch;
             set_tls_measurement_context(inherited);  // takes its own reference
             ctx_release(inherited);                   // drop our temporary reference
             return map;
@@ -1127,6 +1147,7 @@ static uint8_t* get_current_coverage_map(void) {
             // Update task cache to point to measurement map
             tls_cached_task = task;
             tls_cached_task_map = tls_cached_coverage_map;
+            tls_cached_generation = resolve_epoch;
             return tls_cached_coverage_map;
         }
 #endif
@@ -1137,6 +1158,7 @@ static uint8_t* get_current_coverage_map(void) {
             tls_cached_coverage_map = map;
             tls_cached_task = task;
             tls_cached_task_map = map;
+            tls_cached_generation = resolve_epoch;
             return map;
         }
     }
@@ -1171,6 +1193,7 @@ static uint8_t* get_current_coverage_map(void) {
     ensure_tls_coverage_map();
     tls_cached_task = task;
     tls_cached_task_map = tls_coverage_map;
+    tls_cached_generation = resolve_epoch;
     // Clear stale measurement context so sancov_record_edge doesn't append
     // edges from this task into another test's measurement context.
     set_tls_measurement_context(NULL);
