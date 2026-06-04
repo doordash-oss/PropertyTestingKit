@@ -115,10 +115,6 @@ static bool is_active_inheritance_context(SanCovMeasurementContext* candidate);
 static void register_active_inheritance_context(SanCovMeasurementContext* ctx);
 static void unregister_active_inheritance_context(SanCovMeasurementContext* ctx);
 
-// Count of currently-registered (live) measurement contexts. Maintained
-// alongside the hash set purely as a cheap "is anything live?" early-out.
-static _Atomic uint64_t g_active_ctx_count = 0;
-
 /// Read the inherited measurement context from a task's task-local chain.
 /// Returns NULL if no inheritance key is set or the task local is not found.
 // Swift runtime function that looks up task locals with proper inheritance.
@@ -185,38 +181,6 @@ static SanCovMeasurementContext* manual_walk_for_inherited_context(const void* t
             ? (const void*)nextPtr : NULL;
     }
     return NULL;
-}
-
-static SanCovMeasurementContext* read_inherited_context(void* task) {
-    if (task == NULL) return NULL;
-    bool key_known = (g_coverage_inheritance_key != NULL);
-    uint64_t active_count = atomic_load_explicit(&g_active_ctx_count, memory_order_acquire);
-    if (!key_known && active_count == 0) return NULL;
-
-    if (key_known) {
-        // Resolve the runtime function once
-        if (!swift_task_localValueLookup_resolved) {
-            swift_task_localValueLookup_fn = (TaskLocalValueLookupFn)dlsym(
-                RTLD_DEFAULT, "swift_task_localValueGet");
-            swift_task_localValueLookup_resolved = true;
-        }
-
-        // Try the runtime's own lookup first — fast and handles all chain shapes.
-        if (swift_task_localValueLookup_fn) {
-            void* result = swift_task_localValueLookup_fn(g_coverage_inheritance_key);
-            if (result) {
-                uintptr_t ctx_bits;
-                memcpy(&ctx_bits, result, sizeof(ctx_bits));
-                if (ctx_bits != 0) return (SanCovMeasurementContext*)ctx_bits;
-            }
-        }
-    }
-
-    // Fallback: walk the task's own chain manually. Matches by key OR by value
-    // pointing to a registered active measurement context. Covers the cases
-    // where swift_task_localValueGet returns NULL despite the value being in
-    // the chain, and where the captured key is unset/stale.
-    return manual_walk_for_inherited_context(task);
 }
 
 // MARK: - Lock-Free Hash Tables using ConcurrencyKit ck_ht
@@ -386,9 +350,7 @@ static void register_active_inheritance_context(SanCovMeasurementContext* ctx) {
     ck_ht_hash_direct(&h, &g_active_ctx_ht, (uintptr_t)ctx);
     // Value is the pointer itself (must be non-zero); only membership matters.
     ck_ht_entry_set_direct(&entry, h, (uintptr_t)ctx, (uintptr_t)ctx);
-    if (ck_ht_put_spmc(&g_active_ctx_ht, h, &entry)) {
-        atomic_fetch_add_explicit(&g_active_ctx_count, 1, memory_order_acq_rel);
-    }
+    ck_ht_put_spmc(&g_active_ctx_ht, h, &entry);
 }
 
 static void unregister_active_inheritance_context(SanCovMeasurementContext* ctx) {
@@ -399,9 +361,7 @@ static void unregister_active_inheritance_context(SanCovMeasurementContext* ctx)
     ck_ht_hash_t h;
     ck_ht_hash_direct(&h, &g_active_ctx_ht, (uintptr_t)ctx);
     ck_ht_entry_key_set_direct(&entry, (uintptr_t)ctx);
-    if (ck_ht_remove_spmc(&g_active_ctx_ht, h, &entry)) {
-        atomic_fetch_sub_explicit(&g_active_ctx_count, 1, memory_order_acq_rel);
-    }
+    ck_ht_remove_spmc(&g_active_ctx_ht, h, &entry);
 }
 
 // MARK: - Measurement Context Registry Operations (lock-free with ck_ht)
@@ -446,6 +406,16 @@ static void remove_measurement_context_for_task(void* task_id) {
     ck_ht_entry_key_set_direct(&entry, (uintptr_t)task_id);
 
     ck_ht_remove_spmc(&g_measurement_ht, h, &entry);
+}
+
+// TESTING ONLY (see header): mark a context "ended" for routing purposes —
+// drop it from BOTH the active-inheritance liveness set and the per-task
+// measurement registry (exactly what sancov_end_measurement does) but DO NOT
+// free it, so a test can read its coverage afterward. Must be called from the
+// same task that began the measurement (matches end_measurement's contract).
+void sancov_unregister_inheritance_for_testing(SanCovMeasurementContext* context) {
+    unregister_active_inheritance_context(context);
+    remove_measurement_context_for_task(get_current_task_for_measurement());
 }
 
 // MARK: - Coverage Map Registry Operations (lock-free with ck_ht)
@@ -980,7 +950,6 @@ static uint8_t* get_current_coverage_map(void) {
 
     // Get the current task (Swift task or sync pseudo-task)
     void* task = get_current_task_for_measurement();
-    // ITER-9 REPRO: skip iter-5 registry-active gate (recreate iter-4 state).
     bool inheritance_active = (g_coverage_inheritance_key != NULL);
 
 #if !SANCOV_DISABLE_TLS_CACHE

@@ -72,21 +72,23 @@ private func fireEdges(_ seed: Int) -> Int {
 struct StragglerCoverageInheritanceTests {
 
     /// A task that inherited a measurement context and outlives the measurement
-    /// must NOT route its later edges into the (ended, freed) context.
+    /// must NOT route its later edges into that (ended) context.
     ///
-    /// We assert on routing rather than on a crash: the use-after-free read is
-    /// only an *intermittent* SIGSEGV (it faults only when the freed block has
-    /// been unmapped/reused), but the wrong routing is deterministic. Under the
-    /// bug the straggler's edges resolve the freed context from its stale
-    /// task-local and take the `inherited_runtime` path (a UAF read each time).
-    /// Under the fix the active-context liveness gate rejects the ended context
-    /// and the edges fall back to thread-local coverage
-    /// (`tls_fallback_inheritance_active`).
+    /// In production `sancov_end_measurement` unregisters the context from the
+    /// liveness set and THEN frees it; a straggler that fires an edge after the
+    /// free dereferences `freed_ctx->coverage_map` → intermittent SIGSEGV. Here
+    /// we use `sancov_unregister_inheritance_for_testing` to reproduce the
+    /// "ended" state deterministically WITHOUT freeing, so we can read the
+    /// context's coverage directly. This gives a context-LOCAL signal that is
+    /// immune to the process-global route-counter pollution of the parallel
+    /// suite: we assert on THIS context's `covered_count`, which no other test
+    /// can touch.
     ///
-    /// The assertion is a *lower bound* on the fallback bucket, which is robust
-    /// under swift-testing's parallel suite: concurrent tests can only add to
-    /// these process-global counters, never subtract.
-    @Test("Straggler edges after endMeasurement fall back, not route to the freed context")
+    /// Under the bug (no liveness gate) the straggler resolves the context from
+    /// its stale task-local and records edges into it → `covered_count` grows.
+    /// Under the fix the gate rejects the unregistered context and the straggler
+    /// falls back to thread-local coverage → `covered_count` is unchanged.
+    @Test("Straggler edges after a measurement ends do not route into it")
     func stragglerAfterEndMeasurementDoesNotRouteToFreedContext() async {
         let parked = Gate()      // straggler signals it has captured bits & parked
         let proceed = Gate()     // test signals straggler to fire edges
@@ -103,7 +105,7 @@ struct StragglerCoverageInheritanceTests {
             return Task {
                 await parked.signal()
                 await proceed.wait()
-                // Fires AFTER the measurement has ended + been freed.
+                // Fires AFTER the measurement has been unregistered ("ended").
                 var acc = 0
                 for i in 0..<64 { acc &+= fireEdges(i) }
                 blackholeStraggler(acc)
@@ -114,27 +116,24 @@ struct StragglerCoverageInheritanceTests {
         // 2. Wait until the straggler is parked (it still holds `bits`).
         await parked.wait()
 
-        // 3. End the measurement — frees the SanCovMeasurementContext. The
-        //    straggler's task-local still points at the freed pointer.
-        SanCovCounters.endMeasurement(context)
+        // 3. Mark the measurement ended (unregister) but keep it allocated so we
+        //    can inspect its coverage. The straggler's task-local still points at it.
+        sancov_unregister_inheritance_for_testing(context.rawContext)
+        let countBefore = sancov_get_covered_count_with_context(context.rawContext)
 
-        // 4. Release the straggler and measure where its edges routed.
-        var before = SanCovRouteCounters()
-        sancov_read_route_counters(&before)
+        // 4. Release the straggler to fire its edges against the ended context.
         await proceed.signal()
         await straggler.value
         await done.wait()
-        var after = SanCovRouteCounters()
-        sancov_read_route_counters(&after)
 
-        let inheritedDelta = after.inherited_runtime - before.inherited_runtime
-        let fallbackDelta = after.tls_fallback_inheritance_active - before.tls_fallback_inheritance_active
+        let countAfter = sancov_get_covered_count_with_context(context.rawContext)
 
-        // The straggler fires tens of thousands of edge hits. Under the fix they
-        // route to fallback; this lower bound fails under the bug (where they
-        // route to the freed context via `inherited_runtime` instead).
-        #expect(fallbackDelta >= 1000,
-                "straggler edges must fall back to thread-local after the inherited context ended; fallbackΔ=\(fallbackDelta) inheritedΔ=\(inheritedDelta)")
+        // Context-local, pollution-immune: the straggler's edges must NOT be
+        // recorded into the ended context.
+        #expect(countAfter == countBefore,
+                "straggler edges must not route into the ended context; covered_count before=\(countBefore) after=\(countAfter)")
+
+        SanCovCounters.endMeasurement(context)
     }
 }
 
