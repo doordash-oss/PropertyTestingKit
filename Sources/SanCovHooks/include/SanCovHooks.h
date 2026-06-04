@@ -135,6 +135,15 @@ void sancov_reset_coverage(SanCovMeasurementContext* context);
 /// Caller is responsible for freeing the returned pointer.
 SanCovMeasurementContext* sancov_create_dummy_context(void);
 
+/// TESTING ONLY: drop a context from the active-inheritance liveness set WITHOUT
+/// ending/freeing it. Lets a test reproduce the "straggler routes into an ended
+/// measurement" scenario deterministically: after this call the liveness gate
+/// treats `context` as ended (so inherited edges must fall back), yet the context
+/// memory stays valid so the test can read its coverage via
+/// `sancov_get_covered_count_with_context`. Pair with `sancov_end_measurement`
+/// for cleanup.
+void sancov_unregister_inheritance_for_testing(SanCovMeasurementContext* context);
+
 /// Get the number of covered edges for a measurement context (O(1)).
 size_t sancov_get_covered_count_with_context(SanCovMeasurementContext* context);
 

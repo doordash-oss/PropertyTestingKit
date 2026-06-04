@@ -74,8 +74,10 @@ static size_t g_guard_count = 0;
 static _Thread_local SanCovMeasurementContext* g_target_context = NULL;
 
 // Key pointer for coverage inheritance task local. When set, child tasks
-// inherit their parent's measurement context via Swift task locals.
-static const void* g_coverage_inheritance_key = NULL;
+// inherit their parent's measurement context via Swift task locals. Atomic
+// because it is written once by sancov_set_coverage_inheritance_key while being
+// read concurrently on the per-edge hot path (TSan-confirmed race otherwise).
+static _Atomic(const void*) g_coverage_inheritance_key = NULL;
 
 // ABI constants (same as CScheduleHooks — duplicated to avoid cross-dependency)
 #define SANCOV_TASK_LOCAL_HEAD_OFFSET 136
@@ -98,62 +100,37 @@ static bool sancov_is_valid_pointer(const void *ptr) {
 // stale or unset (and to any case where swift_task_localValueGet returns NULL
 // even though the value is in the chain).
 //
-// The registry is a fixed-size array because (a) we don't expect more than a
-// handful of measurements live concurrently in a fuzz session, and (b) a fixed
-// array gives us lock-free reads via atomic loads (the routing hook is on the
-// hot path).
-#define SANCOV_ACTIVE_CTX_CAP 256
-static _Atomic(SanCovMeasurementContext*) g_active_ctx_slots[SANCOV_ACTIVE_CTX_CAP] = {0};
-static _Atomic uint32_t g_active_ctx_high_water = 0;
-
-static inline bool is_active_inheritance_context(SanCovMeasurementContext* candidate) {
-    // ITER-9 REPRO: disable iter-5 value-match path to recreate iter-4 state for SIGSEGV repro.
-    (void)candidate;
-    return 0;
-}
-
-static void register_active_inheritance_context(SanCovMeasurementContext* ctx) {
-    if (ctx == NULL) return;
-    for (uint32_t i = 0; i < SANCOV_ACTIVE_CTX_CAP; i++) {
-        SanCovMeasurementContext* expected = NULL;
-        if (atomic_compare_exchange_strong_explicit(
-                &g_active_ctx_slots[i], &expected, ctx,
-                memory_order_acq_rel, memory_order_acquire)) {
-            uint32_t cur_hw = atomic_load_explicit(&g_active_ctx_high_water, memory_order_acquire);
-            uint32_t want = i + 1;
-            while (want > cur_hw &&
-                   !atomic_compare_exchange_weak_explicit(
-                       &g_active_ctx_high_water, &cur_hw, want,
-                       memory_order_acq_rel, memory_order_acquire)) {}
-            return;
-        }
-    }
-    // Registry full — silently drop. Routing falls back to the runtime path,
-    // which is the previous behaviour. We don't abort because an oversubscribed
-    // registry should be a degraded mode, not a crash.
-}
-
-static void unregister_active_inheritance_context(SanCovMeasurementContext* ctx) {
-    if (ctx == NULL) return;
-    uint32_t hw = atomic_load_explicit(&g_active_ctx_high_water, memory_order_acquire);
-    if (hw > SANCOV_ACTIVE_CTX_CAP) hw = SANCOV_ACTIVE_CTX_CAP;
-    for (uint32_t i = 0; i < hw; i++) {
-        SanCovMeasurementContext* expected = ctx;
-        if (atomic_compare_exchange_strong_explicit(
-                &g_active_ctx_slots[i], &expected, NULL,
-                memory_order_acq_rel, memory_order_acquire)) {
-            return;
-        }
-    }
-}
+// The registry is backed by the same resizable lock-free hash table (ck_ht)
+// used for the per-task coverage/measurement registries — keyed by the context
+// pointer, membership == "currently live". A hash set (rather than the former
+// fixed-size array) removes the capacity ceiling: under the parallel test suite
+// many stress tests each hold dozens of live contexts at once, and a fixed cap
+// silently dropped registrations, which made the liveness gate reject *live*
+// contexts and silently lose their child-task coverage. The hash table grows on
+// demand, so no live context is ever dropped, and reads stay lock-free (the
+// routing hook is on the per-edge hot path).
+//
+// Implementations live below `init_active_ctx_ht` (after the ck_ht
+// infrastructure is declared); these are forward declarations so the task-local
+// walk above can call the liveness oracle.
+static bool is_active_inheritance_context(SanCovMeasurementContext* candidate);
+static void register_active_inheritance_context(SanCovMeasurementContext* ctx);
+static void unregister_active_inheritance_context(SanCovMeasurementContext* ctx);
 
 /// Read the inherited measurement context from a task's task-local chain.
 /// Returns NULL if no inheritance key is set or the task local is not found.
 // Swift runtime function that looks up task locals with proper inheritance.
-// Resolves via dlsym to avoid link-time dependency.
+// Resolves via dlsym to avoid link-time dependency. Resolved exactly once via
+// pthread_once: the previous lazy `if (!resolved) { ... }` was read/written
+// concurrently on the per-edge hot path (TSan-confirmed race); pthread_once
+// gives a race-free, happens-before-correct one-time init.
 typedef void* (*TaskLocalValueLookupFn)(const void* key);
 static TaskLocalValueLookupFn swift_task_localValueLookup_fn = NULL;
-static bool swift_task_localValueLookup_resolved = false;
+static pthread_once_t swift_task_localValueLookup_once = PTHREAD_ONCE_INIT;
+static void resolve_swift_task_localValueLookup(void) {
+    swift_task_localValueLookup_fn =
+        (TaskLocalValueLookupFn)dlsym(RTLD_DEFAULT, "swift_task_localValueGet");
+}
 
 /// Manual walk of the task-local chain. Two paths are checked at each
 /// ValueItem: (1) the captured CoverageInheritance.context key, and (2) any
@@ -215,38 +192,6 @@ static SanCovMeasurementContext* manual_walk_for_inherited_context(const void* t
     return NULL;
 }
 
-static SanCovMeasurementContext* read_inherited_context(void* task) {
-    if (task == NULL) return NULL;
-    bool key_known = (g_coverage_inheritance_key != NULL);
-    uint32_t active_count = atomic_load_explicit(&g_active_ctx_high_water, memory_order_acquire);
-    if (!key_known && active_count == 0) return NULL;
-
-    if (key_known) {
-        // Resolve the runtime function once
-        if (!swift_task_localValueLookup_resolved) {
-            swift_task_localValueLookup_fn = (TaskLocalValueLookupFn)dlsym(
-                RTLD_DEFAULT, "swift_task_localValueGet");
-            swift_task_localValueLookup_resolved = true;
-        }
-
-        // Try the runtime's own lookup first — fast and handles all chain shapes.
-        if (swift_task_localValueLookup_fn) {
-            void* result = swift_task_localValueLookup_fn(g_coverage_inheritance_key);
-            if (result) {
-                uintptr_t ctx_bits;
-                memcpy(&ctx_bits, result, sizeof(ctx_bits));
-                if (ctx_bits != 0) return (SanCovMeasurementContext*)ctx_bits;
-            }
-        }
-    }
-
-    // Fallback: walk the task's own chain manually. Matches by key OR by value
-    // pointing to a registered active measurement context. Covers the cases
-    // where swift_task_localValueGet returns NULL despite the value being in
-    // the chain, and where the captured key is unset/stale.
-    return manual_walk_for_inherited_context(task);
-}
-
 // MARK: - Lock-Free Hash Tables using ConcurrencyKit ck_ht
 //
 // Design: Use ck_ht (BSD licensed, battle-tested) for truly lock-free operations.
@@ -274,10 +219,36 @@ static struct ck_malloc ck_allocator = {
 //
 // ck_ht operations are lock-free for reads. For writes, we rely on ck_ht's
 // internal handling. Initialization uses pthread_once for thread-safety.
+//
+// CONCURRENCY: ck_ht's *_spmc API is single-producer — concurrent writers, and
+// readers racing a resize that frees the old map, are data races (confirmed by
+// ThreadSanitizer). begin/end_measurement run on many threads at once under the
+// parallel test suite, so every table is guarded by a pthread_rwlock: readers
+// (ck_ht_get) take the shared lock; writers (set/put/remove, which also drive
+// resize) take the exclusive lock. This makes writes single-producer and keeps
+// the resize-time free from running concurrently with any reader. The locks are
+// per-table and never nested, so there is no lock-ordering hazard.
 
 // Coverage registry: task_id -> coverage_map
 static ck_ht_t g_coverage_ht;
 static pthread_once_t g_coverage_ht_once = PTHREAD_ONCE_INIT;
+static pthread_rwlock_t g_coverage_ht_lock = PTHREAD_RWLOCK_INITIALIZER;
+
+// Active-context liveness set: live measurement context pointer -> itself.
+// Membership means the context is currently between begin/end_measurement (i.e.
+// safe to route inherited edges to). Resizable, so it never overflows.
+static ck_ht_t g_active_ctx_ht;
+static pthread_once_t g_active_ctx_ht_once = PTHREAD_ONCE_INIT;
+static pthread_rwlock_t g_active_ctx_ht_lock = PTHREAD_RWLOCK_INITIALIZER;
+
+// Bumped on every register/unregister, i.e. whenever the set of live measurement
+// contexts changes. The per-edge hot path caches its resolved coverage map per
+// thread and, while inheritance is active, trusts that cache only as long as the
+// epoch is unchanged: an unchanged epoch means no measurement has begun or ended
+// since the cache was filled, so the cached context is still the right one AND
+// still alive (so the routing dereference is safe WITHOUT re-taking the liveness
+// lock or a reference). Any begin/end forces a full, lock-protected re-resolve.
+static _Atomic uint64_t g_active_ctx_epoch = 0;
 
 // Thread-local fallback for non-async contexts
 static _Thread_local uint8_t *tls_coverage_map = NULL;
@@ -285,6 +256,7 @@ static _Thread_local uint8_t *tls_coverage_map = NULL;
 // Measurement registry: task_id -> measurement_context
 static ck_ht_t g_measurement_ht;
 static pthread_once_t g_measurement_ht_once = PTHREAD_ONCE_INIT;
+static pthread_rwlock_t g_measurement_ht_lock = PTHREAD_RWLOCK_INITIALIZER;
 
 // Thread-local pseudo-task ID for synchronous code outside async contexts
 static _Thread_local void* tls_sync_pseudo_task = NULL;
@@ -373,6 +345,67 @@ static inline void ensure_coverage_ht(void) {
     pthread_once(&g_coverage_ht_once, init_coverage_ht);
 }
 
+static void init_active_ctx_ht(void) {
+    ck_ht_init(&g_active_ctx_ht, CK_HT_MODE_DIRECT, NULL, &ck_allocator, CK_HT_INITIAL_CAPACITY, 0);
+}
+
+static inline void ensure_active_ctx_ht(void) {
+    pthread_once(&g_active_ctx_ht_once, init_active_ctx_ht);
+}
+
+// MARK: - Active-Context Liveness Set (ck_ht-backed; see forward decls above)
+
+// Liveness oracle: a candidate measurement context is only safe to route to
+// while it is still registered (between begin_measurement's register and
+// end_measurement's unregister, which happens BEFORE the context is freed).
+// Lock-free read; compares the candidate pointer as a hash key only — it never
+// dereferences `candidate`, so it is safe to call with an already-freed pointer.
+static bool is_active_inheritance_context(SanCovMeasurementContext* candidate) {
+    if (candidate == NULL) return false;
+    ensure_active_ctx_ht();
+
+    ck_ht_entry_t entry;
+    ck_ht_hash_t h;
+    ck_ht_hash_direct(&h, &g_active_ctx_ht, (uintptr_t)candidate);
+    ck_ht_entry_key_set_direct(&entry, (uintptr_t)candidate);
+    pthread_rwlock_rdlock(&g_active_ctx_ht_lock);
+    bool found = ck_ht_get_spmc(&g_active_ctx_ht, h, &entry);
+    pthread_rwlock_unlock(&g_active_ctx_ht_lock);
+    return found;
+}
+
+static void register_active_inheritance_context(SanCovMeasurementContext* ctx) {
+    if (ctx == NULL) return;
+    ensure_active_ctx_ht();
+
+    ck_ht_entry_t entry;
+    ck_ht_hash_t h;
+    ck_ht_hash_direct(&h, &g_active_ctx_ht, (uintptr_t)ctx);
+    // Value is the pointer itself (must be non-zero); only membership matters.
+    ck_ht_entry_set_direct(&entry, h, (uintptr_t)ctx, (uintptr_t)ctx);
+    pthread_rwlock_wrlock(&g_active_ctx_ht_lock);
+    ck_ht_put_spmc(&g_active_ctx_ht, h, &entry);
+    pthread_rwlock_unlock(&g_active_ctx_ht_lock);
+    // Invalidate every thread's hot-path cache: a new live context exists.
+    atomic_fetch_add_explicit(&g_active_ctx_epoch, 1, memory_order_release);
+}
+
+static void unregister_active_inheritance_context(SanCovMeasurementContext* ctx) {
+    if (ctx == NULL) return;
+    ensure_active_ctx_ht();
+
+    ck_ht_entry_t entry;
+    ck_ht_hash_t h;
+    ck_ht_hash_direct(&h, &g_active_ctx_ht, (uintptr_t)ctx);
+    ck_ht_entry_key_set_direct(&entry, (uintptr_t)ctx);
+    pthread_rwlock_wrlock(&g_active_ctx_ht_lock);
+    ck_ht_remove_spmc(&g_active_ctx_ht, h, &entry);
+    pthread_rwlock_unlock(&g_active_ctx_ht_lock);
+    // Invalidate every thread's hot-path cache: a context just stopped being live,
+    // so any cache that resolved to it must be re-validated before the next deref.
+    atomic_fetch_add_explicit(&g_active_ctx_epoch, 1, memory_order_release);
+}
+
 // MARK: - Measurement Context Registry Operations (lock-free with ck_ht)
 
 // Get measurement context for a task (lock-free lookup)
@@ -385,7 +418,10 @@ static void* get_measurement_context_for_task(void* task_id) {
     ck_ht_hash_direct(&h, &g_measurement_ht, (uintptr_t)task_id);
     ck_ht_entry_key_set_direct(&entry, (uintptr_t)task_id);
 
-    if (ck_ht_get_spmc(&g_measurement_ht, h, &entry)) {
+    pthread_rwlock_rdlock(&g_measurement_ht_lock);
+    bool found = ck_ht_get_spmc(&g_measurement_ht, h, &entry);
+    pthread_rwlock_unlock(&g_measurement_ht_lock);
+    if (found) {
         return (void*)ck_ht_entry_value_direct(&entry);
     }
     return NULL;
@@ -401,7 +437,10 @@ static bool set_measurement_context_for_task(void* task_id, void* context) {
     ck_ht_hash_direct(&h, &g_measurement_ht, (uintptr_t)task_id);
     ck_ht_entry_set_direct(&entry, h, (uintptr_t)task_id, (uintptr_t)context);
 
-    return ck_ht_set_spmc(&g_measurement_ht, h, &entry);
+    pthread_rwlock_wrlock(&g_measurement_ht_lock);
+    bool ok = ck_ht_set_spmc(&g_measurement_ht, h, &entry);
+    pthread_rwlock_unlock(&g_measurement_ht_lock);
+    return ok;
 }
 
 // Remove measurement context for a task (lock-free write)
@@ -414,7 +453,19 @@ static void remove_measurement_context_for_task(void* task_id) {
     ck_ht_hash_direct(&h, &g_measurement_ht, (uintptr_t)task_id);
     ck_ht_entry_key_set_direct(&entry, (uintptr_t)task_id);
 
+    pthread_rwlock_wrlock(&g_measurement_ht_lock);
     ck_ht_remove_spmc(&g_measurement_ht, h, &entry);
+    pthread_rwlock_unlock(&g_measurement_ht_lock);
+}
+
+// TESTING ONLY (see header): mark a context "ended" for routing purposes —
+// drop it from BOTH the active-inheritance liveness set and the per-task
+// measurement registry (exactly what sancov_end_measurement does) but DO NOT
+// free it, so a test can read its coverage afterward. Must be called from the
+// same task that began the measurement (matches end_measurement's contract).
+void sancov_unregister_inheritance_for_testing(SanCovMeasurementContext* context) {
+    unregister_active_inheritance_context(context);
+    remove_measurement_context_for_task(get_current_task_for_measurement());
 }
 
 // MARK: - Coverage Map Registry Operations (lock-free with ck_ht)
@@ -429,11 +480,14 @@ static uint8_t* find_or_create_task_map(void* task_id) {
     ck_ht_entry_t entry;
     ck_ht_hash_t h;
 
-    // Lock-free lookup first (fast path for existing entries)
+    // Fast path: shared-lock lookup for the common (already-exists) case.
     ck_ht_hash_direct(&h, &g_coverage_ht, (uintptr_t)task_id);
     ck_ht_entry_key_set_direct(&entry, (uintptr_t)task_id);
 
-    if (ck_ht_get_spmc(&g_coverage_ht, h, &entry)) {
+    pthread_rwlock_rdlock(&g_coverage_ht_lock);
+    bool found = ck_ht_get_spmc(&g_coverage_ht, h, &entry);
+    pthread_rwlock_unlock(&g_coverage_ht_lock);
+    if (found) {
         return (uint8_t*)ck_ht_entry_value_direct(&entry);
     }
 
@@ -443,19 +497,18 @@ static uint8_t* find_or_create_task_map(void* task_id) {
         return NULL;
     }
 
-    // Try to insert using put (fails if key already exists)
-    ck_ht_entry_set_direct(&entry, h, (uintptr_t)task_id, (uintptr_t)new_map);
-    bool inserted = ck_ht_put_spmc(&g_coverage_ht, h, &entry);
-
-    if (!inserted) {
-        // Another thread beat us - free our map and return existing one
+    // Slow path: take the exclusive lock, re-check (another writer may have
+    // inserted between the rdlock release and now), then insert.
+    pthread_rwlock_wrlock(&g_coverage_ht_lock);
+    ck_ht_entry_key_set_direct(&entry, (uintptr_t)task_id);
+    if (ck_ht_get_spmc(&g_coverage_ht, h, &entry)) {
+        pthread_rwlock_unlock(&g_coverage_ht_lock);
         free(new_map);
-        ck_ht_entry_key_set_direct(&entry, (uintptr_t)task_id);
-        if (ck_ht_get_spmc(&g_coverage_ht, h, &entry)) {
-            return (uint8_t*)ck_ht_entry_value_direct(&entry);
-        }
-        return NULL;  // Shouldn't happen, but handle gracefully
+        return (uint8_t*)ck_ht_entry_value_direct(&entry);
     }
+    ck_ht_entry_set_direct(&entry, h, (uintptr_t)task_id, (uintptr_t)new_map);
+    ck_ht_put_spmc(&g_coverage_ht, h, &entry);
+    pthread_rwlock_unlock(&g_coverage_ht_lock);
 
     return new_map;
 }
@@ -470,10 +523,13 @@ static void cleanup_task_map(void* task_id) {
     ck_ht_hash_direct(&h, &g_coverage_ht, (uintptr_t)task_id);
     ck_ht_entry_key_set_direct(&entry, (uintptr_t)task_id);
 
+    pthread_rwlock_wrlock(&g_coverage_ht_lock);
     bool removed = ck_ht_remove_spmc(&g_coverage_ht, h, &entry);
+    pthread_rwlock_unlock(&g_coverage_ht_lock);
 
     if (removed) {
-        // Entry was found and removed - free the coverage map
+        // Entry was found and removed - free the coverage map. Safe to free
+        // outside the lock: the entry is no longer reachable via the table.
         uint8_t* map = (uint8_t*)ck_ht_entry_value_direct(&entry);
         if (map != NULL) {
             free(map);
@@ -511,6 +567,38 @@ static void set_tls_measurement_context(SanCovMeasurementContext* new_ctx) {
         tls_cached_measurement_context = new_ctx;
         ctx_release(old_ctx); // Release old (NULL is safe)
     }
+}
+
+// Liveness gate WITH a safe retain, closing the TOCTOU between the membership
+// check and the dereference (review #52). Returns true and leaves `ctx`
+// retained (the caller MUST ctx_release it) iff `ctx` was registered as active
+// at the time of the check.
+//
+// Correctness: sancov_end_measurement unregisters a context (which takes the
+// active-ctx WRITE lock) STRICTLY BEFORE it drops the owner reference / frees
+// the context. By holding the READ lock across both the membership test and the
+// ctx_retain, we guarantee that if the context is still registered, unregister
+// (and therefore the free) cannot have run yet — so the context is alive and the
+// retain is safe. After this returns true the caller holds a reference, so the
+// context cannot be freed out from under the subsequent dereference. The retain
+// itself is a bare atomic increment (no nested lock), so no lock-ordering hazard
+// is introduced. Never dereferences `ctx` unless it is provably alive.
+static bool retain_if_active_inheritance_context(SanCovMeasurementContext* ctx) {
+    if (ctx == NULL) return false;
+    ensure_active_ctx_ht();
+
+    ck_ht_entry_t entry;
+    ck_ht_hash_t h;
+    ck_ht_hash_direct(&h, &g_active_ctx_ht, (uintptr_t)ctx);
+    ck_ht_entry_key_set_direct(&entry, (uintptr_t)ctx);
+
+    pthread_rwlock_rdlock(&g_active_ctx_ht_lock);
+    bool found = ck_ht_get_spmc(&g_active_ctx_ht, h, &entry);
+    if (found) {
+        ctx_retain(ctx);  // safe: still registered ⇒ not yet unregistered ⇒ alive
+    }
+    pthread_rwlock_unlock(&g_active_ctx_ht_lock);
+    return found;
 }
 
 SanCovMeasurementContext* sancov_begin_measurement(void) {
@@ -637,7 +725,9 @@ static const uint8_t* get_counters_with_context(SanCovMeasurementContext* ctx) {
 // Get covered count for a measurement context (O(1)).
 size_t sancov_get_covered_count_with_context(SanCovMeasurementContext* ctx) {
     if (!ctx) return 0;
-    return ctx->covered_count;
+    // Atomic load: covered_count is bumped via __atomic_fetch_add on edge-firing
+    // threads, so a plain read here is a data race (TSan-confirmed).
+    return __atomic_load_n(&ctx->covered_count, __ATOMIC_RELAXED);
 }
 
 // Allocate and fill an array of covered edge indices.
@@ -949,26 +1039,30 @@ static uint8_t* get_current_coverage_map(void) {
 
     // Get the current task (Swift task or sync pseudo-task)
     void* task = get_current_task_for_measurement();
-    // ITER-9 REPRO: skip iter-5 registry-active gate (recreate iter-4 state).
     bool inheritance_active = (g_coverage_inheritance_key != NULL);
 
+    // Snapshot the liveness epoch up front. The cached resolution below is only
+    // trustworthy while inheritance is active if NO begin/end has happened since
+    // it was filled (see g_active_ctx_epoch).
+    uint64_t resolve_epoch = atomic_load_explicit(&g_active_ctx_epoch, memory_order_acquire);
+
 #if !SANCOV_DISABLE_TLS_CACHE
-    // FAST PATH: Check if we have a cached map for this exact task
-    // This avoids the O(512) scans in the common case where the task hasn't changed
+    // FAST PATH: cached map for this exact task. Avoids the per-edge runtime
+    // task-local lookup + liveness lock in the common case.
+    //
+    // When inheritance is active the cache is trusted ONLY while the epoch is
+    // unchanged. An unchanged epoch means no measurement began or ended since we
+    // resolved this task, so (a) the cached context is still the correct routing
+    // target and (b) it is still alive (held by this thread's
+    // tls_cached_measurement_context reference) — so returning its map needs no
+    // re-validation and no reference dance. Any begin/end bumps the epoch and
+    // forces the full, lock-protected re-resolve below (which closes TOCTOU/ABA).
     if (task == tls_cached_task && tls_cached_task_map != NULL) {
-        // When coverage inheritance is active, NEVER trust the per-task cache.
-        // Task pointers can be reused across tests (Swift task allocator reuses
-        // freed task memory), and a stale cache entry from a previous test on
-        // this thread can route a new task's edges into the prior measurement
-        // context's bitmap — silently dropping coverage for the current test.
-        // The slow path costs one swift_task_localValueGet call, paid only
-        // while inheritance is active (i.e. during fuzz iterations).
-        if (inheritance_active) {
-            atomic_fetch_add_explicit(&g_route_tls_cache_inheritance_active, 1, memory_order_relaxed);
-            // Fall through to full lookup
-        } else {
+        if (!inheritance_active || resolve_epoch == tls_cached_generation) {
             return tls_cached_task_map;
         }
+        // Epoch changed → a begin/end occurred; re-resolve.
+        atomic_fetch_add_explicit(&g_route_tls_cache_inheritance_active, 1, memory_order_relaxed);
     }
 #endif
 
@@ -986,12 +1080,8 @@ static uint8_t* get_current_coverage_map(void) {
     bool inherited_via_runtime = false;
     if (inheritance_active) {
         if (g_coverage_inheritance_key != NULL) {
-            // Try the runtime's own lookup first
-            if (!swift_task_localValueLookup_resolved) {
-                swift_task_localValueLookup_fn = (TaskLocalValueLookupFn)dlsym(
-                    RTLD_DEFAULT, "swift_task_localValueGet");
-                swift_task_localValueLookup_resolved = true;
-            }
+            // Try the runtime's own lookup first (resolved once, race-free).
+            pthread_once(&swift_task_localValueLookup_once, resolve_swift_task_localValueLookup);
             if (swift_task_localValueLookup_fn) {
                 void* result = swift_task_localValueLookup_fn(g_coverage_inheritance_key);
                 if (result) {
@@ -1010,17 +1100,41 @@ static uint8_t* get_current_coverage_map(void) {
         if (inherited == NULL) {
             inherited = manual_walk_for_inherited_context(task);
         }
-    }
-    if (inherited != NULL && inherited->coverage_map != NULL) {
-        if (inherited_via_runtime) {
-            atomic_fetch_add_explicit(&g_route_inherited_runtime, 1, memory_order_relaxed);
-        } else {
-            atomic_fetch_add_explicit(&g_route_inherited_manualwalk, 1, memory_order_relaxed);
+        // Liveness gate WITH a safe retain (applies to BOTH the runtime
+        // task-local lookup and the manual walk): a task-local can outlive the
+        // measurement it captured — e.g. an unstructured poller task spawned
+        // inside a fuzz iteration keeps firing edges after that measurement has
+        // ended and its context was freed. Routing to such a stale pointer would
+        // dereference a freed `coverage_map`. retain_if_active rejects an ended
+        // context AND, for a still-live one, takes a reference under the lock so
+        // it cannot be freed before we dereference it below (closes the TOCTOU,
+        // review #52). If it returns true, `inherited` is retained and the caller
+        // path below MUST ctx_release it on every exit.
+        if (inherited != NULL && !retain_if_active_inheritance_context(inherited)) {
+            inherited = NULL;
         }
-        tls_cached_task = task;
-        tls_cached_task_map = inherited->coverage_map;
-        set_tls_measurement_context(inherited);
-        return inherited->coverage_map;
+    }
+    if (inherited != NULL) {
+        // We hold a temporary reference (from retain_if_active above), so these
+        // dereferences are safe even if the owning session is ending concurrently.
+        if (inherited->coverage_map != NULL) {
+            if (inherited_via_runtime) {
+                atomic_fetch_add_explicit(&g_route_inherited_runtime, 1, memory_order_relaxed);
+            } else {
+                atomic_fetch_add_explicit(&g_route_inherited_manualwalk, 1, memory_order_relaxed);
+            }
+            uint8_t* map = inherited->coverage_map;
+            tls_cached_task = task;
+            tls_cached_task_map = map;
+            tls_cached_generation = resolve_epoch;
+            set_tls_measurement_context(inherited);  // takes its own reference
+            ctx_release(inherited);                   // drop our temporary reference
+            return map;
+        }
+        // Live but no coverage_map yet: drop the temporary reference and fall
+        // through to the per-task registry / TLS fallback.
+        ctx_release(inherited);
+        inherited = NULL;
     }
 
     // Fallback: per-task registry (for synchronous code / engine root tasks).
@@ -1033,6 +1147,7 @@ static uint8_t* get_current_coverage_map(void) {
             // Update task cache to point to measurement map
             tls_cached_task = task;
             tls_cached_task_map = tls_cached_coverage_map;
+            tls_cached_generation = resolve_epoch;
             return tls_cached_coverage_map;
         }
 #endif
@@ -1043,6 +1158,7 @@ static uint8_t* get_current_coverage_map(void) {
             tls_cached_coverage_map = map;
             tls_cached_task = task;
             tls_cached_task_map = map;
+            tls_cached_generation = resolve_epoch;
             return map;
         }
     }
@@ -1077,6 +1193,7 @@ static uint8_t* get_current_coverage_map(void) {
     ensure_tls_coverage_map();
     tls_cached_task = task;
     tls_cached_task_map = tls_coverage_map;
+    tls_cached_generation = resolve_epoch;
     // Clear stale measurement context so sancov_record_edge doesn't append
     // edges from this task into another test's measurement context.
     set_tls_measurement_context(NULL);
