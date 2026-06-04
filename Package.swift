@@ -30,7 +30,7 @@ let package = Package(
             path: "Sources/SanCovHooks",
             publicHeadersPath: "include",
             cSettings: [
-                // .unsafeFlags(["-O3"])  // Optimize hot path even in debug builds
+                .unsafeFlags(["-O3"])  // Optimize hot path even in debug builds
             ]
         ),
 
@@ -70,14 +70,20 @@ let package = Package(
         .target(
             name: "CScheduleHooks",
             path: "Sources/CScheduleHooks",
-            publicHeadersPath: "include"
+            publicHeadersPath: "include",
+            cSettings: [
+                .unsafeFlags(["-O3"])  // Optimize hot path even in debug builds
+            ]
         ),
 
         // Schedule control for concurrency fuzzing — intercepts swift_task_enqueueGlobal_hook
         // No -sanitize-coverage to avoid instrumenting the hook itself
         .target(
             name: "ScheduleControl",
-            dependencies: ["CScheduleHooks", "SanCovHooks"]
+            dependencies: ["CScheduleHooks", "SanCovHooks"],
+            swiftSettings: [
+                .unsafeFlags(["-O"])  // Optimize even in debug builds
+            ]
         ),
 
         .target(
