@@ -94,10 +94,10 @@ struct FlattenedScheduleTests {
         )
         let snapshot = CorpusSnapshot<[UInt8], Int>(entries: [entry], coveredIndices: [])
 
-        // Mirror runFlattenedSchedule's persistence: scheduleFuzzing is false because
-        // element 0 is a normal input element to the engine.
-        let data = try JSONEncoder.corpusEncoder(scheduleFuzzing: false).encode(snapshot)
-        let reloaded = try JSONDecoder.corpusDecoder(scheduleFuzzing: false)
+        // Schedule bytes persist as input element 0 (a normal element); there is no
+        // separate schedule-bytes encoding flag.
+        let data = try JSONEncoder.corpusEncoder().encode(snapshot)
+        let reloaded = try JSONDecoder.corpusDecoder()
             .decode(CorpusSnapshot<[UInt8], Int>.self, from: data)
 
         try #require(reloaded.entries.count == 1)

@@ -218,7 +218,6 @@ func fuzzInternal<each Input: Codable & Sendable>(
             verbose: verbose,
             coverageStrategy: coverageStrategy,
             edgeHook: edgeHook,
-            scheduleFuzzing: scheduleFuzzing,
             projectPath: projectPath(from: filePath),
             sourceFileID: testFilePath,
             sourceFilePath: testFilePath,

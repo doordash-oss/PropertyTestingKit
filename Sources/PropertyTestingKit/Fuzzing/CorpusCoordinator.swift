@@ -57,12 +57,11 @@ func mutatorSeeds<each Input: Codable & Sendable>(
 
 private func loadSnapshot<each Input: Codable & Sendable>(
     from corpusDir: URL,
-    verbose: Bool,
-    scheduleFuzzing: Bool = false
+    verbose: Bool
 ) -> CorpusSnapshot<repeat each Input>? {
     @Dependency(\.corpusPersistence) var corpusPersistence
     do {
-        return try corpusPersistence.loadSnapshot(from: corpusDir, scheduleFuzzing: scheduleFuzzing)
+        return try corpusPersistence.loadSnapshot(from: corpusDir)
     } catch {
         if verbose {
             print("[Fuzz] Failed to load corpus: \(error)")
@@ -88,7 +87,6 @@ func runFuzz<each Input: Codable & Sendable>(
     verbose: Bool,
     coverageStrategy: CoverageStrategyKind,
     edgeHook: EdgeHook?,
-    scheduleFuzzing: Bool = false,
     projectPath: String?,
     sourceFileID: String,
     sourceFilePath: String,
@@ -106,7 +104,6 @@ func runFuzz<each Input: Codable & Sendable>(
             projectPath: projectPath,
             coverageStrategy: strategy,
             edgeHook: edgeHook,
-            scheduleFuzzing: scheduleFuzzing,
             fileID: sourceFileID,
             filePath: sourceFilePath,
             line: line,
@@ -120,7 +117,7 @@ func runFuzz<each Input: Codable & Sendable>(
         // The replay is a pure verification: the fuzz plugins (which can emit write actions)
         // do not run during it — run `regress(...)` for replay-plus-analysis.
         if corpusPersistence.exists(corpusDir),
-            let snapshot: CorpusSnapshot<repeat each Input> = loadSnapshot(from: corpusDir, verbose: verbose, scheduleFuzzing: scheduleFuzzing) {
+            let snapshot: CorpusSnapshot<repeat each Input> = loadSnapshot(from: corpusDir, verbose: verbose) {
             return await replayRegression(
                 snapshot: snapshot,
                 mutators: mutators,
@@ -167,7 +164,7 @@ func runFuzz<each Input: Codable & Sendable>(
     case .extend:
         var seeds = userSeeds
         if corpusPersistence.exists(corpusDir),
-            let snapshot: CorpusSnapshot<repeat each Input> = loadSnapshot(from: corpusDir, verbose: verbose, scheduleFuzzing: scheduleFuzzing) {
+            let snapshot: CorpusSnapshot<repeat each Input> = loadSnapshot(from: corpusDir, verbose: verbose) {
             if verbose {
                 print("[Fuzz] persistence: extend - loaded \(snapshot.count) corpus entries as seeds")
             }
@@ -348,7 +345,7 @@ private func fuzzCampaign<each Input: Codable & Sendable>(
     // The `.ephemeral` policy skips persistence entirely (persist == false).
     if persist, !result.corpus.entries.isEmpty {
         do {
-            try corpusPersistence.save(result.corpus, to: corpusDir, scheduleFuzzing: config.scheduleFuzzing)
+            try corpusPersistence.save(result.corpus, to: corpusDir)
             if verbose {
                 print("[Fuzz] Saved corpus to \(corpusDir.path)")
             }

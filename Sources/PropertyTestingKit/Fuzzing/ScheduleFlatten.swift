@@ -133,8 +133,8 @@ func runFlattenedSchedule<each Input: Codable & Sendable>(
 
     // Run over the extended pack through the coordinator. The schedule mutator is
     // prepended as element 0; the extractor reads it back to drive
-    // `ScheduleController.run`. `scheduleFuzzing` stays off in the config — to the
-    // engine, element 0 is just a normal input element.
+    // `ScheduleController.run`. To the engine, element 0 is just a normal input
+    // element — it is persisted as one (no separate schedule-bytes flag).
     let extendedResult = await runFuzz(
         mutators: (scheduleByteMutator, repeat each mutators),
         userSeeds: extendedSeeds,
@@ -145,7 +145,6 @@ func runFlattenedSchedule<each Input: Codable & Sendable>(
         verbose: verbose,
         coverageStrategy: coverageStrategy,
         edgeHook: edgeHook,
-        scheduleFuzzing: false,
         projectPath: projectPath,
         sourceFileID: sourceFileID,
         sourceFilePath: sourceFilePath,

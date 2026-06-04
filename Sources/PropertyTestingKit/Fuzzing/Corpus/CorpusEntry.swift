@@ -15,11 +15,6 @@
 import Foundation
 import Dependencies
 
-/// Key used to signal the decoder that schedule bytes are the first element.
-public extension CodingUserInfoKey {
-    static let scheduleFuzzing = CodingUserInfoKey(rawValue: "scheduleFuzzing")!
-}
-
 /// A single entry in the corpus: an input and its coverage data.
 public struct CorpusEntry<each Input: Codable & Sendable>: Sendable, Codable {
     /// The test input.
