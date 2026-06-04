@@ -161,7 +161,7 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
             // recorded by child tasks (TaskGroup.addTask / Task {}) spawned inside
             // the test body are attributed to this engine's measurement context.
             // Set once outside the per-iteration hot path — the context is hoisted.
-            let coverageContextBits = UInt(bitPattern: coverageContext.rawContext)
+            let coverageContextBits = coverageContext.inheritanceHandle
             await CoverageInheritance.$context.withValue(coverageContextBits) {
                 CoverageInheritance.captureKeyIfNeeded(contextBits: coverageContextBits)
 

@@ -98,7 +98,7 @@ struct StragglerCoverageInheritanceTests {
         //    FuzzStateMachine. Spawn an UNSTRUCTURED task inside the withValue
         //    scope so it inherits the context bits in its task-local chain.
         let context = SanCovCounters.beginMeasurement()
-        let bits = UInt(bitPattern: context.rawContext)
+        let bits = context.inheritanceHandle
 
         let straggler: Task<Void, Never> = CoverageInheritance.$context.withValue(bits) {
             CoverageInheritance.captureKeyIfNeeded(contextBits: bits)

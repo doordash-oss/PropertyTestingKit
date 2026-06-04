@@ -72,7 +72,7 @@ struct ActiveContextRegistryStressTests {
                 group.addTask {
                     for _ in 0..<iterationsPerWorker {
                         let ctx = SanCovCounters.beginMeasurement()
-                        let bits = UInt(bitPattern: ctx.rawContext)
+                        let bits = ctx.inheritanceHandle
                         await CoverageInheritance.$context.withValue(bits) {
                             CoverageInheritance.captureKeyIfNeeded(contextBits: bits)
                             // Fire edges under this context's inheritance scope.
@@ -111,7 +111,7 @@ struct ActiveContextRegistryStressTests {
         let rounds = 1500
         for _ in 0..<rounds {
             let ctx = SanCovCounters.beginMeasurement()
-            let bits = UInt(bitPattern: ctx.rawContext)
+            let bits = ctx.inheritanceHandle
 
             // Spawn a straggler that immediately fires inherited edges, then end
             // the measurement WITHOUT awaiting — so the free in endMeasurement

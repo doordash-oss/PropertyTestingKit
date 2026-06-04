@@ -109,6 +109,11 @@ typedef struct {
     uint8_t* coverage_map;
     size_t covered_count;
     _Atomic int refcount;
+    /// Per-context generation tag, assigned at begin_measurement. Packed into
+    /// the inheritance handle's high bits so a stale task-local handle whose
+    /// raw address was recycled by a later, unrelated context is rejected
+    /// (closes ABA cross-measurement contamination). See sancov_inheritance_handle.
+    uint16_t generation;
     /// Ring buffer of covered edge indices, appended on first-hit.
     /// Enables O(covered_edges) hash/snapshot instead of O(total_edges) scan.
     uint32_t* covered_indices;
@@ -143,6 +148,22 @@ SanCovMeasurementContext* sancov_create_dummy_context(void);
 /// `sancov_get_covered_count_with_context`. Pair with `sancov_end_measurement`
 /// for cleanup.
 void sancov_unregister_inheritance_for_testing(SanCovMeasurementContext* context);
+
+/// TESTING ONLY: drop the CURRENT task's measurement-registry entry WITHOUT
+/// touching the active-inheritance liveness set or freeing any context. Lets a
+/// test stop the owning task from self-routing into a context (so its own
+/// instrumented edges don't inflate that context's coverage) while keeping the
+/// context live and active for inheritance-routing assertions.
+void sancov_remove_task_measurement_for_testing(void);
+
+/// The coverage-inheritance handle for a measurement context: a 64-bit value
+/// that packs the context's generation tag (high 16 bits) with its pointer
+/// (low 48 bits). Store THIS in the `CoverageInheritance.context` task-local
+/// (never the raw pointer): routing decodes the pointer to find the context and
+/// verifies the generation, so a stale handle whose address was recycled by a
+/// later context no longer aliases it. Aborts if the context pointer does not
+/// fit in 48 bits (unexpected on the supported arm64/x86_64 targets).
+uint64_t sancov_inheritance_handle(SanCovMeasurementContext* context);
 
 /// Get the number of covered edges for a measurement context (O(1)).
 size_t sancov_get_covered_count_with_context(SanCovMeasurementContext* context);

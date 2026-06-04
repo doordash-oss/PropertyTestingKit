@@ -117,6 +117,18 @@ static bool is_active_inheritance_context(SanCovMeasurementContext* candidate);
 static void register_active_inheritance_context(SanCovMeasurementContext* ctx);
 static void unregister_active_inheritance_context(SanCovMeasurementContext* ctx);
 
+// Coverage-inheritance handle layout (see sancov_inheritance_handle below): the
+// low 48 bits hold the context pointer and the high 16 bits hold its generation
+// tag. Defined here so the task-local walk just below can decode handles.
+#define SANCOV_HANDLE_PTR_BITS 48
+#define SANCOV_HANDLE_PTR_MASK (((uint64_t)1 << SANCOV_HANDLE_PTR_BITS) - 1)
+static inline SanCovMeasurementContext* sancov_handle_pointer(uint64_t handle) {
+    return (SanCovMeasurementContext*)(uintptr_t)(handle & SANCOV_HANDLE_PTR_MASK);
+}
+static inline uint16_t sancov_handle_generation(uint64_t handle) {
+    return (uint16_t)(handle >> SANCOV_HANDLE_PTR_BITS);
+}
+
 /// Read the inherited measurement context from a task's task-local chain.
 /// Returns NULL if no inheritance key is set or the task local is not found.
 // Swift runtime function that looks up task locals with proper inheritance.
@@ -132,22 +144,25 @@ static void resolve_swift_task_localValueLookup(void) {
         (TaskLocalValueLookupFn)dlsym(RTLD_DEFAULT, "swift_task_localValueGet");
 }
 
-/// Manual walk of the task-local chain. Two paths are checked at each
-/// ValueItem: (1) the captured CoverageInheritance.context key, and (2) any
-/// value matching a registered active measurement context. (2) does not
-/// require g_coverage_inheritance_key to be set, and is the load-bearing
-/// path when the captured key is absent or stale.
+/// Manual walk of the task-local chain. Returns the generation-tagged
+/// inheritance HANDLE stored under the CoverageInheritance.context key (0 if
+/// none). Two paths are checked at each ValueItem: (1) the captured
+/// CoverageInheritance.context key, and (2) any value whose decoded pointer is a
+/// registered active measurement context. (2) does not require
+/// g_coverage_inheritance_key to be set, and is the load-bearing path when the
+/// captured key is absent or stale. The caller resolves and validates the
+/// returned handle via retain_inherited_if_valid (liveness + generation check).
 ///
 /// Walks ParentTaskMarker links transparently — the marker's `next` field is
 /// set by the runtime at task creation to point into the parent's chain, so
 /// following `next` continues into parent-task locals as expected. STOP
 /// markers terminate the walk.
-static SanCovMeasurementContext* manual_walk_for_inherited_context(const void* task) {
-    if (!task) return NULL;
+static uint64_t manual_walk_for_inherited_context(const void* task) {
+    if (!task) return 0;
 
     const void* head;
     memcpy(&head, (const char*)task + SANCOV_TASK_LOCAL_HEAD_OFFSET, sizeof(head));
-    if (!head || !sancov_is_valid_pointer(head)) return NULL;
+    if (!head || !sancov_is_valid_pointer(head)) return 0;
 
     const void* current = head;
     for (int depth = 0; depth < 100 && current; depth++) {
@@ -158,27 +173,28 @@ static SanCovMeasurementContext* manual_walk_for_inherited_context(const void* t
         if (kind == SANCOV_ITEM_KIND_VALUE || kind == SANCOV_ITEM_KIND_VALUE_IN_GROUP) {
             const void* key;
             memcpy(&key, (const char*)current + 8, sizeof(key));
-            uintptr_t value;
-            memcpy(&value, (const char*)current + 24, sizeof(value));
+            uint64_t handle;
+            memcpy(&handle, (const char*)current + 24, sizeof(handle));
 
             // Path 1: precise key match (when captureKeyIfNeeded set the key).
             if (g_coverage_inheritance_key != NULL &&
                 key == g_coverage_inheritance_key &&
-                value != 0) {
-                return (SanCovMeasurementContext*)value;
+                handle != 0) {
+                return handle;
             }
 
-            // Path 2: value matches a registered active measurement context.
-            // This covers the case where g_coverage_inheritance_key is unset
-            // or where it was captured against a stale @TaskLocal slot — both
-            // empirically observed under concurrent test load. The candidate
+            // Path 2: handle whose decoded pointer is a registered active
+            // measurement context. Covers an unset or stale captured key (both
+            // empirically observed under concurrent test load). The decoded
             // pointer must be valid and currently registered, so spurious
-            // matches against unrelated @TaskLocals (whose values are not
-            // measurement-context heap pointers) are excluded.
-            if (value != 0 && sancov_is_valid_pointer((const void*)value)) {
-                SanCovMeasurementContext* candidate = (SanCovMeasurementContext*)value;
-                if (is_active_inheritance_context(candidate)) {
-                    return candidate;
+            // matches against unrelated @TaskLocals (whose values do not decode
+            // to live measurement-context pointers) are excluded; the caller's
+            // generation check rejects any residual address-recycling match.
+            if (handle != 0) {
+                SanCovMeasurementContext* candidate = sancov_handle_pointer(handle);
+                if (sancov_is_valid_pointer(candidate) &&
+                    is_active_inheritance_context(candidate)) {
+                    return handle;
                 }
             }
         } else if (kind == SANCOV_ITEM_KIND_STOP_MARKER) {
@@ -189,7 +205,7 @@ static SanCovMeasurementContext* manual_walk_for_inherited_context(const void* t
         current = (nextPtr != 0 && sancov_is_valid_pointer((void*)nextPtr))
             ? (const void*)nextPtr : NULL;
     }
-    return NULL;
+    return 0;
 }
 
 // MARK: - Lock-Free Hash Tables using ConcurrencyKit ck_ht
@@ -249,6 +265,47 @@ static pthread_rwlock_t g_active_ctx_ht_lock = PTHREAD_RWLOCK_INITIALIZER;
 // still alive (so the routing dereference is safe WITHOUT re-taking the liveness
 // lock or a reference). Any begin/end forces a full, lock-protected re-resolve.
 static _Atomic uint64_t g_active_ctx_epoch = 0;
+
+// MARK: - Coverage-inheritance handle (generation-tagged pointer)
+//
+// The value stored in the CoverageInheritance.context task-local is NOT a raw
+// context pointer. It is a generation-tagged HANDLE: the low 48 bits hold the
+// context pointer and the high 16 bits hold the context's `generation` tag
+// (assigned monotonically at begin_measurement). Routing decodes the pointer to
+// locate the context, then — after the liveness retain — verifies the live
+// context's generation matches the handle's. A straggler whose captured address
+// was freed and recycled by a later, unrelated measurement therefore fails the
+// generation check (the new context has a different tag) and is rejected,
+// closing the ABA cross-measurement contamination. arm64/x86_64 user pointers
+// fit in 48 bits, so no pointer information is lost (asserted at handle build).
+// (SANCOV_HANDLE_PTR_* macros and the decode helpers are defined near the top,
+// before the task-local walk that consumes handles.)
+static _Atomic uint64_t g_next_generation = 1;  // 0 reserved; tag is low 16 bits
+
+uint64_t sancov_inheritance_handle(SanCovMeasurementContext* context) {
+    if (context == NULL) return 0;
+    uintptr_t ptr = (uintptr_t)context;
+    if ((ptr & ~SANCOV_HANDLE_PTR_MASK) != 0) {
+        // A context pointer outside the low 48 bits would corrupt the packed
+        // generation tag. Not expected on supported targets; fail loud.
+        fprintf(stderr, "FATAL: context pointer %p does not fit in %d bits\n",
+                (void*)context, SANCOV_HANDLE_PTR_BITS);
+        abort();
+    }
+    return ((uint64_t)context->generation << SANCOV_HANDLE_PTR_BITS)
+         | ((uint64_t)ptr & SANCOV_HANDLE_PTR_MASK);
+}
+
+// Resolve an inheritance handle to a LIVE, generation-matched context, retained.
+// Returns the retained context (caller MUST ctx_release) iff the handle's
+// pointer is currently registered active AND its generation tag still matches
+// the live context — otherwise NULL. Combines the TOCTOU-safe liveness retain
+// (review #52) with the ABA generation check (review #53/#56).
+static SanCovMeasurementContext* retain_inherited_if_valid(uint64_t handle);
+
+// Defined further below (after the refcount helpers); forward-declared so the
+// testing seams above can reset the calling thread's cached measurement context.
+static void set_tls_measurement_context(SanCovMeasurementContext* new_ctx);
 
 // Thread-local fallback for non-async contexts
 static _Thread_local uint8_t *tls_coverage_map = NULL;
@@ -468,6 +525,25 @@ void sancov_unregister_inheritance_for_testing(SanCovMeasurementContext* context
     remove_measurement_context_for_task(get_current_task_for_measurement());
 }
 
+// TESTING ONLY (see header): drop just the current task's measurement-registry
+// entry; leave the active-inheritance set and the context allocation untouched.
+// Bumps the liveness epoch so every thread's hot-path cache is invalidated —
+// otherwise the owning thread's cached map pointer would keep routing the
+// owning task's edges into the context after the registry entry is gone.
+void sancov_remove_task_measurement_for_testing(void) {
+    remove_measurement_context_for_task(get_current_task_for_measurement());
+    // Clear this thread's hot-path cache so a stale cached map pointer can't keep
+    // routing the owning task's edges into the (now-deregistered) context. The
+    // epoch bump covers inheritance-active readers; clearing the TLS cache also
+    // covers the !inheritance_active fast-path short-circuit (which ignores the
+    // epoch). Mirrors the cache teardown in sancov_end_measurement.
+    set_tls_measurement_context(NULL);
+    tls_cached_task = NULL;
+    tls_cached_task_map = NULL;
+    tls_cached_coverage_map = NULL;
+    atomic_fetch_add_explicit(&g_active_ctx_epoch, 1, memory_order_release);
+}
+
 // MARK: - Coverage Map Registry Operations (lock-free with ck_ht)
 
 // Find or create a coverage map for the given task
@@ -601,10 +677,29 @@ static bool retain_if_active_inheritance_context(SanCovMeasurementContext* ctx) 
     return found;
 }
 
+static SanCovMeasurementContext* retain_inherited_if_valid(uint64_t handle) {
+    if (handle == 0) return NULL;
+    SanCovMeasurementContext* ctx = sancov_handle_pointer(handle);
+    // Liveness gate + retain: guarantees `ctx` is alive (and stays alive) so the
+    // generation read below cannot touch freed memory.
+    if (!retain_if_active_inheritance_context(ctx)) return NULL;
+    // ABA check: the address is live, but is it still the SAME context the
+    // handle was minted from? A recycled address carries a different generation.
+    if (ctx->generation != sancov_handle_generation(handle)) {
+        ctx_release(ctx);
+        return NULL;
+    }
+    return ctx;
+}
+
 SanCovMeasurementContext* sancov_begin_measurement(void) {
     SanCovMeasurementContext* ctx = (SanCovMeasurementContext*)xmalloc(sizeof(SanCovMeasurementContext));
     ctx->coverage_map = NULL;
     ctx->covered_count = 0;
+    // Generation tag for the inheritance handle. Monotonic (mod 2^16); two
+    // contexts that share a tag are >= 65536 begin_measurement calls apart, far
+    // beyond the lifetime of any straggler that could alias a recycled address.
+    ctx->generation = (uint16_t)atomic_fetch_add_explicit(&g_next_generation, 1, memory_order_relaxed);
     // Pre-allocate covered index buffer to g_guard_count so concurrent child
     // task writes (under CoverageInheritance) never trigger realloc races.
     // A realloc racing with another thread's append would be a use-after-free.
@@ -647,6 +742,7 @@ SanCovMeasurementContext* sancov_create_dummy_context(void) {
     SanCovMeasurementContext* ctx = (SanCovMeasurementContext*)xmalloc(sizeof(SanCovMeasurementContext));
     ctx->coverage_map = NULL;
     ctx->covered_count = 0;
+    ctx->generation = (uint16_t)atomic_fetch_add_explicit(&g_next_generation, 1, memory_order_relaxed);
     ctx->covered_indices_capacity = 0;
     ctx->covered_indices = NULL;
     ctx->path_trie = NULL;
@@ -1079,16 +1175,16 @@ static uint8_t* get_current_coverage_map(void) {
     SanCovMeasurementContext* inherited = NULL;
     bool inherited_via_runtime = false;
     if (inheritance_active) {
+        // The task-local carries a generation-tagged HANDLE, not a raw pointer.
+        uint64_t handle = 0;
         if (g_coverage_inheritance_key != NULL) {
             // Try the runtime's own lookup first (resolved once, race-free).
             pthread_once(&swift_task_localValueLookup_once, resolve_swift_task_localValueLookup);
             if (swift_task_localValueLookup_fn) {
                 void* result = swift_task_localValueLookup_fn(g_coverage_inheritance_key);
                 if (result) {
-                    uintptr_t ctx_bits;
-                    memcpy(&ctx_bits, result, sizeof(ctx_bits));
-                    if (ctx_bits != 0) {
-                        inherited = (SanCovMeasurementContext*)ctx_bits;
+                    memcpy(&handle, result, sizeof(handle));
+                    if (handle != 0) {
                         inherited_via_runtime = true;
                     }
                 }
@@ -1097,22 +1193,21 @@ static uint8_t* get_current_coverage_map(void) {
         // Fallback: walk the task's own chain manually. Also tried when the
         // captured key is unset — manual walk's value-match fallback covers
         // routing solely via the active-context registry.
-        if (inherited == NULL) {
-            inherited = manual_walk_for_inherited_context(task);
+        if (handle == 0) {
+            handle = manual_walk_for_inherited_context(task);
         }
-        // Liveness gate WITH a safe retain (applies to BOTH the runtime
-        // task-local lookup and the manual walk): a task-local can outlive the
-        // measurement it captured — e.g. an unstructured poller task spawned
-        // inside a fuzz iteration keeps firing edges after that measurement has
-        // ended and its context was freed. Routing to such a stale pointer would
-        // dereference a freed `coverage_map`. retain_if_active rejects an ended
-        // context AND, for a still-live one, takes a reference under the lock so
-        // it cannot be freed before we dereference it below (closes the TOCTOU,
-        // review #52). If it returns true, `inherited` is retained and the caller
-        // path below MUST ctx_release it on every exit.
-        if (inherited != NULL && !retain_if_active_inheritance_context(inherited)) {
-            inherited = NULL;
-        }
+        // Resolve the handle to a LIVE, generation-matched context, retained.
+        // A task-local can outlive the measurement it captured — e.g. an
+        // unstructured poller task spawned inside a fuzz iteration keeps firing
+        // edges after that measurement ended and its context was freed (and the
+        // address may since have been recycled by an unrelated measurement).
+        // retain_inherited_if_valid (a) rejects an ended context, (b) for a
+        // still-live address takes a reference under the liveness lock so it
+        // cannot be freed before we dereference it (TOCTOU, review #52), and
+        // (c) verifies the generation tag so a recycled address routing to the
+        // WRONG live context is rejected (ABA, review #53/#56). On success
+        // `inherited` is retained and the path below MUST ctx_release it.
+        inherited = retain_inherited_if_valid(handle);
     }
     if (inherited != NULL) {
         // We hold a temporary reference (from retain_if_active above), so these

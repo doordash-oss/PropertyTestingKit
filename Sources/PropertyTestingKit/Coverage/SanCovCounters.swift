@@ -204,6 +204,16 @@ extension SanCovCounters {
             self.rawContext = raw
         }
 
+        /// The value to store in the `CoverageInheritance.context` task-local so
+        /// child tasks inherit this measurement. This is a generation-tagged
+        /// handle (NOT the raw pointer): routing decodes it to find the context
+        /// and verifies the generation, so a stale handle whose address was
+        /// recycled by a later, unrelated measurement is rejected rather than
+        /// silently polluting that measurement (ABA, review #53/#56).
+        var inheritanceHandle: UInt {
+            UInt(sancov_inheritance_handle(rawContext))
+        }
+
         /// Creates a dummy context for testing purposes.
         /// This context should only be used with mock CoverageCountersClients.
         static func testInstance() -> MeasurementContext {
