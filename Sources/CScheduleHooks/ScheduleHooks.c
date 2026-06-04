@@ -30,6 +30,16 @@
 // Within PrivateStorage, TaskLocal::Storage.head is at offset 56.
 // Total: 80 + 56 = 136 bytes from Job* to task-local head pointer.
 
+// These offsets and the pointer range below are read from private Swift-runtime
+// internals and were verified only on arm64 macOS for Swift 6.x. They are NOT
+// guaranteed stable across architectures or toolchain versions. Fail the build
+// loudly on anything else rather than silently reading the wrong memory (which
+// would make schedule control degrade to a silent no-op). `ScheduleController`
+// also runs a startup self-test that catches ABI drift within a supported arch.
+#if !(defined(__aarch64__) && defined(__APPLE__))
+#error "CScheduleHooks ABI offsets are verified only for arm64 macOS. Re-verify Job/AsyncTask layout before enabling another architecture or toolchain."
+#endif
+
 #define JOB_FLAGS_OFFSET 32
 #define TASK_LOCAL_HEAD_OFFSET 136
 

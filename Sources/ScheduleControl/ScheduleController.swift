@@ -371,6 +371,7 @@ public enum ScheduleController {
         test: @escaping @Sendable () async throws -> Void
     ) async throws {
         schedule_tls_init()
+        await runABISelfTestOnce()
 
         let sessionID = Int.random(in: 1..<Int.max)
 
@@ -481,6 +482,40 @@ public enum ScheduleController {
     static func _currentSessionStateForTesting() -> SessionState? {
         guard let sid = SessionTag.id else { return nil }
         return _sessions.withLock { $0[sid] }
+    }
+
+    /// Verifies that the private Swift-runtime ABI offsets the C reader depends on
+    /// still hold: stamps a known value into the `SessionTag` task-local, then reads
+    /// it back through the exact C path routing method 2 uses. Returns `false` if the
+    /// value does not round-trip — a sign the Job/AsyncTask layout has drifted on
+    /// this toolchain, in which case schedule control would silently stop capturing
+    /// jobs. Cheap; run once at startup.
+    static func verifyTaskLocalABI() async -> Bool {
+        let sentinel: Int = 0x5E55_10AB
+        return await SessionTag.$id.withValue(sentinel) {
+            guard let task = _getCurrentTask() else { return false }
+            guard let key = schedule_capture_session_key(task) else { return false }
+            return schedule_read_session_from_task(task, key) == Int64(sentinel)
+        }
+    }
+
+    /// One-time ABI self-test, run on the first `ScheduleController.run`. On failure
+    /// it surfaces a loud diagnostic instead of letting schedule control degrade to
+    /// a silent no-op (routing would read garbage / return -1 and pass every job
+    /// through).
+    private static let _abiChecked = OSAllocatedUnfairLock(initialState: false)
+    private static func runABISelfTestOnce() async {
+        let alreadyChecked = _abiChecked.withLock { done -> Bool in
+            if done { return true }
+            done = true
+            return false
+        }
+        if alreadyChecked { return }
+        if await !verifyTaskLocalABI() {
+            FileHandle.standardError.write(Data(
+                "[ScheduleControl] ABI self-test FAILED: the Swift-runtime task-local layout this build relies on appears to have changed. Schedule control will not reliably capture tasks — re-verify the offsets in CScheduleHooks/ScheduleHooks.c.\n"
+                    .utf8))
+        }
     }
 
     private static func captureSessionKeyIfNeeded() {
