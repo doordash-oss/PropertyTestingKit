@@ -121,6 +121,12 @@ private let _original = OSAllocatedUnfairLock<OriginalFn?>(initialState: nil)
 /// Task-local key stored as UInt (pointer bits). 0 = not captured.
 private let _sessionKeyBits = OSAllocatedUnfairLock<UInt>(initialState: 0)
 
+/// The enqueue hook that was installed before the first active session. Saved when
+/// the session count goes 0 → 1 and restored when it returns to 0, so a foreign
+/// hook installed by another component is preserved (LIFO) rather than clobbered
+/// and cleared. Accessed only inside the `_sessions` critical section.
+private let _savedHook = OSAllocatedUnfairLock<HookFn?>(initialState: nil)
+
 private let _getCurrentTask: @convention(c) () -> UnsafeRawPointer? = {
     unsafeBitCast(
         dlsym(dlopen(nil, 0), "swift_task_getCurrent"),
@@ -373,7 +379,6 @@ public enum ScheduleController {
 
             // Create per-session state
             let session = SessionState(sid: sessionID)
-            _sessions.withLock { $0[sessionID] = session }
 
             let completion = TestCompletion()
 
@@ -381,8 +386,18 @@ public enum ScheduleController {
             // the thread-local g_target_context on the serial queue thread.
             session.coverageContext = coverageContext
 
-            // Install the routing hook. Non-session jobs pass through via original(job).
-            _hookPtr.ptr.pointee = _routingHook
+            // Register the session and install the routing hook under the same lock
+            // that tears it down, so concurrent sessions install/restore the global
+            // hook exactly once. The first session (0 → 1) saves whatever hook was
+            // already installed; teardown restores it. Non-session jobs pass through
+            // via original(job).
+            _sessions.withLock { sessions in
+                if sessions.isEmpty {
+                    _savedHook.withLock { $0 = _hookPtr.ptr.pointee }
+                    _hookPtr.ptr.pointee = _routingHook
+                }
+                sessions[sessionID] = session
+            }
 
             // Launch test — Task {} inherits session task local
             let testTask = Task {
@@ -426,7 +441,9 @@ public enum ScheduleController {
             _sessions.withLock { sessions in
                 sessions[sessionID] = nil
                 if sessions.isEmpty {
-                    _hookPtr.ptr.pointee = nil
+                    // Restore the hook that was installed before the first session
+                    // rather than unconditionally clearing it.
+                    _hookPtr.ptr.pointee = _savedHook.withLock { $0 }
                 }
             }
 
