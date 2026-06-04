@@ -84,13 +84,12 @@ struct DrainConcurrencyTest {
         }
     }
 
-    @Test("Many sessions run back-to-back without parking the cooperative pool")
+    @Test("Many sessions run back-to-back and all complete")
     func manySequentialSessionsComplete() async throws {
-        // Each ScheduleController.run drains on a dedicated thread and `await`s its
-        // completion, so the cooperative worker running this loop is released (not
-        // parked on a blocking semaphore) for the duration of every drain. Running
-        // many sessions in a row exercises repeated dedicated-thread setup/teardown
-        // and would stall here if a drain ever blocked the awaiting worker.
+        // Repeated session setup/teardown: each ScheduleController.run installs and
+        // (LIFO-)restores the global hook and drains to completion. Running many in
+        // a row guards that the install/restore + drain cycle is robust across
+        // sessions and none stall.
         var completed = 0
         for _ in 0..<30 {
             try await ScheduleController.run(scheduleBytes: [0, 1, 0, 1, 0, 1, 0, 1]) {
