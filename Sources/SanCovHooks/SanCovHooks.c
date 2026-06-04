@@ -74,8 +74,10 @@ static size_t g_guard_count = 0;
 static _Thread_local SanCovMeasurementContext* g_target_context = NULL;
 
 // Key pointer for coverage inheritance task local. When set, child tasks
-// inherit their parent's measurement context via Swift task locals.
-static const void* g_coverage_inheritance_key = NULL;
+// inherit their parent's measurement context via Swift task locals. Atomic
+// because it is written once by sancov_set_coverage_inheritance_key while being
+// read concurrently on the per-edge hot path (TSan-confirmed race otherwise).
+static _Atomic(const void*) g_coverage_inheritance_key = NULL;
 
 // ABI constants (same as CScheduleHooks — duplicated to avoid cross-dependency)
 #define SANCOV_TASK_LOCAL_HEAD_OFFSET 136
@@ -118,10 +120,17 @@ static void unregister_active_inheritance_context(SanCovMeasurementContext* ctx)
 /// Read the inherited measurement context from a task's task-local chain.
 /// Returns NULL if no inheritance key is set or the task local is not found.
 // Swift runtime function that looks up task locals with proper inheritance.
-// Resolves via dlsym to avoid link-time dependency.
+// Resolves via dlsym to avoid link-time dependency. Resolved exactly once via
+// pthread_once: the previous lazy `if (!resolved) { ... }` was read/written
+// concurrently on the per-edge hot path (TSan-confirmed race); pthread_once
+// gives a race-free, happens-before-correct one-time init.
 typedef void* (*TaskLocalValueLookupFn)(const void* key);
 static TaskLocalValueLookupFn swift_task_localValueLookup_fn = NULL;
-static bool swift_task_localValueLookup_resolved = false;
+static pthread_once_t swift_task_localValueLookup_once = PTHREAD_ONCE_INIT;
+static void resolve_swift_task_localValueLookup(void) {
+    swift_task_localValueLookup_fn =
+        (TaskLocalValueLookupFn)dlsym(RTLD_DEFAULT, "swift_task_localValueGet");
+}
 
 /// Manual walk of the task-local chain. Two paths are checked at each
 /// ValueItem: (1) the captured CoverageInheritance.context key, and (2) any
@@ -210,16 +219,27 @@ static struct ck_malloc ck_allocator = {
 //
 // ck_ht operations are lock-free for reads. For writes, we rely on ck_ht's
 // internal handling. Initialization uses pthread_once for thread-safety.
+//
+// CONCURRENCY: ck_ht's *_spmc API is single-producer — concurrent writers, and
+// readers racing a resize that frees the old map, are data races (confirmed by
+// ThreadSanitizer). begin/end_measurement run on many threads at once under the
+// parallel test suite, so every table is guarded by a pthread_rwlock: readers
+// (ck_ht_get) take the shared lock; writers (set/put/remove, which also drive
+// resize) take the exclusive lock. This makes writes single-producer and keeps
+// the resize-time free from running concurrently with any reader. The locks are
+// per-table and never nested, so there is no lock-ordering hazard.
 
 // Coverage registry: task_id -> coverage_map
 static ck_ht_t g_coverage_ht;
 static pthread_once_t g_coverage_ht_once = PTHREAD_ONCE_INIT;
+static pthread_rwlock_t g_coverage_ht_lock = PTHREAD_RWLOCK_INITIALIZER;
 
 // Active-context liveness set: live measurement context pointer -> itself.
 // Membership means the context is currently between begin/end_measurement (i.e.
 // safe to route inherited edges to). Resizable, so it never overflows.
 static ck_ht_t g_active_ctx_ht;
 static pthread_once_t g_active_ctx_ht_once = PTHREAD_ONCE_INIT;
+static pthread_rwlock_t g_active_ctx_ht_lock = PTHREAD_RWLOCK_INITIALIZER;
 
 // Thread-local fallback for non-async contexts
 static _Thread_local uint8_t *tls_coverage_map = NULL;
@@ -227,6 +247,7 @@ static _Thread_local uint8_t *tls_coverage_map = NULL;
 // Measurement registry: task_id -> measurement_context
 static ck_ht_t g_measurement_ht;
 static pthread_once_t g_measurement_ht_once = PTHREAD_ONCE_INIT;
+static pthread_rwlock_t g_measurement_ht_lock = PTHREAD_RWLOCK_INITIALIZER;
 
 // Thread-local pseudo-task ID for synchronous code outside async contexts
 static _Thread_local void* tls_sync_pseudo_task = NULL;
@@ -338,7 +359,10 @@ static bool is_active_inheritance_context(SanCovMeasurementContext* candidate) {
     ck_ht_hash_t h;
     ck_ht_hash_direct(&h, &g_active_ctx_ht, (uintptr_t)candidate);
     ck_ht_entry_key_set_direct(&entry, (uintptr_t)candidate);
-    return ck_ht_get_spmc(&g_active_ctx_ht, h, &entry);
+    pthread_rwlock_rdlock(&g_active_ctx_ht_lock);
+    bool found = ck_ht_get_spmc(&g_active_ctx_ht, h, &entry);
+    pthread_rwlock_unlock(&g_active_ctx_ht_lock);
+    return found;
 }
 
 static void register_active_inheritance_context(SanCovMeasurementContext* ctx) {
@@ -350,7 +374,9 @@ static void register_active_inheritance_context(SanCovMeasurementContext* ctx) {
     ck_ht_hash_direct(&h, &g_active_ctx_ht, (uintptr_t)ctx);
     // Value is the pointer itself (must be non-zero); only membership matters.
     ck_ht_entry_set_direct(&entry, h, (uintptr_t)ctx, (uintptr_t)ctx);
+    pthread_rwlock_wrlock(&g_active_ctx_ht_lock);
     ck_ht_put_spmc(&g_active_ctx_ht, h, &entry);
+    pthread_rwlock_unlock(&g_active_ctx_ht_lock);
 }
 
 static void unregister_active_inheritance_context(SanCovMeasurementContext* ctx) {
@@ -361,7 +387,9 @@ static void unregister_active_inheritance_context(SanCovMeasurementContext* ctx)
     ck_ht_hash_t h;
     ck_ht_hash_direct(&h, &g_active_ctx_ht, (uintptr_t)ctx);
     ck_ht_entry_key_set_direct(&entry, (uintptr_t)ctx);
+    pthread_rwlock_wrlock(&g_active_ctx_ht_lock);
     ck_ht_remove_spmc(&g_active_ctx_ht, h, &entry);
+    pthread_rwlock_unlock(&g_active_ctx_ht_lock);
 }
 
 // MARK: - Measurement Context Registry Operations (lock-free with ck_ht)
@@ -376,7 +404,10 @@ static void* get_measurement_context_for_task(void* task_id) {
     ck_ht_hash_direct(&h, &g_measurement_ht, (uintptr_t)task_id);
     ck_ht_entry_key_set_direct(&entry, (uintptr_t)task_id);
 
-    if (ck_ht_get_spmc(&g_measurement_ht, h, &entry)) {
+    pthread_rwlock_rdlock(&g_measurement_ht_lock);
+    bool found = ck_ht_get_spmc(&g_measurement_ht, h, &entry);
+    pthread_rwlock_unlock(&g_measurement_ht_lock);
+    if (found) {
         return (void*)ck_ht_entry_value_direct(&entry);
     }
     return NULL;
@@ -392,7 +423,10 @@ static bool set_measurement_context_for_task(void* task_id, void* context) {
     ck_ht_hash_direct(&h, &g_measurement_ht, (uintptr_t)task_id);
     ck_ht_entry_set_direct(&entry, h, (uintptr_t)task_id, (uintptr_t)context);
 
-    return ck_ht_set_spmc(&g_measurement_ht, h, &entry);
+    pthread_rwlock_wrlock(&g_measurement_ht_lock);
+    bool ok = ck_ht_set_spmc(&g_measurement_ht, h, &entry);
+    pthread_rwlock_unlock(&g_measurement_ht_lock);
+    return ok;
 }
 
 // Remove measurement context for a task (lock-free write)
@@ -405,7 +439,9 @@ static void remove_measurement_context_for_task(void* task_id) {
     ck_ht_hash_direct(&h, &g_measurement_ht, (uintptr_t)task_id);
     ck_ht_entry_key_set_direct(&entry, (uintptr_t)task_id);
 
+    pthread_rwlock_wrlock(&g_measurement_ht_lock);
     ck_ht_remove_spmc(&g_measurement_ht, h, &entry);
+    pthread_rwlock_unlock(&g_measurement_ht_lock);
 }
 
 // TESTING ONLY (see header): mark a context "ended" for routing purposes —
@@ -430,11 +466,14 @@ static uint8_t* find_or_create_task_map(void* task_id) {
     ck_ht_entry_t entry;
     ck_ht_hash_t h;
 
-    // Lock-free lookup first (fast path for existing entries)
+    // Fast path: shared-lock lookup for the common (already-exists) case.
     ck_ht_hash_direct(&h, &g_coverage_ht, (uintptr_t)task_id);
     ck_ht_entry_key_set_direct(&entry, (uintptr_t)task_id);
 
-    if (ck_ht_get_spmc(&g_coverage_ht, h, &entry)) {
+    pthread_rwlock_rdlock(&g_coverage_ht_lock);
+    bool found = ck_ht_get_spmc(&g_coverage_ht, h, &entry);
+    pthread_rwlock_unlock(&g_coverage_ht_lock);
+    if (found) {
         return (uint8_t*)ck_ht_entry_value_direct(&entry);
     }
 
@@ -444,19 +483,18 @@ static uint8_t* find_or_create_task_map(void* task_id) {
         return NULL;
     }
 
-    // Try to insert using put (fails if key already exists)
-    ck_ht_entry_set_direct(&entry, h, (uintptr_t)task_id, (uintptr_t)new_map);
-    bool inserted = ck_ht_put_spmc(&g_coverage_ht, h, &entry);
-
-    if (!inserted) {
-        // Another thread beat us - free our map and return existing one
+    // Slow path: take the exclusive lock, re-check (another writer may have
+    // inserted between the rdlock release and now), then insert.
+    pthread_rwlock_wrlock(&g_coverage_ht_lock);
+    ck_ht_entry_key_set_direct(&entry, (uintptr_t)task_id);
+    if (ck_ht_get_spmc(&g_coverage_ht, h, &entry)) {
+        pthread_rwlock_unlock(&g_coverage_ht_lock);
         free(new_map);
-        ck_ht_entry_key_set_direct(&entry, (uintptr_t)task_id);
-        if (ck_ht_get_spmc(&g_coverage_ht, h, &entry)) {
-            return (uint8_t*)ck_ht_entry_value_direct(&entry);
-        }
-        return NULL;  // Shouldn't happen, but handle gracefully
+        return (uint8_t*)ck_ht_entry_value_direct(&entry);
     }
+    ck_ht_entry_set_direct(&entry, h, (uintptr_t)task_id, (uintptr_t)new_map);
+    ck_ht_put_spmc(&g_coverage_ht, h, &entry);
+    pthread_rwlock_unlock(&g_coverage_ht_lock);
 
     return new_map;
 }
@@ -471,10 +509,13 @@ static void cleanup_task_map(void* task_id) {
     ck_ht_hash_direct(&h, &g_coverage_ht, (uintptr_t)task_id);
     ck_ht_entry_key_set_direct(&entry, (uintptr_t)task_id);
 
+    pthread_rwlock_wrlock(&g_coverage_ht_lock);
     bool removed = ck_ht_remove_spmc(&g_coverage_ht, h, &entry);
+    pthread_rwlock_unlock(&g_coverage_ht_lock);
 
     if (removed) {
-        // Entry was found and removed - free the coverage map
+        // Entry was found and removed - free the coverage map. Safe to free
+        // outside the lock: the entry is no longer reachable via the table.
         uint8_t* map = (uint8_t*)ck_ht_entry_value_direct(&entry);
         if (map != NULL) {
             free(map);
@@ -638,7 +679,9 @@ static const uint8_t* get_counters_with_context(SanCovMeasurementContext* ctx) {
 // Get covered count for a measurement context (O(1)).
 size_t sancov_get_covered_count_with_context(SanCovMeasurementContext* ctx) {
     if (!ctx) return 0;
-    return ctx->covered_count;
+    // Atomic load: covered_count is bumped via __atomic_fetch_add on edge-firing
+    // threads, so a plain read here is a data race (TSan-confirmed).
+    return __atomic_load_n(&ctx->covered_count, __ATOMIC_RELAXED);
 }
 
 // Allocate and fill an array of covered edge indices.
@@ -986,12 +1029,8 @@ static uint8_t* get_current_coverage_map(void) {
     bool inherited_via_runtime = false;
     if (inheritance_active) {
         if (g_coverage_inheritance_key != NULL) {
-            // Try the runtime's own lookup first
-            if (!swift_task_localValueLookup_resolved) {
-                swift_task_localValueLookup_fn = (TaskLocalValueLookupFn)dlsym(
-                    RTLD_DEFAULT, "swift_task_localValueGet");
-                swift_task_localValueLookup_resolved = true;
-            }
+            // Try the runtime's own lookup first (resolved once, race-free).
+            pthread_once(&swift_task_localValueLookup_once, resolve_swift_task_localValueLookup);
             if (swift_task_localValueLookup_fn) {
                 void* result = swift_task_localValueLookup_fn(g_coverage_inheritance_key);
                 if (result) {
