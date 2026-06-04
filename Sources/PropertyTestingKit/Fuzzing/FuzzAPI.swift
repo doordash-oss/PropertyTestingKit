@@ -396,13 +396,18 @@ private func reportFuzzResult<each Input: Codable & Sendable>(
 ) throws -> FuzzResult<repeat each Input> {
     let testFilePath = String(describing: filePath)
 
-    for (index, (input, error, _)) in result.failures.enumerated() {
+    for (index, (input, error, _, scheduleBytes)) in result.failures.enumerated() {
         // Format the input for readability
         let formattedInput = formatInput(input)
 
         // Build a comprehensive failure message
         var message = "Fuzz test failure #\(index + 1)"
         message += "\n\nFailing input:\n\(formattedInput)"
+        if let scheduleBytes {
+            // Schedule fuzzing: include the interleaving that triggered the failure
+            // so it can be reproduced.
+            message += "\n\nTriggering schedule bytes:\n\(scheduleBytes)"
+        }
         message += "\n\nError:\n\(error)"
 
         // Add context about the fuzz run

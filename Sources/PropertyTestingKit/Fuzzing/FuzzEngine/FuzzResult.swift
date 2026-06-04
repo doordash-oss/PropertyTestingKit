@@ -21,7 +21,7 @@ public struct FuzzResult<each Input: Codable & Sendable>: Sendable {
     public let corpus: CorpusSnapshot<repeat each Input>
 
     /// Inputs that caused test failures.
-    public let failures: [(input: (repeat each Input), error: Error, timeElapsed: TimeInterval)]
+    public let failures: [(input: (repeat each Input), error: Error, timeElapsed: TimeInterval, scheduleBytes: [UInt8]?)]
 
     /// Statistics about the fuzz run.
     public let stats: FuzzStats
@@ -31,7 +31,7 @@ public struct FuzzResult<each Input: Codable & Sendable>: Sendable {
 
     public init(
         corpus: CorpusSnapshot<repeat each Input>,
-        failures: [(input: (repeat each Input), error: Error, timeElapsed: TimeInterval)],
+        failures: [(input: (repeat each Input), error: Error, timeElapsed: TimeInterval, scheduleBytes: [UInt8]?)],
         stats: FuzzStats,
         wasRegression: Bool
     ) {

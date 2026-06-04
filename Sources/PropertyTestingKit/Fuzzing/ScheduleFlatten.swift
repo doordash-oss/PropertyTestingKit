@@ -50,9 +50,12 @@ func makeScheduleByteMutator(using seedRng: inout FastRNG) -> Mutator<[UInt8]> {
 func peelScheduleResult<each Input: Codable & Sendable>(
     _ result: FuzzResult<[UInt8], repeat each Input>
 ) -> FuzzResult<repeat each Input> {
-    let failures: [(input: (repeat each Input), error: Error, timeElapsed: TimeInterval)] =
+    let failures: [(input: (repeat each Input), error: Error, timeElapsed: TimeInterval, scheduleBytes: [UInt8]?)] =
         result.failures.map { failure in
-            (input: (repeat each failure.input.1), error: failure.error, timeElapsed: failure.timeElapsed)
+            // Lift element 0 (the schedule that triggered the failure) onto the
+            // public `scheduleBytes` slot so the user can reproduce the interleaving.
+            (input: (repeat each failure.input.1), error: failure.error,
+             timeElapsed: failure.timeElapsed, scheduleBytes: failure.input.0)
         }
 
     let entries: [CorpusEntry<repeat each Input>] = result.corpus.entries.map { entry in

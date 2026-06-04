@@ -44,7 +44,7 @@ struct FlattenedScheduleTests {
         )
         let extended = FuzzResult<[UInt8], Int, String>(
             corpus: CorpusSnapshot(entries: [entry], coveredIndices: [1, 2]),
-            failures: [(input: ([5, 6], 7, "bye"), error: PeelTestError(), timeElapsed: 0.25)],
+            failures: [(input: ([5, 6], 7, "bye"), error: PeelTestError(), timeElapsed: 0.25, scheduleBytes: nil)],
             stats: FuzzStats(totalInputs: 1, mutations: 0, generations: 1, duration: 0.5),
             wasRegression: false
         )
@@ -61,12 +61,13 @@ struct FlattenedScheduleTests {
         #expect(e.sparseCoverage.indices == [1, 2])
         #expect(peeled.corpus.coveredIndices == [1, 2])
 
-        // Failure: input peeled to (Int, String); schedule bytes are not carried
-        // in the failures tuple (there is no slot), matching the prior behavior.
+        // Failure: input peeled to (Int, String); the schedule that triggered it is
+        // lifted from element 0 onto the `scheduleBytes` slot so it can be reproduced.
         try #require(peeled.failures.count == 1)
         #expect(peeled.failures[0].input.0 == 7)
         #expect(peeled.failures[0].input.1 == "bye")
         #expect(peeled.failures[0].error is PeelTestError)
+        #expect(peeled.failures[0].scheduleBytes == [5, 6])
 
         #expect(peeled.stats.totalInputs == 1)
         #expect(peeled.wasRegression == false)

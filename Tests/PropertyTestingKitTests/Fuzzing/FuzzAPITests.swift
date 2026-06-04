@@ -209,7 +209,7 @@ struct FuzzAPITests {
         #expect(!result.failures.isEmpty, "Should have captured failures")
 
         // Verify the error type
-        if let (_, error, _) = result.failures.first {
+        if let (_, error, _, _) = result.failures.first {
             #expect(error is TestFailure, "Error should be TestFailure")
         }
     }

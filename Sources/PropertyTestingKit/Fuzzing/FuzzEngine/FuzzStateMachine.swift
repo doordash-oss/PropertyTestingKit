@@ -44,7 +44,7 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
     private let seeds: [(repeat each Input)]
     private let startTime: Date
     private let dateClient: DateClient
-    private var failures: [(input: (repeat each Input), error: Error, timeElapsed: TimeInterval)] =
+    private var failures: [(input: (repeat each Input), error: Error, timeElapsed: TimeInterval, scheduleBytes: [UInt8]?)] =
         []
     private let test: @Sendable ((repeat each Input)) async throws -> Void
 
@@ -94,14 +94,17 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
     }
 
     private func recordFailure(input: (repeat each Input), error: any Error) {
+        // `scheduleBytes` stays nil here: during schedule fuzzing the schedule is
+        // input element 0, and `peelScheduleResult` lifts it onto this slot for the
+        // user-facing result (mirroring how corpus entries are handled).
         failures.append(
-            (input: input, error: error, timeElapsed: startTime.distance(to: dateClient.now())))
+            (input: input, error: error, timeElapsed: startTime.distance(to: dateClient.now()), scheduleBytes: nil))
     }
 
     struct FuzzStateMachineResult {
         let stats: FuzzStats
         let corpus: Corpus<repeat each Input>
-        let failures: [(input: (repeat each Input), error: Error, timeElapsed: TimeInterval)]
+        let failures: [(input: (repeat each Input), error: Error, timeElapsed: TimeInterval, scheduleBytes: [UInt8]?)]
     }
 
     func start() async throws -> FuzzStateMachineResult {

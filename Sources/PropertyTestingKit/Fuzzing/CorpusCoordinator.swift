@@ -440,7 +440,7 @@ private func mergeResults<each Input: Codable & Sendable>(
     }
 
     // Merge all failures
-    var allFailures: [(input: (repeat each Input), error: Error, timeElapsed: TimeInterval)] = []
+    var allFailures: [(input: (repeat each Input), error: Error, timeElapsed: TimeInterval, scheduleBytes: [UInt8]?)] = []
     for result in results {
         allFailures.append(contentsOf: result.failures)
     }
