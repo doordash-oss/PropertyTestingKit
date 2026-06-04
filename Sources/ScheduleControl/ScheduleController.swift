@@ -333,6 +333,24 @@ public enum ScheduleController {
 
     private static let maxDrainSteps = 100_000
 
+    /// Pure schedule-decision used by the drain loop: given the schedule bytes, the
+    /// current read position, and how many jobs are pending, return which pending
+    /// job to run next and the advanced read position.
+    ///
+    /// Exactly one byte is consumed per decision, so the byte at position *k* always
+    /// governs the *k*-th dispatched job — independent of how many jobs happen to be
+    /// queued at that instant. This keeps replay deterministic: byte position tracks
+    /// the (stable) dispatch ordinal rather than the (timing-dependent) queue depth.
+    /// When the bytes are exhausted the decision defaults to FIFO (index 0) without
+    /// advancing. `pendingCount` must be >= 1 (the drain loop only decides when the
+    /// queue is non-empty).
+    static func scheduleChoice(
+        scheduleBytes: [UInt8], byteIndex: Int, pendingCount: Int
+    ) -> (choice: Int, nextByteIndex: Int) {
+        guard byteIndex < scheduleBytes.count else { return (0, byteIndex) }
+        return (Int(scheduleBytes[byteIndex]) % pendingCount, byteIndex + 1)
+    }
+
     /// Execute `test` under schedule control.
     ///
     /// - Parameters:
@@ -393,15 +411,12 @@ public enum ScheduleController {
                     continue
                 }
 
-                let choice: Int
-                if byteIndex < scheduleBytes.count && count > 1 {
-                    choice = Int(scheduleBytes[byteIndex]) % count
-                    byteIndex += 1
-                } else {
-                    choice = 0
-                }
+                let decision = ScheduleController.scheduleChoice(
+                    scheduleBytes: scheduleBytes, byteIndex: byteIndex, pendingCount: count
+                )
+                byteIndex = decision.nextByteIndex
 
-                let job = session.remove(at: choice)
+                let job = session.remove(at: decision.choice)
                 session.dispatch(job)
                 waitForStateChange(session: session, completion: completion)
             }
