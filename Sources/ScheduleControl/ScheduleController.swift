@@ -422,6 +422,21 @@ public enum ScheduleController {
             }
 
             // Drain loop on cooperative pool thread.
+            //
+            // The loop BLOCKS (DispatchSemaphore) rather than `await`s job
+            // arrival, and this is deliberate — not a candidate for async
+            // signalling. The drain thread is the one thread on which this
+            // session's jobs run, via `dispatch` → `runSynchronously`. If the
+            // loop awaited instead of blocking, it would suspend back into the
+            // cooperative pool, and the runtime could then schedule THIS
+            // session's own continuation jobs onto the freed thread out from
+            // under the scheduler — defeating the single-threaded, byte-driven
+            // dispatch order that is the whole point of schedule control. Owning
+            // (blocking) the thread for the session's lifetime is what keeps
+            // dispatch deterministic. The semaphore is signalled on every state
+            // change (`append`, completion), so the only non-event wakeups are
+            // the bounded `.now() + 0.1` fallbacks below, which exist purely as a
+            // liveness backstop against a missed signal — not a busy-poll.
             session.jobArrived.wait()
 
             var byteIndex = 0

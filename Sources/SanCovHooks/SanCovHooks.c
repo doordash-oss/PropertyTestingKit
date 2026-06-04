@@ -1720,11 +1720,22 @@ void sancov_record_edge_to_target(uint32_t *guard) {
 }
 
 // Edge hook function pointer — set by Swift via sancov_install_swift_hook().
-// Before Swift init, falls back to sancov_record_edge directly.
-static void (*g_edge_hook)(uint32_t*) = NULL;
+// Before Swift init, falls back to sancov_record_edge directly. Atomic because
+// parallel fuzzing installs the (same) hook from many engine threads at once
+// while the per-edge hot path reads it concurrently (TSan-confirmed write/read
+// race under `fuzz(parallelism:)` × N concurrent calls).
+// Stored as atomic pointer-sized bits (the __atomic builtins reject a
+// function-pointer _Atomic directly); cast on store/load. Function-pointer ↔
+// uintptr_t round-trips losslessly on every supported target (same assumption
+// dlsym relies on).
+typedef void (*EdgeHookFn)(uint32_t*);
+// Plain (not _Atomic-qualified): accessed via the __atomic_* builtins, which
+// provide atomic load/store on plain types — matching how g_edge_state and the
+// map cells are handled elsewhere in this file.
+static uintptr_t g_edge_hook_bits = 0;
 
 void sancov_install_swift_hook(void (*hook)(uint32_t*)) {
-    g_edge_hook = hook;
+    __atomic_store_n(&g_edge_hook_bits, (uintptr_t)hook, __ATOMIC_RELEASE);
 }
 
 // Forward declarations for lazy edge filter (defined later in file alongside
@@ -1737,27 +1748,31 @@ extern uint8_t* g_edge_state;
 static void check_and_cache_edge_lazy(uint32_t* guard, uint32_t g);
 
 void __sanitizer_cov_trace_pc_guard(uint32_t *guard) {
-    // Fast-path: if guard has been filtered (set to SANCOV_GUARD_SKIP) or is
-    // otherwise out of range, skip. The legacy mechanism keeps working.
+    // Fast-path: out-of-range or upfront-cached-SKIP guards (set to
+    // SANCOV_GUARD_SKIP once, under pthread_once, before any edge fires) skip.
+    // `*guard` is never written after that init barrier, so this read is
+    // race-free under parallel fuzzing.
     uint32_t g = *guard;
     if (g >= g_guard_count) return;
 
-    // Lazy filter: classify on first fire of each edge, then cache.
-    // After classification: ALLOWED → continue to recording; SKIP → suppress.
+    // Lazy filter: classify on first fire of each edge, then cache the verdict
+    // in g_edge_state (atomic). The classification — NOT a `*guard` stamp — is
+    // the single source of truth, so concurrent engines firing the same edge do
+    // not race on the shared guard global (TSan-confirmed fix).
     if (__builtin_expect(g_edge_state != NULL, 1)) {
-        uint8_t state = g_edge_state[g];
+        uint8_t state = __atomic_load_n(&g_edge_state[g], __ATOMIC_ACQUIRE);
         if (__builtin_expect(state == EDGE_STATE_UNCHECKED, 0)) {
             check_and_cache_edge_lazy(guard, g);
-            // Re-read guard: the slow path may have stamped SKIP.
-            if (*guard >= g_guard_count) return;
+            // Re-read the cached verdict: SKIP → suppress.
+            if (__atomic_load_n(&g_edge_state[g], __ATOMIC_ACQUIRE) == EDGE_STATE_SKIP) return;
         } else if (state == EDGE_STATE_SKIP) {
-            *guard = SANCOV_GUARD_SKIP;
             return;
         }
     }
 
-    if (g_edge_hook) {
-        g_edge_hook(guard);
+    EdgeHookFn hook = (EdgeHookFn)__atomic_load_n(&g_edge_hook_bits, __ATOMIC_ACQUIRE);
+    if (hook) {
+        hook(guard);
     } else {
         sancov_record_edge(guard);
     }
@@ -1982,8 +1997,8 @@ static inline void ensure_filter_init(void) {
 
 // Slow path: classify a single edge on its first fire and update state.
 // Called rarely (once per edge, ever). Sets either:
-//   - state[g] = SKIP, *guard = SANCOV_GUARD_SKIP  (compiler-generated noise)
-//   - state[g] = ALLOWED                            (real instrumented code)
+//   - state[g] = SKIP     (compiler-generated noise; never stamps *guard)
+//   - state[g] = ALLOWED  (real instrumented code)
 // Forward-declared up near the hot path.
 static void check_and_cache_edge_lazy_impl(uint32_t* guard, uint32_t g);
 static void check_and_cache_edge_lazy(uint32_t* guard, uint32_t g) {
@@ -2006,7 +2021,10 @@ static void check_and_cache_edge_lazy_impl(uint32_t* guard, uint32_t g) {
     }
 
     if (is_noise) {
-        *guard = SANCOV_GUARD_SKIP;
+        // Record the verdict in g_edge_state only. Do NOT stamp `*guard` — that
+        // shared global is read lock-free on the hot path by every concurrent
+        // engine, so writing it here is a data race (TSan-confirmed). The atomic
+        // g_edge_state verdict already suppresses future fires.
         __atomic_store_n(&g_edge_state[g], (uint8_t)EDGE_STATE_SKIP, __ATOMIC_RELEASE);
         __atomic_fetch_add(&g_lazy_filtered_count, 1, __ATOMIC_RELAXED);
     } else {
