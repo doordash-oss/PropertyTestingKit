@@ -13,6 +13,8 @@
 // limitations under the License.
 
 import Testing
+import Foundation
+import Dependencies
 @testable import PropertyTestingKit
 
 @Suite("CoverageGapDetector")
@@ -304,17 +306,35 @@ struct CoverageGapDetectorTests {
 
         // This test intentionally creates a coverage gap to verify detection works.
         // The detector reports the edge AFTER the unreachable body — i.e. the line
-        // of the next `else if`. Update if the function above is edited.
-        let expectedLine = 298
+        // of the `} else if input < 0 {` above. Update if the function above is edited.
+        let expectedLine = 300
 
+        // Replay a fixed 2-input corpus (0 → `else`, -1 → `else if input < 0`; neither hits
+        // the unreachable `hash == 0x7FFFFFFE` branch) so the gap is produced deterministically.
+        //
+        // The corpus is supplied by a TEST-OWNED in-memory persistence client pinned via
+        // withDependencies, NOT the ambient \.corpusPersistence. This is load-bearing: under
+        // the parallel suite, CorpusCoordinatorTests/FuzzAPITests override \.corpusPersistence
+        // with empty mock clients, and that override leaks across swift-testing's concurrent
+        // tests (see ScheduleDeterminismTest.persistedScheduleReplaysIdentically). A leaked
+        // mock made `runReplay` see no corpus → replay was a no-op → the coverageGap plugin's
+        // .end never fired → "Known issue was not recorded" (~67% of runs). Pinning our own
+        // client makes the replay hermetic and immune to that leak.
+        let corpusJSON = Data("[[0],[-1]]".utf8)
+        let persistence = CorpusPersistenceClient(
+            save: { _, _ in },
+            load: { _ in corpusJSON },
+            exists: { _ in true },
+            delete: { _ in }
+        )
+
+        try await withDependencies {
+            $0.corpusPersistence = persistence
+        } operation: {
         try await withKnownIssue("Expected coverage gap in partiallyCoveredFunction") {
-            // mutation() is included by default via handlers
-            _ = try await fuzz(
-                duration: .seconds(0.5),
-                persistence: .replace,
-                coverageStrategy: .signatureMatch,
-                parallelism: 1,
-                plugins: { [.mutation(), .coverageGap()] }
+            _ = try await regress(
+                duration: .seconds(10),
+                plugins: { [.coverageGap()] }
             ) { (input: Int) in
                 partiallyCoveredFunction(input: input)
             }
@@ -324,6 +344,7 @@ struct CoverageGapDetectorTests {
             let isPartiallyCovered = comment.contains("partiallyCoveredFunction")
             let hasPartialCoverage = comment.contains("% covered")
             return isCorrectLine && isPartiallyCovered && hasPartialCoverage
+        }
         }
     }
 
