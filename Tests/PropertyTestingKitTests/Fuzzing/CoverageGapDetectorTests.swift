@@ -303,39 +303,28 @@ struct CoverageGapDetectorTests {
         }
 
         // This test intentionally creates a coverage gap to verify detection works.
-        // The uncovered branch (`hash == 0x7FFFFFFE`) is attributed by DWARF to the line
+        // The detector reports the edge AFTER the unreachable body — i.e. the line
         // of the next `else if`. Update if the function above is edited.
         let expectedLine = 298
 
-        // Measure coverage deterministically with a direct measurement context — the same
-        // primitive InheritanceTest uses for its baseline measurement — instead of a
-        // fuzz/replay run. Calling the function synchronously inside one measurement window
-        // routes its edges to `ctx` reliably even under parallel test load: a same-thread
-        // synchronous call has none of the fuzz engine's task-hopping / cross-engine
-        // routing fragility. The earlier `fuzz(duration: .seconds(0.5))` form (and a
-        // 2-seed `regress(...)` replay) were both flaky under the parallel suite — too few
-        // executions for the engine's coverage routing to reliably register the edges, so
-        // the gap was intermittently missed ("Known issue was not recorded"). Inputs 0 and
-        // -1 take the `else` and `else if input < 0` branches; the `hash == 0x7FFFFFFE`
-        // branch is never taken, so the function is partially covered on every run.
-        let ctx = SanCovCounters.beginMeasurement()
-        SanCovCounters.resetCoverage(ctx)
-        partiallyCoveredFunction(input: 0)
-        partiallyCoveredFunction(input: -1)
-        let covered = Set((try SanCovCounters.snapshotCoveredArrays(with: ctx)).indices)
-        SanCovCounters.endMeasurement(ctx)
-        try #require(!covered.isEmpty, "partiallyCoveredFunction must produce edges when called directly")
-
-        // Run the real detector over the measured coverage and assert it reports the gap.
-        let report = await CoverageGapDetector().detect(from: covered)
-        let gap = try #require(
-            report.gaps.first(where: { $0.functionName.contains("partiallyCoveredFunction") }),
-            "detector must report a coverage gap for partiallyCoveredFunction; gaps=\(report.gaps.map(\.functionName))"
-        )
-        #expect(gap.coveragePercentage > 0 && gap.coveragePercentage < 100,
-                "the function must be partially covered, was \(gap.coveragePercentage)%")
-        #expect(gap.uncoveredRegions.contains(where: { $0.lineStart == expectedLine }),
-                "expected an uncovered region at line \(expectedLine); got \(gap.uncoveredRegions.map(\.lineStart))")
+        try await withKnownIssue("Expected coverage gap in partiallyCoveredFunction") {
+            // mutation() is included by default via handlers
+            _ = try await fuzz(
+                duration: .seconds(0.5),
+                persistence: .replace,
+                coverageStrategy: .signatureMatch,
+                parallelism: 1,
+                plugins: { [.mutation(), .coverageGap()] }
+            ) { (input: Int) in
+                partiallyCoveredFunction(input: input)
+            }
+        } matching: { issue in
+            let comment = issue.comments.first?.rawValue ?? ""
+            let isCorrectLine = issue.sourceLocation?.line == expectedLine
+            let isPartiallyCovered = comment.contains("partiallyCoveredFunction")
+            let hasPartialCoverage = comment.contains("% covered")
+            return isCorrectLine && isPartiallyCovered && hasPartialCoverage
+        }
     }
 
     func parseAndValidate(_ input: Int) throws {
