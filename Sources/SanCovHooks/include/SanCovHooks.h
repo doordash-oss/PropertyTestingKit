@@ -295,9 +295,9 @@ void sancov_install_swift_hook(void (*hook)(uint32_t*));
 // and writes coverage directly to a specified measurement context.
 
 /// Set a target measurement context for schedule-aware coverage recording.
-/// When non-NULL, `sancov_record_edge_to_target` writes to this context
-/// instead of using the task-keyed lookup.
-/// Pass NULL to disable.
+/// When non-NULL, the live edge hook routes the calling thread's edges to this
+/// context via `get_current_coverage_map` (atomic, same code path as normal
+/// recording), bypassing the task-keyed lookup. Pass NULL to disable.
 void sancov_set_target_context(SanCovMeasurementContext* context);
 
 // MARK: - Coverage Inheritance (Task-Local Propagation)
@@ -315,11 +315,6 @@ const void* sancov_capture_key_by_value(const void* task, uintptr_t expected_val
 /// Call after schedule-controlled drain completes (single-threaded) so that
 /// strategies using covered_indices see the correct data.
 void sancov_rebuild_covered_indices_from_map(SanCovMeasurementContext* context);
-
-/// Edge recording that writes to the target context set by `sancov_set_target_context`.
-/// Falls back to `sancov_record_edge` if no target context is set.
-/// Use as the hook via `sancov_install_swift_hook(sancov_record_edge_to_target)`.
-void sancov_record_edge_to_target(uint32_t *guard);
 
 // MARK: - Edge Filter
 //

@@ -193,6 +193,7 @@ public actor GenericTimerPoller {
                 }
                 while !Task.isCancelled {
                     guard let self else { return }
+                    await Task.yield()
                     try await self.clock.sleep(for: self.effectiveInterval)
                     await self.callHandlers()
                 }

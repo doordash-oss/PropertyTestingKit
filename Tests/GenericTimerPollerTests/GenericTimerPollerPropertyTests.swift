@@ -420,23 +420,43 @@ struct GenericTimerPollerPropertyTests {
         try await withDependencies {
             $0.continuousClock = ImmediateClock()
         } operation: {
-            try await fuzz(duration: .seconds(3)) { (input: SequentialPollerOps) in
+            try await fuzz(duration: .seconds(3), scheduleFuzzing: true) { (input: SequentialPollerOps) in
                 let handlerCallCount = OSAllocatedUnfairLock(initialState: 0)
                 let poller = GenericTimerPoller(defaultInterval: .microseconds(1))
 
-                let (_, _, hasSubscribers, startedPolling) = await executePreamble(
+                // Retain `subs` (the subscription tokens): TaskCancellable cancels its
+                // subscription on dealloc, so binding it to `_` tore the subscriber
+                // down right after the preamble — removing the handler and finishing
+                // the poller's stream before the timer's first fire, so the handler
+                // was never observed (calls == 0). The poller's contract is "retain
+                // the token while you want updates"; the test must honor it.
+                let (subs, _, hasSubscribers, startedPolling) = await executePreamble(
                     ops: input.ops, on: poller
                 ) {
                     handlerCallCount.withLock { $0 += 1 }
                 }
 
-                await poller.stopPolling()
-
                 if hasSubscribers && startedPolling {
-                    let calls = handlerCallCount.withLock { $0 }
-                    #expect(calls > 0,
+                    // Wait for the first fire by observing the count directly, then
+                    // stop — don't race stopPolling() against the fire. The count is
+                    // the right signal here: the poller's `stream` is one-shot, so an
+                    // earlier stopPolling in the op sequence finishes it permanently
+                    // and it can't be used to wait. With the subscription retained the
+                    // timer stays active and fires; under schedule fuzzing the
+                    // scheduler must dispatch that fire to make progress, so this
+                    // terminates across every explored interleaving (a genuine
+                    // never-fire would surface as the test's .timeLimit, not a flake).
+                    while handlerCallCount.withLock({ $0 }) == 0 {
+                        await Task.yield()
+                    }
+                    await poller.stopPolling()
+                    #expect(handlerCallCount.withLock { $0 } > 0,
                             "With subscribers and startPolling, at least one handler call expected")
+                } else {
+                    await poller.stopPolling()
                 }
+                // Keep the subscription tokens alive until after the assertion.
+                withExtendedLifetime(subs) {}
             }
         }
     }

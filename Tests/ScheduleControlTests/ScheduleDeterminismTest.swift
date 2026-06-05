@@ -1,6 +1,6 @@
 import Testing
 import Foundation
-import Dependencies
+import os
 @testable import ScheduleControl
 @testable import PropertyTestingKit
 
@@ -84,7 +84,26 @@ struct ScheduleDeterminismTest {
     /// that the disk-loaded schedule reproduces the original execution order.
     @Test("A schedule persisted to disk replays to the same execution order")
     func persistedScheduleReplaysIdentically() async throws {
-        @Dependency(\.corpusPersistence) var persistence
+        // Test-owned in-memory persistence client. The property under test is the
+        // encode→store→load→decode round-trip (schedule bytes ride as input element
+        // 0 of the extended pack), which an in-memory store exercises exactly — no
+        // filesystem needed. Constructing it directly (rather than reading the
+        // ambient \.corpusPersistence dependency) also makes the test hermetic: a
+        // concurrently-running test's withDependencies override of the persistence
+        // client cannot leak in under parallel execution (previously it did, so the
+        // round-trip hit an empty mock store and failed to decode).
+        let store = OSAllocatedUnfairLock<[URL: Data]>(initialState: [:])
+        let persistence = CorpusPersistenceClient(
+            save: { data, url in store.withLock { $0[url] = data } },
+            load: { url in
+                guard let data = store.withLock({ $0[url] }) else {
+                    throw CocoaError(.fileReadNoSuchFile)
+                }
+                return data
+            },
+            exists: { url in store.withLock { $0[url] != nil } },
+            delete: { url in store.withLock { $0[url] = nil } }
+        )
 
         let bytes: [UInt8] = [
             42, 17, 255, 0, 100, 73, 99, 201,
@@ -98,11 +117,10 @@ struct ScheduleDeterminismTest {
         let original = try await runWithSchedule(bytes: bytes)
         #expect(!original.isEmpty, "expected some operations recorded")
 
-        // Persist + reload through the live on-disk persistence client. Schedule
-        // bytes ride as element 0 of the extended pack, exactly as a scheduled
-        // fuzz corpus stores them.
-        let dir = FileManager.default.temporaryDirectory
-            .appendingPathComponent("ptk-schedule-replay-roundtrip")
+        // Persist + reload through the persistence client. Schedule bytes ride as
+        // element 0 of the extended pack, exactly as a scheduled fuzz corpus stores
+        // them. The URL is just a key into the in-memory store.
+        let dir = URL(fileURLWithPath: "/ptk-schedule-replay-roundtrip")
         try? persistence.delete(dir)
         defer { try? persistence.delete(dir) }
 

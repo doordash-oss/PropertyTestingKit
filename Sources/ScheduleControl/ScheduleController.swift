@@ -75,6 +75,18 @@ final class SessionState: @unchecked Sendable {
     /// of `runSynchronously`, so method 3 in the routing hook can route
     /// runtime-internal enqueues (which fire on the same thread during
     /// the dispatched job) back to this session.
+    ///
+    /// Coverage-attribution limitation (by design): `g_target_context` is set in
+    /// THREAD-LOCAL storage on this drain thread only — it is deliberately not
+    /// process-global, because a global would let concurrent sessions/other tests
+    /// cross-contaminate each other's coverage. Consequently, only edges that fire
+    /// on the drain thread while this job runs synchronously are attributed to the
+    /// session's measurement context. If the test body offloads work to a
+    /// non-cooperative thread (e.g. `DispatchQueue.global().async`), those edges
+    /// fire off the drain thread, are not captured by the enqueue hook, and route
+    /// via inheritance/registry/TLS fallback instead — so coverage for such
+    /// escaped work may be undercounted. Schedule control governs Swift-concurrency
+    /// scheduling, not arbitrary thread offloading.
     func dispatch(_ job: UnownedJob) {
         _dispatchCount.withLock { $0 += 1 }
         let ctx = coverageContext
@@ -440,23 +452,32 @@ public enum ScheduleController {
             session.jobArrived.wait()
 
             var byteIndex = 0
-            var steps = 0
+            // Two independent backstops, so a slow-but-live test that idles between
+            // sparse jobs can't be killed by accrued idle wakeups (review):
+            //  - `dispatches` bounds runaway dispatching (a livelock generating jobs).
+            //  - `idleWaits` bounds a stuck/deadlocked drain that never completes;
+            //    it resets on every real dispatch, so progress keeps it from tripping.
+            var dispatches = 0
+            var idleWaits = 0
 
-            while !completion.isCompleted && steps < maxDrainSteps {
-                steps += 1
-
+            while !completion.isCompleted
+                    && dispatches < maxDrainSteps
+                    && idleWaits < maxDrainSteps {
                 let count = session.count
 
                 if count == 0 {
+                    idleWaits += 1
                     _ = session.jobArrived.wait(timeout: .now() + 0.1)
                     continue
                 }
+                idleWaits = 0
 
                 let decision = ScheduleController.scheduleChoice(
                     scheduleBytes: scheduleBytes, byteIndex: byteIndex, pendingCount: count
                 )
                 byteIndex = decision.nextByteIndex
 
+                dispatches += 1
                 let job = session.remove(at: decision.choice)
                 session.dispatch(job)
                 waitForStateChange(session: session, completion: completion)
