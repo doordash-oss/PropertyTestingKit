@@ -9,6 +9,7 @@ PropertyTestingKit brings coverage-guided fuzzing to Swift Testing:
 - **Coverage-guided fuzzing** - Automatically discover inputs that exercise new code paths
 - **Corpus persistence** - Save and replay interesting inputs across test runs
 - **Regression testing** - Replay saved corpus to catch regressions
+- **Schedule fuzzing** - Deterministically explore concurrent task interleavings to surface order-dependent races
 - **High throughput** - ~35M iterations/sec with full per-test concurrent coverage isolation
 
 ## Requirements
@@ -93,7 +94,7 @@ Commit the `Corpus/` directory to version control for deterministic CI runs.
 There are two entry points. `fuzz(...)` explores inputs and maintains a corpus;
 `regress(...)` only replays a saved corpus to verify it still passes. The split is
 deliberate: regression takes none of the fuzz-only knobs (`seeds`, `coverageStrategy`,
-`parallelism`), and its plugins are `AnalysisHandler`s that can only observe (`stop` /
+`parallelism`), and its plugins are `AnalysisPlugin`s that can only observe (`stop` /
 `recordIssue`) — so it's impossible, at compile time, to hand a replay a configuration or
 a plugin that would explore or mutate the corpus.
 
@@ -296,7 +297,7 @@ Find functions with incomplete test coverage using the coverage gap plugin:
 ```swift
 @Test func testParser() async throws {
     try await fuzz(
-        makeHandlers: { [.corpusMutation(), .coverageGap()] }
+        plugins: { [.corpusMutation(), .coverageGap()] }
     ) { (input: String) in
         parse(input)
     }
@@ -318,21 +319,29 @@ See [Plugins](#plugins) for more details on the plugin system.
 
 ### Plugins
 
-The fuzzer uses a plugin handler system to customize behavior:
+The fuzzer uses a plugin system to customize behavior:
 
 ```swift
 try await fuzz(
-    makeHandlers: { [.corpusMutation(), .plateauDetector()] }
+    plugins: { [.corpusMutation(), .plateauDetector()] }
 ) { (input: String) in
     parse(input)
 }
 ```
 
-Each `FuzzPluginHandler` receives synchronous events (per-iteration) and async events (start, end, failure), and can return actions (stop, queue inputs, record issues, etc.).
+A plugin receives synchronous events (per-iteration) and async events (start, end, failure),
+and can return actions (stop, queue inputs, record issues, etc.). There are two plugin types:
 
-#### Built-in Plugin Handlers
+- **`FuzzPlugin`** — full plugins that may emit write actions (queue inputs, mutate, submit to
+  the corpus). Valid only in `fuzz(...)`.
+- **`AnalysisPlugin`** — observe-only plugins whose actions are limited to `stop` / `recordIssue`.
+  Valid in both `regress(...)` and `fuzz(...)` (auto-lifted via `.asFuzzPlugin()`). The
+  observe-only factories below (e.g. `.coverageGap()`, the stopping detectors) are
+  `AnalysisPlugin`s, which is why a regression replay can never be handed a corpus-mutating plugin.
 
-| Handler | Category | Description |
+#### Built-in plugins
+
+| Plugin | Category | Description |
 |---------|----------|-------------|
 | `.mutation()` | Mutation | Basic: queues mutations when new coverage is found |
 | `.corpusMutation()` | Mutation | AFL-style: re-mutates random interesting inputs when queue drains (default) |
@@ -343,17 +352,18 @@ Each `FuzzPluginHandler` receives synchronous events (per-iteration) and async e
 | `.saturationDetector()` | Stopping | Stops when coverage growth saturates |
 | `.coverageGap()` | Analysis | Reports partially-covered functions after fuzzing completes |
 
-#### Custom Plugin Handlers
+#### Custom plugins
 
-Create custom handlers by constructing `FuzzPluginHandler` directly:
+Create a custom plugin by constructing `FuzzPlugin` directly (use `AnalysisPlugin` instead if
+it only observes, so it also works in `regress(...)`):
 
 ```swift
-let loggingHandler = FuzzPluginHandler<String>(
+let loggingPlugin = FuzzPlugin<String>(
     id: "logger",
     handleSync: { event in
         switch event {
         case .iteration(let ctx):
-            if ctx.discoveredNewCoverage {
+            if ctx.newCoverage != nil {
                 print("New coverage from: \(ctx.input)")
             }
         }
@@ -373,11 +383,64 @@ let loggingHandler = FuzzPluginHandler<String>(
 )
 
 try await fuzz(
-    makeHandlers: { [.corpusMutation(), loggingHandler] }
+    plugins: { [.corpusMutation(), loggingPlugin] }
 ) { (input: String) in
     parse(input)
 }
 ```
+
+### Schedule Fuzzing (concurrency races)
+
+Order-dependent concurrency bugs are notoriously hard to reproduce: they depend on how the
+runtime happens to interleave concurrent tasks. Pass `scheduleFuzzing: true` and the fuzzer
+also explores the *interleaving order* of the tasks your test spawns — turning a rare race
+into a deterministic, replayable failure.
+
+This is inspired by **ConFuzz** (Padhiyar & Sivaramakrishnan, [_Coverage-guided Property Fuzzing
+for Event-driven Programs_, PADL 2021](https://kcsrk.info/papers/confuzz_padl21.pdf)), which has
+AFL mutate both program inputs *and* the concurrent schedule, using coverage feedback to drive
+assertions to fail.
+
+```swift
+@Test func concurrentCounterIsConsistent() async throws {
+    try await fuzz(scheduleFuzzing: true) { (workers: Int) in
+        let counter = Counter()  // your type under test
+        await withTaskGroup(of: Void.self) { group in
+            for _ in 0..<(1 + abs(workers % 8)) {
+                group.addTask { await counter.bump() }
+            }
+        }
+        // If `Counter` has an order-dependent race, schedule fuzzing finds the
+        // interleaving that violates this — and saves it for replay.
+        #expect(await counter.value == 1 + abs(workers % 8))
+    }
+}
+```
+
+**How it works:**
+
+Normally the Swift runtime decides when each of your concurrent tasks gets to run, and that
+timing shifts from run to run — which is exactly why races are flaky and hard to reproduce.
+Schedule control takes that decision away from the runtime and gives it to the fuzzer:
+
+1. **It intercepts task scheduling.** For the tasks your test spawns (`Task {}`, task groups,
+   continuations), it captures them instead of letting the runtime dispatch them freely, and
+   runs them **one at a time on a single thread** — a fully serialized, deterministic drain.
+2. **The schedule bytes decide who runs next.** Whenever more than one task is runnable, the
+   scheduler has to choose one. That choice is driven by the fuzzed bytes: the *k*-th decision
+   reads byte *k* and picks `byte % (number of runnable tasks)`. So one byte string describes
+   one exact interleaving, end to end.
+3. **The fuzzer searches interleavings like it searches inputs.** Mutating the bytes reorders
+   *who runs when*, exploring the space of possible interleavings. A byte string that trips your
+   assertions is a concrete schedule — saved to the corpus and **replayed deterministically**,
+   so a once-in-a-thousand race becomes a test that fails the same way every time.
+
+Everything outside your test's tasks runs untouched. Practically: the interleaving is treated
+as just more fuzzed input (so it's mutated, persisted, and replayed like any input, while your
+`test` closure still receives only its own `(repeat each Input)`); `parallelism` is forced to 1
+since the schedule itself now controls ordering; and the default `corpusMutation` plugin is used
+(custom `plugins` are not applied to scheduled runs). The machinery lives in the separate
+`ScheduleControl` module, which `scheduleFuzzing: true` wires into the fuzz loop for you.
 
 ### Building with Coverage
 
