@@ -413,15 +413,29 @@ into a deterministic, replayable failure.
 ```
 
 **How it works:**
-- The schedule is encoded as bytes and folded into the input pack as element 0
-  (`([UInt8], repeat each Input)`), so it is mutated, persisted, and replayed exactly like any
-  other fuzzed input — a discovered bad interleaving reproduces on the next run. Your `test`
-  closure still receives only its own `(repeat each Input)`.
-- `parallelism` is forced to 1 (the schedule itself controls ordering), and the default
-  `corpusMutation` plugin is used (custom `plugins` are not applied to scheduled runs).
 
-The underlying machinery lives in the separate `ScheduleControl` module; `scheduleFuzzing: true`
-wires it into the fuzz loop for you.
+Normally the Swift runtime decides when each of your concurrent tasks gets to run, and that
+timing shifts from run to run — which is exactly why races are flaky and hard to reproduce.
+Schedule control takes that decision away from the runtime and gives it to the fuzzer:
+
+1. **It intercepts task scheduling.** For the tasks your test spawns (`Task {}`, task groups,
+   continuations), it captures them instead of letting the runtime dispatch them freely, and
+   runs them **one at a time on a single thread** — a fully serialized, deterministic drain.
+2. **The schedule bytes decide who runs next.** Whenever more than one task is runnable, the
+   scheduler has to choose one. That choice is driven by the fuzzed bytes: the *k*-th decision
+   reads byte *k* and picks `byte % (number of runnable tasks)`. So one byte string describes
+   one exact interleaving, end to end.
+3. **The fuzzer searches interleavings like it searches inputs.** Mutating the bytes reorders
+   *who runs when*, exploring the space of possible interleavings. A byte string that trips your
+   assertions is a concrete schedule — saved to the corpus and **replayed deterministically**,
+   so a once-in-a-thousand race becomes a test that fails the same way every time.
+
+Everything outside your test's tasks runs untouched. Practically: the interleaving is treated
+as just more fuzzed input (so it's mutated, persisted, and replayed like any input, while your
+`test` closure still receives only its own `(repeat each Input)`); `parallelism` is forced to 1
+since the schedule itself now controls ordering; and the default `corpusMutation` plugin is used
+(custom `plugins` are not applied to scheduled runs). The machinery lives in the separate
+`ScheduleControl` module, which `scheduleFuzzing: true` wires into the fuzz loop for you.
 
 ### Building with Coverage
 
