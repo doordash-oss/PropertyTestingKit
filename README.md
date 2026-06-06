@@ -399,7 +399,7 @@ into a deterministic, replayable failure.
 This is inspired by **ConFuzz** (Padhiyar & Sivaramakrishnan, [_Coverage-guided Property Fuzzing
 for Event-driven Programs_, PADL 2021](https://kcsrk.info/papers/confuzz_padl21.pdf)), which has
 AFL mutate both program inputs *and* the concurrent schedule, using coverage feedback to drive
-assertions to fail. See [`research/padhiyar-2021-confuzz.md`](research/padhiyar-2021-confuzz.md).
+assertions to fail.
 
 ```swift
 @Test func concurrentCounterIsConsistent() async throws {
