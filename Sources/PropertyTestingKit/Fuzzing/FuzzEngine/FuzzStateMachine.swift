@@ -15,6 +15,8 @@
 import Dependencies
 import Foundation
 import Testing
+import SanCovHooks
+import ScheduleControl
 
 /// Manages the fuzzing loop state. Not thread-safe - only used from a single task.
 final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendable {
@@ -42,9 +44,15 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
     private let seeds: [(repeat each Input)]
     private let startTime: Date
     private let dateClient: DateClient
-    private var failures: [(input: (repeat each Input), error: Error, timeElapsed: TimeInterval)] =
+    private var failures: [(input: (repeat each Input), error: Error, timeElapsed: TimeInterval, scheduleBytes: [UInt8]?)] =
         []
     private let test: @Sendable ((repeat each Input)) async throws -> Void
+
+    /// Extracts the schedule bytes from an input. When schedule fuzzing over the
+    /// flattened pack `([UInt8], repeat each UserInput)`, this returns element 0;
+    /// for non-scheduled runs it returns `nil`. When non-nil, the test execution
+    /// is wrapped in `ScheduleController.run` to fuzz task interleaving.
+    private let scheduleBytesExtractor: @Sendable ((repeat each Input)) -> [UInt8]?
 
     private var mutationsCount: Int = 0
 
@@ -65,7 +73,8 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
         processAsyncPlugins: @escaping AsyncPluginProcessorFn,
         config: FuzzEngineConfig,
         startTime: Date,
-        test: @escaping @Sendable ((repeat each Input)) async throws -> Void
+        test: @escaping @Sendable ((repeat each Input)) async throws -> Void,
+        scheduleBytesExtractor: @escaping @Sendable ((repeat each Input)) -> [UInt8]?
     ) {
         // Caching the dateclient
         @Dependency(\.dateClient) var dateClient: DateClient
@@ -80,18 +89,22 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
         self.config = config
         self.corpus = corpus
         self.test = test
+        self.scheduleBytesExtractor = scheduleBytesExtractor
         self.pendingInputs = SimpleRingBuffer(minimumCapacity: 16)
     }
 
     private func recordFailure(input: (repeat each Input), error: any Error) {
+        // `scheduleBytes` stays nil here: during schedule fuzzing the schedule is
+        // input element 0, and `peelScheduleResult` lifts it onto this slot for the
+        // user-facing result (mirroring how corpus entries are handled).
         failures.append(
-            (input: input, error: error, timeElapsed: startTime.distance(to: dateClient.now())))
+            (input: input, error: error, timeElapsed: startTime.distance(to: dateClient.now()), scheduleBytes: nil))
     }
 
     struct FuzzStateMachineResult {
         let stats: FuzzStats
         let corpus: Corpus<repeat each Input>
-        let failures: [(input: (repeat each Input), error: Error, timeElapsed: TimeInterval)]
+        let failures: [(input: (repeat each Input), error: Error, timeElapsed: TimeInterval, scheduleBytes: [UInt8]?)]
     }
 
     func start() async throws -> FuzzStateMachineResult {
@@ -99,16 +112,22 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
             print("[FUZZ] FuzzStateMachine.start() called, maxDuration=\(config.maxDuration)")
         }
 
-        // Initialize pending inputs with seeds
+        // Initialize pending inputs with seeds. Schedule bytes (when scheduling)
+        // travel inside the input pack as element 0, so there is no parallel
+        // schedule-bytes queue to seed — `scheduleBytesExtractor` reads them from
+        // each input.
         pendingInputs = SimpleRingBuffer(seeds)
 
         // Setup for test execution
         let coverageCountersClient = Self.fetchCoverageCounters()
         let sourceLocation = config.sourceLocation
 
-        // Cache RNG once here - passed to generate functions to avoid
-        // dependency injection overhead per call (millions of calls).
-        var rng = FastRNG()
+        // Resolve the RNG from the dependency once here, then pass it to the
+        // generate/mutate functions. Caching it avoids dependency-injection
+        // overhead per call (millions of calls) while still sourcing randomness
+        // from the injected `\.fastRNG`.
+        @Dependency(\.fastRNG) var fastRNG
+        var rng = fastRNG
 
         // Simple fuzz loop - no workers, just iterate
         var iterationCount = 0
@@ -142,7 +161,7 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
             // recorded by child tasks (TaskGroup.addTask / Task {}) spawned inside
             // the test body are attributed to this engine's measurement context.
             // Set once outside the per-iteration hot path — the context is hoisted.
-            let coverageContextBits = UInt(bitPattern: coverageContext.rawContext)
+            let coverageContextBits = coverageContext.inheritanceHandle
             await CoverageInheritance.$context.withValue(coverageContextBits) {
                 CoverageInheritance.captureKeyIfNeeded(contextBits: coverageContextBits)
 
@@ -156,7 +175,10 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
                         }
                     }
 
-                    // Get input: from pending queue or generate random
+                    // Get input: from pending queue or generate random.
+                    // Schedule bytes (when scheduling) are element 0 of the input
+                    // pack, generated/mutated by the prepended schedule mutator like
+                    // any other element, and read back via `scheduleBytesExtractor`.
                     let input: (repeat each Input)
                     let fromMutationQueue: Bool
                     if !pendingInputs.isEmpty {
@@ -168,6 +190,7 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
                         generatedCount += 1
                         fromMutationQueue = false
                     }
+                    let currentScheduleBytes: [UInt8]? = scheduleBytesExtractor(input)
 
                     // Inputs still queued after taking this one. A plugin can use
                     // `queueCount == 0` to detect that the queue has drained — e.g. to
@@ -180,8 +203,21 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
                     // Run the test, capturing coverage on success and recording failures.
                     var failureRecorded = false
                     do {
-                        // Will throw if either the test throws or if it logs an Issue
-                        try await testWithIssueCapture(input)
+                        // Will throw if either the test throws or if it logs an Issue.
+                        // When scheduling is being fuzzed, run the test under the
+                        // recorded/generated schedule so task interleaving is controlled.
+                        // The coverage context is forwarded so edges recorded by the
+                        // schedule-controlled tasks are attributed to this measurement.
+                        if let bytes = currentScheduleBytes {
+                            try await ScheduleController.run(
+                                scheduleBytes: bytes,
+                                coverageContext: coverageContext.rawContext
+                            ) {
+                                try await testWithIssueCapture(input)
+                            }
+                        } else {
+                            try await testWithIssueCapture(input)
+                        }
                     } catch is CancellationError {
                         // Allow clean exit on cancellation
                         break
@@ -193,6 +229,7 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
                     // Delegate interestingness check to the coverage strategy (O(1) for trie strategy)
                     let discoveredNewCoverage = coverageStrategy.evaluate(
                         input,
+                        currentScheduleBytes,
                         coverageContext,
                         coverageCountersClient,
                         corpus
@@ -211,6 +248,7 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
                             .iteration(
                                 .init(
                                     input: input,
+                                    scheduleBytes: currentScheduleBytes,
                                     fromMutationQueue: fromMutationQueue,
                                     queueCount: queueCount,
                                     newCoverage: iterationCoverage
@@ -224,6 +262,7 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
                                 .failureFound(
                                     .init(
                                         input: input,
+                                        scheduleBytes: currentScheduleBytes,
                                         test: testWithIssueCapture,
                                         sourceLocation: sourceLocation,
                                         // TODO: This should probably throw if we can't gather coverage
@@ -329,14 +368,17 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
             pendingInputs.append(contentsOf: queueAction.inputs)
 
         case .selectForMutation(let mutationAction):
-            // Generate mutations directly - no closure indirection
-            let mutations = generateMutations(mutationAction.input)
-            pendingInputs.append(contentsOf: mutations)
+            // Generate input mutations. When scheduling, element 0 holds the
+            // schedule bytes and is mutated by the prepended schedule mutator as
+            // part of `generateMutations`, so schedule mutation is unified with
+            // input mutation — no separate schedule-byte pass.
+            pendingInputs.append(contentsOf: generateMutations(mutationAction.input))
             mutationsCount += 1
 
         case .submitToCorpus(let corpusAction):
             addToCorpus(
                 corpusAction.input,
+                scheduleBytes: corpusAction.scheduleBytes,
                 sparse: corpusAction.sparseCoverage,
                 type: corpusAction.entryType,
                 failureInfo: corpusAction.failureInfo
@@ -349,10 +391,10 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
     }
 
     private func addToCorpus(
-        _ input: (repeat each Input), sparse: SparseCoverage, type: CorpusEntryType,
-        failureInfo: FailureInfo?
+        _ input: (repeat each Input), scheduleBytes: [UInt8]? = nil, sparse: SparseCoverage,
+        type: CorpusEntryType, failureInfo: FailureInfo?
     ) {
-        corpus.add(input: input, sparse: sparse, entryType: type, failure: failureInfo)
+        corpus.add(input: input, scheduleBytes: scheduleBytes, sparse: sparse, entryType: type, failure: failureInfo)
     }
 
     /// Generate mutations for an input by mutating one position at a time.

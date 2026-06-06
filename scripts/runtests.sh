@@ -16,9 +16,13 @@ SWIFT_BUILD="$BUILD_ROOT/swift-macosx-arm64"
 LOCAL_SWIFTC="$SWIFT_BUILD/bin/swiftc"
 LOCAL_RUNTIME="$SWIFT_BUILD/lib/swift/macosx"
 
-XCTEST_FW="/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks"
-XCTEST_USR_LIB="/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib"
-SHARED_FW="/Applications/Xcode.app/Contents/SharedFrameworks"
+# Honor DEVELOPER_DIR (e.g. Xcode-beta) instead of hardcoding /Applications/Xcode.app,
+# so the XCTest support dylibs resolve against the active toolchain's Xcode.
+DEV_DIR="${DEVELOPER_DIR:-/Applications/Xcode.app/Contents/Developer}"
+XCODE_APP="$(cd "$DEV_DIR/../.." && pwd)"
+XCTEST_FW="$DEV_DIR/Platforms/MacOSX.platform/Developer/Library/Frameworks"
+XCTEST_USR_LIB="$DEV_DIR/Platforms/MacOSX.platform/Developer/usr/lib"
+SHARED_FW="$XCODE_APP/Contents/SharedFrameworks"
 
 SHIM_SRC="$REPO_ROOT/scripts/runtests.swift"
 SHIM_BIN="$REPO_ROOT/.build/runtests"

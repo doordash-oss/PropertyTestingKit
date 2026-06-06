@@ -113,7 +113,7 @@ extension FuzzPlugin {
                 switch event {
                 case let .iteration(context):
                     if context.newCoverage != nil {
-                        return [.selectForMutation(.init(input: context.input))]
+                        return [.selectForMutation(.init(input: context.input, scheduleBytes: context.scheduleBytes))]
                     }
                     return []
                 }
@@ -134,7 +134,10 @@ extension FuzzPlugin {
     /// the corpus, so it works correctly in parallel fuzz mode where each engine
     /// has its own plugin instance.
     public static func corpusMutation() -> FuzzPlugin<repeat each Input> {
-        var interestingInputs: [(repeat each Input)] = []
+        // One list of (input, scheduleBytes) pairs — the same payload we emit —
+        // instead of two arrays kept in lockstep by index (which could silently
+        // drift out of sync).
+        var interesting: [FuzzPluginAction<repeat each Input>.SelectForMutationAction] = []
         @Dependency(\.fastRNG) var fastRNG: FastRNG
         let seedRNG: FastRNG = fastRNG
 
@@ -144,17 +147,19 @@ extension FuzzPlugin {
                 switch event {
                 case let .iteration(context):
                     if context.newCoverage != nil {
-                        interestingInputs.append(context.input)
-                        return [.selectForMutation(.init(input: context.input))]
+                        let entry = FuzzPluginAction<repeat each Input>.SelectForMutationAction(
+                            input: context.input, scheduleBytes: context.scheduleBytes)
+                        interesting.append(entry)
+                        return [.selectForMutation(entry)]
                     }
 
                     // When the mutation queue was exhausted (state machine fell back to
                     // fresh generation) and we have previously-interesting inputs, pick
                     // one at random and schedule its mutations.
-                    if !context.fromMutationQueue, !interestingInputs.isEmpty {
+                    if !context.fromMutationQueue, !interesting.isEmpty {
                         var rng = seedRNG
-                        let idx = Int.random(in: 0..<interestingInputs.count, using: &rng)
-                        return [.selectForMutation(.init(input: interestingInputs[idx]))]
+                        let idx = Int.random(in: 0..<interesting.count, using: &rng)
+                        return [.selectForMutation(interesting[idx])]
                     }
 
                     return []
@@ -207,9 +212,10 @@ extension FuzzPlugin {
 
                     // Return actions: select for mutation, add to corpus, and record issue
                     return [
-                        .selectForMutation(.init(input: minimized)),
+                        .selectForMutation(.init(input: minimized, scheduleBytes: context.scheduleBytes)),
                         .submitToCorpus(.init(
                             input: minimized,
+                            scheduleBytes: context.scheduleBytes,
                             sparseCoverage: context.sparseCoverage,
                             entryType: .failure
                         )),
@@ -248,7 +254,10 @@ extension FuzzPlugin {
         rareFeatureThreshold: Int = 3,
         maxMutationFactor: Int = 20
     ) -> FuzzPlugin<repeat each Input> {
-        var entryInputs: [(repeat each Input)] = []
+        // (input, scheduleBytes) as one list of the payload we emit, rather than
+        // two index-aligned arrays. entryFeatures/entryMutations stay parallel —
+        // they're per-entry bookkeeping, not redundant with the input itself.
+        var entries: [FuzzPluginAction<repeat each Input>.SelectForMutationAction] = []
         var entryFeatures: [[UInt32]] = []
         var entryMutations: [Int] = []
         var globalFeatureFreqs: [UInt32: Int] = [:]
@@ -267,19 +276,21 @@ extension FuzzPlugin {
                         for feature in coverage.indices {
                             globalFeatureFreqs[feature, default: 0] += 1
                         }
-                        entryInputs.append(context.input)
+                        let entry = FuzzPluginAction<repeat each Input>.SelectForMutationAction(
+                            input: context.input, scheduleBytes: context.scheduleBytes)
+                        entries.append(entry)
                         entryFeatures.append(coverage.indices)
                         entryMutations.append(0)
 
                         // Immediately schedule mutations for the newly-interesting input.
-                        return [.selectForMutation(.init(input: context.input))]
+                        return [.selectForMutation(entry)]
                     }
 
                     // When the mutation queue has drained, pick the next entry to
                     // mutate using energy-weighted selection.
-                    if !context.fromMutationQueue, !entryInputs.isEmpty {
+                    if !context.fromMutationQueue, !entries.isEmpty {
                         var rng = seedRNG
-                        let count = entryInputs.count
+                        let count = entries.count
                         let totalRareFeatures = globalFeatureFreqs.values
                             .filter { $0 <= rareFeatureThreshold }.count
 
@@ -300,7 +311,7 @@ extension FuzzPlugin {
                         entryMutations[selectedIdx] += 1
                         totalMutations += 1
 
-                        return [.selectForMutation(.init(input: entryInputs[selectedIdx]))]
+                        return [.selectForMutation(entries[selectedIdx])]
                     }
 
                     return []

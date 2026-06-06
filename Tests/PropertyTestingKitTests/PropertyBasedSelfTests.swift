@@ -111,8 +111,8 @@ struct CoverageSignaturePropertyTests {
             CoverageSignature(edges: Set<UInt32>([0, 100, 1000])),
         ]
 
-        let encoder = JSONEncoder.corpusEncoder
-        let decoder = JSONDecoder.corpusDecoder
+        let encoder = JSONEncoder.corpusEncoder()
+        let decoder = JSONDecoder.corpusDecoder()
 
         for original in signatures {
             let data = try encoder.encode(original)
@@ -304,8 +304,8 @@ struct CorpusEntryPropertyTests {
             failure: nil
         )
 
-        let encoder = JSONEncoder.corpusEncoder
-        let decoder = JSONDecoder.corpusDecoder
+        let encoder = JSONEncoder.corpusEncoder()
+        let decoder = JSONDecoder.corpusDecoder()
 
         let data = try encoder.encode(entry)
         let decoded = try decoder.decode(CorpusEntry<String>.self, from: data)

@@ -209,7 +209,7 @@ struct FuzzAPITests {
         #expect(!result.failures.isEmpty, "Should have captured failures")
 
         // Verify the error type
-        if let (_, error, _) = result.failures.first {
+        if let (_, error, _, _) = result.failures.first {
             #expect(error is TestFailure, "Error should be TestFailure")
         }
     }
@@ -276,7 +276,7 @@ struct FuzzAPITests {
             sparse: SparseCoverage(indices: [1])
         )
         let corpusSnapshot = existingCorpus.snapshot()
-        let corpusData = try JSONEncoder.corpusEncoder.encode(corpusSnapshot)
+        let corpusData = try JSONEncoder.corpusEncoder().encode(corpusSnapshot)
 
         let (loadSpy, loadFn) = spy { (_: URL) -> Data in
             return corpusData

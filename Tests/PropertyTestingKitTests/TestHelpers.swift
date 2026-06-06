@@ -130,7 +130,7 @@ func fuzzEngineWithMaxIterations<each Input: MutatorProviding & Codable & Sendab
         )
         let mutators = (repeat (each Input).defaultMutator)
         let engine = FuzzEngine(
-            mutators: mutators,
+            mutators: repeat each mutators,
             config: effectiveConfig
         )
         // The engine runs exactly the seeds it's given — assemble the mutators' seed
@@ -307,3 +307,4 @@ func fuzzWithMaxIterations<each Input: Codable & Sendable>(
         )
     })
 }
+

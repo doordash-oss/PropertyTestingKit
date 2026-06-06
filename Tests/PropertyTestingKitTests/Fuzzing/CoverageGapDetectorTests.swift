@@ -304,17 +304,17 @@ struct CoverageGapDetectorTests {
 
         // This test intentionally creates a coverage gap to verify detection works.
         // The detector reports the edge AFTER the unreachable body — i.e. the line
-        // of the next `else if`. Update if the function above is edited.
+        // of the `} else if input < 0 {` above. Update if the function above is edited.
         let expectedLine = 298
 
+        // Realistic regression test: replay the on-disk corpus
+        // (Corpus/realisticCoverageGapTest/corpus.json = [[0],[-1]]; 0 → `else`,
+        // -1 → `else if input < 0`; neither hits the unreachable `hash == 0x7FFFFFFE`
+        // branch) with the ambient \.corpusPersistence and NO dependency overrides.
         try await withKnownIssue("Expected coverage gap in partiallyCoveredFunction") {
-            // mutation() is included by default via handlers
-            _ = try await fuzz(
-                duration: .seconds(0.5),
-                persistence: .replace,
-                coverageStrategy: .signatureMatch,
-                parallelism: 1,
-                plugins: { [.mutation(), .coverageGap()] }
+            _ = try await regress(
+                duration: .seconds(10),
+                plugins: { [.coverageGap()] }
             ) { (input: Int) in
                 partiallyCoveredFunction(input: input)
             }

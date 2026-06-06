@@ -63,8 +63,8 @@ import Dependencies
 /// }
 ///
 /// @Test func testWithGapDetection() throws {
-///     // Enable coverage gap detection
-///     try fuzz(plugins: CoverageGapPlugin()) { (input: String) in
+///     // Enable coverage gap detection alongside the default mutation behavior
+///     try fuzz(plugins: { [.corpusMutation(), .coverageGap()] }) { (input: String) in
 ///         parse(input)
 ///     }
 /// }
@@ -94,14 +94,25 @@ import Dependencies
 ///     or `.extend` (load corpus as seeds, then fuzz). To verify a corpus without
 ///     fuzzing, use `regress(...)` instead. Can be overridden suite-wide via the
 ///     `FUZZ_CORPUS_MODE` environment variable.
+///   - coverageStrategy: How an input is judged "interesting" (default: `.pathTrie`).
+///   - edgeHook: Optional custom hook invoked on every edge hit; when `nil`, the
+///     default binary edge recording is used.
+///   - scheduleFuzzing: When `true`, also fuzz the interleaving order of concurrent
+///     tasks. The schedule bytes are folded into the input pack as element 0
+///     (`([UInt8], repeat each Input)`) and mutated/stored/persisted like any input;
+///     your `test` still receives only its own `(repeat each Input)`. Forces
+///     `parallelism` to 1, and uses the default `corpusMutation` plugin behavior
+///     (custom `plugins` are not applied to scheduled runs).
 ///   - parallelism: Number of parallel fuzz engines to run. Each engine runs
 ///     independently with its portion of seeds distributed round-robin.
 ///     Results are merged at the end. Defaults to the number of available processors.
+///     Ignored (treated as 1) when `scheduleFuzzing` is enabled.
 ///   - plugins: Factory for the per-engine plugins. Defaults to
 ///     `{ [.corpusMutation()] }`. Analysis plugins (`AnalysisPlugin`) can be lifted in
 ///     with `.asFuzzPlugin()`.
 ///   - filePath: Source file path (auto-filled).
 ///   - function: Test function name (auto-filled).
+///   - line: Source line (auto-filled).
 ///   - test: The test closure receiving fuzzed inputs.
 ///
 /// - Throws: Re-throws test failures, or throws if fuzzing finds failures.
@@ -115,6 +126,7 @@ public func fuzz<each Input: Codable & Sendable>(
     persistence: CorpusPersistence = .auto,
     coverageStrategy: CoverageStrategyKind = .pathTrie,
     edgeHook: EdgeHook? = nil,
+    scheduleFuzzing: Bool = false,
     parallelism: Int = ProcessInfo.processInfo.processorCount,
     plugins: @escaping @Sendable () -> [FuzzPlugin<repeat each Input>] = { [.corpusMutation()] },
     filePath: StaticString = #filePath,
@@ -129,6 +141,7 @@ public func fuzz<each Input: Codable & Sendable>(
         persistence: persistence,
         coverageStrategy: coverageStrategy,
         edgeHook: edgeHook,
+        scheduleFuzzing: scheduleFuzzing,
         parallelism: parallelism,
         plugins: plugins,
         filePath: filePath,
@@ -147,6 +160,7 @@ func fuzzInternal<each Input: Codable & Sendable>(
     persistence: CorpusPersistence,
     coverageStrategy: CoverageStrategyKind,
     edgeHook: EdgeHook?,
+    scheduleFuzzing: Bool,
     parallelism: Int,
     plugins: @escaping @Sendable () -> [FuzzPlugin<repeat each Input>],
     filePath: StaticString,
@@ -158,7 +172,36 @@ func fuzzInternal<each Input: Codable & Sendable>(
 
     let testFilePath = String(describing: filePath)
     let verbose = environment.environment()["FUZZ_VERBOSE"] != nil
+    // Scheduled runs return early below (via runFlattenedSchedule, which forces a
+    // single engine itself because the task-enqueue hook is process-global), so this
+    // only governs the non-scheduled path.
+    let effectiveParallelism = max(1, parallelism)
     let corpusDir = corpusDirectory(filePath: filePath, function: function)
+
+    // Schedule fuzzing runs over the flattened pack `([UInt8], repeat each Input)`:
+    // the schedule bytes become input element 0, generated/mutated/stored/persisted
+    // by the same coordinator machinery as user inputs; the `ScheduleController.run`
+    // wrapping is driven by the element-0 extractor inside `runFlattenedSchedule`.
+    // The call-site `persistence` is used directly (the suite-level env override does
+    // not apply to scheduled runs).
+    if scheduleFuzzing {
+        let peeled = await runFlattenedSchedule(
+            mutators: (repeat each mutators),
+            seeds: seeds,
+            corpusDir: corpusDir,
+            persistence: persistence,
+            duration: duration,
+            verbose: verbose,
+            coverageStrategy: coverageStrategy,
+            edgeHook: edgeHook,
+            projectPath: projectPath(from: filePath),
+            sourceFileID: testFilePath,
+            sourceFilePath: testFilePath,
+            line: line,
+            test: test
+        )
+        return try reportFuzzResult(peeled, filePath: filePath, line: line)
+    }
 
     // All corpus policy (load/save/delete, regression replay, parallel orchestration)
     // lives in the coordinator. fuzzInternal resolves the suite-level env override and
@@ -171,7 +214,7 @@ func fuzzInternal<each Input: Codable & Sendable>(
             userSeeds: seeds,
             corpusDir: corpusDir,
             persistence: resolved,
-            parallelism: max(1, parallelism),
+            parallelism: effectiveParallelism,
             duration: duration,
             verbose: verbose,
             coverageStrategy: coverageStrategy,
@@ -251,10 +294,20 @@ func regressInternal<each Input: Codable & Sendable>(
 ///   - persistence: How the on-disk corpus is treated (`.auto`/`.replace`/`.extend`).
 ///     To verify a corpus without fuzzing, use `regress(...)`. Can be overridden
 ///     suite-wide via `FUZZ_CORPUS_MODE`.
-///   - parallelism: Number of parallel fuzz engines to run. Defaults to processor count.
+///   - coverageStrategy: How an input is judged "interesting" (default: `.pathTrie`).
+///   - edgeHook: Optional custom hook invoked on every edge hit; when `nil`, the
+///     default binary edge recording is used.
+///   - scheduleFuzzing: When `true`, also fuzz the interleaving order of concurrent
+///     tasks. The schedule bytes are folded into the input pack as element 0 and
+///     mutated/stored/persisted like any input; your `test` still receives only its
+///     own `(repeat each Input)`. Forces `parallelism` to 1 and uses the default
+///     `corpusMutation` plugin behavior.
+///   - parallelism: Number of parallel fuzz engines to run. Defaults to processor
+///     count. Ignored (treated as 1) when `scheduleFuzzing` is enabled.
 ///   - plugins: Factory for the per-engine plugins. Defaults to `{ [.corpusMutation()] }`.
 ///   - filePath: Source file path (auto-filled).
 ///   - function: Test function name (auto-filled).
+///   - line: Source line (auto-filled).
 ///   - test: The test closure receiving fuzzed inputs.
 ///
 /// - Throws: Re-throws test failures, or throws if fuzzing finds failures.
@@ -267,6 +320,7 @@ public func fuzz<each Input: MutatorProviding & Codable & Sendable>(
     persistence: CorpusPersistence = .auto,
     coverageStrategy: CoverageStrategyKind = .pathTrie,
     edgeHook: EdgeHook? = nil,
+    scheduleFuzzing: Bool = false,
     parallelism: Int = ProcessInfo.processInfo.processorCount,
     plugins: @escaping @Sendable () -> [FuzzPlugin<repeat each Input>] = { [.corpusMutation()] },
     filePath: StaticString = #filePath,
@@ -281,6 +335,7 @@ public func fuzz<each Input: MutatorProviding & Codable & Sendable>(
         persistence: persistence,
         coverageStrategy: coverageStrategy,
         edgeHook: edgeHook,
+        scheduleFuzzing: scheduleFuzzing,
         parallelism: parallelism,
         plugins: plugins,
         filePath: filePath,
@@ -341,13 +396,18 @@ private func reportFuzzResult<each Input: Codable & Sendable>(
 ) throws -> FuzzResult<repeat each Input> {
     let testFilePath = String(describing: filePath)
 
-    for (index, (input, error, _)) in result.failures.enumerated() {
+    for (index, (input, error, _, scheduleBytes)) in result.failures.enumerated() {
         // Format the input for readability
         let formattedInput = formatInput(input)
 
         // Build a comprehensive failure message
         var message = "Fuzz test failure #\(index + 1)"
         message += "\n\nFailing input:\n\(formattedInput)"
+        if let scheduleBytes {
+            // Schedule fuzzing: include the interleaving that triggered the failure
+            // so it can be reproduced.
+            message += "\n\nTriggering schedule bytes:\n\(scheduleBytes)"
+        }
         message += "\n\nError:\n\(error)"
 
         // Add context about the fuzz run

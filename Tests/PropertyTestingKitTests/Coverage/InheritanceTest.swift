@@ -39,7 +39,7 @@ struct InheritanceTest {
         // WITH inheritance
         let ctx = SanCovCounters.beginMeasurement()
         SanCovCounters.resetCoverage(ctx)
-        let ctxBits = UInt(bitPattern: ctx.rawContext)
+        let ctxBits = ctx.inheritanceHandle
         await CoverageInheritance.$context.withValue(ctxBits) {
             CoverageInheritance.captureKeyIfNeeded(contextBits: ctxBits)
             await withTaskGroup(of: Void.self) { group in
@@ -80,7 +80,7 @@ struct InheritanceTest {
 
         let ctx = SanCovCounters.beginMeasurement()
         SanCovCounters.resetCoverage(ctx)
-        let ctxBits = UInt(bitPattern: ctx.rawContext)
+        let ctxBits = ctx.inheritanceHandle
         await CoverageInheritance.$context.withValue(ctxBits) {
             CoverageInheritance.captureKeyIfNeeded(contextBits: ctxBits)
             // Task {} inherits task locals (unlike Task.detached)
@@ -108,7 +108,7 @@ struct InheritanceTest {
 
         let ctx = SanCovCounters.beginMeasurement()
         SanCovCounters.resetCoverage(ctx)
-        let ctxBits = UInt(bitPattern: ctx.rawContext)
+        let ctxBits = ctx.inheritanceHandle
         await CoverageInheritance.$context.withValue(ctxBits) {
             CoverageInheritance.captureKeyIfNeeded(contextBits: ctxBits)
             let task = Task.detached { let _ = Self.childOnlyWork(42) }
@@ -167,8 +167,8 @@ struct InheritanceTest {
 
         FileHandle.standardError.write("[TEST] ctx1=\(ctx1.rawContext) ctx2=\(ctx2.rawContext)\n".data(using: .utf8) ?? Data())
 
-        let bits1 = UInt(bitPattern: ctx1.rawContext)
-        let bits2 = UInt(bitPattern: ctx2.rawContext)
+        let bits1 = ctx1.inheritanceHandle
+        let bits2 = ctx2.inheritanceHandle
 
         func logTid(_ tag: String) {
             var t: UInt64 = 0
@@ -389,8 +389,8 @@ struct InheritanceTest {
                             SanCovCounters.endMeasurement(ctx2)
                         }
 
-                        let bits1 = UInt(bitPattern: ctx1.rawContext)
-                        let bits2 = UInt(bitPattern: ctx2.rawContext)
+                        let bits1 = ctx1.inheritanceHandle
+                        let bits2 = ctx2.inheritanceHandle
 
                         await CoverageInheritance.$context.withValue(bits1) {
                             CoverageInheritance.captureKeyIfNeeded(contextBits: bits1)

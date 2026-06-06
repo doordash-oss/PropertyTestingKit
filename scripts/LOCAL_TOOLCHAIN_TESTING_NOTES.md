@@ -296,6 +296,46 @@ You haven't applied the `-disable-round-trip-debug-types` workaround to `swiftpm
 
 You haven't applied the `-disable-batch-mode` workaround to `swiftpm/Utilities/bootstrap`, or you have a stale build dir. See Step 5 (apply patch + wipe `swift-driver` and `bootstrap` subdirs).
 
+## Using the Toolchain in Xcode
+
+The CLI build points `swiftc` at `swift-macosx-arm64/bin/swiftc` directly. To get
+the same patched compiler (plus the fork's `Testing` SPI, `TestingMacros`, and the
+signed runtime) inside Xcode, register that build directory as a selectable Xcode
+toolchain:
+
+```bash
+# Defaults BUILD_ROOT to the OpenSourceDev path; override if yours differs.
+./scripts/install-xcode-toolchain.sh
+```
+
+This creates `~/Library/Developer/Toolchains/propertytestingkit-local.xctoolchain`
+with an `Info.plist` (bundle id `dev.alex.propertytestingkit.local`) and a
+`usr` symlink to `$BUILD_ROOT/swift-macosx-arm64`. Because it's a symlink, a fresh
+`utils/build-script` rebuild is picked up automatically — no reinstall needed (but
+re-run Step 4 code-signing if the Testing dylibs were rebuilt).
+
+Select it:
+- **Xcode UI:** `Xcode ▸ Toolchains ▸ Local Swift (PropertyTestingKit)`. Relaunch
+  Xcode once after installing so the toolchain appears in the menu.
+- **Command line / CI:** `export TOOLCHAINS=dev.alex.propertytestingkit.local`
+  before `xcodebuild`, or pass `-toolchain dev.alex.propertytestingkit.local`.
+
+Verify resolution: `xcrun --toolchain dev.alex.propertytestingkit.local swiftc --version`
+should report `+assertions`.
+
+Remove it: `./scripts/install-xcode-toolchain.sh --uninstall`.
+
+**Notes / caveats:**
+- Open the project in **Xcode-beta** (`/Applications/Xcode-beta.app`). The toolchain
+  ships no `clang` and no SDK — Xcode supplies those — so use the same Xcode the
+  toolchain was built against to keep the clang/SDK consistent with CLI builds.
+- `import Testing` resolves to the toolchain's own `lib/swift/macosx/Testing.swiftmodule`
+  (the fork, with `@_spi(ForToolsIntegrationOnly)`), so the `-I$SWIFTTESTING_BUILD/swift`
+  flag the CLI uses isn't needed in Xcode. If you ever see the "will not include any SPI
+  symbols" warning in Xcode, Step 3 wasn't completed for the `swift-macosx-arm64` tree.
+- The package's `-sanitize-coverage`/`-sanitize=undefined` unsafe flags apply in Xcode
+  builds just as on the CLI.
+
 ## Why This Setup Works
 
 1. **SwiftPM** is compiled with the local compiler and links against system paths

@@ -109,6 +109,11 @@ typedef struct {
     uint8_t* coverage_map;
     size_t covered_count;
     _Atomic int refcount;
+    /// Per-context generation tag, assigned at begin_measurement. Packed into
+    /// the inheritance handle's high bits so a stale task-local handle whose
+    /// raw address was recycled by a later, unrelated context is rejected
+    /// (closes ABA cross-measurement contamination). See sancov_inheritance_handle.
+    uint16_t generation;
     /// Ring buffer of covered edge indices, appended on first-hit.
     /// Enables O(covered_edges) hash/snapshot instead of O(total_edges) scan.
     uint32_t* covered_indices;
@@ -143,6 +148,33 @@ SanCovMeasurementContext* sancov_create_dummy_context(void);
 /// `sancov_get_covered_count_with_context`. Pair with `sancov_end_measurement`
 /// for cleanup.
 void sancov_unregister_inheritance_for_testing(SanCovMeasurementContext* context);
+
+/// TESTING ONLY: drop the CURRENT task's measurement-registry entry WITHOUT
+/// touching the active-inheritance liveness set or freeing any context. Lets a
+/// test stop the owning task from self-routing into a context (so its own
+/// instrumented edges don't inflate that context's coverage) while keeping the
+/// context live and active for inheritance-routing assertions.
+void sancov_remove_task_measurement_for_testing(void);
+
+/// TESTING ONLY: drop one reference from a context (mirrors the internal
+/// refcount release used by sancov_end_measurement), freeing it when the count
+/// reaches zero. Lets a test deterministically free a context that still has a
+/// trie attached, to exercise the context-freed-before-trie teardown ordering.
+void sancov_release_for_testing(SanCovMeasurementContext* context);
+
+/// TESTING ONLY: read a trie's owner-context back-pointer. Used to assert the
+/// back-pointer is cleared once the owning context is freed, so a later
+/// sancov_trie_destroy cannot write through a dangling owner_context.
+SanCovMeasurementContext* sancov_trie_owner_context_for_testing(const SanCovPathTrie* trie);
+
+/// The coverage-inheritance handle for a measurement context: a 64-bit value
+/// that packs the context's generation tag (high 16 bits) with its pointer
+/// (low 48 bits). Store THIS in the `CoverageInheritance.context` task-local
+/// (never the raw pointer): routing decodes the pointer to find the context and
+/// verifies the generation, so a stale handle whose address was recycled by a
+/// later context no longer aliases it. Aborts if the context pointer does not
+/// fit in 48 bits (unexpected on the supported arm64/x86_64 targets).
+uint64_t sancov_inheritance_handle(SanCovMeasurementContext* context);
 
 /// Get the number of covered edges for a measurement context (O(1)).
 size_t sancov_get_covered_count_with_context(SanCovMeasurementContext* context);
@@ -263,9 +295,9 @@ void sancov_install_swift_hook(void (*hook)(uint32_t*));
 // and writes coverage directly to a specified measurement context.
 
 /// Set a target measurement context for schedule-aware coverage recording.
-/// When non-NULL, `sancov_record_edge_to_target` writes to this context
-/// instead of using the task-keyed lookup.
-/// Pass NULL to disable.
+/// When non-NULL, the live edge hook routes the calling thread's edges to this
+/// context via `get_current_coverage_map` (atomic, same code path as normal
+/// recording), bypassing the task-keyed lookup. Pass NULL to disable.
 void sancov_set_target_context(SanCovMeasurementContext* context);
 
 // MARK: - Coverage Inheritance (Task-Local Propagation)
@@ -283,11 +315,6 @@ const void* sancov_capture_key_by_value(const void* task, uintptr_t expected_val
 /// Call after schedule-controlled drain completes (single-threaded) so that
 /// strategies using covered_indices see the correct data.
 void sancov_rebuild_covered_indices_from_map(SanCovMeasurementContext* context);
-
-/// Edge recording that writes to the target context set by `sancov_set_target_context`.
-/// Falls back to `sancov_record_edge` if no target context is set.
-/// Use as the hook via `sancov_install_swift_hook(sancov_record_edge_to_target)`.
-void sancov_record_edge_to_target(uint32_t *guard);
 
 // MARK: - Edge Filter
 //

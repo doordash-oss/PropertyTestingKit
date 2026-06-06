@@ -17,6 +17,7 @@
 
 import Dependencies
 import Foundation
+import ScheduleControl
 import Testing
 
 // MARK: - FuzzEngine
@@ -60,18 +61,55 @@ final class FuzzEngine<each Input: Codable & Sendable>: @unchecked Sendable {
     private let mutators: (repeat Mutator<each Input>)
     private let inputSize: Int
 
+    /// Extracts schedule bytes from an input (element 0 of the flattened pack
+    /// when schedule fuzzing; `nil` otherwise). Threaded to the state machine and
+    /// regression replay so they wrap execution in `ScheduleController.run`.
+    private let scheduleBytesExtractor: @Sendable ((repeat each Input)) -> [UInt8]?
+
     /// Initialize with mutators.
     ///
     /// - Parameters:
-    ///   - mutators: A tuple of mutators, one for each input type.
+    ///   - mutators: The mutators, one for each input type, passed as variadic
+    ///     pack arguments.
     ///   - config: Fuzzing configuration.
+    ///   - scheduleBytesExtractor: Extracts schedule bytes from an input. Supply
+    ///     `{ $0.0 }` when running over the flattened pack `([UInt8], repeat each
+    ///     UserInput)`.
+    ///
+    /// - Note: `mutators` is a *variadic pack* parameter, not a tuple, on purpose.
+    ///   Building the flattened mutator pack by materializing a mixed tuple
+    ///   `(scheduleByteMutator, repeat each userMutators)` and then iterating it as
+    ///   a pack mis-indexes at runtime (a mixed-tuple/pack lowering bug). Passing
+    ///   the prepended mutators as variadic arguments — `mutators: scheduleByteMutator,
+    ///   repeat each userMutators` — lowers correctly.
+    /// - Note: `scheduleBytesExtractor` is a *required* parameter on the
+    ///   designated initializer (rather than defaulted) because a defaulted
+    ///   pack-closure argument makes the compiler emit a default-argument
+    ///   generator whose reabstraction thunk crashes SILGen. The non-scheduled
+    ///   convenience initializer passes the no-op extractor as an explicit
+    ///   closure literal, which lowers cleanly.
     init(
-        mutators: (repeat Mutator<each Input>),
-        config: FuzzEngineConfig = FuzzEngineConfig()
+        mutators: repeat Mutator<each Input>,
+        config: FuzzEngineConfig,
+        scheduleBytesExtractor: @escaping @Sendable ((repeat each Input)) -> [UInt8]?
     ) {
         self.config = config
-        self.mutators = mutators
+        self.mutators = (repeat each mutators)
         self.inputSize = Self.inputCount(for: repeat (each Input).self)
+        self.scheduleBytesExtractor = scheduleBytesExtractor
+    }
+
+    /// Non-scheduled convenience initializer: runs over the user's pack with a
+    /// no-op schedule-bytes extractor.
+    convenience init(
+        mutators: repeat Mutator<each Input>,
+        config: FuzzEngineConfig = FuzzEngineConfig()
+    ) {
+        self.init(
+            mutators: repeat each mutators,
+            config: config,
+            scheduleBytesExtractor: { _ in nil }
+        )
     }
 
     // MARK: - Helpers
@@ -151,7 +189,8 @@ final class FuzzEngine<each Input: Codable & Sendable>: @unchecked Sendable {
             processAsyncPlugins: processAsyncPlugins,
             config: config,
             startTime: startTime,
-            test: test
+            test: test,
+            scheduleBytesExtractor: scheduleBytesExtractor
         )
 
         let stateMachineResult = try! await stateMachine.start()

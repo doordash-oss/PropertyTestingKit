@@ -52,7 +52,7 @@ struct CorpusPersistenceClient: Sendable {
         _ snapshot: CorpusSnapshot<repeat each Input>,
         to url: URL
     ) throws {
-        let data = try JSONEncoder.corpusEncoder.encode(snapshot)
+        let data = try JSONEncoder.corpusEncoder().encode(snapshot)
         try _save(data, url)
     }
 
@@ -61,7 +61,7 @@ struct CorpusPersistenceClient: Sendable {
         from url: URL
     ) throws -> CorpusSnapshot<repeat each Input> {
         let data = try _load(url)
-        return try JSONDecoder.corpusDecoder.decode(CorpusSnapshot<repeat each Input>.self, from: data)
+        return try JSONDecoder.corpusDecoder().decode(CorpusSnapshot<repeat each Input>.self, from: data)
     }
 }
 
@@ -69,23 +69,34 @@ struct CorpusPersistenceClient: Sendable {
 
 struct CorpusPersistenceClientKey: DependencyKey {
     static var liveValue: CorpusPersistenceClient {
-        @Dependency(\.fileManager) var fileManager
-
+        // Resolve `\.fileManager` PER CALL (inside each closure), not once here.
+        //
+        // `liveValue` is cached globally by swift-dependencies, and `@Dependency`
+        // snapshots the dependency context where it is *initialized*. Declaring the
+        // `fileManager` wrapper at this scope captured it from whichever task first
+        // triggered `liveValue` computation under the parallel test suite — if that
+        // task had `\.fileManager` overridden (e.g. a test mock whose `fileExists`
+        // returns false), the cached live client was poisoned for the whole process.
+        // Declaring it inside each closure binds it to the *calling* task's context.
         return CorpusPersistenceClient(
             save: { data, directory in
+                @Dependency(\.fileManager) var fileManager
                 try fileManager.createDirectory(directory, true)
                 let fileURL = directory.appendingPathComponent(corpusFilename)
                 try fileManager.writeData(data, fileURL)
             },
             load: { directory in
+                @Dependency(\.fileManager) var fileManager
                 let fileURL = directory.appendingPathComponent(corpusFilename)
                 return try fileManager.readData(fileURL)
             },
             exists: { directory in
+                @Dependency(\.fileManager) var fileManager
                 let fileURL = directory.appendingPathComponent(corpusFilename)
                 return fileManager.fileExists(atPath: fileURL.path)
             },
             delete: { directory in
+                @Dependency(\.fileManager) var fileManager
                 let fileURL = directory.appendingPathComponent(corpusFilename)
                 if fileManager.fileExists(atPath: fileURL.path) {
                     try fileManager.removeItem(fileURL)
