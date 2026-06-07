@@ -414,6 +414,14 @@ private func runEngines<each Input: Codable & Sendable>(
         var allResults: [FuzzResult<repeat each Input>] = []
         for await result in group {
             allResults.append(result)
+            // First engine to report a counterexample ends the run: the goal
+            // (a failing input) is met, so cancel the siblings instead of waiting
+            // out the slowest engine's full budget. The engine loop honors
+            // `Task.isCancelled`, so the cancelled engines wind down promptly.
+            if !result.failures.isEmpty {
+                group.cancelAll()
+                break
+            }
         }
         return allResults
     }
