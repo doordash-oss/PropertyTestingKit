@@ -115,6 +115,7 @@ struct FuzzAPITests {
             try await fuzzWithMaxIterations(
                 maxIterations: 100,
                 seeds: ["0", "-0", "-1", "abc", String(Int.max)],
+                persistence: .ephemeral,
                 coverageStrategy: .alwaysInteresting
             ) { input in
                 let parsed = NumberParser.parse(input)
@@ -234,6 +235,7 @@ struct FuzzAPITests {
                 // Note: Seeds are required to provide type context for the variadic generic
                 _ = try await fuzzWithMaxIterations(
                     maxIterations: 10,
+                    persistence: .ephemeral,
                     coverageStrategy: .alwaysInteresting
                 ) { (_: Bool) in
                     throw TestFailure()

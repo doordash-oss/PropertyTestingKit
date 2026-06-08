@@ -435,6 +435,7 @@ struct FuzzAPIPropertyTests {
         } operation: {
             try await fuzzWithMaxIterations(
                 maxIterations: 50,
+                persistence: .ephemeral,
                 coverageStrategy: .alwaysInteresting
             ) { (input: Int) in
                 _ = input > 0 ? "positive" : "non-positive"
@@ -449,20 +450,12 @@ struct FuzzAPIPropertyTests {
     func testFuzzWithCustomSeeds() async throws {
         let result = try await withDependencies {
             $0.environment = EnvironmentClient(environment: { [:] })
-            $0.fileManager = FileManagerClient(
-                currentDirectoryPath: { "/test" },
-                fileExists: { _ in false },
-                createDirectory: { _, _ in },
-                removeItem: { _ in },
-                writeData: { _, _ in },
-                readData: { _ in Data() }
-            )
         } operation: {
-            // Use refuzzReplace to always start fresh (ignore any saved corpus)
+            // Ephemeral: fuzz fresh in memory, ignoring and never writing a corpus.
             try await fuzzWithMaxIterations(
                 maxIterations: 50,
                 seeds: ["custom1", "custom2", "custom3"],
-                persistence: .replace,
+                persistence: .ephemeral,
                 coverageStrategy: .alwaysInteresting
             ) { (input: String) in
                 // Just exercise the input - no actor involvement

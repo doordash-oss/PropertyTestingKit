@@ -321,7 +321,7 @@ struct InheritanceTest {
         let result = try await fuzzWithMaxIterations(
             maxIterations: 100,
             seeds: [(1,), (2,), (3,)],
-            persistence: .replace,
+            persistence: .ephemeral,
             coverageStrategy: .newEdge
         ) { (input: Int) in
             await withTaskGroup(of: Void.self) { group in
