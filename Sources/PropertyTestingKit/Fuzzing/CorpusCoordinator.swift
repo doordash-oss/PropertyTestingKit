@@ -414,11 +414,15 @@ private func runEngines<each Input: Codable & Sendable>(
         var allResults: [FuzzResult<repeat each Input>] = []
         for await result in group {
             allResults.append(result)
-            // First engine to report a counterexample ends the run: the goal
-            // (a failing input) is met, so cancel the siblings instead of waiting
-            // out the slowest engine's full budget. The engine loop honors
-            // `Task.isCancelled`, so the cancelled engines wind down promptly.
-            if !result.failures.isEmpty {
+            // End the run as soon as an engine signals the campaign's goal is
+            // met — either it found a counterexample, or a plugin emitted a
+            // campaign-scoped stop (`StopScope.campaign`). Cancel the siblings
+            // instead of waiting out the slowest engine's full budget; the engine
+            // loop honors `Task.isCancelled`, so they wind down promptly.
+            // Per-engine stops (`StopScope.engine`: coverage plateau, drained
+            // replay queue, …) do NOT land here — that engine just returns and
+            // the others keep running.
+            if !result.failures.isEmpty || result.campaignStopRequested {
                 group.cancelAll()
                 break
             }

@@ -68,4 +68,45 @@ struct ParallelEarlyCancelTest {
             "fuzz took \(elapsed) of an \(budget) budget — siblings were not cancelled on first failure"
         )
     }
+
+    @Test("a campaign-scoped stop (no failure) cancels the siblings too")
+    func campaignScopedStopCancelsSiblings() async throws {
+        let sentinel = 0x1F2E_3D4C_5B6A_79
+
+        // Stops the WHOLE campaign — not just its own engine — the first time it
+        // sees the sentinel input, without any failure being thrown.
+        let stopCampaign = FuzzPlugin<Int>(
+            id: "stop_campaign_on_sentinel",
+            handleSync: { event in
+                switch event {
+                case let .iteration(context):
+                    return context.input == sentinel
+                        ? [.stop(.init(reason: .custom("sentinel_seen"), scope: .campaign))]
+                        : []
+                }
+            }
+        )
+
+        // Engine 0 gets the sentinel and stops the campaign on its first input;
+        // engines 1–3 would otherwise mutate benign seeds for the full budget.
+        let budget = Duration.seconds(8)
+        let start = ContinuousClock.now
+
+        let result = try await fuzz(
+            seeds: [sentinel, 1, 2, 3],
+            duration: budget,
+            persistence: .ephemeral,
+            parallelism: 4,
+            plugins: { [.corpusMutation(), stopCampaign] }
+        ) { (_: Int) in
+            // never fails
+        }
+
+        let elapsed = ContinuousClock.now - start
+        #expect(
+            elapsed < .seconds(3),
+            "fuzz took \(elapsed) of an \(budget) budget — a campaign-scoped stop did not cancel the siblings"
+        )
+        #expect(result.failures.isEmpty)
+    }
 }

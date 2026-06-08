@@ -143,6 +143,23 @@ enum PluginEvent<each T: Sendable>: Sendable {
 
 // MARK: - Plugin Actions
 
+/// How far a `stop` action reaches in a parallel `fuzz(...)` run.
+///
+/// Each parallel engine has its own plugin instances, coverage accounting, and
+/// seed partition, so a stop is by default a *local* decision — it winds down
+/// only the engine whose plugin emitted it (e.g. a per-engine coverage-plateau
+/// detector, or a regression replay that drained its own queue). Use `.campaign`
+/// only when the stop reflects a goal that makes the *whole* run pointless to
+/// continue — e.g. the first counterexample was found — in which case the
+/// coordinator cancels the sibling engines instead of letting them run out the
+/// time budget.
+public enum StopScope: Sendable, Equatable {
+    /// Stop only the engine whose plugin emitted this action. The default.
+    case engine
+    /// Stop the whole parallel campaign — cancel the sibling engines too.
+    case campaign
+}
+
 /// Actions that plugins can return for FuzzEngine to execute.
 public enum FuzzPluginAction<each T: Sendable>: Sendable {
     /// Stop fuzzing.
@@ -160,9 +177,13 @@ public enum FuzzPluginAction<each T: Sendable>: Sendable {
     public struct StopAction: Sendable {
         /// Reason for stopping.
         public let reason: FuzzStats.StopReason
+        /// How far the stop reaches — just this engine (default) or the whole
+        /// parallel campaign. See ``StopScope``.
+        public let scope: StopScope
 
-        public init(reason: FuzzStats.StopReason) {
+        public init(reason: FuzzStats.StopReason, scope: StopScope = .engine) {
             self.reason = reason
+            self.scope = scope
         }
     }
 

@@ -57,6 +57,9 @@ struct StopOnFirstFailurePluginTests {
             return
         }
         #expect(stopAction.reason.rawValue == "first_failure")
+        // A found counterexample is the campaign's goal — stop every engine,
+        // not just the one that found it.
+        #expect(stopAction.scope == .campaign)
     }
 
     @Test("Uses a caller-supplied stop reason")
@@ -85,5 +88,11 @@ struct StopOnFirstFailurePluginTests {
     func liftedFuzzPlugin() {
         let plugin: FuzzPlugin<Int> = .stopOnFirstFailure()
         #expect(plugin.id == "stop_on_first_failure")
+    }
+
+    @Test("StopAction defaults to engine scope")
+    func stopActionDefaultsToEngineScope() {
+        let action = FuzzPluginAction<Int>.StopAction(reason: .timeLimit)
+        #expect(action.scope == .engine)
     }
 }

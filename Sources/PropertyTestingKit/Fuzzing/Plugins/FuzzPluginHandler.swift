@@ -374,7 +374,9 @@ extension AnalysisPlugin {
             handleSync: { _ in [] },
             handleAsync: { event in
                 if case .failureFound = event {
-                    return [.stop(.init(reason: reason))]
+                    // Campaign-scoped: a found counterexample is the whole run's
+                    // goal, so cancel the sibling engines too, not just this one.
+                    return [.stop(.init(reason: reason, scope: .campaign))]
                 }
                 return []
             }
