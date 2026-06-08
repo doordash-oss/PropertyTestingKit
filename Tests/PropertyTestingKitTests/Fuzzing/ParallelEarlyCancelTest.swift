@@ -34,7 +34,8 @@ struct ParallelEarlyCancelTest {
             handleSync: { _ in [] },
             handleAsync: { event in
                 if case .failureFound = event {
-                    return [.stop(FuzzPluginAction<Int>.StopAction(reason: .custom("found")))]
+                    // Campaign-scoped: cancel the siblings, not just this engine.
+                    return [.stop(FuzzPluginAction<Int>.StopAction(reason: .custom("found"), scope: .campaign))]
                 }
                 return []
             }
