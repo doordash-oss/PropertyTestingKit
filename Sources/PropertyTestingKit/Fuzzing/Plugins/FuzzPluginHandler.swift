@@ -353,6 +353,36 @@ extension AnalysisPlugin {
         )
     }
 
+    /// Creates a plugin that stops the run as soon as the first failure is found.
+    ///
+    /// Reacts to the `failureFound` event and emits a single `.stop`. In a
+    /// parallel `fuzz(...)` run this halts the engine that found the
+    /// counterexample and, because the engines cancel their siblings on the first
+    /// failure, brings the whole campaign down promptly — so the run returns at
+    /// the first counterexample with an accurate time-to-find, instead of letting
+    /// the other engines keep generating inputs. Handy when you only care
+    /// *whether* (and how quickly) a property can be broken, not about collecting
+    /// every distinct failure.
+    ///
+    /// - Parameter reason: The stop reason recorded in the run's stats. Defaults
+    ///   to `.custom("first_failure")`.
+    public static func stopOnFirstFailure(
+        reason: FuzzStats.StopReason = .custom("first_failure")
+    ) -> AnalysisPlugin<repeat each Input> {
+        AnalysisPlugin(
+            id: "stop_on_first_failure",
+            handleSync: { _ in [] },
+            handleAsync: { event in
+                if case .failureFound = event {
+                    // Campaign-scoped: a found counterexample is the whole run's
+                    // goal, so cancel the sibling engines too, not just this one.
+                    return [.stop(.init(reason: reason, scope: .campaign))]
+                }
+                return []
+            }
+        )
+    }
+
     /// Creates a simple plateau detector that stops when no new coverage is found.
     ///
     /// - Parameter config: Configuration for plateau detection.
@@ -529,6 +559,13 @@ extension FuzzPlugin {
         reason: FuzzStats.StopReason = .regressionTestCompleted
     ) -> FuzzPlugin<repeat each Input> {
         AnalysisPlugin.stopWhenQueueEmpty(reason: reason).asFuzzPlugin()
+    }
+
+    /// Lifted `AnalysisPlugin.stopOnFirstFailure(reason:)` for use in `fuzz(...)`.
+    public static func stopOnFirstFailure(
+        reason: FuzzStats.StopReason = .custom("first_failure")
+    ) -> FuzzPlugin<repeat each Input> {
+        AnalysisPlugin.stopOnFirstFailure(reason: reason).asFuzzPlugin()
     }
 
     /// Lifted `AnalysisPlugin.plateauDetector(config:)` for use in `fuzz(...)`.

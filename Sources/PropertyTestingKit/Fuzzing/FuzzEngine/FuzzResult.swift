@@ -29,16 +29,23 @@ public struct FuzzResult<each Input: Codable & Sendable>: Sendable {
     /// Whether this was a regression run (replaying saved corpus).
     public let wasRegression: Bool
 
+    /// A plugin requested a campaign-wide stop (`StopScope.campaign`) — e.g. the
+    /// run found its first counterexample. In a parallel run this is what tells
+    /// the coordinator to cancel the sibling engines.
+    public let campaignStopRequested: Bool
+
     public init(
         corpus: CorpusSnapshot<repeat each Input>,
         failures: [(input: (repeat each Input), error: Error, timeElapsed: TimeInterval, scheduleBytes: [UInt8]?)],
         stats: FuzzStats,
-        wasRegression: Bool
+        wasRegression: Bool,
+        campaignStopRequested: Bool = false
     ) {
         self.corpus = corpus
         self.failures = failures
         self.stats = stats
         self.wasRegression = wasRegression
+        self.campaignStopRequested = campaignStopRequested
     }
 }
 

@@ -62,6 +62,9 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
     // Simple loop state (replaces WorkerPool)
     private var pendingInputs: SimpleRingBuffer<(repeat each Input)>
     private var haltReason: FuzzStats.StopReason?
+    /// Scope of the halt that ended the loop. `.campaign` means a plugin asked to
+    /// stop the whole parallel run, not just this engine.
+    private var haltScope: StopScope = .engine
 
     init(
         seeds: [(repeat each Input)],
@@ -105,6 +108,8 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
         let stats: FuzzStats
         let corpus: Corpus<repeat each Input>
         let failures: [(input: (repeat each Input), error: Error, timeElapsed: TimeInterval, scheduleBytes: [UInt8]?)]
+        /// A plugin asked to stop the whole parallel campaign (`StopScope.campaign`).
+        let campaignStopRequested: Bool
     }
 
     func start() async throws -> FuzzStateMachineResult {
@@ -306,7 +311,8 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
         return FuzzStateMachineResult(
             stats: stats,
             corpus: corpus,
-            failures: failures
+            failures: failures,
+            campaignStopRequested: haltScope == .campaign
         )
     }
 
@@ -359,7 +365,7 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
     private func executeAction(_ action: FuzzPluginAction<repeat each Input>) {
         switch action {
         case .stop(let stopAction):
-            halt(reason: stopAction.reason)
+            halt(reason: stopAction.reason, scope: stopAction.scope)
 
         case .recordIssue(let issueAction):
             Issue.record(issueAction.comment, sourceLocation: issueAction.sourceLocation)
@@ -386,8 +392,10 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
         }
     }
 
-    private func halt(reason: FuzzStats.StopReason) {
+    private func halt(reason: FuzzStats.StopReason, scope: StopScope = .engine) {
         haltReason = reason
+        // A campaign-scoped stop wins; never downgrade once requested.
+        if scope == .campaign { haltScope = .campaign }
     }
 
     private func addToCorpus(

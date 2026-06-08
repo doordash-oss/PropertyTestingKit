@@ -216,7 +216,8 @@ final class FuzzEngine<each Input: Codable & Sendable>: @unchecked Sendable {
             corpus: finalSnapshot,
             failures: failures,
             stats: stats,
-            wasRegression: false
+            wasRegression: false,
+            campaignStopRequested: stateMachineResult.campaignStopRequested
         )
     }
 
