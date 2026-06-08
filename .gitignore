@@ -18,3 +18,6 @@ traces
 call_trees
 __BenchmarkBoilerplate*
 __pycache__/
+
+# ETNA workload runner logs
+scripts/.workload-logs/
