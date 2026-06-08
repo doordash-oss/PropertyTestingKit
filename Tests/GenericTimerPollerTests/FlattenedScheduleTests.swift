@@ -122,7 +122,7 @@ struct FlattenedScheduleTests {
                 using: Mutator<Int>(seeds: [1, 2, 3], mutate: { [$0 &+ 1, $0 &- 1] }),
                        Mutator<String>(seeds: ["a", "bb"], mutate: { [$0 + "x"] }),
                 duration: .milliseconds(200),
-                persistence: .replace,
+                persistence: .ephemeral,
                 scheduleFuzzing: true
             ) { (i: Int, s: String) in
                 await withTaskGroup(of: Int.self) { group in

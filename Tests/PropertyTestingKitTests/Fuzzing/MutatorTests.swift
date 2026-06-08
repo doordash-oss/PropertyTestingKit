@@ -358,12 +358,12 @@ struct MutatorFuzzEngineTests {
             mutate: { _ in [] }
         )
 
-        // .refuzzReplace prevents stale on-disk corpus from short-circuiting
-        // the test into single-entry regression mode.
+        // Ephemeral: no on-disk corpus, so a stale one can't short-circuit the
+        // test into single-entry regression mode (and none is left behind).
         _ = try await fuzzWithMaxIterations(
             maxIterations: 2,
             using: mutator,
-            persistence: .replace,
+            persistence: .ephemeral,
             coverageStrategy: .alwaysInteresting
         ) { input in
             await testedInputs.update { $0.append(input) }
@@ -383,12 +383,12 @@ struct MutatorFuzzEngineTests {
             mutate: { [$0 + "-mutated"] }
         )
 
-        // .refuzzReplace prevents stale on-disk corpus from short-circuiting
-        // the test into single-entry regression mode.
+        // Ephemeral: no on-disk corpus, so a stale one can't short-circuit the
+        // test into single-entry regression mode (and none is left behind).
         _ = try await fuzzWithMaxIterations(
             maxIterations: 3,
             using: mutator,
-            persistence: .replace,
+            persistence: .ephemeral,
             coverageStrategy: .alwaysInteresting
         ) { input in
             await testedInputs.update { $0.append(input) }
@@ -410,29 +410,19 @@ struct MutatorPublicAPITests {
     func fuzzWithSingleMutator() async throws {
         let testedInputs = Synchronized([String]())
 
-        try await withDependencies {
-            // Use no-op file manager to avoid writing corpus to disk
-            $0.fileManager = FileManagerClient(
-                currentDirectoryPath: { "/test" },
-                fileExists: { _ in false },
-                createDirectory: { _, _ in },
-                removeItem: { _ in },
-                writeData: { _, _ in },
-                readData: { _ in Data() }
-            )
-        } operation: {
-            let mutator = Mutator<String>(
-                seeds: ["test1", "test2"],
-                mutate: { _ in [] }
-            )
+        let mutator = Mutator<String>(
+            seeds: ["test1", "test2"],
+            mutate: { _ in [] }
+        )
 
-            _ = try await fuzzWithMaxIterations(
-                maxIterations: 50,
-                using: mutator,
-                coverageStrategy: .alwaysInteresting
-            ) { (input: String) in
-                await testedInputs.update { $0.append(input) }
-            }
+        // Ephemeral: in-memory only, so the run never writes a corpus to disk.
+        _ = try await fuzzWithMaxIterations(
+            maxIterations: 50,
+            using: mutator,
+            persistence: .ephemeral,
+            coverageStrategy: .alwaysInteresting
+        ) { (input: String) in
+            await testedInputs.update { $0.append(input) }
         }
 
         let inputs = await testedInputs.value
@@ -444,24 +434,14 @@ struct MutatorPublicAPITests {
     func fuzzWithBuiltInMutators() async throws {
         let testedInputs = Synchronized([String]())
 
-        try await withDependencies {
-            // Use no-op file manager to avoid writing corpus to disk
-            $0.fileManager = FileManagerClient(
-                currentDirectoryPath: { "/test" },
-                fileExists: { _ in false },
-                createDirectory: { _, _ in },
-                removeItem: { _ in },
-                writeData: { _, _ in },
-                readData: { _ in Data() }
-            )
-        } operation: {
-            _ = try await fuzzWithMaxIterations(
-                maxIterations: 50,
-                using: emptyStringMutator,
-                coverageStrategy: .alwaysInteresting
-            ) { (input: String) in
-                await testedInputs.update { $0.append(input) }
-            }
+        // Ephemeral: in-memory only, so the run never writes a corpus to disk.
+        _ = try await fuzzWithMaxIterations(
+            maxIterations: 50,
+            using: emptyStringMutator,
+            persistence: .ephemeral,
+            coverageStrategy: .alwaysInteresting
+        ) { (input: String) in
+            await testedInputs.update { $0.append(input) }
         }
 
         let inputs = await testedInputs.value

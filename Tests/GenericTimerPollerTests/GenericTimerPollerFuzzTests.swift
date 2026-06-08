@@ -222,7 +222,8 @@ struct GenericTimerPollerFuzzTests {
             $0.continuousClock = ImmediateClock()
         } operation: {
             try await fuzz(
-                duration: .seconds(30)
+                duration: .seconds(30),
+                persistence: .ephemeral
             ) { (input: SequentialPollerInput) in
                 let poller = GenericTimerPoller(defaultInterval: .microseconds(100))
                 await executeLane(input.ops, on: poller)
@@ -236,7 +237,8 @@ struct GenericTimerPollerFuzzTests {
             $0.continuousClock = ImmediateClock()
         } operation: {
             let result = try await fuzz(
-                duration: .seconds(30)
+                duration: .seconds(30),
+                persistence: .ephemeral
             ) { (input: PollerFuzzInput) in
                 let poller = GenericTimerPoller(defaultInterval: .microseconds(100))
 
@@ -266,6 +268,7 @@ struct GenericTimerPollerFuzzTests {
             let iterCounter = Atomic<Int>(0)
             let result = try await fuzz(
                 duration: .seconds(3),
+                persistence: .ephemeral,
                 scheduleFuzzing: true
             ) { (input: PollerFuzzInput) in
                 let iter = iterCounter.wrappingAdd(1, ordering: .relaxed).newValue
@@ -298,6 +301,7 @@ struct GenericTimerPollerFuzzTests {
         } operation: {
             let result = try await fuzz(
                 duration: .milliseconds(100),
+                persistence: .ephemeral,
                 scheduleFuzzing: true
             ) { (input: ConstantPollerInput) in
                 let poller = GenericTimerPoller(defaultInterval: .microseconds(100))
@@ -337,13 +341,13 @@ struct GenericTimerPollerFuzzTests {
         try await withDependencies {
             $0.continuousClock = ImmediateClock()
         } operation: {
-            // refuzzReplace forces fresh fuzzing (not regression replay). Without
-            // this, the fuzz engine auto-detects the saved corpus and runs only
-            // the saved entries — defeating the point of measuring uncontrolled
-            // non-determinism.
+            // Ephemeral: fuzz fresh in memory and never touch disk. Without this
+            // the engine would auto-detect a saved corpus and replay only the
+            // saved entries — defeating the point of measuring uncontrolled
+            // non-determinism — and would also leave a corpus file behind.
             let result = try await fuzz(
                 duration: .seconds(3),
-                persistence: .replace,
+                persistence: .ephemeral,
                 coverageStrategy: .pathTrie
             ) { (input: ConstantPollerInput) in
                 let poller = GenericTimerPoller(defaultInterval: .microseconds(100))
@@ -376,11 +380,11 @@ struct GenericTimerPollerFuzzTests {
         try await withDependencies {
             $0.continuousClock = ImmediateClock()
         } operation: {
-            // refuzzReplace so we measure fresh fuzzing behavior, not replay a
-            // previously saved corpus.
+            // Ephemeral: measure fresh fuzzing behavior in memory, never replaying
+            // a saved corpus or leaving one behind.
             let result = try await fuzz(
                 duration: .seconds(2),
-                persistence: .replace,
+                persistence: .ephemeral,
                 coverageStrategy: .pathTrie,
                 scheduleFuzzing: true
             ) { (input: ConstantPollerInput) in

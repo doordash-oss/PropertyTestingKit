@@ -28,7 +28,7 @@ struct ParallelTimingTest {
 
         let result = try await fuzz(
             duration: .milliseconds(100),
-            persistence: .replace,
+            persistence: .ephemeral,
             parallelism: 16  // Internal parallelism
         ) { (input: Int) in
             // Fast test - no work
@@ -57,7 +57,7 @@ struct ParallelTimingTest {
 
                     let result = try? await fuzz(
                         duration: .milliseconds(100),
-                        persistence: .replace,
+                        persistence: .ephemeral,
                         parallelism: inner  // Internal parallelism
                     ) { (input: Int) in
                         // Fast test - no work

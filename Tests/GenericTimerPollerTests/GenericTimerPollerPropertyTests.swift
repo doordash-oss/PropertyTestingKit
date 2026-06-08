@@ -205,7 +205,7 @@ struct GenericTimerPollerPropertyTests {
         try await withDependencies {
             $0.continuousClock = ImmediateClock()
         } operation: {
-            try await fuzz(duration: .seconds(3)) { (input: SequentialPollerOps) in
+            try await fuzz(duration: .seconds(3), persistence: .ephemeral) { (input: SequentialPollerOps) in
                 // Filter ops that lock the actor (startPolling/resumePolling with ImmediateClock).
                 // The full oracle with timer ops requires TestClock (task #27).
                 let safeOps = input.ops.filter { $0 != .startPolling && $0 != .resumePolling }
@@ -261,7 +261,7 @@ struct GenericTimerPollerPropertyTests {
 
     @Test("Full model oracle with TestClock: all operations", .timeLimit(.minutes(2)))
     func fullModelOracle() async throws {
-        try await fuzz(duration: .seconds(3)) { (input: SequentialPollerOps) in
+        try await fuzz(duration: .seconds(3), persistence: .ephemeral) { (input: SequentialPollerOps) in
             let testClock = TestClock()
             try await withDependencies {
                 $0.continuousClock = testClock
@@ -325,7 +325,7 @@ struct GenericTimerPollerPropertyTests {
         try await withDependencies {
             $0.continuousClock = ImmediateClock()
         } operation: {
-            try await fuzz(duration: .seconds(3)) { (input: SequentialPollerOps) in
+            try await fuzz(duration: .seconds(3), persistence: .ephemeral) { (input: SequentialPollerOps) in
                 let handlerCalledAfterStop = OSAllocatedUnfairLock(initialState: false)
                 let poller = GenericTimerPoller(defaultInterval: .microseconds(1))
 
@@ -353,7 +353,7 @@ struct GenericTimerPollerPropertyTests {
         try await withDependencies {
             $0.continuousClock = ImmediateClock()
         } operation: {
-            try await fuzz(duration: .seconds(3)) { (input: SequentialPollerOps) in
+            try await fuzz(duration: .seconds(3), persistence: .ephemeral) { (input: SequentialPollerOps) in
                 let poller = GenericTimerPoller(defaultInterval: .microseconds(1))
 
                 _ = await executePreamble(ops: input.ops, on: poller)
@@ -374,7 +374,7 @@ struct GenericTimerPollerPropertyTests {
         try await withDependencies {
             $0.continuousClock = ImmediateClock()
         } operation: {
-            try await fuzz(duration: .seconds(3)) { (input: SequentialPollerOps) in
+            try await fuzz(duration: .seconds(3), persistence: .ephemeral) { (input: SequentialPollerOps) in
                 let poller = GenericTimerPoller(defaultInterval: .microseconds(1))
 
                 let (subs, expectedCount, _, _) = await executePreamble(ops: input.ops, on: poller)
@@ -395,7 +395,7 @@ struct GenericTimerPollerPropertyTests {
         try await withDependencies {
             $0.continuousClock = ImmediateClock()
         } operation: {
-            try await fuzz(duration: .seconds(3)) { (input: SequentialPollerOps) in
+            try await fuzz(duration: .seconds(3), persistence: .ephemeral) { (input: SequentialPollerOps) in
                 let opsWithoutStart = input.ops.filter { $0 != .startPolling && $0 != .resumePolling }
                 guard !opsWithoutStart.isEmpty else { return }
 
@@ -420,7 +420,7 @@ struct GenericTimerPollerPropertyTests {
         try await withDependencies {
             $0.continuousClock = ImmediateClock()
         } operation: {
-            try await fuzz(duration: .seconds(3), scheduleFuzzing: true) { (input: SequentialPollerOps) in
+            try await fuzz(duration: .seconds(3), persistence: .ephemeral, scheduleFuzzing: true) { (input: SequentialPollerOps) in
                 let handlerCallCount = OSAllocatedUnfairLock(initialState: 0)
                 let poller = GenericTimerPoller(defaultInterval: .microseconds(1))
 
@@ -470,6 +470,7 @@ struct GenericTimerPollerPropertyTests {
         } operation: {
             try await fuzz(
                 duration: .seconds(3),
+                persistence: .ephemeral,
                 scheduleFuzzing: true
             ) { (input: PollerFuzzInput) in
                 let poller = GenericTimerPoller(defaultInterval: .microseconds(1))
@@ -702,6 +703,7 @@ struct GenericTimerPollerPropertyTests {
         } operation: {
             let result = try await fuzz(
                 duration: .seconds(60),
+                persistence: .ephemeral,
                 scheduleFuzzing: true,
                 plugins: { [.corpusMutation(), .stadsDetector()] }
             ) { (input: PollerFuzzInput) in
