@@ -193,7 +193,6 @@ func runFuzzWithMaxIterations<each Input: MutatorProviding & Codable & Sendable>
             duration: .seconds(10),
             verbose: false,
             coverageStrategy: coverageStrategy,
-            edgeHook: nil,
             projectPath: nil,
             sourceFileID: "PropertyTestingKitTests/TestHelpers.swift",
             sourceFilePath: "PropertyTestingKitTests/TestHelpers.swift",

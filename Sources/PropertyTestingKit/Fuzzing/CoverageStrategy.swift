@@ -45,6 +45,14 @@ public struct CoverageStrategy<each Input: Codable & Sendable>: Sendable {
     /// The built-in kind, or `nil` for a custom strategy.
     let builtin: CoverageStrategyBuiltin?
 
+    /// The edge hook that records raw coverage for this strategy — the *measurement*
+    /// half (what each edge hit writes), paired with the evaluator's *judgement* half
+    /// (how that recording is read to decide "interesting"). They must agree on the
+    /// recording format, so the strategy owns both. The default, `defaultEdgeHook`,
+    /// records the coverage-map bit, appends to `covered_indices`, and advances any
+    /// trie attached to the context — i.e. it serves every built-in strategy.
+    let edgeHook: EdgeHook
+
     /// Builds a fresh evaluator (with fresh per-engine state, e.g. a new trie/index).
     /// Called once per parallel engine so engines never share mutable coverage state.
     let makeEvaluator: @Sendable () -> CoverageEvaluator<repeat each Input>
@@ -52,9 +60,11 @@ public struct CoverageStrategy<each Input: Codable & Sendable>: Sendable {
     /// Internal designated initializer used by the built-in factories.
     init(
         builtin: CoverageStrategyBuiltin?,
+        edgeHook: EdgeHook = defaultEdgeHook,
         makeEvaluator: @escaping @Sendable () -> CoverageEvaluator<repeat each Input>
     ) {
         self.builtin = builtin
+        self.edgeHook = edgeHook
         self.makeEvaluator = makeEvaluator
     }
 
@@ -65,18 +75,31 @@ public struct CoverageStrategy<each Input: Codable & Sendable>: Sendable {
     /// Return `true` if the input was interesting; add it to the corpus yourself via
     /// `corpus.addEntry(...)` / `corpus.mergeCoverageAndAdd(...)`.
     ///
+    /// - Parameter edgeHook: The recording hook to install while this strategy runs.
+    ///   Defaults to `defaultEdgeHook` (map bit + `covered_indices` + trie advance).
+    ///   Pass e.g. `countingEdgeHook` for 8-bit saturating hit counters.
     /// - Note: `decide` is shared across parallel engines. Keep it free of mutable state,
-    ///   or use `init(makeDecision:)` to get a fresh decision per engine.
-    public init(_ decide: @escaping CoverageDecision<repeat each Input>) {
-        self.init(makeDecision: { decide })
+    ///   or use `init(edgeHook:makeDecision:)` to get a fresh decision per engine.
+    public init(
+        edgeHook: EdgeHook = defaultEdgeHook,
+        _ decide: @escaping CoverageDecision<repeat each Input>
+    ) {
+        self.init(edgeHook: edgeHook, makeDecision: { decide })
     }
 
     /// Build a custom strategy whose decision holds fresh per-engine state.
     ///
     /// `makeDecision` is called once per parallel engine to produce an isolated decision
     /// closure, mirroring how the built-ins allocate a fresh trie/index per engine.
-    public init(makeDecision: @escaping @Sendable () -> CoverageDecision<repeat each Input>) {
+    ///
+    /// - Parameter edgeHook: The recording hook to install while this strategy runs
+    ///   (default `defaultEdgeHook`).
+    public init(
+        edgeHook: EdgeHook = defaultEdgeHook,
+        makeDecision: @escaping @Sendable () -> CoverageDecision<repeat each Input>
+    ) {
         self.builtin = nil
+        self.edgeHook = edgeHook
         self.makeEvaluator = {
             let decide = makeDecision()
             return CoverageEvaluator(setup: nil, evaluate: { input, scheduleBytes, context, coverageClient, corpus in

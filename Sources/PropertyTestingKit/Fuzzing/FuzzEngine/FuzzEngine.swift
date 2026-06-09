@@ -160,8 +160,8 @@ final class FuzzEngine<each Input: Codable & Sendable>: @unchecked Sendable {
 
         let startTime = dateClient.now()
 
-        // Install custom edge hook if configured
-        SanCovCounters.setEdgeHook(config.edgeHook)
+        // Install the strategy's recording hook (its measurement half).
+        SanCovCounters.setEdgeHook(coverageStrategy.edgeHook)
 
         // Early exit if no seeds and no way to generate inputs
         if seeds.isEmpty {

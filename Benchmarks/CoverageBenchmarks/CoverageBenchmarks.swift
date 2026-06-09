@@ -134,10 +134,16 @@ let benchmarks: @Sendable () -> Void = {
             let startCPU = getCPUTimeNanos()
             let startWall = DispatchTime.now().uptimeNanoseconds
 
+            // Exercise the counting edge hook (8-bit saturating buckets) via a custom
+            // strategy that records with it and adds every input — measures recording
+            // throughput, which is what this benchmark targets.
             let result = try await fuzz(
                 duration: .seconds(0.1),
                 persistence: .replace,
-                edgeHook: countingEdgeHook,
+                coverageStrategy: CoverageStrategy(edgeHook: countingEdgeHook) { sparse, corpus, input, schedule in
+                    corpus.addEntry(input: input, scheduleBytes: schedule, sparse: sparse)
+                    return true
+                },
                 parallelism: 16
             ) { (input: Int) in
                 blackHole(input)
