@@ -124,7 +124,7 @@ public func fuzz<each Input: Codable & Sendable>(
     seeds: [(repeat each Input)] = [],
     duration: Duration = .seconds(60),
     persistence: CorpusPersistence = .auto,
-    coverageStrategy: CoverageStrategy<repeat each Input> = .pathTrie,
+    coverageStrategy: CoverageStrategy = .pathTrie,
     scheduleFuzzing: Bool = false,
     parallelism: Int = ProcessInfo.processInfo.processorCount,
     plugins: @escaping @Sendable () -> [FuzzPlugin<repeat each Input>] = { [.corpusMutation()] },
@@ -156,7 +156,7 @@ func fuzzInternal<each Input: Codable & Sendable>(
     seeds: [(repeat each Input)],
     duration: Duration,
     persistence: CorpusPersistence,
-    coverageStrategy: CoverageStrategy<repeat each Input>,
+    coverageStrategy: CoverageStrategy,
     scheduleFuzzing: Bool,
     parallelism: Int,
     plugins: @escaping @Sendable () -> [FuzzPlugin<repeat each Input>],
@@ -182,11 +182,9 @@ func fuzzInternal<each Input: Codable & Sendable>(
     // The call-site `persistence` is used directly (the suite-level env override does
     // not apply to scheduled runs).
     if scheduleFuzzing {
-        // Schedule fuzzing runs over the extended pack `([UInt8], repeat each Input)`, a
-        // different pack than the user's, so the strategy value can't be forwarded directly.
-        // Re-instantiate the same built-in kind at the extended pack (custom strategies fall
-        // back to `.pathTrie`, the natural order-sensitive strategy for schedule fuzzing).
-        let scheduledStrategy = CoverageStrategy<[UInt8], repeat each Input>.builtin(coverageStrategy.builtin)
+        // Strategies are pack-agnostic (pure judgement over coverage), so the
+        // user's strategy — built-in or custom — passes straight into the
+        // extended-pack run; its single engine builds from the same makeEngine.
         let peeled = await runFlattenedSchedule(
             mutators: (repeat each mutators),
             seeds: seeds,
@@ -194,7 +192,7 @@ func fuzzInternal<each Input: Codable & Sendable>(
             persistence: persistence,
             duration: duration,
             verbose: verbose,
-            coverageStrategy: scheduledStrategy,
+            coverageStrategy: coverageStrategy,
             projectPath: projectPath(from: filePath),
             sourceFileID: testFilePath,
             sourceFilePath: testFilePath,
@@ -318,7 +316,7 @@ public func fuzz<each Input: MutatorProviding & Codable & Sendable>(
     seeds: [(repeat each Input)] = [],
     duration: Duration = .seconds(60),
     persistence: CorpusPersistence = .auto,
-    coverageStrategy: CoverageStrategy<repeat each Input> = .pathTrie,
+    coverageStrategy: CoverageStrategy = .pathTrie,
     scheduleFuzzing: Bool = false,
     parallelism: Int = ProcessInfo.processInfo.processorCount,
     plugins: @escaping @Sendable () -> [FuzzPlugin<repeat each Input>] = { [.corpusMutation()] },

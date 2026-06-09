@@ -27,11 +27,9 @@ struct CustomCoverageStrategyTests {
     @Test("A custom strategy can add to the corpus via the public API")
     func customStrategyAddsToCorpus() async throws {
         // An "always interesting" strategy written entirely against public types:
-        // the run's SparseCoverage and the Corpus. No MeasurementContext / client needed.
-        let everything = CoverageStrategy<Int> { sparse, corpus, input, schedule in
-            corpus.addEntry(input: input, scheduleBytes: schedule, sparse: sparse)
-            return true
-        }
+        // pure judgement over the run's SparseCoverage — the engine records
+        // interesting inputs; strategies never touch the corpus.
+        let everything = CoverageStrategy { _ in true }
 
         let result = try await fuzzWithMaxIterations(
             maxIterations: 20,
@@ -45,7 +43,7 @@ struct CustomCoverageStrategyTests {
 
     @Test("A custom strategy that rejects everything yields an empty corpus")
     func customStrategyCanReject() async throws {
-        let nothing = CoverageStrategy<Int> { _, _, _, _ in false }
+        let nothing = CoverageStrategy { _ in false }
 
         let result = try await fuzzWithMaxIterations(
             maxIterations: 20,

@@ -17,16 +17,7 @@
 
 extension CoverageStrategy {
     /// Always-interesting strategy: every input is added. Useful for deterministic tests.
-    public static var alwaysInteresting: CoverageStrategy<repeat each Input> {
-        CoverageStrategy(builtin: .alwaysInteresting, makeEngine: { makeAlwaysInterestingEngine() })
-    }
-}
-
-/// Always interesting strategy: every input is added unconditionally.
-private func makeAlwaysInterestingEngine<each Input: Codable & Sendable>(
-) -> CoverageEngine<repeat each Input> {
-    CoverageEngine { sparse, corpus, input, scheduleBytes in
-        corpus.mergeCoverageAndAdd(input: input, scheduleBytes: scheduleBytes, sparse: sparse)
-        return true
+    public static var alwaysInteresting: CoverageStrategy {
+        CoverageStrategy { _ in true }
     }
 }

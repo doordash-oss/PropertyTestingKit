@@ -17,8 +17,8 @@
 
 extension CoverageStrategy {
     /// Signature match strategy: exact edge-set matching via inverted index. Zero false positives.
-    public static var signatureMatch: CoverageStrategy<repeat each Input> {
-        CoverageStrategy(builtin: .signatureMatch, makeEngine: { makeSignatureMatchEngine() })
+    public static var signatureMatch: CoverageStrategy {
+        CoverageStrategy(makeEngine: { makeSignatureMatchEngine() })
     }
 }
 
@@ -105,11 +105,10 @@ private struct SignatureIndex {
 /// Zero false positives — if the edge set hasn't been seen before, it's
 /// interesting. The inverted index is this engine's state, wrapped in a
 /// `SyncBox` because the decision closure is `@Sendable`.
-private func makeSignatureMatchEngine<each Input: Codable & Sendable>(
-) -> CoverageEngine<repeat each Input> {
+private func makeSignatureMatchEngine() -> CoverageEngine {
     let index = SyncBox(SignatureIndex())
 
-    return CoverageEngine { sparse, corpus, input, scheduleBytes in
+    return CoverageEngine { sparse in
         let isDuplicate = index.update { idx in
             sparse.indices.withUnsafeBufferPointer { idx.isDuplicate(coveredIndices: $0) }
         }
@@ -118,9 +117,8 @@ private func makeSignatureMatchEngine<each Input: Codable & Sendable>(
             return false
         }
 
-        // Novel edge set — register it and add to the corpus.
+        // Novel edge set — register it; the engine records the input.
         index.update { $0.addSignature(sparse.indices) }
-        corpus.mergeCoverageAndAdd(input: input, scheduleBytes: scheduleBytes, sparse: sparse)
         return true
     }
 }

@@ -25,7 +25,7 @@ struct PathTrieStrategyTests {
 
     @Test("First iteration trie path is not empty")
     func firstIterationTriePathNotEmpty() {
-        let strategy: CoverageEvaluator<Int> = CoverageStrategy<Int>.pathTrie.makeEvaluator()
+        let strategy: CoverageEvaluator<Int> = CoverageStrategy.pathTrie.makeEvaluator()
         let context = SanCovCounters.beginMeasurement()
         // The context co-owns the strategy's observer (and so its trie) — no
         // lifetime pinning needed even though edges dispatch until the end.

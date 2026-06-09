@@ -85,7 +85,7 @@ func runFuzz<each Input: Codable & Sendable>(
     parallelism: Int,
     duration: Duration,
     verbose: Bool,
-    coverageStrategy: CoverageStrategy<repeat each Input>,
+    coverageStrategy: CoverageStrategy,
     projectPath: String?,
     sourceFileID: String,
     sourceFilePath: String,
@@ -269,7 +269,7 @@ private func replayRegression<each Input: Codable & Sendable>(
     mutators: (repeat Mutator<each Input>),
     verbose: Bool,
     config: FuzzEngineConfig,
-    coverageStrategy: CoverageStrategy<repeat each Input>,
+    coverageStrategy: CoverageStrategy,
     scheduleBytesExtractor: @escaping @Sendable ((repeat each Input)) -> [UInt8]? = { _ in nil },
     plugins: @escaping @Sendable () -> [AnalysisPlugin<repeat each Input>],
     test: @escaping @Sendable ((repeat each Input)) async throws -> Void
@@ -316,7 +316,7 @@ private func fuzzCampaign<each Input: Codable & Sendable>(
     verbose: Bool,
     persist: Bool,
     config: FuzzEngineConfig,
-    coverageStrategy: CoverageStrategy<repeat each Input>,
+    coverageStrategy: CoverageStrategy,
     scheduleBytesExtractor: @escaping @Sendable ((repeat each Input)) -> [UInt8]? = { _ in nil },
     makeHandlers: @escaping @Sendable () -> [FuzzPlugin<repeat each Input>],
     test: @escaping @Sendable ((repeat each Input)) async throws -> Void
@@ -384,7 +384,7 @@ private func runEngines<each Input: Codable & Sendable>(
     parallelism: Int,
     verbose: Bool,
     config: FuzzEngineConfig,
-    coverageStrategy: CoverageStrategy<repeat each Input>,
+    coverageStrategy: CoverageStrategy,
     scheduleBytesExtractor: @escaping @Sendable ((repeat each Input)) -> [UInt8]? = { _ in nil },
     makeProcessor: @escaping @Sendable () -> PluginProcessor<repeat each Input>,
     test: @escaping @Sendable ((repeat each Input)) async throws -> Void

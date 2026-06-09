@@ -18,7 +18,11 @@
 /// A strategy's per-engine bundle: the measurement hooks and the decision,
 /// sharing one parallel engine's state. Built fresh by `makeEngine` for each
 /// engine, so state captured by these closures never crosses engines.
-public struct CoverageEngine<each Input: Codable & Sendable>: Sendable {
+///
+/// The bundle is pure judgement: it never sees the corpus, the typed input,
+/// or schedule bytes — which is what lets one strategy value serve any input
+/// pack (including schedule fuzzing's extended pack).
+public struct CoverageEngine: Sendable {
     /// Called on every hit of edges routing to this engine's measurement
     /// context (see `CoverageStrategy.init(onEdge:_:)` for semantics).
     let onEdge: (@Sendable (UInt32) -> Void)?
@@ -27,14 +31,15 @@ public struct CoverageEngine<each Input: Codable & Sendable>: Sendable {
     /// per-iteration state starts each run clean.
     let onReset: (@Sendable () -> Void)?
 
-    /// The judgement half: decides per iteration whether the input was
-    /// interesting and adds it to the corpus.
-    let decide: CoverageDecision<repeat each Input>
+    /// The judgement half: decides per iteration whether the run's coverage
+    /// makes the input interesting. The engine records interesting inputs in
+    /// the corpus.
+    let decide: CoverageDecision
 
     public init(
         onEdge: (@Sendable (UInt32) -> Void)? = nil,
         onReset: (@Sendable () -> Void)? = nil,
-        _ decide: @escaping CoverageDecision<repeat each Input>
+        _ decide: @escaping CoverageDecision
     ) {
         self.onEdge = onEdge
         self.onReset = onReset

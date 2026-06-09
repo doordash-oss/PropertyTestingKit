@@ -35,16 +35,16 @@ struct CoverageEngineTests {
 
         // The engine's state: a per-engine iteration counter. Only the FIRST
         // iteration of EACH engine is "interesting".
-        let strategy = CoverageStrategy<Int>(makeEngine: {
+        let strategy = CoverageStrategy(makeEngine: {
             let iterations = PropertyTestingKit.SyncBox<Int>(0)
-            return CoverageEngine { _, _, _, _ in
+            return CoverageEngine { _ in
                 iterations.update { $0 += 1 }
                 return iterations.value == 1
             }
         })
 
-        let engine1 = strategy.makeEvaluator()
-        let engine2 = strategy.makeEvaluator()
+        let engine1: CoverageEvaluator<Int> = strategy.makeEvaluator()
+        let engine2: CoverageEvaluator<Int> = strategy.makeEvaluator()
 
         #expect(engine1.evaluate(1, nil, context, coverageClient, corpus) != nil,
                 "Engine 1's first iteration")
@@ -61,15 +61,15 @@ struct CoverageEngineTests {
         let coverageClient = CoverageCountersClient.liveValue
         let corpus = Corpus<Int>()
 
-        let strategy = CoverageStrategy<Int>(makeEngine: {
+        let strategy = CoverageStrategy(makeEngine: {
             let edges = PropertyTestingKit.SyncBox<Set<UInt32>>([])
             return CoverageEngine(
                 onEdge: { edge in edges.update { _ = $0.insert(edge) } },
-                { _, _, _, _ in edges.value.contains(21) }
+                { _ in edges.value.contains(21) }
             )
         })
 
-        let evaluator = strategy.makeEvaluator()
+        let evaluator: CoverageEvaluator<Int> = strategy.makeEvaluator()
         evaluator.setup?(context)
 
         var g21: UInt32 = 21
@@ -85,32 +85,19 @@ struct CoverageEngineTests {
         defer { SanCovCounters.endMeasurement(context) }
 
         let resets = PropertyTestingKit.SyncBox<Int>(0)
-        let strategy = CoverageStrategy<Int>(makeEngine: {
+        let strategy = CoverageStrategy(makeEngine: {
             CoverageEngine(
                 onEdge: { _ in },
                 onReset: { resets.update { $0 += 1 } },
-                { _, _, _, _ in false }
+                { _ in false }
             )
         })
 
-        strategy.makeEvaluator().setup?(context)
+        let evaluator: CoverageEvaluator<Int> = strategy.makeEvaluator()
+        evaluator.setup?(context)
         SanCovCounters.resetCoverage(context)
 
         #expect(resets.value == 1, "resetCoverage must reach the engine's onReset")
-    }
-
-    @Test("Corpus.mergeCoverage merges and reports whether any edge was new")
-    func corpusMergeCoverageReportsNovelty() {
-        let corpus = Corpus<Int>()
-
-        #expect(corpus.mergeCoverage(SparseCoverage(indices: [1, 2, 3])),
-                "All edges new")
-        #expect(!corpus.mergeCoverage(SparseCoverage(indices: [2, 3])),
-                "A subset of seen edges is not new coverage")
-        #expect(corpus.mergeCoverage(SparseCoverage(indices: [3, 4])),
-                "One unseen edge suffices")
-        #expect(!corpus.mergeCoverage(SparseCoverage()),
-                "Empty coverage is never new")
     }
 
     /// The forcing function for "no privileged strategies": newEdge expressed
@@ -122,14 +109,20 @@ struct CoverageEngineTests {
         let coverageClient = CoverageCountersClient.liveValue
         let corpus = Corpus<Int>()
 
-        let strategy = CoverageStrategy<Int>(makeEngine: {
-            CoverageEngine { sparse, corpus, input, scheduleBytes in
-                guard corpus.mergeCoverage(sparse) else { return false }
-                corpus.addEntry(input: input, scheduleBytes: scheduleBytes, sparse: sparse)
-                return true
+        let strategy = CoverageStrategy(makeEngine: {
+            // Novelty state is the STRATEGY's own — no corpus access at all.
+            let seen = PropertyTestingKit.SyncBox<Set<UInt32>>([])
+            return CoverageEngine { sparse in
+                seen.update { seenEdges in
+                    var foundNew = false
+                    for edge in sparse.indices where seenEdges.insert(edge).inserted {
+                        foundNew = true
+                    }
+                    return foundNew
+                }
             }
         })
-        let evaluator = strategy.makeEvaluator()
+        let evaluator: CoverageEvaluator<Int> = strategy.makeEvaluator()
         evaluator.setup?(context)
 
         // Identical instrumented code in both passes, reset through evaluate
@@ -152,13 +145,66 @@ struct CoverageEngineTests {
         #expect(corpus.count == 1, "Only the novel run joins the corpus")
     }
 
+    /// Strategies are pure judgement: they never see the corpus or the typed
+    /// input. When decide says yes, the ENGINE records the input — with its
+    /// coverage and schedule bytes — in the corpus.
+    @Test("The engine, not the strategy, records interesting inputs")
+    func engineOwnsStorage() {
+        let context = SanCovCounters.beginMeasurement()
+        defer { SanCovCounters.endMeasurement(context) }
+        let coverageClient = CoverageCountersClient.liveValue
+        let corpus = Corpus<Int>()
+
+        let strategy = CoverageStrategy { _ in true }
+        let evaluator: CoverageEvaluator<Int> = strategy.makeEvaluator()
+
+        let sparse = evaluator.evaluate(7, [9, 9], context, coverageClient, corpus)
+
+        #expect(sparse != nil, "An always-true decision is interesting")
+        #expect(corpus.count == 1, "The engine records the interesting input")
+        #expect(corpus.entries.first?.scheduleBytes == [9, 9],
+                "Schedule bytes ride with the entry as a storage concern")
+        #expect(corpus.entries.first?.sparseCoverage == sparse,
+                "The entry carries the run's judged coverage")
+    }
+
+    /// newEdge's novelty oracle is the strategy's OWN per-engine state, not
+    /// the corpus: a second engine judging the same edges finds them new for
+    /// itself even when the shared corpus already holds them.
+    @Test("newEdge novelty state is per-engine, not corpus-owned")
+    func newEdgeNoveltyIsPerEngine() {
+        let context = SanCovCounters.beginMeasurement()
+        defer { SanCovCounters.endMeasurement(context) }
+        let coverageClient = CoverageCountersClient.liveValue
+        let corpus = Corpus<Int>()
+
+        let strategy = CoverageStrategy.newEdge
+        let engine1: CoverageEvaluator<Int> = strategy.makeEvaluator()
+        let engine2: CoverageEvaluator<Int> = strategy.makeEvaluator()
+
+        // Identical instrumented code per pass (see the trie dispatch test).
+        func firePass(_ evaluator: CoverageEvaluator<Int>, _ input: Int) -> Bool {
+            SanCovCounters.resetCoverage(context)
+            var g41: UInt32 = 41
+            var g42: UInt32 = 42
+            sancov_dispatch_edge(&g41)
+            sancov_dispatch_edge(&g42)
+            return evaluator.evaluate(input, nil, context, coverageClient, corpus) != nil
+        }
+
+        #expect(firePass(engine1, 1), "Engine 1: first sight of these edges")
+        #expect(!firePass(engine1, 2), "Engine 1: replay brings nothing new")
+        #expect(firePass(engine2, 3),
+                "Engine 2 judges with its OWN state — the corpus already holding these edges must not decide for it")
+    }
+
     @Test("A parallel fuzz run builds one engine per parallel engine")
     func makeEngineCalledPerParallelEngine() async throws {
         // Deliberately SHARED across engines: counts makeEngine invocations.
         let engineCount = PropertyTestingKit.SyncBox<Int>(0)
-        let strategy = CoverageStrategy<Int>(makeEngine: {
+        let strategy = CoverageStrategy(makeEngine: {
             engineCount.update { $0 += 1 }
-            return CoverageEngine { _, _, _, _ in false }
+            return CoverageEngine { _ in false }
         })
 
         _ = try await fuzzWithMaxIterations(

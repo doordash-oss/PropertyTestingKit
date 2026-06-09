@@ -16,23 +16,25 @@
 //
 
 extension CoverageStrategy {
-    /// New edge strategy: bitmap merge — any previously-unseen edge is interesting (AFL/libFuzzer).
-    public static var newEdge: CoverageStrategy<repeat each Input> {
-        CoverageStrategy(builtin: .newEdge, makeEngine: { makeNewEdgeEngine() })
+    /// New edge strategy: any previously-unseen edge is interesting (AFL/libFuzzer).
+    public static var newEdge: CoverageStrategy {
+        CoverageStrategy(makeEngine: { makeNewEdgeEngine() })
     }
 }
 
-/// New edge strategy: any previously-unseen edge (per the corpus's global
-/// seen-edges bitmap) is interesting. Aligns with AFL/libFuzzer model.
-private func makeNewEdgeEngine<each Input: Codable & Sendable>(
-) -> CoverageEngine<repeat each Input> {
-    CoverageEngine { sparse, corpus, input, scheduleBytes in
-        guard corpus.mergeCoverage(sparse) else {
-            return false
-        }
+/// New edge strategy: an input is interesting iff it covered an edge this
+/// engine hasn't seen before. The novelty oracle is the STRATEGY's own
+/// per-engine state — the corpus stores results, it doesn't judge them.
+private func makeNewEdgeEngine() -> CoverageEngine {
+    let seen = SyncBox<Set<UInt32>>([])
 
-        // mergeCoverage already merged the bitmap — record without re-merging.
-        corpus.addEntry(input: input, scheduleBytes: scheduleBytes, sparse: sparse)
-        return true
+    return CoverageEngine { sparse in
+        seen.update { seenEdges in
+            var foundNew = false
+            for edge in sparse.indices where seenEdges.insert(edge).inserted {
+                foundNew = true
+            }
+            return foundNew
+        }
     }
 }

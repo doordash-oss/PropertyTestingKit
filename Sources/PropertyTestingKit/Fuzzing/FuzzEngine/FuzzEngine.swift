@@ -68,7 +68,7 @@ final class FuzzEngine<each Input: Codable & Sendable>: @unchecked Sendable {
 
     /// The coverage strategy. Its evaluator is built fresh in `run()` so each parallel
     /// engine gets its own per-engine state (e.g. a distinct trie/index).
-    private let coverageStrategy: CoverageStrategy<repeat each Input>
+    private let coverageStrategy: CoverageStrategy
 
     /// Initialize with mutators.
     ///
@@ -95,7 +95,7 @@ final class FuzzEngine<each Input: Codable & Sendable>: @unchecked Sendable {
     init(
         mutators: repeat Mutator<each Input>,
         config: FuzzEngineConfig,
-        coverageStrategy: CoverageStrategy<repeat each Input>,
+        coverageStrategy: CoverageStrategy,
         scheduleBytesExtractor: @escaping @Sendable ((repeat each Input)) -> [UInt8]?
     ) {
         self.config = config
@@ -110,7 +110,7 @@ final class FuzzEngine<each Input: Codable & Sendable>: @unchecked Sendable {
     convenience init(
         mutators: repeat Mutator<each Input>,
         config: FuzzEngineConfig = FuzzEngineConfig(),
-        coverageStrategy: CoverageStrategy<repeat each Input> = .pathTrie
+        coverageStrategy: CoverageStrategy = .pathTrie
     ) {
         self.init(
             mutators: repeat each mutators,

@@ -270,7 +270,7 @@ struct ContextRecorderTests {
         let context = SanCovCounters.beginMeasurement()
         defer { SanCovCounters.endMeasurement(context) }
 
-        let evaluator: CoverageEvaluator<Int> = CoverageStrategy<Int>.pathTrie.makeEvaluator()
+        let evaluator: CoverageEvaluator<Int> = CoverageStrategy.pathTrie.makeEvaluator()
         evaluator.setup?(context)
 
         #expect(sancov_context_get_recorder_for_testing(context.rawContext) == recorderBits(edgeObserverRecorder))
@@ -284,11 +284,11 @@ struct ContextRecorderTests {
         defer { SanCovCounters.endMeasurement(context) }
 
         let hits = PropertyTestingKit.SyncBox<[UInt32]>([])
-        let strategy = CoverageStrategy<Int>(
+        let strategy = CoverageStrategy(
             onEdge: { edge in hits.update { $0.append(edge) } }
-        ) { _, _, _, _ in false }
+        ) { _ in false }
 
-        let evaluator = strategy.makeEvaluator()
+        let evaluator: CoverageEvaluator<Int> = strategy.makeEvaluator()
         evaluator.setup?(context)
 
         var g13: UInt32 = 13
@@ -304,7 +304,7 @@ struct ContextRecorderTests {
         let context = SanCovCounters.beginMeasurement()
         defer { SanCovCounters.endMeasurement(context) }
 
-        let evaluator: CoverageEvaluator<Int> = CoverageStrategy<Int>.signatureMatch.makeEvaluator()
+        let evaluator: CoverageEvaluator<Int> = CoverageStrategy.signatureMatch.makeEvaluator()
         evaluator.setup?(context)
 
         #expect(sancov_context_get_recorder_for_testing(context.rawContext) == nil)

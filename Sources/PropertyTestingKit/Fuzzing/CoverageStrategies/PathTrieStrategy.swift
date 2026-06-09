@@ -21,28 +21,27 @@ import EdgeHooks
 
 extension CoverageStrategy {
     /// Path trie strategy: ordered-path tracking (A→B→C differs from A→C→B). The default.
-    public static var pathTrie: CoverageStrategy<repeat each Input> {
-        CoverageStrategy(builtin: .pathTrie, makeEngine: { makePathTrieEngine() })
+    public static var pathTrie: CoverageStrategy {
+        CoverageStrategy(makeEngine: { makePathTrieEngine() })
     }
 }
 
 /// Path trie strategy: O(1) per-hit path tracking, O(1) uniqueness check.
 ///
-/// Built through the same per-engine API custom strategies use — the strategy
-/// contains its trie as engine state, advanced by its onEdge hook and judged by
-/// its decision. The observer mechanism reports every hit; THIS strategy
+/// The strategy contains its trie as engine state, advanced by its onEdge hook
+/// and judged by its decision (the sparse coverage itself is unused — the path
+/// IS the judgement). The observer mechanism reports every hit; THIS strategy
 /// chooses loop immunity (`makeTrieHooks` gates advancement to an edge's first
 /// hit per iteration) so loop counts don't lengthen paths. Each parallel
 /// engine builds its own trie, so cursors never interleave.
-private func makePathTrieEngine<each Input: Codable & Sendable>(
-) -> CoverageEngine<repeat each Input> {
+private func makePathTrieEngine() -> CoverageEngine {
     let trie = PathTrie()
     let hooks = makeTrieHooks(trie)
 
     return CoverageEngine(
         onEdge: hooks.onEdge,
         onReset: hooks.onReset
-    ) { sparse, corpus, input, scheduleBytes in
+    ) { _ in
         defer {
             trie.reset()
         }
@@ -52,7 +51,6 @@ private func makePathTrieEngine<each Input: Codable & Sendable>(
         }
 
         trie.markTerminal()
-        corpus.mergeCoverageAndAdd(input: input, scheduleBytes: scheduleBytes, sparse: sparse)
         return true
     }
 }
