@@ -27,11 +27,9 @@ struct PathTrieStrategyTests {
     func firstIterationTriePathNotEmpty() {
         let strategy: CoverageEvaluator<Int> = CoverageStrategy<Int>.pathTrie.makeEvaluator()
         let context = SanCovCounters.beginMeasurement()
-        // The evaluator owns the strategy's trie, and the attached trie recorder
-        // keeps dispatching until endMeasurement severs it — keep the evaluator
-        // alive through endMeasurement (ARC would otherwise release it after
-        // its last use, leaving the recorder pointed at a freed trie).
-        defer { withExtendedLifetime(strategy) { SanCovCounters.endMeasurement(context) } }
+        // The context co-owns the strategy's observer (and so its trie) — no
+        // lifetime pinning needed even though edges dispatch until the end.
+        defer { SanCovCounters.endMeasurement(context) }
         let coverageClient = CoverageCountersClient.liveValue
         let corpus = Corpus<Int>()
 

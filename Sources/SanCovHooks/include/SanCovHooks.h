@@ -122,16 +122,27 @@ typedef struct {
     /// builtins reject a function-pointer _Atomic directly; cast on store/load).
     /// 0 → the default recorder. Set by the coverage strategy's setup phase via
     /// sancov_context_set_recorder; read per edge by sancov_dispatch_edge after
-    /// routing resolves this context. Cleared by sancov_end_measurement so
-    /// straggler tasks that retain the context past `end` fall back to the
-    /// default recorder and can never touch freed recorder state.
+    /// routing resolves this context. Severed (fn + reset only) by
+    /// sancov_end_measurement so straggler tasks that retain the context past
+    /// `end` fall back to the default recorder.
     uintptr_t edge_recorder_bits;
-    /// Opaque state for the recorder (e.g. the path trie). Stored/loaded with
-    /// release/acquire ordering paired with edge_recorder_bits: data is written
-    /// before the fn, so a dispatcher that observes the fn observes the data.
-    /// Not owned by the context — the attacher keeps it alive until the
-    /// measurement ends (sancov_end_measurement severs the reference).
+    /// Opaque state for the recorder (e.g. a Swift edge-observer box). Stored/
+    /// loaded with release/acquire ordering paired with edge_recorder_bits:
+    /// data is written before the fn, so a dispatcher that observes the fn
+    /// observes the data. CO-OWNED by the context when a release fn is given:
+    /// the context calls recorder_release_bits(recorder_data) when its last
+    /// reference drops (or when the recorder is replaced), so any thread that
+    /// can still dispatch — every TLS cache holds a context ref — keeps the
+    /// data alive. No attacher-side lifetime contract remains.
     void* recorder_data;
+    /// Optional `void (*)(void* data)` (as pointer bits) invoked by
+    /// sancov_reset_coverage with recorder_data, so per-iteration recorder
+    /// state (e.g. a path-trie cursor) resets with the coverage map.
+    uintptr_t recorder_reset_bits;
+    /// Optional `void (*)(void* data)` (as pointer bits) invoked exactly once
+    /// with recorder_data when the context is finally freed, or immediately
+    /// when the recorder is replaced/cleared via sancov_context_set_recorder.
+    uintptr_t recorder_release_bits;
 } SanCovMeasurementContext;
 
 /// Begin a measurement context for coverage isolation.
@@ -182,8 +193,9 @@ void sancov_retain_for_testing(SanCovMeasurementContext* context);
 /// default recorder is in effect).
 void* sancov_context_get_recorder_for_testing(SanCovMeasurementContext* context);
 
-/// TESTING ONLY: read the context's opaque recorder data.
-void* sancov_context_get_recorder_data_for_testing(SanCovMeasurementContext* context);
+/// Read the context's opaque recorder data (acquire). Hot-path safe: used by
+/// Swift observer recorders to reach their box; NULL when nothing is attached.
+void* sancov_context_get_recorder_data(SanCovMeasurementContext* context);
 
 /// The coverage-inheritance handle for a measurement context: a 64-bit value
 /// that packs the context's generation tag (high 16 bits) with its pointer
@@ -264,6 +276,10 @@ bool sancov_merge_coverage_into_bitmap(
 /// fallback path), so recorders never re-run routing on the hot path.
 typedef void (*SanCovEdgeRecorder)(uint32_t* guard, uint8_t* map, SanCovMeasurementContext* context);
 
+/// A recorder-data lifecycle hook: reset (per-iteration state) or release
+/// (final ownership drop). Receives the context's recorder_data.
+typedef void (*SanCovRecorderDataFn)(void* data);
+
 /// The default recorder: binary first-hit (atomic 0→1) + covered_indices append.
 void sancov_recorder_default(uint32_t* guard, uint8_t* map, SanCovMeasurementContext* context);
 
@@ -272,16 +288,40 @@ void sancov_recorder_default(uint32_t* guard, uint8_t* map, SanCovMeasurementCon
 /// hit-count bucketing strategies (libFuzzer-style).
 void sancov_recorder_counting(uint32_t* guard, uint8_t* map, SanCovMeasurementContext* context);
 
-/// Trie recorder: first hit like the default (atomic map 1 + index append, so
-/// sparse snapshots keep working), then advances the path trie carried in the
-/// context's recorder_data. O(1) per hit. Loop-immune: advances on first hit only.
-void sancov_recorder_trie(uint32_t* guard, uint8_t* map, SanCovMeasurementContext* context);
+/// Set (or with NULL clear) the context's edge recorder, its opaque state, and
+/// the state's lifecycle hooks. Stores data/hooks before fn (release) so a
+/// dispatcher that observes the fn (acquire) observes everything it needs.
+///
+/// `release`, when non-NULL, transfers ownership of `data` to the context:
+/// it is called exactly once — when the context's last reference drops, or
+/// immediately if the recorder is later replaced/cleared by another call here.
+/// `reset`, when non-NULL, is called by sancov_reset_coverage with `data`.
+///
+/// Replacing/clearing while edges are actively dispatching is unsupported
+/// (the replaced data is released immediately, racing any in-flight reader);
+/// strategies attach once during setup, before the first iteration.
+void sancov_context_set_recorder(
+    SanCovMeasurementContext* context,
+    SanCovEdgeRecorder recorder,
+    void* data,
+    SanCovRecorderDataFn reset,
+    SanCovRecorderDataFn release);
 
-/// Set (or with NULL clear) the context's edge recorder and its opaque state.
-/// Stores data before fn (release) so a dispatcher that observes the fn
-/// (acquire) observes the data; clearing stores fn-then-data so no dispatch
-/// can begin against half-cleared state.
-void sancov_context_set_recorder(SanCovMeasurementContext* context, SanCovEdgeRecorder recorder, void* data);
+/// Record a first hit for `guard` (atomic map 0→1 + covered_indices append)
+/// with the standard bounds checks. Returns true iff this call recorded the
+/// first hit. Building block for Swift observer recorders: gate per-edge work
+/// on the return value to stay loop-immune.
+bool sancov_record_edge_first_hit(uint32_t* guard, uint8_t* map, SanCovMeasurementContext* context);
+
+/// Per-thread observer reentrancy gate. An observer callback that lives in
+/// instrumented code fires edges of its own, which dispatch back into the
+/// recorder ON THE SAME THREAD — without a gate that re-enters the callback
+/// (and deadlocks any non-reentrant lock it holds). Enter returns false when
+/// this thread is already inside an observer callback; the caller then skips
+/// the callback (the edge is still recorded in the map). Pair every
+/// successful enter with exit.
+bool sancov_observer_enter(void);
+void sancov_observer_exit(void);
 
 /// Resolve routing for the current task/thread and run the context's recorder
 /// (default recorder when none is attached or no measurement is active).
@@ -302,7 +342,7 @@ void sancov_record_edge_counting(uint32_t *guard);
 // Each unique execution path (ordered sequence of edge hits) is a path in the trie.
 // On each edge hit, the current pointer advances to the child for that edge index.
 // If no child exists, a new node is created and a "novel" flag is set.
-// Attached to a context as sancov_recorder_trie's recorder_data.
+// Driven from Swift via sancov_trie_advance (the .pathTrie strategy's observer).
 
 /// Create a new path trie.
 SanCovPathTrie* sancov_trie_create(void);

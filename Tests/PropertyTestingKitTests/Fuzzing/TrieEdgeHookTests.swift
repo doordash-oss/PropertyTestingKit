@@ -201,27 +201,28 @@ struct TrieEdgeHookTests {
 
     // MARK: - Integration with Coverage System
 
-    @Test("Trie advances on first-hit via the dispatched trie recorder")
+    @Test("Trie advances on first-hit via the dispatched trie observer")
     func trieAdvancesViaDispatch() {
-        let ctx = sancov_begin_measurement()!
+        let context = SanCovCounters.beginMeasurement()
+        defer { SanCovCounters.endMeasurement(context) }
+
+        // The context co-owns the observer (and so the trie) — no lifetime
+        // pinning needed even though instrumented edges keep dispatching.
         let trie = PathTrie()
-        trie.attach(to: ctx)
-        // Keep the trie alive until end_measurement severs the recorder —
-        // instrumented edges keep dispatching into it until then.
-        defer { withExtendedLifetime(trie) { sancov_end_measurement(ctx) } }
+        SanCovCounters.attachTrie(trie, to: context)
 
         var g0: UInt32 = 0
         var g1: UInt32 = 1
         sancov_dispatch_edge(&g0)
         sancov_dispatch_edge(&g1)
 
-        // The trie should have been advanced by the context's trie recorder
+        // The trie should have been advanced by the context's trie observer
         #expect(trie.isUniquePath)
 
         // Also verify coverage map was written
-        let map = ctx.pointee.coverage_map!
-        #expect(map[0] == 1)
-        #expect(map[1] == 1)
+        let map = context.rawContext.pointee.coverage_map
+        #expect(map?[0] == 1)
+        #expect(map?[1] == 1)
     }
 
     // MARK: - Empty Path

@@ -627,9 +627,16 @@ static void ctx_release(SanCovMeasurementContext* ctx) {
     if (ctx) {
         int old_count = atomic_fetch_sub(&ctx->refcount, 1);
         if (old_count == 1) {
-            // Refcount dropped to zero, free the context. The recorder fields
-            // need no detach here: they're function pointers + an unowned data
-            // pointer, severed earlier by sancov_end_measurement.
+            // Refcount dropped to zero, free the context. Drop the co-owned
+            // recorder data now: the fn was severed at end_measurement, and
+            // with the last reference gone no thread can still dispatch into
+            // this context, so releasing the data here can race nothing.
+            SanCovRecorderDataFn release =
+                (SanCovRecorderDataFn)__atomic_load_n(&ctx->recorder_release_bits, __ATOMIC_ACQUIRE);
+            void* data = __atomic_load_n(&ctx->recorder_data, __ATOMIC_ACQUIRE);
+            if (release && data) {
+                release(data);
+            }
             cleanup_task_map(ctx);
             free(ctx->covered_indices);
             free(ctx);
@@ -711,6 +718,8 @@ SanCovMeasurementContext* sancov_begin_measurement(void) {
     // xmalloc does not zero: the recorder fields must start cleared (default recorder).
     ctx->edge_recorder_bits = 0;
     ctx->recorder_data = NULL;
+    ctx->recorder_reset_bits = 0;
+    ctx->recorder_release_bits = 0;
     atomic_init(&ctx->refcount, 1);  // Start with refcount of 1 (owner reference)
 
     // Associate this measurement context with the current task
@@ -751,6 +760,8 @@ SanCovMeasurementContext* sancov_create_dummy_context(void) {
     ctx->covered_indices = NULL;
     ctx->edge_recorder_bits = 0;
     ctx->recorder_data = NULL;
+    ctx->recorder_reset_bits = 0;
+    ctx->recorder_release_bits = 0;
     atomic_init(&ctx->refcount, 1);
     return ctx;
 }
@@ -776,48 +787,80 @@ void sancov_reset_coverage(SanCovMeasurementContext* ctx) {
     // before any edge fired to refresh the cache). Wiping it silently dropped
     // coverage in foreign concurrent measurements (parallelEngineIsolation).
 
-    // Reset the trie if the trie recorder is attached (move pointer back to
-    // root, clear novel flag) so each iteration replays from the trie root.
-    if ((SanCovEdgeRecorder)__atomic_load_n(&ctx->edge_recorder_bits, __ATOMIC_ACQUIRE) == sancov_recorder_trie) {
-        sancov_trie_reset((SanCovPathTrie*)__atomic_load_n(&ctx->recorder_data, __ATOMIC_ACQUIRE));
+    // Reset per-iteration recorder state (e.g. a path-trie cursor back to
+    // root) through the generic hook, so strategy state replays from a clean
+    // slate each iteration just like the coverage map does.
+    SanCovRecorderDataFn reset =
+        (SanCovRecorderDataFn)__atomic_load_n(&ctx->recorder_reset_bits, __ATOMIC_ACQUIRE);
+    if (reset) {
+        reset(__atomic_load_n(&ctx->recorder_data, __ATOMIC_ACQUIRE));
+    }
+
+}
+
+// Release the context's current recorder data through its release hook (if
+// any), consuming both fields. Callers must have already cleared the recorder
+// fn so no new dispatch can reach the data being released.
+static void release_recorder_data(SanCovMeasurementContext* context) {
+    SanCovRecorderDataFn release =
+        (SanCovRecorderDataFn)__atomic_load_n(&context->recorder_release_bits, __ATOMIC_ACQUIRE);
+    void* data = __atomic_load_n(&context->recorder_data, __ATOMIC_ACQUIRE);
+    __atomic_store_n(&context->recorder_release_bits, 0, __ATOMIC_RELEASE);
+    __atomic_store_n(&context->recorder_data, NULL, __ATOMIC_RELEASE);
+    if (release && data) {
+        release(data);
     }
 }
 
-void sancov_context_set_recorder(SanCovMeasurementContext* context, SanCovEdgeRecorder recorder, void* data) {
+void sancov_context_set_recorder(
+    SanCovMeasurementContext* context,
+    SanCovEdgeRecorder recorder,
+    void* data,
+    SanCovRecorderDataFn reset,
+    SanCovRecorderDataFn release) {
     if (context == NULL) return;
+
+    // Stop new dispatch/reset against the OLD state, then drop ownership of it.
+    // (Replacing while edges actively dispatch is unsupported; see header.)
+    __atomic_store_n(&context->edge_recorder_bits, 0, __ATOMIC_RELEASE);
+    __atomic_store_n(&context->recorder_reset_bits, 0, __ATOMIC_RELEASE);
+    release_recorder_data(context);
+
     if (recorder) {
-        // Data first, then the fn (release): a dispatcher that observes the fn
-        // (acquire) is guaranteed to observe the data the fn needs.
+        // Data and hooks first, then the fn (release): a dispatcher that
+        // observes the fn (acquire) is guaranteed to observe what it needs.
+        __atomic_store_n(&context->recorder_release_bits, (uintptr_t)release, __ATOMIC_RELEASE);
         __atomic_store_n(&context->recorder_data, data, __ATOMIC_RELEASE);
+        __atomic_store_n(&context->recorder_reset_bits, (uintptr_t)reset, __ATOMIC_RELEASE);
         __atomic_store_n(&context->edge_recorder_bits, (uintptr_t)recorder, __ATOMIC_RELEASE);
-    } else {
-        // Clearing: fn first so no new dispatch starts, then the data.
-        __atomic_store_n(&context->edge_recorder_bits, 0, __ATOMIC_RELEASE);
-        __atomic_store_n(&context->recorder_data, NULL, __ATOMIC_RELEASE);
     }
 }
 
-// TESTING ONLY seams (see SanCovHooks.h).
+void* sancov_context_get_recorder_data(SanCovMeasurementContext* context) {
+    if (context == NULL) return NULL;
+    return __atomic_load_n(&context->recorder_data, __ATOMIC_ACQUIRE);
+}
+
+// TESTING ONLY seam (see SanCovHooks.h).
 void* sancov_context_get_recorder_for_testing(SanCovMeasurementContext* context) {
     if (context == NULL) return NULL;
     return (void*)__atomic_load_n(&context->edge_recorder_bits, __ATOMIC_ACQUIRE);
-}
-
-void* sancov_context_get_recorder_data_for_testing(SanCovMeasurementContext* context) {
-    if (context == NULL) return NULL;
-    return __atomic_load_n(&context->recorder_data, __ATOMIC_ACQUIRE);
 }
 
 /// Cleanup caches, etc
 void sancov_end_measurement(SanCovMeasurementContext* ctx) {
     if (ctx == NULL) return;
 
-    // Sever the recorder FIRST: stragglers that retain this context past `end`
-    // must dispatch to the default recorder, never to a recorder whose state
-    // (e.g. the strategy's trie) Swift may free once the engine returns. This
-    // replaces the old bidirectional context<->trie unlink — and runs strictly
-    // earlier than that destroy-time detach did.
-    sancov_context_set_recorder(ctx, NULL, NULL);
+    // Sever the recorder fn FIRST: stragglers that retain this context past
+    // `end` must dispatch to the default recorder. The recorder DATA (and its
+    // release hook) deliberately stay: a straggler that loaded the fn just
+    // before this store may still read the data, and every thread that can
+    // dispatch holds a context reference via its TLS cache — so the data is
+    // released only when the last reference drops (see ctx_release). That
+    // closes the in-flight use-after-free window the old "attacher keeps the
+    // data alive" contract merely documented.
+    __atomic_store_n(&ctx->edge_recorder_bits, 0, __ATOMIC_RELEASE);
+    __atomic_store_n(&ctx->recorder_reset_bits, 0, __ATOMIC_RELEASE);
 
     // Drop the inheritance registration first so concurrent routing decisions
     // stop matching this context by value pointer before we tear it down.
@@ -1414,6 +1457,26 @@ void sancov_recorder_default(uint32_t* guard, uint8_t* map, SanCovMeasurementCon
     }
 }
 
+bool sancov_record_edge_first_hit(uint32_t* guard, uint8_t* map, SanCovMeasurementContext* ctx) {
+    if (!guard || !map || *guard >= g_guard_count) return false;
+    return record_first_hit(*guard, map, ctx);
+}
+
+// Set while the calling thread is inside an observer callback, so edges fired
+// BY the callback never re-enter it (see header: re-entry deadlocks any
+// non-reentrant lock the callback holds).
+static _Thread_local bool tls_in_edge_observer = false;
+
+bool sancov_observer_enter(void) {
+    if (tls_in_edge_observer) return false;
+    tls_in_edge_observer = true;
+    return true;
+}
+
+void sancov_observer_exit(void) {
+    tls_in_edge_observer = false;
+}
+
 void sancov_recorder_counting(uint32_t* guard, uint8_t* map, SanCovMeasurementContext* ctx) {
     if (!map || *guard >= g_guard_count) return;
     if (!record_first_hit(*guard, map, ctx)) {
@@ -1429,8 +1492,6 @@ void sancov_recorder_counting(uint32_t* guard, uint8_t* map, SanCovMeasurementCo
         }
     }
 }
-
-// sancov_recorder_trie is defined after the trie types, below.
 
 __attribute__((noinline))
 void sancov_record_edge(uint32_t *guard) {
@@ -1522,31 +1583,6 @@ struct SanCovPathTrie {
 static os_unfair_lock g_trie_lock = OS_UNFAIR_LOCK_INIT;
 
 static bool g_trie_debug = false;
-
-/// Trie recorder: default first-hit recording (map + covered_indices, so sparse
-/// snapshots keep working), then advance the trie carried in recorder_data.
-/// Advances on first hit only — loop-immune.
-void sancov_recorder_trie(uint32_t* guard, uint8_t* map, SanCovMeasurementContext* ctx) {
-    if (!map || *guard >= g_guard_count) return;
-    if (!record_first_hit(*guard, map, ctx)) return;
-    if (!ctx) return;
-
-    SanCovPathTrie* trie = (SanCovPathTrie*)__atomic_load_n(&ctx->recorder_data, __ATOMIC_ACQUIRE);
-    if (!trie) return;
-    if (g_trie_debug) {
-        fprintf(stderr, "[trie-adv] edge=%u\n", *guard);
-    }
-
-    os_unfair_lock_lock(&g_trie_lock);
-    TrieNode* child = trie_node_find_child(trie->current, *guard);
-    if (child) {
-        trie->current = child;
-    } else {
-        trie->current = trie_node_add_child(trie->current, *guard);
-        trie->is_novel = true;
-    }
-    os_unfair_lock_unlock(&g_trie_lock);
-}
 
 SanCovPathTrie* sancov_trie_create(void) {
     SanCovPathTrie* trie = (SanCovPathTrie*)xmalloc(sizeof(SanCovPathTrie));

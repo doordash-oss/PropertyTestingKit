@@ -12,9 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//  Tests for per-context edge recorders: the recorder choice lives on the
-//  measurement context (like the trie used to), and `sancov_dispatch_edge`
-//  routes each edge to the context's recorder — no process-global hook.
+//  Tests for per-context edge recorders and Swift edge observers: the recorder
+//  choice lives on the measurement context, `sancov_dispatch_edge` routes each
+//  edge to it, and a strategy's per-edge work is a Swift closure (EdgeObserver)
+//  that the context co-owns — retained at attach, released when the context is
+//  freed, so no caller has to pin the observer's state alive.
 //
 
 import Testing
@@ -26,6 +28,10 @@ import SanCovHooks
 private func recorderBits(_ hook: EdgeHook) -> UnsafeMutableRawPointer {
     unsafeBitCast(hook, to: UnsafeMutableRawPointer.self)
 }
+
+/// Deinit canary: captured strongly by an observer closure, held weakly by the
+/// test. Its lifetime IS the observer's lifetime.
+private final class Canary: Sendable {}
 
 @Suite("Per-context edge recorders")
 struct ContextRecorderTests {
@@ -42,14 +48,14 @@ struct ContextRecorderTests {
 
         var datum: Int = 0
         withUnsafeMutablePointer(to: &datum) { data in
-            sancov_context_set_recorder(ctx, countingEdgeHook, UnsafeMutableRawPointer(data))
+            sancov_context_set_recorder(ctx, countingEdgeHook, UnsafeMutableRawPointer(data), nil, nil)
             #expect(sancov_context_get_recorder_for_testing(ctx) == recorderBits(countingEdgeHook))
-            #expect(sancov_context_get_recorder_data_for_testing(ctx) == UnsafeMutableRawPointer(data))
+            #expect(sancov_context_get_recorder_data(ctx) == UnsafeMutableRawPointer(data))
 
             // Clearing: NULL recorder resets both fields.
-            sancov_context_set_recorder(ctx, nil, nil)
+            sancov_context_set_recorder(ctx, nil, nil, nil, nil)
             #expect(sancov_context_get_recorder_for_testing(ctx) == nil)
-            #expect(sancov_context_get_recorder_data_for_testing(ctx) == nil)
+            #expect(sancov_context_get_recorder_data(ctx) == nil)
         }
     }
 
@@ -88,30 +94,149 @@ struct ContextRecorderTests {
         #expect(cell == 1, "Default recorder is binary: repeated hits stay at 1")
     }
 
-    @Test("Dispatch advances the trie recorder's trie and still appends covered indices")
-    func dispatchTrieRecorderAdvancesAndSnapshots() throws {
-        let context = SanCovCounters.beginMeasurement()
-        let trie = PathTrie()
-        // The recorder contract: the attached data must stay alive until the
-        // measurement ends. ARC may release `trie` after its last use, while
-        // instrumented edges still dispatch into the trie recorder — keep it
-        // alive through endMeasurement (which severs the recorder).
-        defer { withExtendedLifetime(trie) { SanCovCounters.endMeasurement(context) } }
+    // MARK: - Swift edge observers
 
-        SanCovCounters.attachRecorder(
-            trieEdgeHook,
-            data: UnsafeMutableRawPointer(trie.rawPointer),
+    @Test("An observer's onEdge fires exactly once per first-hit edge")
+    func observerFiresOncePerFirstHit() {
+        let context = SanCovCounters.beginMeasurement()
+        defer { SanCovCounters.endMeasurement(context) }
+
+        let hits = PropertyTestingKit.SyncBox<[UInt32]>([])
+        SanCovCounters.attachObserver(
+            EdgeObserver(onEdge: { edge in hits.update { $0.append(edge) } }),
             to: context
         )
 
+        // Same synthetic guard twice: first-hit semantics mean the closure runs
+        // once for this edge no matter how many times it fires. (This test file
+        // is instrumented, so its own edges land in `hits` too — filter.)
+        var g11: UInt32 = 11
+        sancov_dispatch_edge(&g11)
+        sancov_dispatch_edge(&g11)
+
+        #expect(hits.value.filter { $0 == 11 }.count == 1,
+                "onEdge must run once per edge per iteration (first hit only)")
+        let cell = context.rawContext.pointee.coverage_map?[11]
+        #expect(cell == 1, "The observer recorder keeps binary map recording")
+
+        let covered = (try? SanCovCounters.snapshotCoveredArrays(with: context)) ?? SparseCoverage()
+        #expect(covered.indices.contains(11),
+                "The observer recorder must keep feeding covered_indices")
+    }
+
+    @Test("An observer's onReset fires when coverage is reset")
+    func observerOnResetFiresOnResetCoverage() {
+        let context = SanCovCounters.beginMeasurement()
+        defer { SanCovCounters.endMeasurement(context) }
+
+        let resets = PropertyTestingKit.SyncBox<Int>(0)
+        SanCovCounters.attachObserver(
+            EdgeObserver(onEdge: { _ in }, onReset: { resets.update { $0 += 1 } }),
+            to: context
+        )
+
+        SanCovCounters.resetCoverage(context)
+        #expect(resets.value == 1, "resetCoverage must invoke the observer's onReset")
+    }
+
+    // MARK: - Lifecycle: the context co-owns the observer
+
+    @Test("The context keeps the observer (and its captures) alive after the test drops it")
+    func contextSharesOwnershipOfObserver() {
+        weak var weakCanary: Canary?
+        let context = SanCovCounters.beginMeasurement()
+
+        do {
+            let canary = Canary()
+            weakCanary = canary
+            SanCovCounters.attachObserver(
+                EdgeObserver(onEdge: { _ in withExtendedLifetime(canary) {} }),
+                to: context
+            )
+        }
+        // No Swift reference to the observer or canary remains — only the
+        // context's retain. This is the shared ownership that deletes the old
+        // "keep recorder_data alive until endMeasurement" contract.
+        #expect(weakCanary != nil,
+                "The context must retain the observer after attach")
+
+        SanCovCounters.endMeasurement(context)
+        #expect(weakCanary == nil,
+                "Freeing the context must release the observer")
+    }
+
+    @Test("Re-attaching releases the previous observer")
+    func replaceReleasesPreviousObserver() {
+        weak var weakCanary: Canary?
+        let context = SanCovCounters.beginMeasurement()
+        defer { SanCovCounters.endMeasurement(context) }
+
+        do {
+            let canary = Canary()
+            weakCanary = canary
+            SanCovCounters.attachObserver(
+                EdgeObserver(onEdge: { _ in withExtendedLifetime(canary) {} }),
+                to: context
+            )
+        }
+        #expect(weakCanary != nil)
+
+        SanCovCounters.attachObserver(EdgeObserver(onEdge: { _ in }), to: context)
+        #expect(weakCanary == nil,
+                "Replacing the recorder must release the old observer")
+    }
+
+    /// Stragglers that retain the context past `endMeasurement` must dispatch
+    /// to the default recorder — but the observer's state must stay alive until
+    /// the LAST reference drops, so an in-flight dispatch can never race its free.
+    @Test("endMeasurement severs the recorder; the observer lives until the last context ref drops")
+    func endMeasurementSeversButObserverOutlivesStragglers() {
+        weak var weakCanary: Canary?
+        let context = SanCovCounters.beginMeasurement()
+        let raw = context.rawContext
+        // Hold an extra reference, standing in for a straggler child task.
+        sancov_retain_for_testing(raw)
+
+        do {
+            let canary = Canary()
+            weakCanary = canary
+            SanCovCounters.attachObserver(
+                EdgeObserver(onEdge: { _ in withExtendedLifetime(canary) {} }),
+                to: context
+            )
+        }
+        #expect(sancov_context_get_recorder_for_testing(raw) != nil)
+
+        SanCovCounters.endMeasurement(context)
+
+        #expect(sancov_context_get_recorder_for_testing(raw) == nil,
+                "endMeasurement must sever the recorder fn")
+        #expect(weakCanary != nil,
+                "The observer must survive while a straggler still holds the context")
+
+        sancov_release_for_testing(raw)
+        #expect(weakCanary == nil,
+                "The final context release must release the observer")
+    }
+
+    // MARK: - Strategies attach observers via setup
+
+    @Test("Dispatch advances the pathTrie observer's trie and still appends covered indices")
+    func dispatchObserverAdvancesTrieAndSnapshots() throws {
+        let context = SanCovCounters.beginMeasurement()
+        defer { SanCovCounters.endMeasurement(context) }
+
+        let trie = PathTrie()
+        SanCovCounters.attachTrie(trie, to: context)
+
         // Both passes must execute IDENTICAL instrumented code between the
         // coverage reset and the uniqueness read — this test file is itself
-        // instrumented, and its edges dispatch into the trie too. A single
+        // instrumented, and its edges dispatch into the observer too. A single
         // local function gives both passes the same edge sequence; read and
         // mark are adjacent straight-line calls so no instrumented branch edge
         // can land between them and extend the path past the read point.
         func firePass() -> Bool {
-            SanCovCounters.resetCoverage(context)   // also resets the trie to root
+            SanCovCounters.resetCoverage(context)   // onReset resets the trie to root
             var g0: UInt32 = 0
             var g1: UInt32 = 1
             var g2: UInt32 = 2
@@ -125,33 +250,48 @@ struct ContextRecorderTests {
 
         let firstPassUnique = firePass()
 
-        // The trie recorder must keep feeding covered_indices — corpus entries
-        // snapshot sparse coverage from it. (The old standalone trie hook
-        // skipped this bookkeeping; that would silently break corpus data.)
+        // The observer recorder must keep feeding covered_indices — corpus
+        // entries snapshot sparse coverage from it.
         let sparse = try SanCovCounters.snapshotCoveredArrays(with: context)
 
         let secondPassUnique = firePass()
 
         #expect(firstPassUnique, "First pass over a path is novel")
-        #expect(sparse.count >= 3, "Trie recorder must append covered indices")
+        #expect(sparse.count >= 3, "The observer recorder must append covered indices")
         #expect(!secondPassUnique, "Identical replayed path must not be novel")
     }
 
-    // MARK: - The pathTrie strategy attaches its recorder via setup
-
-    @Test("pathTrie's setup attaches the trie recorder and its trie")
-    func pathTrieSetupAttachesRecorder() {
+    @Test("pathTrie's setup attaches an edge observer carrying its trie")
+    func pathTrieSetupAttachesObserver() {
         let context = SanCovCounters.beginMeasurement()
-        let evaluator: CoverageEvaluator<Int> = CoverageStrategy<Int>.pathTrie.makeEvaluator()
-        // The evaluator owns the strategy's trie; keep it alive until
-        // endMeasurement severs the recorder (see the trie-dispatch test).
-        defer { withExtendedLifetime(evaluator) { SanCovCounters.endMeasurement(context) } }
+        defer { SanCovCounters.endMeasurement(context) }
 
+        let evaluator: CoverageEvaluator<Int> = CoverageStrategy<Int>.pathTrie.makeEvaluator()
         evaluator.setup?(context)
 
-        #expect(sancov_context_get_recorder_for_testing(context.rawContext) == recorderBits(trieEdgeHook))
-        #expect(sancov_context_get_recorder_data_for_testing(context.rawContext) != nil,
-                "The strategy's trie rides along as recorder data")
+        #expect(sancov_context_get_recorder_for_testing(context.rawContext) == recorderBits(edgeObserverRecorder))
+        #expect(sancov_context_get_recorder_data(context.rawContext) != nil,
+                "The strategy's observer (owning the trie) rides along as recorder data")
+    }
+
+    @Test("A custom strategy's onEdge closure receives dispatched edges")
+    func customStrategyOnEdgeReceivesEdges() {
+        let context = SanCovCounters.beginMeasurement()
+        defer { SanCovCounters.endMeasurement(context) }
+
+        let hits = PropertyTestingKit.SyncBox<[UInt32]>([])
+        let strategy = CoverageStrategy<Int>(
+            onEdge: { edge in hits.update { $0.append(edge) } }
+        ) { _, _, _, _ in false }
+
+        let evaluator = strategy.makeEvaluator()
+        evaluator.setup?(context)
+
+        var g13: UInt32 = 13
+        sancov_dispatch_edge(&g13)
+
+        #expect(hits.value.contains(13),
+                "The custom strategy's Swift onEdge must observe dispatched edges")
     }
 
     @Test("Built-ins other than pathTrie attach nothing (default recorder)")
@@ -163,31 +303,5 @@ struct ContextRecorderTests {
         evaluator.setup?(context)
 
         #expect(sancov_context_get_recorder_for_testing(context.rawContext) == nil)
-    }
-
-    // MARK: - Lifecycle: end_measurement severs the recorder
-
-    /// Replaces the trie/owner-context unlink machinery: stragglers that retain
-    /// the context past `endMeasurement` must dispatch to the default recorder,
-    /// never to a recorder whose state (e.g. the trie) Swift may have freed.
-    @Test("endMeasurement clears the recorder so stragglers fall back to default")
-    func endMeasurementClearsRecorder() {
-        let context = SanCovCounters.beginMeasurement()
-        let raw = context.rawContext
-        // Hold an extra reference so the context outlives endMeasurement,
-        // standing in for a straggler child task.
-        sancov_retain_for_testing(raw)
-
-        SanCovCounters.attachRecorder(countingEdgeHook, to: context)
-        #expect(sancov_context_get_recorder_for_testing(raw) != nil)
-
-        SanCovCounters.endMeasurement(context)
-
-        #expect(sancov_context_get_recorder_for_testing(raw) == nil,
-                "endMeasurement must clear the recorder")
-        #expect(sancov_context_get_recorder_data_for_testing(raw) == nil,
-                "endMeasurement must clear the recorder data")
-
-        sancov_release_for_testing(raw)
     }
 }

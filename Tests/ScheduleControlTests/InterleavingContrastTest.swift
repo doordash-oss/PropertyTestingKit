@@ -117,9 +117,7 @@ struct InterleavingContrastTest {
         let trie = PathTrie()
         let ctx = SanCovCounters.beginMeasurement()
         SanCovCounters.attachTrie(trie, to: ctx)
-        // Keep the trie alive until endMeasurement severs the recorder —
-        // instrumented edges keep dispatching into it until then.
-        defer { withExtendedLifetime(trie) { SanCovCounters.endMeasurement(ctx) } }
+        defer { SanCovCounters.endMeasurement(ctx) }
 
         var unique = 0
         let iters = 500
@@ -158,9 +156,7 @@ struct InterleavingContrastTest {
         let trie = PathTrie()
         let ctx = SanCovCounters.beginMeasurement()
         SanCovCounters.attachTrie(trie, to: ctx)
-        // Keep the trie alive until endMeasurement severs the recorder —
-        // instrumented edges keep dispatching into it until then.
-        defer { withExtendedLifetime(trie) { SanCovCounters.endMeasurement(ctx) } }
+        defer { SanCovCounters.endMeasurement(ctx) }
 
         var unique = 0
         let iters = 200

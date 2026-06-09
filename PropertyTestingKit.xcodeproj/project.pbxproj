@@ -119,6 +119,7 @@
 		88B2BC9C932B354AFB8F3358 /* Clocks in Frameworks */ = {isa = PBXBuildFile; productRef = 0E893A5DFC166302CEB2F46D /* Clocks */; };
 		890F51672DF9C141E63233FB /* ArrayLengthTargetedMutator.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF13CC15C322A9D79BD1BD06 /* ArrayLengthTargetedMutator.swift */; };
 		8B77076135753B47C626A029 /* FuzzEngine+Config.swift in Sources */ = {isa = PBXBuildFile; fileRef = ACE4D8AA0A411B9988FA7E7C /* FuzzEngine+Config.swift */; };
+		8BD6A306A5F55973C4C54AEB /* EdgeObserver.swift in Sources */ = {isa = PBXBuildFile; fileRef = C95BCE905C5A7F433C213114 /* EdgeObserver.swift */; };
 		8CBB720CE81E97F2750950E1 /* libSanCovHooks.a in Frameworks */ = {isa = PBXBuildFile; fileRef = FC16934A7D0ADDA3859FDFCA /* libSanCovHooks.a */; };
 		902AD170388F6A40C15ECCA5 /* MutatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C2AB425C1886E9C43DA056F /* MutatorTests.swift */; };
 		92C0A97FA308BAE7318F09BE /* UInt+MutatorProviding.swift in Sources */ = {isa = PBXBuildFile; fileRef = C94A378F579D36D7A0DE6F8D /* UInt+MutatorProviding.swift */; };
@@ -602,6 +603,7 @@
 		C80829DB919B1E7D80F66C9B /* SpecialDoubleMutator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpecialDoubleMutator.swift; sourceTree = "<group>"; };
 		C8D72A5EBCA28D84F6AECC0B /* Data+Shrinkable.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Data+Shrinkable.swift"; sourceTree = "<group>"; };
 		C94A378F579D36D7A0DE6F8D /* UInt+MutatorProviding.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "UInt+MutatorProviding.swift"; sourceTree = "<group>"; };
+		C95BCE905C5A7F433C213114 /* EdgeObserver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EdgeObserver.swift; sourceTree = "<group>"; };
 		C9952DEBABC45B57A9A83D8B /* HTTPStatusCodeMutator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HTTPStatusCodeMutator.swift; sourceTree = "<group>"; };
 		CB119BBD24F520783D33BA6F /* SanCovHooks.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = SanCovHooks.c; sourceTree = "<group>"; };
 		CB81D025D3C307D01FD829DB /* CorpusCoordinatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CorpusCoordinatorTests.swift; sourceTree = "<group>"; };
@@ -1228,6 +1230,7 @@
 			isa = PBXGroup;
 			children = (
 				6C5AD1463A0DC540930AF8AE /* CoverageBitmap.swift */,
+				C95BCE905C5A7F433C213114 /* EdgeObserver.swift */,
 				D675F3742488937DF00D923F /* FunctionSizeLookup.swift */,
 				2A865DFA08A7E0DE3F588EDB /* SanCovCounters.swift */,
 				5E849F3495589275569E76FC /* SanCovSourceLocation.swift */,
@@ -2021,6 +2024,7 @@
 				605B9C253222E341C0385AB9 /* Double+MutatorProviding.swift in Sources */,
 				9D2D02284C1649A4BA51ED14 /* DoubleBoundaryMutator.swift in Sources */,
 				234BA490B759413930B7164B /* DoubleMutators.swift in Sources */,
+				8BD6A306A5F55973C4C54AEB /* EdgeObserver.swift in Sources */,
 				FD441F5D3E24D693D0A26B7B /* EmailMutator.swift in Sources */,
 				C029DB863E81D5730107E9F9 /* EmptyStringMutator.swift in Sources */,
 				A11656F32C1DA89DAC5AE4B1 /* EnvironmentClient.swift in Sources */,

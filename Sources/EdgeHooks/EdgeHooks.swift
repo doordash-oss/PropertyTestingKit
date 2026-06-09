@@ -21,22 +21,14 @@
 //  An edge recorder is the *measurement* half of a coverage strategy: what
 //  each edge hit writes. Recorders are attached to a fuzz engine's measurement
 //  context (never installed process-globally), so concurrent tests with
-//  different recorders don't interfere. Attach one via
-//  `CoverageStrategy(edgeHook:)`.
+//  different recorders don't interfere.
 //
-//  A custom recorder must be a non-capturing `@convention(c)` value — per-run
-//  state travels through the context's recorder data, not closure captures:
-//
-//  ```swift
-//  import PropertyTestingKit
-//  import EdgeHooks
-//  import SanCovHooks
-//
-//  let myRecorder: EdgeHook = { guardPtr, map, context in
-//      // Default recording, then custom bookkeeping.
-//      sancov_recorder_default(guardPtr, map, context)
-//  }
-//  ```
+//  This is the LOW-LEVEL surface: a raw `@convention(c)` recorder that
+//  replaces the map-write semantics wholesale (e.g. `countingEdgeHook`'s 8-bit
+//  saturating counters). Strategy-level per-edge work — "call my Swift
+//  function when an edge is hit" — does not live here: pass a closure to
+//  `CoverageStrategy(onEdge:)` in PropertyTestingKit, which may capture state
+//  freely (the `.pathTrie` strategy captures its trie that way).
 //
 
 // Re-exported: the EdgeHook typealias references SanCovMeasurementContext, so
@@ -66,29 +58,25 @@ public let defaultEdgeHook: EdgeHook = sancov_recorder_default
 /// On first hit records the edge index; subsequent hits increment up to 255.
 public let countingEdgeHook: EdgeHook = sancov_recorder_counting
 
-/// Trie recorder. Default first-hit recording AND execution-path tracking in
-/// the trie carried as the context's recorder data. O(1) per edge hit, O(1)
-/// uniqueness check at end of run. Attached automatically by the `.pathTrie`
-/// coverage strategy.
-public let trieEdgeHook: EdgeHook = sancov_recorder_trie
-
 // MARK: - Path Trie
 
 /// A trie that stores all previously-seen execution paths (ordered edge sequences).
 ///
-/// Usage with the trie recorder:
+/// The `.pathTrie` coverage strategy owns one of these and advances it from a
+/// Swift per-edge function:
 /// ```swift
 /// let trie = PathTrie()
-/// trie.attach(to: context)   // installs trieEdgeHook with this trie as its data
-///
-/// // After each test execution:
-/// if trie.isUniquePath {
-///     trie.markTerminal()
-///     // Add to corpus...
-/// }
-/// trie.reset()
+/// // per edge hit:        trie.advance(edgeIndex)
+/// // after each run:      if trie.isUniquePath { trie.markTerminal() /* corpus */ }
+/// // between iterations:  trie.reset()
 /// ```
-public final class PathTrie {
+/// Thread-safety: `advance` may be called from any thread (edge observers run
+/// wherever edges fire) and is serialized by the C-side trie lock. The
+/// end-of-run operations (`isUniquePath`, `markTerminal`, `reset`) are called
+/// by the owning evaluator between iterations, never concurrently with each
+/// other. `@unchecked` because the synchronization lives in C, invisible to
+/// the compiler.
+public final class PathTrie: @unchecked Sendable {
     private let raw: OpaquePointer
 
     public init() {
@@ -100,15 +88,7 @@ public final class PathTrie {
     }
 
     /// The opaque pointer to the underlying C trie.
-    /// Used by the coverage strategy to attach this trie to a measurement context.
     public var rawPointer: OpaquePointer { raw }
-
-    /// Attach this trie as the context's edge recorder state: installs the trie
-    /// recorder with this trie as its data. The measurement severs the
-    /// reference at `sancov_end_measurement`; keep this object alive until then.
-    public func attach(to context: UnsafeMutablePointer<SanCovMeasurementContext>) {
-        sancov_context_set_recorder(context, sancov_recorder_trie, UnsafeMutableRawPointer(raw))
-    }
 
     /// Whether the current path is unique (not seen before).
     public var isUniquePath: Bool {

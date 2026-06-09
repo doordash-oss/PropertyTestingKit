@@ -140,30 +140,21 @@ enum SanCovCounters {
 // MARK: - Edge Recorders
 
 extension SanCovCounters {
-    /// Attach an edge recorder (and its opaque state) to a measurement context.
+    /// Attach a raw C edge recorder (and its opaque state) to a measurement
+    /// context. Low-level seam for recorders with bespoke map semantics (e.g.
+    /// `countingEdgeHook`); strategy-level per-edge work uses `attachObserver`
+    /// instead, which gives the context shared ownership of its state.
     ///
     /// The recorder runs for every edge that routes to this context — there is
     /// no process-global hook, so concurrent measurements with different
     /// recorders don't interfere. `sancov_end_measurement` severs the recorder,
     /// so stragglers that retain the context fall back to the default recorder.
-    ///
-    /// - Important: `data` is unowned; the attacher keeps it alive until the
-    ///   measurement ends. Beware ARC: an object is releasable after its last
-    ///   source use, while instrumented edges keep dispatching — hold it with
-    ///   `withExtendedLifetime` through `endMeasurement` (which severs the
-    ///   recorder).
     static func attachRecorder(
         _ recorder: EdgeHook,
         data: UnsafeMutableRawPointer? = nil,
         to context: MeasurementContext
     ) {
-        sancov_context_set_recorder(context.rawContext, recorder, data)
-    }
-
-    /// Attach a path trie to a measurement context: installs the trie recorder
-    /// with the trie as its data.
-    static func attachTrie(_ trie: PathTrie, to context: MeasurementContext) {
-        trie.attach(to: context.rawContext)
+        sancov_context_set_recorder(context.rawContext, recorder, data, nil, nil)
     }
 }
 
