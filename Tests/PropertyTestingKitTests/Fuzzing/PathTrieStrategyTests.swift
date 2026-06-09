@@ -25,7 +25,7 @@ struct PathTrieStrategyTests {
 
     @Test("First iteration trie path is not empty")
     func firstIterationTriePathNotEmpty() {
-        let strategy: CoverageStrategy<Int> = makeCoverageStrategy(.pathTrie)
+        let strategy: CoverageEvaluator<Int> = CoverageStrategy<Int>.pathTrie.makeEvaluator()
         let context = SanCovCounters.beginMeasurement()
         defer { SanCovCounters.endMeasurement(context) }
         let coverageClient = CoverageCountersClient.liveValue

@@ -37,10 +37,6 @@ struct FuzzEngineConfig: Sendable {
     /// Tests that need precise iteration control should use 1.
     let timeLimitCheckInterval: Int
 
-    /// The coverage strategy that determines when an input is "interesting."
-    /// Default: `.pathTrie` — O(1) per-hit trie-based path tracking.
-    let coverageStrategy: CoverageStrategyKind
-
     /// Custom edge hook called on every edge hit.
     /// When set, replaces the default binary recording in the sanitizer coverage hook.
     /// The hook receives the guard pointer — dereference it to get the edge index.
@@ -53,7 +49,6 @@ struct FuzzEngineConfig: Sendable {
         verbose: Bool = false,
         projectPath: String? = nil,
         timeLimitCheckInterval: Int = 1000,
-        coverageStrategy: CoverageStrategyKind = .pathTrie,
         edgeHook: EdgeHook? = nil,
         fileID: String = #fileID,
         filePath: String = #filePath,
@@ -64,7 +59,6 @@ struct FuzzEngineConfig: Sendable {
         self.verbose = verbose
         self.projectPath = projectPath
         self.timeLimitCheckInterval = timeLimitCheckInterval
-        self.coverageStrategy = coverageStrategy
         self.edgeHook = edgeHook
         self.sourceLocation = SourceLocation(
             fileID: fileID,

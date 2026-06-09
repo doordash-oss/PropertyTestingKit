@@ -230,7 +230,7 @@ public final class Corpus<each Input: Codable & Sendable>: @unchecked Sendable {
     /// Merge sparse coverage into the bitmap and add an entry unconditionally.
     ///
     /// Used by coverage strategies that have already determined the input is interesting.
-    func mergeCoverageAndAdd(
+    public func mergeCoverageAndAdd(
         input: (repeat each Input),
         scheduleBytes: [UInt8]? = nil,
         sparse: SparseCoverage
@@ -244,7 +244,7 @@ public final class Corpus<each Input: Codable & Sendable>: @unchecked Sendable {
     }
 
     /// Add an entry without merging coverage (caller already merged, e.g., newEdge strategy).
-    func addEntry(
+    public func addEntry(
         input: (repeat each Input),
         scheduleBytes: [UInt8]? = nil,
         sparse: SparseCoverage

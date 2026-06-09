@@ -105,7 +105,7 @@ func runFlattenedSchedule<each Input: Codable & Sendable>(
     persistence: CorpusPersistence,
     duration: Duration,
     verbose: Bool,
-    coverageStrategy: CoverageStrategyKind,
+    coverageStrategy: CoverageStrategy<[UInt8], repeat each Input>,
     edgeHook: EdgeHook?,
     projectPath: String?,
     sourceFileID: String,

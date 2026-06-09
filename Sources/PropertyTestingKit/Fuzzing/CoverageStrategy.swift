@@ -15,60 +15,129 @@
 //  Swappable coverage strategies that determine when a fuzz input is "interesting."
 //
 
-/// Determines how the fuzzer decides if an input is interesting (i.e., worth adding to the corpus).
+/// Determines how the fuzzer decides if an input is "interesting" (worth adding to the corpus).
 ///
-/// Different strategies trade off between precision and performance:
-/// - `.signatureMatch`: Exact edge-set matching via inverted index. Zero false positives. Default.
+/// PropertyTestingKit ships four built-in strategies as static factories:
+/// - `.signatureMatch`: Exact edge-set matching via inverted index. Zero false positives.
 /// - `.newEdge`: Bitmap merge — any previously-unseen edge is interesting. Matches AFL/libFuzzer.
-/// - `.pathTrie`: Trie-based path tracking. O(1) per edge hit and O(1) uniqueness check.
+/// - `.pathTrie` (default): Trie-based ordered-path tracking. O(1) per edge hit and uniqueness check.
 /// - `.alwaysInteresting`: Every input is added. Useful for testing without coverage.
-public enum CoverageStrategyKind: Sendable {
-    /// Signature match strategy (default).
-    ///
-    /// Tracks all previously-seen edge sets and uses an inverted index to check
-    /// if the current run's edge set exactly matches any of them. An input is
-    /// interesting if its exact set of covered edges hasn't been seen before.
-    ///
-    /// No hashing — no false positives. The reject path is O(covered_edges * avg_signatures_per_edge).
-    /// With typical coverage (4-8 edges, ~100 unique signatures), this is ~8-16 integer increments.
-    case signatureMatch
+///
+/// You can also build a custom strategy from a high-level decision over the run's coverage
+/// (`SparseCoverage`) and the `Corpus`:
+/// ```swift
+/// fuzz(coverageStrategy: CoverageStrategy { sparse, corpus, input, schedule in
+///     guard isNovel(sparse) else { return false }
+///     corpus.addEntry(input: input, scheduleBytes: schedule, sparse: sparse)
+///     return true
+/// }) { ... }
+/// ```
+/// Identifies a built-in coverage strategy so it can be rebuilt at a *different* input pack —
+/// schedule fuzzing runs over `([UInt8], repeat each Input)`, a different pack than the user's
+/// `(repeat each Input)`, and a strategy value can't cross pack instantiations. Top-level (not
+/// nested in the generic `CoverageStrategy`) so the tag itself is pack-agnostic.
+/// `nil` for custom strategies (which can't be re-packed; see `CoverageStrategy.builtin(_:)`).
+enum CoverageStrategyBuiltin: Sendable, Equatable {
+    case signatureMatch, newEdge, pathTrie, alwaysInteresting
+}
 
-    /// New edge strategy (bitmap merge).
-    ///
-    /// Uses `mergeCoverageIntoBitmap` to check if any previously-unseen edge
-    /// was hit. Aligns with the AFL/libFuzzer model where any new edge is interesting.
-    case newEdge
+public struct CoverageStrategy<each Input: Codable & Sendable>: Sendable {
+    /// The built-in kind, or `nil` for a custom strategy.
+    let builtin: CoverageStrategyBuiltin?
 
-    /// Path trie strategy.
-    ///
-    /// Tracks every unique execution path (ordered edge sequence) in a trie.
-    /// O(1) per edge hit (advance trie pointer), O(1) uniqueness check at end of run.
-    /// Installs the `trieEdgeHook` automatically — no need to set `edgeHook` separately.
-    /// Order-sensitive: A→B→C is different from A→C→B.
-    case pathTrie
+    /// Builds a fresh evaluator (with fresh per-engine state, e.g. a new trie/index).
+    /// Called once per parallel engine so engines never share mutable coverage state.
+    let makeEvaluator: @Sendable () -> CoverageEvaluator<repeat each Input>
 
-    /// Always interesting (for testing).
-    ///
-    /// Every input is added to the corpus unconditionally. Useful for tests
-    /// that need deterministic corpus growth without depending on coverage data.
-    case alwaysInteresting
+    /// Internal designated initializer used by the built-in factories.
+    init(
+        builtin: CoverageStrategyBuiltin?,
+        makeEvaluator: @escaping @Sendable () -> CoverageEvaluator<repeat each Input>
+    ) {
+        self.builtin = builtin
+        self.makeEvaluator = makeEvaluator
+    }
 
-    /// Whether coverage changed between the expected and actual sparse coverage.
+    /// Build a custom strategy from a high-level decision over public coverage data.
     ///
-    /// Used by regression to decide if the corpus needs to be re-fuzzed.
-    /// Order-sensitive strategies (pathTrie) compare arrays directly.
-    /// Set-based strategies (signatureMatch, newEdge) compare sorted indices.
-    func coverageChanged(expected: SparseCoverage, actual: SparseCoverage) -> Bool {
-        switch self {
-        case .pathTrie:
-            return expected != actual
-        case .signatureMatch, .newEdge:
-            return expected.indices.sorted() != actual.indices.sorted()
-        case .alwaysInteresting:
-            return false
+    /// `decide` is called once per fuzz iteration with the edges the run covered
+    /// (`sparse`), the shared `corpus`, the `input`, and its optional schedule bytes.
+    /// Return `true` if the input was interesting; add it to the corpus yourself via
+    /// `corpus.addEntry(...)` / `corpus.mergeCoverageAndAdd(...)`.
+    ///
+    /// - Note: `decide` is shared across parallel engines. Keep it free of mutable state,
+    ///   or use `init(makeDecision:)` to get a fresh decision per engine.
+    public init(_ decide: @escaping CoverageDecision<repeat each Input>) {
+        self.init(makeDecision: { decide })
+    }
+
+    /// Build a custom strategy whose decision holds fresh per-engine state.
+    ///
+    /// `makeDecision` is called once per parallel engine to produce an isolated decision
+    /// closure, mirroring how the built-ins allocate a fresh trie/index per engine.
+    public init(makeDecision: @escaping @Sendable () -> CoverageDecision<repeat each Input>) {
+        self.builtin = nil
+        self.makeEvaluator = {
+            let decide = makeDecision()
+            return CoverageEvaluator(setup: nil, evaluate: { input, scheduleBytes, context, coverageClient, corpus in
+                let sparse = (try? coverageClient.snapshotCoveredArraysWithContext(context)) ?? SparseCoverage()
+                return decide(sparse, corpus, input, scheduleBytes)
+            })
         }
     }
 }
+
+// MARK: - Built-in Strategies
+
+extension CoverageStrategy {
+    /// Signature match strategy: exact edge-set matching via inverted index. Zero false positives.
+    public static var signatureMatch: CoverageStrategy<repeat each Input> {
+        CoverageStrategy(builtin: .signatureMatch, makeEvaluator: { CoverageEvaluator(setup: nil, evaluate: makeSignatureMatchStrategy()) })
+    }
+
+    /// New edge strategy: bitmap merge — any previously-unseen edge is interesting (AFL/libFuzzer).
+    public static var newEdge: CoverageStrategy<repeat each Input> {
+        CoverageStrategy(builtin: .newEdge, makeEvaluator: { CoverageEvaluator(setup: nil, evaluate: makeNewEdgeStrategy()) })
+    }
+
+    /// Path trie strategy: ordered-path tracking (A→B→C differs from A→C→B). The default.
+    public static var pathTrie: CoverageStrategy<repeat each Input> {
+        CoverageStrategy(builtin: .pathTrie, makeEvaluator: { makePathTrieStrategy() })
+    }
+
+    /// Always-interesting strategy: every input is added. Useful for deterministic tests.
+    public static var alwaysInteresting: CoverageStrategy<repeat each Input> {
+        CoverageStrategy(builtin: .alwaysInteresting, makeEvaluator: { CoverageEvaluator(setup: nil, evaluate: makeAlwaysInterestingStrategy()) })
+    }
+
+    /// Re-create a built-in strategy at *this* input pack. Used by schedule fuzzing, which
+    /// runs over the extended pack `([UInt8], repeat each Input)`. A custom strategy
+    /// (`builtin == nil`) can't be re-packed, so it falls back to `.pathTrie` — schedule
+    /// fuzzing is order-sensitive and `.pathTrie` is its natural strategy anyway.
+    static func builtin(_ kind: CoverageStrategyBuiltin?) -> CoverageStrategy<repeat each Input> {
+        switch kind {
+        case .signatureMatch: return .signatureMatch
+        case .newEdge: return .newEdge
+        case .alwaysInteresting: return .alwaysInteresting
+        case .pathTrie, .none: return .pathTrie
+        }
+    }
+}
+
+/// A custom interestingness decision over public coverage data.
+///
+/// - Parameters:
+///   - sparse: The edges this run covered.
+///   - corpus: The corpus to add to when the input is interesting.
+///   - input: The input that was just executed.
+///   - scheduleBytes: The schedule bytes for the run, if any.
+/// - Returns: `true` if the input was interesting and added to the corpus.
+public typealias CoverageDecision<each Input: Codable & Sendable> = @Sendable (
+    _ sparse: SparseCoverage,
+    _ corpus: Corpus<repeat each Input>,
+    _ input: (repeat each Input),
+    _ scheduleBytes: [UInt8]?
+) -> Bool
 
 /// A closure that decides if an input is interesting and adds it to the corpus.
 ///
@@ -88,29 +157,10 @@ typealias CoverageStrategySetup = (
     _ context: SanCovCounters.MeasurementContext
 ) -> Void
 
-/// A coverage strategy with an optional setup phase.
-struct CoverageStrategy<each Input: Codable & Sendable> {
+/// A coverage evaluator with an optional setup phase. Built per-engine by `CoverageStrategy`.
+struct CoverageEvaluator<each Input: Codable & Sendable> {
     let setup: CoverageStrategySetup?
     let evaluate: CoverageStrategyFn<repeat each Input>
-}
-
-/// Creates a coverage strategy for the given kind.
-///
-/// The returned strategy encapsulates all interestingness logic and corpus addition.
-/// It captures any mutable state it needs (e.g., the inverted index).
-func makeCoverageStrategy<each Input: Codable & Sendable>(
-    _ kind: CoverageStrategyKind
-) -> CoverageStrategy<repeat each Input> {
-    switch kind {
-    case .signatureMatch:
-        return CoverageStrategy(setup: nil, evaluate: makeSignatureMatchStrategy())
-    case .newEdge:
-        return CoverageStrategy(setup: nil, evaluate: makeNewEdgeStrategy())
-    case .pathTrie:
-        return makePathTrieStrategy()
-    case .alwaysInteresting:
-        return CoverageStrategy(setup: nil, evaluate: makeAlwaysInterestingStrategy())
-    }
 }
 
 // MARK: - Signature Match Strategy
@@ -261,7 +311,7 @@ private func makeNewEdgeStrategy<each Input: Codable & Sendable>(
 /// via `trie.isUniquePath` after each run. The trie is attached to the
 /// measurement context so each parallel engine gets its own trie.
 private func makePathTrieStrategy<each Input: Codable & Sendable>(
-) -> CoverageStrategy<repeat each Input> {
+) -> CoverageEvaluator<repeat each Input> {
     let trie = PathTrie()
 
     // Attach the trie in setup so iteration 1's edges advance the trie.
@@ -290,7 +340,7 @@ private func makePathTrieStrategy<each Input: Codable & Sendable>(
         return true
     }
 
-    return CoverageStrategy(setup: setup, evaluate: evaluate)
+    return CoverageEvaluator(setup: setup, evaluate: evaluate)
 }
 
 // MARK: - Always Interesting Strategy

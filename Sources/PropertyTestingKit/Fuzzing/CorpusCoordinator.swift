@@ -85,7 +85,7 @@ func runFuzz<each Input: Codable & Sendable>(
     parallelism: Int,
     duration: Duration,
     verbose: Bool,
-    coverageStrategy: CoverageStrategyKind,
+    coverageStrategy: CoverageStrategy<repeat each Input>,
     edgeHook: EdgeHook?,
     projectPath: String?,
     sourceFileID: String,
@@ -97,12 +97,11 @@ func runFuzz<each Input: Codable & Sendable>(
 ) async -> FuzzResult<repeat each Input> {
     @Dependency(\.corpusPersistence) var corpusPersistence
 
-    func config(strategy: CoverageStrategyKind) -> FuzzEngineConfig {
+    func makeConfig() -> FuzzEngineConfig {
         FuzzEngineConfig(
             maxDuration: duration,
             verbose: verbose,
             projectPath: projectPath,
-            coverageStrategy: strategy,
             edgeHook: edgeHook,
             fileID: sourceFileID,
             filePath: sourceFilePath,
@@ -122,7 +121,8 @@ func runFuzz<each Input: Codable & Sendable>(
                 snapshot: snapshot,
                 mutators: mutators,
                 verbose: verbose,
-                config: config(strategy: .alwaysInteresting),
+                config: makeConfig(),
+                coverageStrategy: .alwaysInteresting,
                 scheduleBytesExtractor: scheduleBytesExtractor,
                 plugins: { [] },
                 test: test
@@ -135,7 +135,8 @@ func runFuzz<each Input: Codable & Sendable>(
             parallelism: parallelism,
             verbose: verbose,
             persist: true,
-            config: config(strategy: coverageStrategy),
+            config: makeConfig(),
+            coverageStrategy: coverageStrategy,
             scheduleBytesExtractor: scheduleBytesExtractor,
             makeHandlers: makeHandlers,
             test: test
@@ -155,7 +156,8 @@ func runFuzz<each Input: Codable & Sendable>(
             parallelism: parallelism,
             verbose: verbose,
             persist: true,
-            config: config(strategy: coverageStrategy),
+            config: makeConfig(),
+            coverageStrategy: coverageStrategy,
             scheduleBytesExtractor: scheduleBytesExtractor,
             makeHandlers: makeHandlers,
             test: test
@@ -177,7 +179,8 @@ func runFuzz<each Input: Codable & Sendable>(
             parallelism: parallelism,
             verbose: verbose,
             persist: true,
-            config: config(strategy: coverageStrategy),
+            config: makeConfig(),
+            coverageStrategy: coverageStrategy,
             scheduleBytesExtractor: scheduleBytesExtractor,
             makeHandlers: makeHandlers,
             test: test
@@ -192,7 +195,8 @@ func runFuzz<each Input: Codable & Sendable>(
             parallelism: parallelism,
             verbose: verbose,
             persist: false,
-            config: config(strategy: coverageStrategy),
+            config: makeConfig(),
+            coverageStrategy: coverageStrategy,
             scheduleBytesExtractor: scheduleBytesExtractor,
             makeHandlers: makeHandlers,
             test: test
@@ -234,7 +238,6 @@ func runReplay<each Input: Codable & Sendable>(
         maxDuration: duration,
         verbose: verbose,
         projectPath: projectPath,
-        coverageStrategy: .alwaysInteresting,
         edgeHook: nil,
         fileID: sourceFileID,
         filePath: sourceFilePath,
@@ -247,6 +250,7 @@ func runReplay<each Input: Codable & Sendable>(
         mutators: mutators,
         verbose: verbose,
         config: config,
+        coverageStrategy: .alwaysInteresting,
         plugins: plugins,
         test: test
     )
@@ -268,6 +272,7 @@ private func replayRegression<each Input: Codable & Sendable>(
     mutators: (repeat Mutator<each Input>),
     verbose: Bool,
     config: FuzzEngineConfig,
+    coverageStrategy: CoverageStrategy<repeat each Input>,
     scheduleBytesExtractor: @escaping @Sendable ((repeat each Input)) -> [UInt8]? = { _ in nil },
     plugins: @escaping @Sendable () -> [AnalysisPlugin<repeat each Input>],
     test: @escaping @Sendable ((repeat each Input)) async throws -> Void
@@ -282,6 +287,7 @@ private func replayRegression<each Input: Codable & Sendable>(
         parallelism: 1,
         verbose: verbose,
         config: config,
+        coverageStrategy: coverageStrategy,
         scheduleBytesExtractor: scheduleBytesExtractor,
         makeProcessor: {
             let lifted = (plugins() + [AnalysisPlugin<repeat each Input>.stopWhenQueueEmpty()])
@@ -313,6 +319,7 @@ private func fuzzCampaign<each Input: Codable & Sendable>(
     verbose: Bool,
     persist: Bool,
     config: FuzzEngineConfig,
+    coverageStrategy: CoverageStrategy<repeat each Input>,
     scheduleBytesExtractor: @escaping @Sendable ((repeat each Input)) -> [UInt8]? = { _ in nil },
     makeHandlers: @escaping @Sendable () -> [FuzzPlugin<repeat each Input>],
     test: @escaping @Sendable ((repeat each Input)) async throws -> Void
@@ -334,6 +341,7 @@ private func fuzzCampaign<each Input: Codable & Sendable>(
         parallelism: max(1, parallelism),
         verbose: verbose,
         config: config,
+        coverageStrategy: coverageStrategy,
         scheduleBytesExtractor: scheduleBytesExtractor,
         makeProcessor: {
             PluginProcessor<repeat each Input>(plugins: makeHandlers())
@@ -379,6 +387,7 @@ private func runEngines<each Input: Codable & Sendable>(
     parallelism: Int,
     verbose: Bool,
     config: FuzzEngineConfig,
+    coverageStrategy: CoverageStrategy<repeat each Input>,
     scheduleBytesExtractor: @escaping @Sendable ((repeat each Input)) -> [UInt8]? = { _ in nil },
     makeProcessor: @escaping @Sendable () -> PluginProcessor<repeat each Input>,
     test: @escaping @Sendable ((repeat each Input)) async throws -> Void
@@ -400,6 +409,7 @@ private func runEngines<each Input: Codable & Sendable>(
                 let engine = FuzzEngine<repeat each Input>(
                     mutators: repeat each mutators,
                     config: config,
+                    coverageStrategy: coverageStrategy,
                     scheduleBytesExtractor: scheduleBytesExtractor
                 )
                 return await engine.run(

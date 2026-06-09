@@ -89,13 +89,13 @@ struct FuzzEngineTests {
     func testFuzzEngineDiscoversPaths() async {
         let config = FuzzEngineConfig(
             maxDuration: .seconds(10),
-            verbose: false,
-            coverageStrategy: .alwaysInteresting
+            verbose: false
         )
 
         let result = await fuzzEngineWithMaxIterations(
             maxIterations: 100,
             config: config,
+            coverageStrategy: .alwaysInteresting,
             additionalSeeds: [0, 1, -1, 42]
         ) { (_: Int) in }
 
@@ -109,14 +109,14 @@ struct FuzzEngineTests {
 
         let config = FuzzEngineConfig(
             maxDuration: .seconds(10),
-            verbose: false,
-            coverageStrategy: .alwaysInteresting
+            verbose: false
         )
 
         // Include 42 in seeds to guarantee we hit the failure case
         let result = await fuzzEngineWithMaxIterations(
             maxIterations: 100,
             config: config,
+            coverageStrategy: .alwaysInteresting,
             additionalSeeds: [0, 1, 42, -1]
         ) { (input: Int) in
             if input == 42 {
@@ -132,13 +132,13 @@ struct FuzzEngineTests {
     func testVerboseMode() async {
         let config = FuzzEngineConfig(
             maxDuration: .seconds(10),
-            verbose: true,
-            coverageStrategy: .alwaysInteresting
+            verbose: true
         )
 
         let result = await fuzzEngineWithMaxIterations(
             maxIterations: 100,
             config: config,
+            coverageStrategy: .alwaysInteresting,
             additionalSeeds: [0, 1, -1, 42]
         ) { (_: Int) in }
 
@@ -151,14 +151,14 @@ struct FuzzEngineTests {
 
         let config = FuzzEngineConfig(
             maxDuration: .seconds(10),
-            verbose: false,
-            coverageStrategy: .alwaysInteresting
+            verbose: false
         )
 
         // Include multiples of 10 in seeds to guarantee failures
         let result = await fuzzEngineWithMaxIterations(
             maxIterations: 100,
             config: config,
+            coverageStrategy: .alwaysInteresting,
             additionalSeeds: [0, 10, 20, 1, 2]
         ) { (input: Int) in
             if input % 10 == 0 {
@@ -229,13 +229,13 @@ struct FuzzEngineTests {
     func testNewCoverageVerboseInIterations() async {
         let config = FuzzEngineConfig(
             maxDuration: .seconds(10),
-            verbose: true,
-            coverageStrategy: .alwaysInteresting
+            verbose: true
         )
 
         let result = await fuzzEngineWithMaxIterations(
             maxIterations: 50,
-            config: config
+            config: config,
+            coverageStrategy: .alwaysInteresting
         ) { (_: Int) in }
 
         #expect(result.corpus.count >= 1, "Should have corpus entries")
@@ -451,6 +451,7 @@ struct FuzzEngineTests {
             return await fuzzEngineWithMaxIterations(
                 maxIterations: 100,
                 config: config,
+                coverageStrategy: .pathTrie,
                 additionalSeeds: [0, 1, -1, 100, -100, Int.max, Int.min]
             ) { (input: Int) in
                 // Exercise different code paths based on input

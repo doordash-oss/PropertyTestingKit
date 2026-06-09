@@ -124,7 +124,7 @@ public func fuzz<each Input: Codable & Sendable>(
     seeds: [(repeat each Input)] = [],
     duration: Duration = .seconds(60),
     persistence: CorpusPersistence = .auto,
-    coverageStrategy: CoverageStrategyKind = .pathTrie,
+    coverageStrategy: CoverageStrategy<repeat each Input> = .pathTrie,
     edgeHook: EdgeHook? = nil,
     scheduleFuzzing: Bool = false,
     parallelism: Int = ProcessInfo.processInfo.processorCount,
@@ -158,7 +158,7 @@ func fuzzInternal<each Input: Codable & Sendable>(
     seeds: [(repeat each Input)],
     duration: Duration,
     persistence: CorpusPersistence,
-    coverageStrategy: CoverageStrategyKind,
+    coverageStrategy: CoverageStrategy<repeat each Input>,
     edgeHook: EdgeHook?,
     scheduleFuzzing: Bool,
     parallelism: Int,
@@ -185,6 +185,11 @@ func fuzzInternal<each Input: Codable & Sendable>(
     // The call-site `persistence` is used directly (the suite-level env override does
     // not apply to scheduled runs).
     if scheduleFuzzing {
+        // Schedule fuzzing runs over the extended pack `([UInt8], repeat each Input)`, a
+        // different pack than the user's, so the strategy value can't be forwarded directly.
+        // Re-instantiate the same built-in kind at the extended pack (custom strategies fall
+        // back to `.pathTrie`, the natural order-sensitive strategy for schedule fuzzing).
+        let scheduledStrategy = CoverageStrategy<[UInt8], repeat each Input>.builtin(coverageStrategy.builtin)
         let peeled = await runFlattenedSchedule(
             mutators: (repeat each mutators),
             seeds: seeds,
@@ -192,7 +197,7 @@ func fuzzInternal<each Input: Codable & Sendable>(
             persistence: persistence,
             duration: duration,
             verbose: verbose,
-            coverageStrategy: coverageStrategy,
+            coverageStrategy: scheduledStrategy,
             edgeHook: edgeHook,
             projectPath: projectPath(from: filePath),
             sourceFileID: testFilePath,
@@ -318,7 +323,7 @@ public func fuzz<each Input: MutatorProviding & Codable & Sendable>(
     seeds: [(repeat each Input)] = [],
     duration: Duration = .seconds(60),
     persistence: CorpusPersistence = .auto,
-    coverageStrategy: CoverageStrategyKind = .pathTrie,
+    coverageStrategy: CoverageStrategy<repeat each Input> = .pathTrie,
     edgeHook: EdgeHook? = nil,
     scheduleFuzzing: Bool = false,
     parallelism: Int = ProcessInfo.processInfo.processorCount,

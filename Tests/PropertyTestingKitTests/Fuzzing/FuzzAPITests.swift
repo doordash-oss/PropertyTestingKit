@@ -192,14 +192,14 @@ struct FuzzAPITests {
 
         let config = FuzzEngineConfig(
             maxDuration: .seconds(10),
-            verbose: false,
-            coverageStrategy: .alwaysInteresting
+            verbose: false
         )
 
         // Test FuzzEngine directly to verify failure capture without Issue.record noise
         let result = await fuzzEngineWithMaxIterations(
             maxIterations: 100,
             config: config,
+            coverageStrategy: .alwaysInteresting,
             additionalSeeds: [true, false]
         ) { (_: Bool) in
             // Throw for any input to guarantee a failure
