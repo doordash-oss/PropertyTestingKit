@@ -102,9 +102,6 @@ size_t sancov_get_covered_locations(SanCovSourceLocation* locations, size_t max_
 /// Measurement context for coverage isolation.
 /// Uses atomic reference counting to prevent use-after-free when TLS caches
 /// hold references across thread hops in the worker pool model.
-/// Forward declaration for path trie (defined in SanCovHooks.c).
-typedef struct SanCovPathTrie SanCovPathTrie;
-
 typedef struct {
     uint8_t* coverage_map;
     size_t covered_count;
@@ -265,7 +262,7 @@ bool sancov_merge_coverage_into_bitmap(
 // MARK: - Edge Recorders
 //
 // An edge recorder is the *measurement* half of a coverage strategy: what each
-// edge hit writes (map cells, covered_indices, trie advance, ...). The recorder
+// edge hit writes (map cells, covered_indices, observer callbacks, ...). The recorder
 // choice lives on the measurement context (edge_recorder_bits), NOT in a
 // process-global — so concurrent tests/engines with different strategies never
 // stomp each other. __sanitizer_cov_trace_pc_guard resolves routing once and
@@ -336,38 +333,6 @@ void sancov_record_edge(uint32_t *guard);
 /// Single-argument convenience: resolve routing, then run the counting recorder.
 void sancov_record_edge_counting(uint32_t *guard);
 
-// MARK: - Path Trie
-//
-// O(1)-per-hit path tracking using a trie of edge sequences.
-// Each unique execution path (ordered sequence of edge hits) is a path in the trie.
-// On each edge hit, the current pointer advances to the child for that edge index.
-// If no child exists, a new node is created and a "novel" flag is set.
-// Driven from Swift via sancov_trie_advance (the .pathTrie strategy's observer).
-
-/// Create a new path trie.
-SanCovPathTrie* sancov_trie_create(void);
-
-/// Destroy a path trie and free all nodes.
-void sancov_trie_destroy(SanCovPathTrie* trie);
-
-/// Check if the current path in the trie is unique.
-/// Returns true if: the novel flag is set, OR the current node is not terminal.
-bool sancov_trie_is_unique_path(SanCovPathTrie* trie);
-
-/// Mark the current node as terminal (end of a complete run).
-void sancov_trie_mark_terminal(SanCovPathTrie* trie);
-
-/// Reset the trie pointer to root and clear the novel flag.
-void sancov_trie_reset(SanCovPathTrie* trie);
-
-/// Dump all terminal paths in the trie to stderr.
-void sancov_trie_dump(SanCovPathTrie* trie);
-
-/// Advance the trie for a given edge index.
-/// If the child exists, advance. If not, create child and set novel flag.
-/// This is the low-level trie operation — does NOT touch the coverage map.
-void sancov_trie_advance(SanCovPathTrie* trie, uint32_t edge_index);
-
 // MARK: - Schedule-Aware Coverage
 //
 // When schedule fuzzing is active, test code runs in a different Swift task
@@ -429,9 +394,6 @@ size_t sancov_get_filtered_count(void);
 /// Check if a symbol name matches compiler-generated patterns.
 /// Exposed for testing the filter logic.
 bool sancov_is_compiler_generated(const char* sname);
-
-/// Enable/disable debug logging for trie advances.
-void sancov_trie_set_debug(bool enable);
 
 /// Diagnostic: per-routing-path counters maintained inside get_current_coverage_map.
 /// Pure atomic loads — safe to call from anywhere; concurrent reads are consistent

@@ -31,6 +31,8 @@
 //  freely (the `.pathTrie` strategy captures its trie that way).
 //
 
+import Foundation
+
 // Re-exported: the EdgeHook typealias references SanCovMeasurementContext, so
 // anyone who can name an EdgeHook needs the C types visible too.
 @_exported import SanCovHooks
@@ -71,48 +73,91 @@ public let countingEdgeHook: EdgeHook = sancov_recorder_counting
 /// // between iterations:  trie.reset()
 /// ```
 /// Thread-safety: `advance` may be called from any thread (edge observers run
-/// wherever edges fire) and is serialized by the C-side trie lock. The
-/// end-of-run operations (`isUniquePath`, `markTerminal`, `reset`) are called
-/// by the owning evaluator between iterations, never concurrently with each
-/// other. `@unchecked` because the synchronization lives in C, invisible to
-/// the compiler.
+/// wherever edges fire); every operation is serialized by a per-instance lock,
+/// so separate tries (e.g. parallel engines') never contend with each other.
+/// `@unchecked` because the synchronization is a manual lock, invisible to the
+/// compiler.
+///
+/// Pure Swift: this target is uninstrumented, so trie operations running
+/// inside an edge observer cannot fire edges of their own.
 public final class PathTrie: @unchecked Sendable {
-    private let raw: OpaquePointer
+    /// A trie node: one observed edge transition. The path from the root to a
+    /// node is an ordered prefix of some run's edge sequence.
+    private final class Node {
+        var children: [UInt32: Node] = [:]
+        var isTerminal = false
+    }
+
+    private let lock = NSLock()
+    private let root = Node()
+    private var current: Node
+    /// Set when the current path created a node nothing had visited before —
+    /// such a path is unique regardless of terminal marks.
+    private var isNovel = false
 
     public init() {
-        raw = sancov_trie_create()
+        current = root
     }
 
-    deinit {
-        sancov_trie_destroy(raw)
-    }
-
-    /// The opaque pointer to the underlying C trie.
-    public var rawPointer: OpaquePointer { raw }
-
-    /// Whether the current path is unique (not seen before).
+    /// Whether the current path is unique (not seen before): it either created
+    /// a new node, or ends at a node no previous run terminated on (prefix
+    /// semantics — a strict prefix of a known path is still unique).
     public var isUniquePath: Bool {
-        sancov_trie_is_unique_path(raw)
+        lock.lock()
+        defer { lock.unlock() }
+        return isNovel || !current.isTerminal
     }
 
     /// Mark the current path as complete (a terminal node in the trie).
     public func markTerminal() {
-        sancov_trie_mark_terminal(raw)
+        lock.lock()
+        defer { lock.unlock() }
+        current.isTerminal = true
     }
 
-    /// Advance the trie for an edge index.
+    /// Advance the trie for an edge index: follow the existing child, or grow
+    /// a new node (which makes the path novel).
     /// Does NOT touch the coverage map — pure trie operation.
     public func advance(_ edgeIndex: UInt32) {
-        sancov_trie_advance(raw, edgeIndex)
+        lock.lock()
+        defer { lock.unlock() }
+        if let child = current.children[edgeIndex] {
+            current = child
+        } else {
+            let child = Node()
+            current.children[edgeIndex] = child
+            current = child
+            isNovel = true
+        }
     }
 
     /// Reset to root for the next iteration.
     public func reset() {
-        sancov_trie_reset(raw)
+        lock.lock()
+        defer { lock.unlock() }
+        current = root
+        isNovel = false
     }
 
     /// Print all terminal paths in the trie to stderr.
     public func dump() {
-        sancov_trie_dump(raw)
+        lock.lock()
+        defer { lock.unlock() }
+        var path: [UInt32] = []
+        var count = 0
+        func walk(_ node: Node) {
+            if node.isTerminal {
+                count += 1
+                FileHandle.standardError.write(Data("[trie] \(path.map(String.init).joined(separator: " -> "))\n".utf8))
+            }
+            for (edge, child) in node.children.sorted(by: { $0.key < $1.key }) {
+                path.append(edge)
+                walk(child)
+                path.removeLast()
+            }
+        }
+        FileHandle.standardError.write(Data("[trie] dumping all terminal paths:\n".utf8))
+        walk(root)
+        FileHandle.standardError.write(Data("[trie] total terminal paths: \(count)\n".utf8))
     }
 }

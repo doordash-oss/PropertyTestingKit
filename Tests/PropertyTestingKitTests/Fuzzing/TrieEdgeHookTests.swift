@@ -13,7 +13,7 @@
 // limitations under the License.
 
 //  Tests for the trie-based path tracking.
-//  Uses sancov_trie_advance directly to test the trie data structure
+//  Drives PathTrie.advance directly to test the trie data structure
 //  without going through the coverage system (avoids framework edge pollution).
 //
 

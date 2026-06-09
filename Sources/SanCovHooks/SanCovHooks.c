@@ -18,7 +18,6 @@
 #include "include/SanCovHooks.h"
 #include <string.h>
 #include <dlfcn.h>
-#include <os/lock.h>
 #include <fcntl.h>
 #include <unistd.h>
 #include <sys/stat.h>
@@ -841,10 +840,18 @@ void* sancov_context_get_recorder_data(SanCovMeasurementContext* context) {
     return __atomic_load_n(&context->recorder_data, __ATOMIC_ACQUIRE);
 }
 
-// TESTING ONLY seam (see SanCovHooks.h).
+// TESTING ONLY seams (see SanCovHooks.h).
 void* sancov_context_get_recorder_for_testing(SanCovMeasurementContext* context) {
     if (context == NULL) return NULL;
     return (void*)__atomic_load_n(&context->edge_recorder_bits, __ATOMIC_ACQUIRE);
+}
+
+void sancov_release_for_testing(SanCovMeasurementContext* context) {
+    ctx_release(context);
+}
+
+void sancov_retain_for_testing(SanCovMeasurementContext* context) {
+    ctx_retain(context);
 }
 
 /// Cleanup caches, etc
@@ -1207,8 +1214,8 @@ static uint8_t* get_current_coverage_map(void) {
     if (g_target_context != NULL) {
         atomic_fetch_add_explicit(&g_route_target_ctx, 1, memory_order_relaxed);
         // Route all edges to the target context. Set tls_cached_measurement_context
-        // so the trie and covered_indices are maintained. Trie operations are
-        // protected by g_trie_lock to handle concurrent access from pool threads.
+        // so the attached recorder/observer and covered_indices are maintained
+        // (observer state guards its own concurrent access from pool threads).
         set_tls_measurement_context(g_target_context);
         tls_cached_coverage_map = g_target_context->coverage_map;
         return g_target_context->coverage_map;
@@ -1503,183 +1510,6 @@ __attribute__((noinline))
 void sancov_record_edge_counting(uint32_t *guard) {
     uint8_t* map = get_current_coverage_map();
     sancov_recorder_counting(guard, map, tls_cached_measurement_context);
-}
-
-// MARK: - Trie Edge Hook
-
-// Trie node: children stored as a sorted array of (edge_index, child_pointer) pairs.
-// For typical coverage (~10-50 unique edges per node), linear scan is faster than hash table.
-typedef struct TrieNode {
-    uint32_t *child_edges;          // Sorted array of edge indices
-    struct TrieNode **child_nodes;  // Parallel array of child pointers
-    uint16_t child_count;
-    uint16_t child_capacity;
-    bool is_terminal;
-} TrieNode;
-
-static TrieNode* trie_node_create(void) {
-    TrieNode* node = (TrieNode*)xmalloc(sizeof(TrieNode));
-    node->child_edges = NULL;
-    node->child_nodes = NULL;
-    node->child_count = 0;
-    node->child_capacity = 0;
-    node->is_terminal = false;
-    return node;
-}
-
-static void trie_node_destroy(TrieNode* node) {
-    if (!node) return;
-    for (uint16_t i = 0; i < node->child_count; i++) {
-        trie_node_destroy(node->child_nodes[i]);
-    }
-    free(node->child_edges);
-    free(node->child_nodes);
-    free(node);
-}
-
-// Find child for edge_index. Returns the child node or NULL.
-static inline TrieNode* trie_node_find_child(TrieNode* node, uint32_t edge_index) {
-    // Linear scan — fast for small child counts (typical: 1-5 children per node)
-    for (uint16_t i = 0; i < node->child_count; i++) {
-        if (node->child_edges[i] == edge_index) {
-            return node->child_nodes[i];
-        }
-    }
-    return NULL;
-}
-
-// Add a child for edge_index. Returns the new child node.
-static TrieNode* trie_node_add_child(TrieNode* node, uint32_t edge_index) {
-    if (node->child_count == node->child_capacity) {
-        uint16_t new_cap = node->child_capacity == 0 ? 4 : node->child_capacity * 2;
-        node->child_edges = (uint32_t*)realloc(node->child_edges, new_cap * sizeof(uint32_t));
-        node->child_nodes = (TrieNode**)realloc(node->child_nodes, new_cap * sizeof(TrieNode*));
-        node->child_capacity = new_cap;
-    }
-    TrieNode* child = trie_node_create();
-    node->child_edges[node->child_count] = edge_index;
-    node->child_nodes[node->child_count] = child;
-    node->child_count++;
-    return child;
-}
-
-// Path trie state.
-//
-// Lifecycle: the trie is owned by Swift (`PathTrie`); a context references it
-// only via recorder_data. sancov_end_measurement severs that reference before
-// the engine returns — strictly before Swift can release the trie — so a
-// straggler task that retains the context past `end` dispatches to the default
-// recorder and never touches a freed trie. This replaces the old bidirectional
-// context<->trie unlink (owner_context + detach paths): with no back-pointer,
-// neither side can write through the other's freed memory.
-struct SanCovPathTrie {
-    TrieNode* root;
-    TrieNode* current;
-    bool is_novel;
-};
-
-// Lock protecting trie advancement. When g_target_context routes all threads'
-// edges to one context, multiple pool threads can advance the same trie.
-static os_unfair_lock g_trie_lock = OS_UNFAIR_LOCK_INIT;
-
-static bool g_trie_debug = false;
-
-SanCovPathTrie* sancov_trie_create(void) {
-    SanCovPathTrie* trie = (SanCovPathTrie*)xmalloc(sizeof(SanCovPathTrie));
-    trie->root = trie_node_create();
-    trie->current = trie->root;
-    trie->is_novel = false;
-    return trie;
-}
-
-void sancov_trie_destroy(SanCovPathTrie* trie) {
-    if (!trie) return;
-    trie_node_destroy(trie->root);
-    free(trie);
-}
-
-// TESTING ONLY seams (see SanCovHooks.h).
-void sancov_release_for_testing(SanCovMeasurementContext* context) {
-    ctx_release(context);
-}
-
-void sancov_retain_for_testing(SanCovMeasurementContext* context) {
-    ctx_retain(context);
-}
-
-
-bool sancov_trie_is_unique_path(SanCovPathTrie* trie) {
-    if (!trie) return false;
-    if (trie->is_novel) return true;
-    return !trie->current->is_terminal;
-}
-
-void sancov_trie_mark_terminal(SanCovPathTrie* trie) {
-    if (trie) trie->current->is_terminal = true;
-}
-
-void sancov_trie_reset(SanCovPathTrie* trie) {
-    if (!trie) return;
-    trie->current = trie->root;
-    trie->is_novel = false;
-}
-
-// Temporary dump functions for trie analysis
-uintptr_t sancov_get_pc(size_t edge_index);
-
-static const char* resolve_edge_symbol(uint32_t edge_index) {
-    uintptr_t pc = sancov_get_pc(edge_index);
-    if (pc == 0) return "?";
-    Dl_info info;
-    if (dladdr((void*)pc, &info) == 0 || !info.dli_sname) return "?";
-    return info.dli_sname;
-}
-
-static void trie_dump_recursive(TrieNode* node, uint32_t* path_buf, int depth, int* path_count) {
-    if (node->is_terminal) {
-        fprintf(stderr, "  path %d (len=%d):\n", *path_count, depth);
-        for (int i = 0; i < depth; i++) {
-            fprintf(stderr, "    [%d] edge %u = %s\n", i, path_buf[i], resolve_edge_symbol(path_buf[i]));
-        }
-        (*path_count)++;
-    }
-    for (uint16_t i = 0; i < node->child_count; i++) {
-        if (depth < 4096) {
-            path_buf[depth] = node->child_edges[i];
-            trie_dump_recursive(node->child_nodes[i], path_buf, depth + 1, path_count);
-        }
-    }
-}
-
-void sancov_trie_dump(SanCovPathTrie* trie) {
-    if (!trie || !trie->root) {
-        fprintf(stderr, "[trie] empty\n");
-        return;
-    }
-    uint32_t* buf = (uint32_t*)malloc(4096 * sizeof(uint32_t));
-    int count = 0;
-    fprintf(stderr, "[trie] dumping all terminal paths:\n");
-    trie_dump_recursive(trie->root, buf, 0, &count);
-    fprintf(stderr, "[trie] total terminal paths: %d\n", count);
-    free(buf);
-}
-
-void sancov_trie_set_debug(bool enable) { g_trie_debug = enable; }
-
-void sancov_trie_advance(SanCovPathTrie* trie, uint32_t edge_index) {
-    if (!trie) return;
-    if (g_trie_debug) {
-        fprintf(stderr, "[trie-adv] edge=%u\n", edge_index);
-    }
-    os_unfair_lock_lock(&g_trie_lock);
-    TrieNode* child = trie_node_find_child(trie->current, edge_index);
-    if (child) {
-        trie->current = child;
-    } else {
-        trie->current = trie_node_add_child(trie->current, edge_index);
-        trie->is_novel = true;
-    }
-    os_unfair_lock_unlock(&g_trie_lock);
 }
 
 // MARK: - Schedule-Aware Target Context
