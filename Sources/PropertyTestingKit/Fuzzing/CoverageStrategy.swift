@@ -67,10 +67,11 @@ public struct CoverageStrategy<each Input: Codable & Sendable>: Sendable {
     ///
     /// - Parameter onEdge: The strategy's per-edge function — the *measurement*
     ///   half (what each edge hit does), paired with `decide`'s *judgement* half.
-    ///   Called once per edge per iteration, on the edge's first hit, for edges
-    ///   that route to the engine's measurement context. The context co-owns the
-    ///   closure's state, so capture freely (the `.pathTrie` strategy captures
-    ///   its trie this way). `nil` (the default) leaves the plain map recording.
+    ///   Called on EVERY hit of edges that route to the engine's measurement
+    ///   context, loop re-executions included — gating (loop immunity, dedup,
+    ///   hit-count bucketing) is your strategy's decision, the way `.pathTrie`
+    ///   gates itself to first hits. The context co-owns the closure's state,
+    ///   so capture freely. `nil` (the default) leaves the plain map recording.
     /// - Note: `decide` is shared across parallel engines. Keep it free of mutable state,
     ///   or use `init(onEdge:makeDecision:)` to get a fresh decision per engine.
     public init(
@@ -331,11 +332,12 @@ private func makeNewEdgeStrategy<each Input: Codable & Sendable>(
 /// Path trie strategy: O(1) per-hit path tracking, O(1) uniqueness check.
 ///
 /// The strategy contains its trie as Swift state: per-edge work is a Swift
-/// function capturing the trie (advance on each first hit, cursor back to root
-/// on coverage reset), attached as an edge observer that the measurement
-/// context co-owns. Uniqueness is checked via `trie.isUniquePath` after each
-/// run. The evaluator (and so the trie) is built per engine, so parallel
-/// engines never share a trie cursor.
+/// function capturing the trie, attached as an edge observer that the
+/// measurement context co-owns. The observer reports every hit; THIS strategy
+/// chooses loop immunity (advance only on an edge's first hit per iteration —
+/// see `attachTrie`'s gate) so loop counts don't lengthen paths. Uniqueness is
+/// checked via `trie.isUniquePath` after each run. The evaluator (and so the
+/// trie) is built per engine, so parallel engines never share a trie cursor.
 private func makePathTrieStrategy<each Input: Codable & Sendable>(
 ) -> CoverageEvaluator<repeat each Input> {
     let trie = PathTrie()

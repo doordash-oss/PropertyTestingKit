@@ -30,17 +30,22 @@
 //  the coverage map; they just aren't observed.
 //
 
+import Foundation
 import EdgeHooks
 
 /// A strategy's per-edge callback (and optional per-iteration reset), called
 /// from the edge-dispatch hot path for edges that route to the context it is
 /// attached to.
 final class EdgeObserver: Sendable {
-    /// Called once per edge per iteration, on the edge's FIRST hit (loop-immune
-    /// — re-executing a loop body doesn't re-observe its edges). Edges fired by
-    /// an observer callback itself are recorded but not observed (per-thread
-    /// reentrancy gate), so the closure may live in instrumented code and take
-    /// locks safely.
+    /// Called on EVERY hit of every edge that routes to the context — including
+    /// loop re-executions. Gating (loop immunity, dedup, counting) is the
+    /// strategy's decision, not the library's; `.pathTrie` gates itself. Edges
+    /// fired by an observer callback itself are recorded but not observed
+    /// (per-thread reentrancy gate), so the closure may live in instrumented
+    /// code and take locks safely.
+    ///
+    /// - Important: this runs once per HIT on the hot path — a hot loop can
+    ///   call it millions of times per second.
     let onEdge: @Sendable (UInt32) -> Void
 
     /// Called when the context's coverage is reset between iterations, so
@@ -55,11 +60,14 @@ final class EdgeObserver: Sendable {
 
 /// The recorder behind every `EdgeObserver`: default first-hit recording (map
 /// bit + covered_indices, so sparse snapshots keep working), then the
-/// observer's `onEdge` with the edge index. Runs millions of times per second;
-/// the observer box is reached through one acquire load on the context.
+/// observer's `onEdge` for EVERY in-range hit. Runs millions of times per
+/// second; the observer box is reached through one acquire load on the context.
 let edgeObserverRecorder: EdgeHook = { guardPtr, map, context in
     guard let guardPtr, let context else { return }
-    guard sancov_record_edge_first_hit(guardPtr, map, context) else { return }
+    // Explicit bounds check: record_edge_first_hit's false conflates "repeat
+    // hit" (observed) with "out of range / filtered" (not observed).
+    guard guardPtr.pointee < sancov_get_counter_count() else { return }
+    _ = sancov_record_edge_first_hit(guardPtr, map, context)
     guard let data = sancov_context_get_recorder_data(context) else { return }
     guard sancov_observer_enter() else { return }
     defer { sancov_observer_exit() }
@@ -97,12 +105,46 @@ extension SanCovCounters {
         )
     }
 
-    /// Attach a path trie as an edge observer: edges advance the trie, and
-    /// coverage resets return its cursor to the root.
+    /// Attach a path trie as an edge observer: an edge's FIRST hit each
+    /// iteration advances the trie, and coverage resets return its cursor to
+    /// the root. The first-hit gating is the TRIE strategy's own policy (loop
+    /// immunity: re-executing a loop must not lengthen the path) — the
+    /// observer mechanism itself reports every hit.
     static func attachTrie(_ trie: PathTrie, to context: MeasurementContext) {
+        let gate = FirstHitGate()
         attachObserver(
-            EdgeObserver(onEdge: { trie.advance($0) }, onReset: { trie.reset() }),
+            EdgeObserver(
+                onEdge: { edge in
+                    if gate.firstHit(edge) { trie.advance(edge) }
+                },
+                onReset: {
+                    gate.reset()
+                    trie.reset()
+                }
+            ),
             to: context
         )
+    }
+}
+
+/// Per-iteration first-hit tracker for strategies that choose loop immunity.
+/// Lock-protected because edges arrive from any thread (inheriting child
+/// tasks); the critical sections run no instrumented code, and the observer
+/// reentrancy gate keeps dispatch from ever re-entering while the lock is held.
+private final class FirstHitGate: @unchecked Sendable {
+    private let lock = NSLock()
+    private var seen = Set<UInt32>()
+
+    /// True exactly once per edge between resets.
+    func firstHit(_ edge: UInt32) -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return seen.insert(edge).inserted
+    }
+
+    func reset() {
+        lock.lock()
+        defer { lock.unlock() }
+        seen.removeAll()
     }
 }

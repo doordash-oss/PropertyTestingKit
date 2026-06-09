@@ -96,8 +96,8 @@ struct ContextRecorderTests {
 
     // MARK: - Swift edge observers
 
-    @Test("An observer's onEdge fires exactly once per first-hit edge")
-    func observerFiresOncePerFirstHit() {
+    @Test("An observer's onEdge fires on every hit of an edge")
+    func observerFiresOnEveryHit() {
         let context = SanCovCounters.beginMeasurement()
         defer { SanCovCounters.endMeasurement(context) }
 
@@ -107,17 +107,20 @@ struct ContextRecorderTests {
             to: context
         )
 
-        // Same synthetic guard twice: first-hit semantics mean the closure runs
-        // once for this edge no matter how many times it fires. (This test file
-        // is instrumented, so its own edges land in `hits` too — filter.)
+        // Same synthetic guard three times: the hook runs per HIT — gating
+        // (loop immunity, dedup, counting) is the strategy's decision, not the
+        // library's. (This test file is instrumented, so its own edges land in
+        // `hits` too — filter; a real edge sharing this index can only ADD
+        // occurrences, hence >=.)
         var g11: UInt32 = 11
         sancov_dispatch_edge(&g11)
         sancov_dispatch_edge(&g11)
+        sancov_dispatch_edge(&g11)
 
-        #expect(hits.value.filter { $0 == 11 }.count == 1,
-                "onEdge must run once per edge per iteration (first hit only)")
+        #expect(hits.value.filter { $0 == 11 }.count >= 3,
+                "onEdge must run for every hit, not only the first")
         let cell = context.rawContext.pointee.coverage_map?[11]
-        #expect(cell == 1, "The observer recorder keeps binary map recording")
+        #expect(cell == 1, "Map recording stays binary regardless of hit count")
 
         let covered = (try? SanCovCounters.snapshotCoveredArrays(with: context)) ?? SparseCoverage()
         #expect(covered.indices.contains(11),
@@ -242,6 +245,7 @@ struct ContextRecorderTests {
             var g2: UInt32 = 2
             sancov_dispatch_edge(&g0)
             sancov_dispatch_edge(&g1)
+            sancov_dispatch_edge(&g1)   // repeat hit: the TRIE strategy gates it out
             sancov_dispatch_edge(&g2)
             let unique = trie.isUniquePath
             trie.markTerminal()    // marking an already-terminal node is a no-op
@@ -289,9 +293,10 @@ struct ContextRecorderTests {
 
         var g13: UInt32 = 13
         sancov_dispatch_edge(&g13)
+        sancov_dispatch_edge(&g13)
 
-        #expect(hits.value.contains(13),
-                "The custom strategy's Swift onEdge must observe dispatched edges")
+        #expect(hits.value.filter { $0 == 13 }.count >= 2,
+                "The custom strategy's onEdge must observe every dispatched hit")
     }
 
     @Test("Built-ins other than pathTrie attach nothing (default recorder)")
