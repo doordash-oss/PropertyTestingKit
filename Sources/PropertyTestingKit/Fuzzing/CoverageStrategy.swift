@@ -72,42 +72,96 @@ public struct CoverageStrategy<each Input: Codable & Sendable>: Sendable {
     ///   hit-count bucketing) is your strategy's decision, the way `.pathTrie`
     ///   gates itself to first hits. The context co-owns the closure's state,
     ///   so capture freely. `nil` (the default) leaves the plain map recording.
-    /// - Note: `decide` is shared across parallel engines. Keep it free of mutable state,
-    ///   or use `init(onEdge:makeDecision:)` to get a fresh decision per engine.
+    /// - Note: `onEdge` and `decide` are shared across parallel engines. Keep
+    ///   them free of mutable state, or use `init(makeEngine:)` to give each
+    ///   engine its own.
     public init(
         onEdge: (@Sendable (UInt32) -> Void)? = nil,
         _ decide: @escaping CoverageDecision<repeat each Input>
     ) {
-        self.init(onEdge: onEdge, makeDecision: { decide })
+        self.init(builtin: nil, makeEngine: { CoverageEngine(onEdge: onEdge, decide) })
     }
 
-    /// Build a custom strategy whose decision holds fresh per-engine state.
+    /// Build a custom strategy whose per-edge hooks and decision hold fresh
+    /// per-engine state.
     ///
-    /// `makeDecision` is called once per parallel engine to produce an isolated decision
-    /// closure, mirroring how the built-ins allocate a fresh trie/index per engine.
-    ///
-    /// - Parameter onEdge: The strategy's per-edge function, attached to each
-    ///   engine's measurement context during setup (see `init(onEdge:_:)`).
-    public init(
-        onEdge: (@Sendable (UInt32) -> Void)? = nil,
-        makeDecision: @escaping @Sendable () -> CoverageDecision<repeat each Input>
+    /// `makeEngine` is called once per parallel engine, so the state its
+    /// closures capture is engine-isolated by construction — exactly how the
+    /// built-in `.pathTrie` allocates a fresh trie per engine. This is the form
+    /// to use for any stateful strategy that should be correct under
+    /// `parallelism > 1`:
+    /// ```swift
+    /// CoverageStrategy<Int>(makeEngine: {
+    ///     let trie = PathTrie()                       // this engine's state
+    ///     return CoverageEngine(
+    ///         onEdge: { edge in trie.advance(edge) }, // measurement half
+    ///         onReset: { trie.reset() }
+    ///     ) { sparse, corpus, input, schedule in      // judgement half
+    ///         defer { trie.reset() }
+    ///         guard trie.isUniquePath else { return false }
+    ///         trie.markTerminal()
+    ///         corpus.mergeCoverageAndAdd(input: input, scheduleBytes: schedule, sparse: sparse)
+    ///         return true
+    ///     }
+    /// })
+    /// ```
+    public init(makeEngine: @escaping @Sendable () -> CoverageEngine<repeat each Input>) {
+        self.init(builtin: nil, makeEngine: makeEngine)
+    }
+
+    /// Internal designated form of `init(makeEngine:)` that keeps the built-in
+    /// tag for schedule-fuzzing re-packing. Converts each engine bundle into a
+    /// CoverageEvaluator: hooks become an attached EdgeObserver; the decision
+    /// runs over the iteration's sparse snapshot.
+    init(
+        builtin: CoverageStrategyBuiltin?,
+        makeEngine: @escaping @Sendable () -> CoverageEngine<repeat each Input>
     ) {
-        self.builtin = nil
+        self.builtin = builtin
         self.makeEvaluator = {
-            let decide = makeDecision()
-            // Attach the per-edge function as an observer in setup, like
-            // .pathTrie attaches its trie observer. No onEdge → nothing to
-            // attach: a cleared recorder field already means "default".
-            let setup: CoverageStrategySetup? = onEdge.map { onEdge in
-                { context in
-                    SanCovCounters.attachObserver(EdgeObserver(onEdge: onEdge), to: context)
+            let engine = makeEngine()
+            // No hooks → nothing to attach: a cleared recorder field already
+            // means "default recording".
+            let setup: CoverageStrategySetup? = (engine.onEdge != nil || engine.onReset != nil)
+                ? { context in
+                    SanCovCounters.attachObserver(
+                        EdgeObserver(onEdge: engine.onEdge ?? { _ in }, onReset: engine.onReset),
+                        to: context
+                    )
                 }
-            }
+                : nil
             return CoverageEvaluator(setup: setup, evaluate: { input, scheduleBytes, context, coverageClient, corpus in
                 let sparse = (try? coverageClient.snapshotCoveredArraysWithContext(context)) ?? SparseCoverage()
-                return decide(sparse, corpus, input, scheduleBytes)
+                return engine.decide(sparse, corpus, input, scheduleBytes)
             })
         }
+    }
+}
+
+/// A strategy's per-engine bundle: the measurement hooks and the decision,
+/// sharing one parallel engine's state. Built fresh by `makeEngine` for each
+/// engine, so state captured by these closures never crosses engines.
+public struct CoverageEngine<each Input: Codable & Sendable>: Sendable {
+    /// Called on every hit of edges routing to this engine's measurement
+    /// context (see `CoverageStrategy.init(onEdge:_:)` for semantics).
+    let onEdge: (@Sendable (UInt32) -> Void)?
+
+    /// Called when the engine's coverage resets between iterations, so
+    /// per-iteration state starts each run clean.
+    let onReset: (@Sendable () -> Void)?
+
+    /// The judgement half: decides per iteration whether the input was
+    /// interesting and adds it to the corpus.
+    let decide: CoverageDecision<repeat each Input>
+
+    public init(
+        onEdge: (@Sendable (UInt32) -> Void)? = nil,
+        onReset: (@Sendable () -> Void)? = nil,
+        _ decide: @escaping CoverageDecision<repeat each Input>
+    ) {
+        self.onEdge = onEdge
+        self.onReset = onReset
+        self.decide = decide
     }
 }
 
@@ -126,7 +180,7 @@ extension CoverageStrategy {
 
     /// Path trie strategy: ordered-path tracking (A→B→C differs from A→C→B). The default.
     public static var pathTrie: CoverageStrategy<repeat each Input> {
-        CoverageStrategy(builtin: .pathTrie, makeEvaluator: { makePathTrieStrategy() })
+        CoverageStrategy(builtin: .pathTrie, makeEngine: { makePathTrieEngine() })
     }
 
     /// Always-interesting strategy: every input is added. Useful for deterministic tests.
@@ -331,25 +385,21 @@ private func makeNewEdgeStrategy<each Input: Codable & Sendable>(
 
 /// Path trie strategy: O(1) per-hit path tracking, O(1) uniqueness check.
 ///
-/// The strategy contains its trie as Swift state: per-edge work is a Swift
-/// function capturing the trie, attached as an edge observer that the
-/// measurement context co-owns. The observer reports every hit; THIS strategy
-/// chooses loop immunity (advance only on an edge's first hit per iteration —
-/// see `attachTrie`'s gate) so loop counts don't lengthen paths. Uniqueness is
-/// checked via `trie.isUniquePath` after each run. The evaluator (and so the
-/// trie) is built per engine, so parallel engines never share a trie cursor.
-private func makePathTrieStrategy<each Input: Codable & Sendable>(
-) -> CoverageEvaluator<repeat each Input> {
+/// Built through the same per-engine API custom strategies use — the strategy
+/// contains its trie as engine state, advanced by its onEdge hook and judged by
+/// its decision. The observer mechanism reports every hit; THIS strategy
+/// chooses loop immunity (`makeTrieHooks` gates advancement to an edge's first
+/// hit per iteration) so loop counts don't lengthen paths. Each parallel
+/// engine builds its own trie, so cursors never interleave.
+private func makePathTrieEngine<each Input: Codable & Sendable>(
+) -> CoverageEngine<repeat each Input> {
     let trie = PathTrie()
+    let hooks = makeTrieHooks(trie)
 
-    // Attach the trie observer in setup so iteration 1's edges advance the
-    // trie. Attaching lazily on the first evaluate call misses those edges —
-    // they've already fired by the time evaluate runs.
-    let setup: CoverageStrategySetup = { context in
-        SanCovCounters.attachTrie(trie, to: context)
-    }
-
-    let evaluate: CoverageStrategyFn<repeat each Input> = { input, scheduleBytes, context, coverageClient, corpus in
+    return CoverageEngine(
+        onEdge: hooks.onEdge,
+        onReset: hooks.onReset
+    ) { sparse, corpus, input, scheduleBytes in
         defer {
             trie.reset()
         }
@@ -359,16 +409,9 @@ private func makePathTrieStrategy<each Input: Codable & Sendable>(
         }
 
         trie.markTerminal()
-
-        if let sparse = try? coverageClient.snapshotCoveredArraysWithContext(context) {
-            corpus.mergeCoverageAndAdd(input: input, scheduleBytes: scheduleBytes, sparse: sparse)
-        } else {
-            corpus.addEntry(input: input, scheduleBytes: scheduleBytes, sparse: SparseCoverage())
-        }
+        corpus.mergeCoverageAndAdd(input: input, scheduleBytes: scheduleBytes, sparse: sparse)
         return true
     }
-
-    return CoverageEvaluator(setup: setup, evaluate: evaluate)
 }
 
 // MARK: - Always Interesting Strategy

@@ -105,26 +105,36 @@ extension SanCovCounters {
         )
     }
 
-    /// Attach a path trie as an edge observer: an edge's FIRST hit each
-    /// iteration advances the trie, and coverage resets return its cursor to
-    /// the root. The first-hit gating is the TRIE strategy's own policy (loop
-    /// immunity: re-executing a loop must not lengthen the path) — the
-    /// observer mechanism itself reports every hit.
+    /// Attach a path trie as an edge observer using the standard gated trie
+    /// hooks (see `makeTrieHooks`).
     static func attachTrie(_ trie: PathTrie, to context: MeasurementContext) {
-        let gate = FirstHitGate()
+        let hooks = makeTrieHooks(trie)
         attachObserver(
-            EdgeObserver(
-                onEdge: { edge in
-                    if gate.firstHit(edge) { trie.advance(edge) }
-                },
-                onReset: {
-                    gate.reset()
-                    trie.reset()
-                }
-            ),
+            EdgeObserver(onEdge: hooks.onEdge, onReset: hooks.onReset),
             to: context
         )
     }
+}
+
+/// The trie strategy's per-engine hooks: an edge's FIRST hit each iteration
+/// advances the trie, and coverage resets return both the gate and the cursor
+/// to a clean slate. The first-hit gating is the TRIE strategy's own policy
+/// (loop immunity: re-executing a loop must not lengthen the path) — the
+/// observer mechanism itself reports every hit. Shared by the `.pathTrie`
+/// built-in's engine and `SanCovCounters.attachTrie`.
+func makeTrieHooks(
+    _ trie: PathTrie
+) -> (onEdge: @Sendable (UInt32) -> Void, onReset: @Sendable () -> Void) {
+    let gate = FirstHitGate()
+    return (
+        onEdge: { edge in
+            if gate.firstHit(edge) { trie.advance(edge) }
+        },
+        onReset: {
+            gate.reset()
+            trie.reset()
+        }
+    )
 }
 
 /// Per-iteration first-hit tracker for strategies that choose loop immunity.

@@ -19,6 +19,7 @@
 		08723356674CF23AB08EFC98 /* WorkerPoolPatternTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3C4BEC4C9B5FC9BAEF5F9ECE /* WorkerPoolPatternTests.swift */; };
 		0A0B966D3B103DDD9ADC457C /* CoverageCountersClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B7DA3E55A8132FE210D8EAF /* CoverageCountersClient.swift */; };
 		0AEA251D3FF9432F04D9FC04 /* CoverageGapDetectorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5A7DD272E538B8E8CFE5C75 /* CoverageGapDetectorTests.swift */; };
+		0AF273C35C44F4B57C9AE477 /* CoverageEngineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9791710C8985E9069A0AAEA9 /* CoverageEngineTests.swift */; };
 		0BBBCECACEFDD2F0255FDB97 /* ParallelEarlyCancelTest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 63C99FD379289FA24BBE7A5B /* ParallelEarlyCancelTest.swift */; };
 		0F22629EF545632A4492EF91 /* ScheduleByteMutator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B2B7BE0BAA86B5197752AE1 /* ScheduleByteMutator.swift */; };
 		0FE8890D1104E4FD6DA64832 /* CustomCoverageStrategyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3CFC8EFE2F9AF6F2346D1B2D /* CustomCoverageStrategyTests.swift */; };
@@ -569,6 +570,7 @@
 		9475EBCF152B8D2EEACB5111 /* STADSPluginTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = STADSPluginTests.swift; sourceTree = "<group>"; };
 		94EB367A0BBDEA977C219F3A /* SimpleCoveragePlateauDetector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SimpleCoveragePlateauDetector.swift; sourceTree = "<group>"; };
 		955C5983D6125F89C2DE0E3E /* DoubleMutators.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DoubleMutators.swift; sourceTree = "<group>"; };
+		9791710C8985E9069A0AAEA9 /* CoverageEngineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoverageEngineTests.swift; sourceTree = "<group>"; };
 		987822C1AE1DD0059B1B19EB /* XSSMutator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = XSSMutator.swift; sourceTree = "<group>"; };
 		99DF2D2D7A9C78BEFDA1C9FF /* FuzzAPITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FuzzAPITests.swift; sourceTree = "<group>"; };
 		9BD8E7DDBFB1256A08DEBE05 /* CoverageSignature.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoverageSignature.swift; sourceTree = "<group>"; };
@@ -1384,6 +1386,7 @@
 				CB81D025D3C307D01FD829DB /* CorpusCoordinatorTests.swift */,
 				9E53225F99BA35278DB06DA6 /* CorpusTests.swift */,
 				7C464278A88D0764906067B1 /* CountingEdgeHookTests.swift */,
+				9791710C8985E9069A0AAEA9 /* CoverageEngineTests.swift */,
 				A5A7DD272E538B8E8CFE5C75 /* CoverageGapDetectorTests.swift */,
 				3DCC188A42F8F55099B6EC2C /* CoverageGapPluginTests.swift */,
 				09F9A66C1671353C4CCF4F16 /* CoverageSignatureTests.swift */,
@@ -1926,6 +1929,7 @@
 				808DEDCEF3F72F26E4C97724 /* CorpusTests.swift in Sources */,
 				6EA52009D7E48F7CE7FB0A61 /* CountingEdgeHookTests.swift in Sources */,
 				ADF49AE0B09D08080E515387 /* CoverageCountersTests.swift in Sources */,
+				0AF273C35C44F4B57C9AE477 /* CoverageEngineTests.swift in Sources */,
 				0AEA251D3FF9432F04D9FC04 /* CoverageGapDetectorTests.swift in Sources */,
 				5D7BD139A169A1190764B4E8 /* CoverageGapPluginTests.swift in Sources */,
 				D304EFC84705417D212EA91D /* CoverageSignatureTests.swift in Sources */,
