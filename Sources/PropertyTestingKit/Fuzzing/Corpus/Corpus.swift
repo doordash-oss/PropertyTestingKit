@@ -227,6 +227,23 @@ public final class Corpus<each Input: Codable & Sendable>: @unchecked Sendable {
 
     // MARK: - Adding Entries
 
+    /// Merge a run's covered edges into the corpus's global seen-edges bitmap,
+    /// reporting whether anything was new.
+    ///
+    /// The building block for newEdge-style decisions: call it with the
+    /// iteration's coverage, and treat the input as interesting iff it
+    /// returns `true` (then record it with `addEntry`, which does not
+    /// re-merge).
+    ///
+    /// - Returns: `true` iff `sparse` contained at least one edge the corpus
+    ///   had not seen before. All of `sparse` is merged either way.
+    @discardableResult
+    public func mergeCoverage(_ sparse: SparseCoverage) -> Bool {
+        let inserted = Self.bitmapMergeSparse(sparse, storage: bitmapStorage, capacity: bitmapCapacity)
+        bitmapCount += inserted
+        return inserted > 0
+    }
+
     /// Merge sparse coverage into the bitmap and add an entry unconditionally.
     ///
     /// Used by coverage strategies that have already determined the input is interesting.

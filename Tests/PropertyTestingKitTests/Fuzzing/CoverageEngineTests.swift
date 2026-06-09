@@ -46,11 +46,11 @@ struct CoverageEngineTests {
         let engine1 = strategy.makeEvaluator()
         let engine2 = strategy.makeEvaluator()
 
-        #expect(engine1.evaluate(1, nil, context, coverageClient, corpus),
+        #expect(engine1.evaluate(1, nil, context, coverageClient, corpus) != nil,
                 "Engine 1's first iteration")
-        #expect(!engine1.evaluate(2, nil, context, coverageClient, corpus),
+        #expect(engine1.evaluate(2, nil, context, coverageClient, corpus) == nil,
                 "Engine 1's state must persist across its own iterations")
-        #expect(engine2.evaluate(3, nil, context, coverageClient, corpus),
+        #expect(engine2.evaluate(3, nil, context, coverageClient, corpus) != nil,
                 "Engine 2 must get FRESH state from its own makeEngine call")
     }
 
@@ -75,7 +75,7 @@ struct CoverageEngineTests {
         var g21: UInt32 = 21
         sancov_dispatch_edge(&g21)
 
-        #expect(evaluator.evaluate(1, nil, context, coverageClient, corpus),
+        #expect(evaluator.evaluate(1, nil, context, coverageClient, corpus) != nil,
                 "decide must see the edges its OWN engine's onEdge observed")
     }
 
@@ -97,6 +97,59 @@ struct CoverageEngineTests {
         SanCovCounters.resetCoverage(context)
 
         #expect(resets.value == 1, "resetCoverage must reach the engine's onReset")
+    }
+
+    @Test("Corpus.mergeCoverage merges and reports whether any edge was new")
+    func corpusMergeCoverageReportsNovelty() {
+        let corpus = Corpus<Int>()
+
+        #expect(corpus.mergeCoverage(SparseCoverage(indices: [1, 2, 3])),
+                "All edges new")
+        #expect(!corpus.mergeCoverage(SparseCoverage(indices: [2, 3])),
+                "A subset of seen edges is not new coverage")
+        #expect(corpus.mergeCoverage(SparseCoverage(indices: [3, 4])),
+                "One unseen edge suffices")
+        #expect(!corpus.mergeCoverage(SparseCoverage()),
+                "Empty coverage is never new")
+    }
+
+    /// The forcing function for "no privileged strategies": newEdge expressed
+    /// purely through public API, validated against real dispatch.
+    @Test("A user can express the newEdge strategy through the public API")
+    func userBuiltNewEdgeStrategy() {
+        let context = SanCovCounters.beginMeasurement()
+        defer { SanCovCounters.endMeasurement(context) }
+        let coverageClient = CoverageCountersClient.liveValue
+        let corpus = Corpus<Int>()
+
+        let strategy = CoverageStrategy<Int>(makeEngine: {
+            CoverageEngine { sparse, corpus, input, scheduleBytes in
+                guard corpus.mergeCoverage(sparse) else { return false }
+                corpus.addEntry(input: input, scheduleBytes: scheduleBytes, sparse: sparse)
+                return true
+            }
+        })
+        let evaluator = strategy.makeEvaluator()
+        evaluator.setup?(context)
+
+        // Identical instrumented code in both passes, reset through evaluate
+        // (see the trie dispatch test for why): pass 1 brings new edges,
+        // pass 2 replays exactly the same set.
+        func firePass(_ input: Int) -> Bool {
+            SanCovCounters.resetCoverage(context)
+            var g31: UInt32 = 31
+            var g32: UInt32 = 32
+            sancov_dispatch_edge(&g31)
+            sancov_dispatch_edge(&g32)
+            return evaluator.evaluate(input, nil, context, coverageClient, corpus) != nil
+        }
+
+        let first = firePass(1)
+        let second = firePass(2)
+
+        #expect(first, "First pass covers unseen edges")
+        #expect(!second, "An identical replay brings no new edge")
+        #expect(corpus.count == 1, "Only the novel run joins the corpus")
     }
 
     @Test("A parallel fuzz run builds one engine per parallel engine")

@@ -241,21 +241,17 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
                         failureRecorded = true
                     }
 
-                    // Delegate interestingness check to the coverage evaluator (O(1) for trie strategy)
-                    let discoveredNewCoverage = coverageEvaluator.evaluate(
+                    // Delegate interestingness to the coverage evaluator. It returns
+                    // the run's coverage when the input was interesting (the sparse
+                    // snapshot it already took for the decision — no re-snapshot
+                    // here), nil otherwise.
+                    let iterationCoverage = coverageEvaluator.evaluate(
                         input,
                         currentScheduleBytes,
                         coverageContext,
                         coverageCountersClient,
                         corpus
                     )
-
-                    // Snapshot coverage only when new edges were found — amortizes
-                    // allocation cost since new coverage is rare (~0.1% of iterations).
-                    let iterationCoverage =
-                        discoveredNewCoverage
-                        ? (try? coverageCountersClient.snapshotCoveredArraysWithContext(coverageContext))
-                        : nil
 
                     // Process iteration event before failure event
                     var events = [

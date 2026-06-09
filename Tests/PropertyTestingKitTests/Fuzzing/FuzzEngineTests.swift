@@ -307,7 +307,7 @@ struct FuzzEngineTests {
     @Test("FuzzEngine resetCoverage is called between iterations")
     func testResetCoverageCalledBetweenIterations() async {
         let resetCount = SyncBox(0)
-        let coveredIndicesCheckCount = SyncBox(0)
+        let snapshotCount = SyncBox(0)
 
         let result = await withDependencies {
             $0.coverageCounters = CoverageCountersClient(
@@ -318,29 +318,26 @@ struct FuzzEngineTests {
                     resetCount.update { $0 += 1 }
                 },
                 snapshotCoveredArraysWithContext: { _ in
-                    // Return sparse coverage with a unique index each time
-                    SparseCoverage(indices: [UInt32(coveredIndicesCheckCount.value)])
+                    // Unique index each time so the strategy accepts every run
+                    snapshotCount.update { $0 += 1 }
+                    return SparseCoverage(indices: [UInt32(snapshotCount.value)])
                 },
                 withRawCoverage: { _, _ in false },
                 mergeCoverageIntoBitmap: { _, _, _, _ in false },
                 computeSignatureHash: { _ in 0 },
-                withCoveredIndices: { _, body in
-                    coveredIndicesCheckCount.update { $0 += 1 }
-                    // Return unique index each time so corpus accepts it
-                    let index = UInt32(coveredIndicesCheckCount.value)
-                    return [index].withUnsafeBufferPointer { body($0) }
-                }
+                withCoveredIndices: { _, _ in false }
             )
         } operation: {
             await fuzzEngineWithMaxIterations(maxIterations: 10) { (_: Int) in }
         }
 
-        // Reset should be called once per iteration
-        // withCoveredIndices should be called once per iteration (for signature match check)
+        // Reset should be called once per iteration.
+        // Every strategy decision runs over the iteration's sparse snapshot,
+        // so the snapshot is taken once per iteration.
         #expect(resetCount.value == result.stats.totalInputs,
                 "resetCoverage should be called once per iteration: got \(resetCount.value), expected \(result.stats.totalInputs)")
-        #expect(coveredIndicesCheckCount.value == result.stats.totalInputs,
-                "withCoveredIndices should be called once per iteration")
+        #expect(snapshotCount.value == result.stats.totalInputs,
+                "the coverage snapshot should be taken once per iteration")
     }
 
     @Test("FuzzEngine beginMeasurement called only once")
@@ -402,17 +399,16 @@ struct FuzzEngineTests {
                     events.update { $0.append(.reset) }
                 },
                 snapshotCoveredArraysWithContext: { _ in
-                    SparseCoverage(indices: [UInt32(checkCounter.value)])
+                    // The strategy decision reads coverage through the
+                    // per-iteration snapshot — that read IS the coverage check.
+                    events.update { $0.append(.coverageCheck) }
+                    checkCounter.update { $0 += 1 }
+                    return SparseCoverage(indices: [UInt32(checkCounter.value)])
                 },
                 withRawCoverage: { _, _ in false },
                 mergeCoverageIntoBitmap: { _, _, _, _ in false },
                 computeSignatureHash: { _ in 0 },
-                withCoveredIndices: { _, body in
-                    events.update { $0.append(.coverageCheck) }
-                    checkCounter.update { $0 += 1 }
-                    let index = UInt32(checkCounter.value)
-                    return [index].withUnsafeBufferPointer { body($0) }
-                }
+                withCoveredIndices: { _, _ in false }
             )
         } operation: {
             await fuzzEngineWithMaxIterations(maxIterations: 5) { (_: Int) in }

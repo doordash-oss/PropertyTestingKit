@@ -47,16 +47,9 @@ public struct CoverageStrategy<each Input: Codable & Sendable>: Sendable {
 
     /// Builds a fresh evaluator (with fresh per-engine state, e.g. a new trie/index).
     /// Called once per parallel engine so engines never share mutable coverage state.
+    /// Always derived from a `CoverageEngine` — every strategy, built-in or
+    /// custom, goes through the same public `makeEngine` surface.
     let makeEvaluator: @Sendable () -> CoverageEvaluator<repeat each Input>
-
-    /// Internal designated initializer used by the built-in factories.
-    init(
-        builtin: CoverageStrategyBuiltin?,
-        makeEvaluator: @escaping @Sendable () -> CoverageEvaluator<repeat each Input>
-    ) {
-        self.builtin = builtin
-        self.makeEvaluator = makeEvaluator
-    }
 
     /// Build a custom strategy from a high-level decision over public coverage data.
     ///
@@ -131,8 +124,14 @@ public struct CoverageStrategy<each Input: Codable & Sendable>: Sendable {
                 }
                 : nil
             return CoverageEvaluator(setup: setup, evaluate: { input, scheduleBytes, context, coverageClient, corpus in
-                let sparse = (try? coverageClient.snapshotCoveredArraysWithContext(context)) ?? SparseCoverage()
-                return engine.decide(sparse, corpus, input, scheduleBytes)
+                // No coverage, no judgement: a decision over coverage cannot
+                // run when the snapshot is unavailable, so the input is not
+                // interesting. (Synthesizing empty coverage instead would make
+                // a broken measurement look like a novel empty edge set.)
+                guard let sparse = try? coverageClient.snapshotCoveredArraysWithContext(context) else {
+                    return nil
+                }
+                return engine.decide(sparse, corpus, input, scheduleBytes) ? sparse : nil
             })
         }
     }
@@ -170,12 +169,12 @@ public struct CoverageEngine<each Input: Codable & Sendable>: Sendable {
 extension CoverageStrategy {
     /// Signature match strategy: exact edge-set matching via inverted index. Zero false positives.
     public static var signatureMatch: CoverageStrategy<repeat each Input> {
-        CoverageStrategy(builtin: .signatureMatch, makeEvaluator: { CoverageEvaluator(setup: nil, evaluate: makeSignatureMatchStrategy()) })
+        CoverageStrategy(builtin: .signatureMatch, makeEngine: { makeSignatureMatchEngine() })
     }
 
     /// New edge strategy: bitmap merge — any previously-unseen edge is interesting (AFL/libFuzzer).
     public static var newEdge: CoverageStrategy<repeat each Input> {
-        CoverageStrategy(builtin: .newEdge, makeEvaluator: { CoverageEvaluator(setup: nil, evaluate: makeNewEdgeStrategy()) })
+        CoverageStrategy(builtin: .newEdge, makeEngine: { makeNewEdgeEngine() })
     }
 
     /// Path trie strategy: ordered-path tracking (A→B→C differs from A→C→B). The default.
@@ -185,7 +184,7 @@ extension CoverageStrategy {
 
     /// Always-interesting strategy: every input is added. Useful for deterministic tests.
     public static var alwaysInteresting: CoverageStrategy<repeat each Input> {
-        CoverageStrategy(builtin: .alwaysInteresting, makeEvaluator: { CoverageEvaluator(setup: nil, evaluate: makeAlwaysInterestingStrategy()) })
+        CoverageStrategy(builtin: .alwaysInteresting, makeEngine: { makeAlwaysInterestingEngine() })
     }
 
     /// Re-create a built-in strategy at *this* input pack. Used by schedule fuzzing, which
@@ -219,14 +218,16 @@ public typealias CoverageDecision<each Input: Codable & Sendable> = @Sendable (
 
 /// A closure that decides if an input is interesting and adds it to the corpus.
 ///
-/// Returns `true` if the input was interesting and added.
+/// Returns the run's sparse coverage when the input was interesting (the
+/// snapshot already taken for the decision — callers must not re-snapshot),
+/// or `nil` when it wasn't.
 typealias CoverageStrategyFn<each Input: Codable & Sendable> = (
     _ input: (repeat each Input),
     _ scheduleBytes: [UInt8]?,
     _ context: SanCovCounters.MeasurementContext,
     _ coverageClient: CoverageCountersClient,
     _ corpus: Corpus<repeat each Input>
-) -> Bool
+) -> SparseCoverage?
 
 /// Called once with the measurement context before the first test execution.
 /// Strategies that need to attach to the context (e.g., pathTrie) use this
@@ -323,29 +324,24 @@ private struct SignatureIndex {
 
 /// Signature match strategy: exact edge-set matching via inverted index.
 ///
-/// Zero false positives — if the edge set hasn't been seen before, it's interesting.
-private func makeSignatureMatchStrategy<each Input: Codable & Sendable>(
-) -> CoverageStrategyFn<repeat each Input> {
-    var index = SignatureIndex()
+/// Zero false positives — if the edge set hasn't been seen before, it's
+/// interesting. The inverted index is this engine's state, wrapped in a
+/// `SyncBox` because the decision closure is `@Sendable`.
+private func makeSignatureMatchEngine<each Input: Codable & Sendable>(
+) -> CoverageEngine<repeat each Input> {
+    let index = SyncBox(SignatureIndex())
 
-    return { input, scheduleBytes, context, coverageClient, corpus in
-        // Zero-copy access to covered indices buffer
-        let isDuplicate = coverageClient.withCoveredIndices(context) { buffer in
-            index.isDuplicate(coveredIndices: buffer)
+    return CoverageEngine { sparse, corpus, input, scheduleBytes in
+        let isDuplicate = index.update { idx in
+            sparse.indices.withUnsafeBufferPointer { idx.isDuplicate(coveredIndices: $0) }
         }
 
         guard !isDuplicate else {
             return false
         }
 
-        // Novel edge set — snapshot coverage and add to corpus
-        guard let sparse = try? coverageClient.snapshotCoveredArraysWithContext(context) else {
-            return false
-        }
-
-        // Register in the inverted index
-        index.addSignature(Array(sparse.indices))
-
+        // Novel edge set — register it and add to the corpus.
+        index.update { $0.addSignature(sparse.indices) }
         corpus.mergeCoverageAndAdd(input: input, scheduleBytes: scheduleBytes, sparse: sparse)
         return true
     }
@@ -353,29 +349,16 @@ private func makeSignatureMatchStrategy<each Input: Codable & Sendable>(
 
 // MARK: - New Edge Strategy
 
-/// New edge strategy: uses bitmap merge to detect any previously-unseen edge.
-///
-/// Aligns with AFL/libFuzzer model.
-private func makeNewEdgeStrategy<each Input: Codable & Sendable>(
-) -> CoverageStrategyFn<repeat each Input> {
-    return { input, scheduleBytes, context, coverageClient, corpus in
-        // Merge coverage directly into corpus bitmap - returns true if any new edge found
-        let foundNewEdge = coverageClient.mergeCoverageIntoBitmap(
-            context,
-            corpus.bitmapStorage,
-            corpus.bitmapWordCount,
-            true // mergeAll: merge all edges, not just new ones
-        )
-
-        guard foundNewEdge else {
+/// New edge strategy: any previously-unseen edge (per the corpus's global
+/// seen-edges bitmap) is interesting. Aligns with AFL/libFuzzer model.
+private func makeNewEdgeEngine<each Input: Codable & Sendable>(
+) -> CoverageEngine<repeat each Input> {
+    CoverageEngine { sparse, corpus, input, scheduleBytes in
+        guard corpus.mergeCoverage(sparse) else {
             return false
         }
 
-        // New edge found - snapshot for the corpus entry
-        guard let sparse = try? coverageClient.snapshotCoveredArraysWithContext(context) else {
-            return false
-        }
-
+        // mergeCoverage already merged the bitmap — record without re-merging.
         corpus.addEntry(input: input, scheduleBytes: scheduleBytes, sparse: sparse)
         return true
     }
@@ -417,14 +400,10 @@ private func makePathTrieEngine<each Input: Codable & Sendable>(
 // MARK: - Always Interesting Strategy
 
 /// Always interesting strategy: every input is added unconditionally.
-private func makeAlwaysInterestingStrategy<each Input: Codable & Sendable>(
-) -> CoverageStrategyFn<repeat each Input> {
-    return { input, scheduleBytes, context, coverageClient, corpus in
-        if let sparse = try? coverageClient.snapshotCoveredArraysWithContext(context) {
-            corpus.mergeCoverageAndAdd(input: input, scheduleBytes: scheduleBytes, sparse: sparse)
-        } else {
-            corpus.addEntry(input: input, scheduleBytes: scheduleBytes, sparse: SparseCoverage())
-        }
+private func makeAlwaysInterestingEngine<each Input: Codable & Sendable>(
+) -> CoverageEngine<repeat each Input> {
+    CoverageEngine { sparse, corpus, input, scheduleBytes in
+        corpus.mergeCoverageAndAdd(input: input, scheduleBytes: scheduleBytes, sparse: sparse)
         return true
     }
 }
