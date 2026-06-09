@@ -213,7 +213,9 @@ private func measureDeterminism(
         }
     }
 
-    SanCovCounters.endMeasurement(ctx)
+    // Keep the trie alive until endMeasurement severs the recorder —
+    // instrumented edges keep dispatching into it until then.
+    withExtendedLifetime(trie) { SanCovCounters.endMeasurement(ctx) }
     return uniqueCount
 }
 
@@ -422,7 +424,8 @@ struct PathTrieReuseTest {
         print("Run 2: isUnique=\(secondUnique)")
         #expect(!secondUnique, "Second run with identical code should NOT be unique — trie should recognize the path")
 
-        SanCovCounters.endMeasurement(ctx)
+        // Keep the trie alive until endMeasurement severs the recorder.
+        withExtendedLifetime(trie) { SanCovCounters.endMeasurement(ctx) }
     }
 
     @Test("PathTrie identifies repeated scheduled path as non-unique")
@@ -471,7 +474,8 @@ struct PathTrieReuseTest {
             }
         }
 
-        SanCovCounters.endMeasurement(ctx)
+        // Keep the trie alive until endMeasurement severs the recorder.
+        withExtendedLifetime(trie) { SanCovCounters.endMeasurement(ctx) }
 
         #expect(results[0] == true, "First run should be unique")
         #expect(results[1] == false, "Second run should NOT be unique")

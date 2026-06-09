@@ -118,9 +118,20 @@ typedef struct {
     /// Enables O(covered_edges) hash/snapshot instead of O(total_edges) scan.
     uint32_t* covered_indices;
     size_t covered_indices_capacity;
-    /// Optional path trie for the trie edge hook. Set by the strategy, read by the hook.
-    /// NULL when trie tracking is not active.
-    SanCovPathTrie* path_trie;
+    /// Optional per-context edge recorder, stored as pointer bits (the __atomic
+    /// builtins reject a function-pointer _Atomic directly; cast on store/load).
+    /// 0 → the default recorder. Set by the coverage strategy's setup phase via
+    /// sancov_context_set_recorder; read per edge by sancov_dispatch_edge after
+    /// routing resolves this context. Cleared by sancov_end_measurement so
+    /// straggler tasks that retain the context past `end` fall back to the
+    /// default recorder and can never touch freed recorder state.
+    uintptr_t edge_recorder_bits;
+    /// Opaque state for the recorder (e.g. the path trie). Stored/loaded with
+    /// release/acquire ordering paired with edge_recorder_bits: data is written
+    /// before the fn, so a dispatcher that observes the fn observes the data.
+    /// Not owned by the context — the attacher keeps it alive until the
+    /// measurement ends (sancov_end_measurement severs the reference).
+    void* recorder_data;
 } SanCovMeasurementContext;
 
 /// Begin a measurement context for coverage isolation.
@@ -158,14 +169,21 @@ void sancov_remove_task_measurement_for_testing(void);
 
 /// TESTING ONLY: drop one reference from a context (mirrors the internal
 /// refcount release used by sancov_end_measurement), freeing it when the count
-/// reaches zero. Lets a test deterministically free a context that still has a
-/// trie attached, to exercise the context-freed-before-trie teardown ordering.
+/// reaches zero.
 void sancov_release_for_testing(SanCovMeasurementContext* context);
 
-/// TESTING ONLY: read a trie's owner-context back-pointer. Used to assert the
-/// back-pointer is cleared once the owning context is freed, so a later
-/// sancov_trie_destroy cannot write through a dangling owner_context.
-SanCovMeasurementContext* sancov_trie_owner_context_for_testing(const SanCovPathTrie* trie);
+/// TESTING ONLY: take an extra reference on a context, standing in for a
+/// straggler child task. Lets a test read the context's fields after
+/// sancov_end_measurement without use-after-free. Pair with
+/// sancov_release_for_testing.
+void sancov_retain_for_testing(SanCovMeasurementContext* context);
+
+/// TESTING ONLY: read the context's recorder as raw pointer bits (NULL when the
+/// default recorder is in effect).
+void* sancov_context_get_recorder_for_testing(SanCovMeasurementContext* context);
+
+/// TESTING ONLY: read the context's opaque recorder data.
+void* sancov_context_get_recorder_data_for_testing(SanCovMeasurementContext* context);
 
 /// The coverage-inheritance handle for a measurement context: a 64-bit value
 /// that packs the context's generation tag (high 16 bits) with its pointer
@@ -232,27 +250,59 @@ bool sancov_merge_coverage_into_bitmap(
     bool merge_all
 );
 
-/// The default edge recording implementation.
-/// Records a binary hit (first-hit writes 1, subsequent skipped) and
-/// appends to the covered indices buffer.
+// MARK: - Edge Recorders
+//
+// An edge recorder is the *measurement* half of a coverage strategy: what each
+// edge hit writes (map cells, covered_indices, trie advance, ...). The recorder
+// choice lives on the measurement context (edge_recorder_bits), NOT in a
+// process-global — so concurrent tests/engines with different strategies never
+// stomp each other. __sanitizer_cov_trace_pc_guard resolves routing once and
+// dispatches to the context's recorder via sancov_dispatch_edge.
+
+/// An edge recorder. Receives the guard pointer plus the already-resolved
+/// coverage map and measurement context (may be NULL on the no-measurement TLS
+/// fallback path), so recorders never re-run routing on the hot path.
+typedef void (*SanCovEdgeRecorder)(uint32_t* guard, uint8_t* map, SanCovMeasurementContext* context);
+
+/// The default recorder: binary first-hit (atomic 0→1) + covered_indices append.
+void sancov_recorder_default(uint32_t* guard, uint8_t* map, SanCovMeasurementContext* context);
+
+/// Counting recorder: first hit like the default (map 1 + index append),
+/// subsequent hits increment an 8-bit saturating counter up to 255. Enables
+/// hit-count bucketing strategies (libFuzzer-style).
+void sancov_recorder_counting(uint32_t* guard, uint8_t* map, SanCovMeasurementContext* context);
+
+/// Trie recorder: first hit like the default (atomic map 1 + index append, so
+/// sparse snapshots keep working), then advances the path trie carried in the
+/// context's recorder_data. O(1) per hit. Loop-immune: advances on first hit only.
+void sancov_recorder_trie(uint32_t* guard, uint8_t* map, SanCovMeasurementContext* context);
+
+/// Set (or with NULL clear) the context's edge recorder and its opaque state.
+/// Stores data before fn (release) so a dispatcher that observes the fn
+/// (acquire) observes the data; clearing stores fn-then-data so no dispatch
+/// can begin against half-cleared state.
+void sancov_context_set_recorder(SanCovMeasurementContext* context, SanCovEdgeRecorder recorder, void* data);
+
+/// Resolve routing for the current task/thread and run the context's recorder
+/// (default recorder when none is attached or no measurement is active).
+/// Called by __sanitizer_cov_trace_pc_guard for every recorded edge; public so
+/// tests can drive the real dispatch path with synthetic guards.
+void sancov_dispatch_edge(uint32_t* guard);
+
+/// Single-argument convenience: resolve routing, then run the DEFAULT recorder.
+/// Does NOT dispatch to the context's recorder (so it can never recurse).
 void sancov_record_edge(uint32_t *guard);
 
-/// Counting edge recording implementation.
-/// Uses 8-bit saturating counters: first hit records the edge index (same as binary),
-/// subsequent hits increment the counter up to 255. Enables hit-count bucketing
-/// strategies (libFuzzer-style).
+/// Single-argument convenience: resolve routing, then run the counting recorder.
 void sancov_record_edge_counting(uint32_t *guard);
 
-// MARK: - Trie Edge Hook
+// MARK: - Path Trie
 //
 // O(1)-per-hit path tracking using a trie of edge sequences.
 // Each unique execution path (ordered sequence of edge hits) is a path in the trie.
 // On each edge hit, the current pointer advances to the child for that edge index.
 // If no child exists, a new node is created and a "novel" flag is set.
-
-/// Set the path trie on a measurement context.
-/// The trie hook will read from this context's trie pointer.
-void sancov_context_set_trie(SanCovMeasurementContext* context, SanCovPathTrie* trie);
+// Attached to a context as sancov_recorder_trie's recorder_data.
 
 /// Create a new path trie.
 SanCovPathTrie* sancov_trie_create(void);
@@ -277,16 +327,6 @@ void sancov_trie_dump(SanCovPathTrie* trie);
 /// If the child exists, advance. If not, create child and set novel flag.
 /// This is the low-level trie operation — does NOT touch the coverage map.
 void sancov_trie_advance(SanCovPathTrie* trie, uint32_t edge_index);
-
-/// Trie edge hook. Records binary coverage AND advances the trie pointer.
-/// On each edge hit: if child exists, advance; if not, create child and set novel flag.
-/// Both operations are O(1).
-void sancov_record_edge_trie(uint32_t *guard);
-
-/// Install a custom hook function that overrides the default Swift trampoline.
-/// The hook is a C function pointer called on every edge hit.
-/// Pass NULL to restore the default (sancov_swift_trampoline → sancov_record_edge).
-void sancov_install_swift_hook(void (*hook)(uint32_t*));
 
 // MARK: - Schedule-Aware Coverage
 //

@@ -45,14 +45,6 @@ public struct CoverageStrategy<each Input: Codable & Sendable>: Sendable {
     /// The built-in kind, or `nil` for a custom strategy.
     let builtin: CoverageStrategyBuiltin?
 
-    /// The edge hook that records raw coverage for this strategy — the *measurement*
-    /// half (what each edge hit writes), paired with the evaluator's *judgement* half
-    /// (how that recording is read to decide "interesting"). They must agree on the
-    /// recording format, so the strategy owns both. The default, `defaultEdgeHook`,
-    /// records the coverage-map bit, appends to `covered_indices`, and advances any
-    /// trie attached to the context — i.e. it serves every built-in strategy.
-    let edgeHook: EdgeHook
-
     /// Builds a fresh evaluator (with fresh per-engine state, e.g. a new trie/index).
     /// Called once per parallel engine so engines never share mutable coverage state.
     let makeEvaluator: @Sendable () -> CoverageEvaluator<repeat each Input>
@@ -60,11 +52,9 @@ public struct CoverageStrategy<each Input: Codable & Sendable>: Sendable {
     /// Internal designated initializer used by the built-in factories.
     init(
         builtin: CoverageStrategyBuiltin?,
-        edgeHook: EdgeHook = defaultEdgeHook,
         makeEvaluator: @escaping @Sendable () -> CoverageEvaluator<repeat each Input>
     ) {
         self.builtin = builtin
-        self.edgeHook = edgeHook
         self.makeEvaluator = makeEvaluator
     }
 
@@ -75,8 +65,11 @@ public struct CoverageStrategy<each Input: Codable & Sendable>: Sendable {
     /// Return `true` if the input was interesting; add it to the corpus yourself via
     /// `corpus.addEntry(...)` / `corpus.mergeCoverageAndAdd(...)`.
     ///
-    /// - Parameter edgeHook: The recording hook to install while this strategy runs.
-    ///   Defaults to `defaultEdgeHook` (map bit + `covered_indices` + trie advance).
+    /// - Parameter edgeHook: The edge recorder for this strategy — the *measurement*
+    ///   half (what each edge hit writes), paired with `decide`'s *judgement* half.
+    ///   Attached to each engine's measurement context during setup (never installed
+    ///   process-globally, so concurrent tests with different recorders don't
+    ///   interfere). Defaults to `defaultEdgeHook` (map bit + `covered_indices`).
     ///   Pass e.g. `countingEdgeHook` for 8-bit saturating hit counters.
     /// - Note: `decide` is shared across parallel engines. Keep it free of mutable state,
     ///   or use `init(edgeHook:makeDecision:)` to get a fresh decision per engine.
@@ -92,17 +85,24 @@ public struct CoverageStrategy<each Input: Codable & Sendable>: Sendable {
     /// `makeDecision` is called once per parallel engine to produce an isolated decision
     /// closure, mirroring how the built-ins allocate a fresh trie/index per engine.
     ///
-    /// - Parameter edgeHook: The recording hook to install while this strategy runs
-    ///   (default `defaultEdgeHook`).
+    /// - Parameter edgeHook: The edge recorder attached to each engine's measurement
+    ///   context during setup (default `defaultEdgeHook`).
     public init(
         edgeHook: EdgeHook = defaultEdgeHook,
         makeDecision: @escaping @Sendable () -> CoverageDecision<repeat each Input>
     ) {
         self.builtin = nil
-        self.edgeHook = edgeHook
+        // Attach a non-default recorder in setup, like .pathTrie attaches its
+        // trie recorder. Attaching the default is skipped: a cleared field
+        // already means "default recorder".
+        let attachesCustomRecorder =
+            unsafeBitCast(edgeHook, to: UnsafeRawPointer.self) != unsafeBitCast(defaultEdgeHook, to: UnsafeRawPointer.self)
         self.makeEvaluator = {
             let decide = makeDecision()
-            return CoverageEvaluator(setup: nil, evaluate: { input, scheduleBytes, context, coverageClient, corpus in
+            let setup: CoverageStrategySetup? = attachesCustomRecorder
+                ? { context in SanCovCounters.attachRecorder(edgeHook, to: context) }
+                : nil
+            return CoverageEvaluator(setup: setup, evaluate: { input, scheduleBytes, context, coverageClient, corpus in
                 let sparse = (try? coverageClient.snapshotCoveredArraysWithContext(context)) ?? SparseCoverage()
                 return decide(sparse, corpus, input, scheduleBytes)
             })
@@ -330,15 +330,16 @@ private func makeNewEdgeStrategy<each Input: Codable & Sendable>(
 
 /// Path trie strategy: O(1) per-hit path tracking, O(1) uniqueness check.
 ///
-/// Creates a PathTrie, installs the trie edge hook, and checks uniqueness
-/// via `trie.isUniquePath` after each run. The trie is attached to the
-/// measurement context so each parallel engine gets its own trie.
+/// Creates a PathTrie, attaches the trie recorder (`trieEdgeHook`) with the
+/// trie as its per-context data, and checks uniqueness via `trie.isUniquePath`
+/// after each run. The recorder is per-context, so each parallel engine gets
+/// its own trie.
 private func makePathTrieStrategy<each Input: Codable & Sendable>(
 ) -> CoverageEvaluator<repeat each Input> {
     let trie = PathTrie()
 
-    // Attach the trie in setup so iteration 1's edges advance the trie.
-    // Attaching lazily on the first evaluate call misses those edges —
+    // Attach the trie recorder in setup so iteration 1's edges advance the
+    // trie. Attaching lazily on the first evaluate call misses those edges —
     // they've already fired by the time evaluate runs.
     let setup: CoverageStrategySetup = { context in
         SanCovCounters.attachTrie(trie, to: context)

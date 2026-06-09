@@ -201,19 +201,21 @@ struct TrieEdgeHookTests {
 
     // MARK: - Integration with Coverage System
 
-    @Test("Trie advances on first-hit via sancov_record_edge")
-    func trieAdvancesViaRecordEdge() {
+    @Test("Trie advances on first-hit via the dispatched trie recorder")
+    func trieAdvancesViaDispatch() {
         let ctx = sancov_begin_measurement()!
         let trie = PathTrie()
         trie.attach(to: ctx)
-        defer { sancov_end_measurement(ctx) }
+        // Keep the trie alive until end_measurement severs the recorder —
+        // instrumented edges keep dispatching into it until then.
+        defer { withExtendedLifetime(trie) { sancov_end_measurement(ctx) } }
 
         var g0: UInt32 = 0
         var g1: UInt32 = 1
-        sancov_record_edge(&g0)
-        sancov_record_edge(&g1)
+        sancov_dispatch_edge(&g0)
+        sancov_dispatch_edge(&g1)
 
-        // The trie should have been advanced by sancov_record_edge
+        // The trie should have been advanced by the context's trie recorder
         #expect(trie.isUniquePath)
 
         // Also verify coverage map was written

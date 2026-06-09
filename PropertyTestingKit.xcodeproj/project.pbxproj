@@ -128,7 +128,6 @@
 		93B2E23B1BBADC7F513EC48E /* String+MutatorProviding.swift in Sources */ = {isa = PBXBuildFile; fileRef = 87964E15BDAEE902B7B38D6E /* String+MutatorProviding.swift */; };
 		958ADDE946E9CD95EC9CB590 /* StopOnFirstFailurePluginTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F9A2D6D2D787FF8BD1869F6F /* StopOnFirstFailurePluginTests.swift */; };
 		95A92958FD086AD9481BA7F5 /* GenericTimerPoller.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 5AAFECCE3AA98E503089E0B7 /* GenericTimerPoller.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
-		95F6271BEA7CBA9E37FEC6DE /* TrieOwnerContextLifetimeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14FE27FBE9C54752748E68CA /* TrieOwnerContextLifetimeTests.swift */; };
 		995888DFC95845A88625B91A /* FailureInfo.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CF3A4D9068E7899D99B8C01 /* FailureInfo.swift */; };
 		997046243B39595955A73A07 /* CoverageGap.swift in Sources */ = {isa = PBXBuildFile; fileRef = E710A18D4C3A68A36CF37040 /* CoverageGap.swift */; };
 		99BAD167860B31B48CFBB699 /* IssueReporting in Frameworks */ = {isa = PBXBuildFile; productRef = 27C67ABB6F1BBC4F43D83270 /* IssueReporting */; };
@@ -214,6 +213,7 @@
 		EED2A378ADF17C64DC50D6C8 /* ArrayMutators.swift in Sources */ = {isa = PBXBuildFile; fileRef = D82933D55EE528E5E866C257 /* ArrayMutators.swift */; };
 		F175208C6823ED3BC2A92224 /* PropertyTestingKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 2595E9AD80DBFC77F241A7E7 /* PropertyTestingKit.framework */; };
 		F4F5214CABA1CC0BBFD80985 /* IntBoundaryMutator.swift in Sources */ = {isa = PBXBuildFile; fileRef = E88B1563B358C2EE651C20E4 /* IntBoundaryMutator.swift */; };
+		F63BA597B8068668511D3B8E /* ContextRecorderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 257B1E9613373B2BF2E9934E /* ContextRecorderTests.swift */; };
 		F721D9CEB032EC80C6F3DCF3 /* PropertyTestingKit.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 2595E9AD80DBFC77F241A7E7 /* PropertyTestingKit.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		F854221602A30DC642BC0670 /* SimpleCoveragePlateauDetector.swift in Sources */ = {isa = PBXBuildFile; fileRef = 94EB367A0BBDEA977C219F3A /* SimpleCoveragePlateauDetector.swift */; };
 		F90AAA32E041831DC6EEF916 /* CorpusPersistenceClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8FED37BAA14224125F5AD7CA /* CorpusPersistenceClient.swift */; };
@@ -460,7 +460,6 @@
 		13045E2C359AB3AFCD8C3FF9 /* AnyShrinkable.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnyShrinkable.swift; sourceTree = "<group>"; };
 		137A6EE309F1056E3F217831 /* ck_pr.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ck_pr.h; sourceTree = "<group>"; };
 		146B4C7BE9FB4A557084104F /* STADSPlateauDetectorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = STADSPlateauDetectorTests.swift; sourceTree = "<group>"; };
-		14FE27FBE9C54752748E68CA /* TrieOwnerContextLifetimeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrieOwnerContextLifetimeTests.swift; sourceTree = "<group>"; };
 		1733E8C2C5D2FC2BC7394036 /* STADSPlateauDetector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = STADSPlateauDetector.swift; sourceTree = "<group>"; };
 		1B7FA0AAC10E7E2DB5FD6CDE /* TSanTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = TSanTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		1B9764162F7545DC89277868 /* ScheduleControlTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ScheduleControlTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -469,6 +468,7 @@
 		248285724DB5F6586AE70506 /* FuzzStateMachine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FuzzStateMachine.swift; sourceTree = "<group>"; };
 		248B03EF2ED5C071ABDB9FA2 /* ScheduleController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScheduleController.swift; sourceTree = "<group>"; };
 		24A467224B8821AF297298A6 /* EdgeHooks.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EdgeHooks.swift; sourceTree = "<group>"; };
+		257B1E9613373B2BF2E9934E /* ContextRecorderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContextRecorderTests.swift; sourceTree = "<group>"; };
 		2595E9AD80DBFC77F241A7E7 /* PropertyTestingKit.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = PropertyTestingKit.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		25D1A7AC964578057CD75715 /* ScheduleChoiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScheduleChoiceTests.swift; sourceTree = "<group>"; };
 		2A865DFA08A7E0DE3F588EDB /* SanCovCounters.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SanCovCounters.swift; sourceTree = "<group>"; };
@@ -901,10 +901,10 @@
 			isa = PBXGroup;
 			children = (
 				6AD3FFE8C65FFC7DFDAABC32 /* ABAInheritanceHandleTests.swift */,
+				257B1E9613373B2BF2E9934E /* ContextRecorderTests.swift */,
 				F1E97A029218EB361C14F01D /* DWARFSymbolizerTests.swift */,
 				A1F82BCFBF0645CBC9D5149D /* InheritanceTest.swift */,
 				FC7508FECD8A4E1A1528B9E5 /* SignatureHashTests.swift */,
-				14FE27FBE9C54752748E68CA /* TrieOwnerContextLifetimeTests.swift */,
 			);
 			path = Coverage;
 			sourceTree = "<group>";
@@ -1918,6 +1918,7 @@
 				9C2D7BC931DE426492026F2A /* ActiveContextRegistryStressTests.swift in Sources */,
 				B26FDBA1F2F9B6BE116325A2 /* CartesianProductTests.swift in Sources */,
 				2E6CDCBF7B91A07E9402C82F /* ConcurrentFuzzLoadTest.swift in Sources */,
+				F63BA597B8068668511D3B8E /* ContextRecorderTests.swift in Sources */,
 				F9E2D4EA13931A5F9FFC4736 /* CorpusCoordinatorTests.swift in Sources */,
 				808DEDCEF3F72F26E4C97724 /* CorpusTests.swift in Sources */,
 				6EA52009D7E48F7CE7FB0A61 /* CountingEdgeHookTests.swift in Sources */,
@@ -1956,7 +1957,6 @@
 				721B918F0C92F521E1CD4FC3 /* TestCaseShrinkerTests.swift in Sources */,
 				C352BBDC8B2905DE42CD9BDA /* TestHelpers.swift in Sources */,
 				6A0F5613921D49D2A8E2E295 /* TrieEdgeHookTests.swift in Sources */,
-				95F6271BEA7CBA9E37FEC6DE /* TrieOwnerContextLifetimeTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

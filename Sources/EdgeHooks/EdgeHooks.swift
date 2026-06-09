@@ -12,62 +12,74 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//  Uninstrumented Swift target for writing custom edge hooks.
+//  Uninstrumented Swift target for working with edge recorders.
 //
 //  This target is NOT compiled with -sanitize-coverage, so functions here
 //  won't trigger __sanitizer_cov_trace_pc_guard. This makes it safe to
-//  write edge hooks in pure Swift without infinite recursion.
+//  work with edge recorders in pure Swift without infinite recursion.
 //
-//  Users import this module alongside PropertyTestingKit to write custom hooks:
+//  An edge recorder is the *measurement* half of a coverage strategy: what
+//  each edge hit writes. Recorders are attached to a fuzz engine's measurement
+//  context (never installed process-globally), so concurrent tests with
+//  different recorders don't interfere. Attach one via
+//  `CoverageStrategy(edgeHook:)`.
+//
+//  A custom recorder must be a non-capturing `@convention(c)` value — per-run
+//  state travels through the context's recorder data, not closure captures:
 //
 //  ```swift
 //  import PropertyTestingKit
 //  import EdgeHooks
 //  import SanCovHooks
 //
-//  let myHook: EdgeHook = makeEdgeHook { map, edgeIndex, guardCount in
-//      // Custom counting logic
-//      let prev = map[Int(edgeIndex)]
-//      if prev == 0 {
-//          map[Int(edgeIndex)] = 1
-//          sancov_record_first_hit(edgeIndex)
-//      } else if prev < 255 {
-//          map[Int(edgeIndex)] = prev &+ 1
-//      }
+//  let myRecorder: EdgeHook = { guardPtr, map, context in
+//      // Default recording, then custom bookkeeping.
+//      sancov_recorder_default(guardPtr, map, context)
 //  }
 //  ```
 //
 
-import SanCovHooks
+// Re-exported: the EdgeHook typealias references SanCovMeasurementContext, so
+// anyone who can name an EdgeHook needs the C types visible too.
+@_exported import SanCovHooks
 
-/// The type of a coverage edge hook.
+/// The type of an edge recorder.
 ///
-/// A C-compatible function pointer called on every edge hit from
-/// `__sanitizer_cov_trace_pc_guard`. The guard pointer contains the edge index.
+/// A C-compatible function pointer called on every recorded edge from
+/// `__sanitizer_cov_trace_pc_guard` (via `sancov_dispatch_edge`). Receives the
+/// guard pointer (holding the edge index) plus the already-resolved coverage
+/// map and measurement context — `context` is `nil` when no measurement is
+/// active. Recorders never re-run routing on the hot path.
 ///
 /// - Important: This runs millions of times per second. Keep it fast.
-public typealias EdgeHook = @convention(c) (UnsafeMutablePointer<UInt32>?) -> Void
+public typealias EdgeHook = @convention(c) (
+    _ guard: UnsafeMutablePointer<UInt32>?,
+    _ map: UnsafeMutablePointer<UInt8>?,
+    _ context: UnsafeMutablePointer<SanCovMeasurementContext>?
+) -> Void
 
-/// The default edge hook. Binary hit recording (first hit -> 1, subsequent skipped).
-public let defaultEdgeHook: EdgeHook = sancov_record_edge
+/// The default recorder. Binary hit recording (first hit -> 1, subsequent
+/// skipped) plus covered-indices bookkeeping.
+public let defaultEdgeHook: EdgeHook = sancov_recorder_default
 
-/// Counting edge hook. Uses 8-bit saturating counters for hit-count bucketing.
+/// Counting recorder. Uses 8-bit saturating counters for hit-count bucketing.
 /// On first hit records the edge index; subsequent hits increment up to 255.
-public let countingEdgeHook: EdgeHook = sancov_record_edge_counting
+public let countingEdgeHook: EdgeHook = sancov_recorder_counting
 
-/// Trie edge hook. Records binary coverage AND tracks execution paths in a trie.
-/// O(1) per edge hit, O(1) uniqueness check at end of run.
-public let trieEdgeHook: EdgeHook = sancov_record_edge_trie
+/// Trie recorder. Default first-hit recording AND execution-path tracking in
+/// the trie carried as the context's recorder data. O(1) per edge hit, O(1)
+/// uniqueness check at end of run. Attached automatically by the `.pathTrie`
+/// coverage strategy.
+public let trieEdgeHook: EdgeHook = sancov_recorder_trie
 
 // MARK: - Path Trie
 
 /// A trie that stores all previously-seen execution paths (ordered edge sequences).
 ///
-/// Usage with the trie edge hook:
+/// Usage with the trie recorder:
 /// ```swift
 /// let trie = PathTrie()
-/// trie.activate()
-/// SanCovCounters.setEdgeHook(trieEdgeHook)
+/// trie.attach(to: context)   // installs trieEdgeHook with this trie as its data
 ///
 /// // After each test execution:
 /// if trie.isUniquePath {
@@ -91,10 +103,11 @@ public final class PathTrie {
     /// Used by the coverage strategy to attach this trie to a measurement context.
     public var rawPointer: OpaquePointer { raw }
 
-    /// Attach this trie to a measurement context.
-    /// The trie hook will read the trie from the context on every edge hit.
+    /// Attach this trie as the context's edge recorder state: installs the trie
+    /// recorder with this trie as its data. The measurement severs the
+    /// reference at `sancov_end_measurement`; keep this object alive until then.
     public func attach(to context: UnsafeMutablePointer<SanCovMeasurementContext>) {
-        sancov_context_set_trie(context, raw)
+        sancov_context_set_recorder(context, sancov_recorder_trie, UnsafeMutableRawPointer(raw))
     }
 
     /// Whether the current path is unique (not seen before).

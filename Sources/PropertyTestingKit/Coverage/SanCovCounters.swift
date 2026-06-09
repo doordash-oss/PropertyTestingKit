@@ -137,23 +137,31 @@ enum SanCovCounters {
     }
 }
 
-// MARK: - Edge Hook
+// MARK: - Edge Recorders
 
 extension SanCovCounters {
-    /// Install a custom edge hook that will be called on every edge hit.
+    /// Attach an edge recorder (and its opaque state) to a measurement context.
     ///
-    /// The hook receives the guard pointer — dereference it to get the edge index.
-    /// Call `sancov_record_edge(guardPtr)` from your hook for default behavior.
+    /// The recorder runs for every edge that routes to this context — there is
+    /// no process-global hook, so concurrent measurements with different
+    /// recorders don't interfere. `sancov_end_measurement` severs the recorder,
+    /// so stragglers that retain the context fall back to the default recorder.
     ///
-    /// Pass `nil` to restore the default.
-    ///
-    /// - Important: Must be called before fuzzing starts. Not safe to call during fuzzing.
-    public static func setEdgeHook(_ hook: EdgeHook?) {
-        sancov_install_swift_hook(hook ?? defaultEdgeHook)
+    /// - Important: `data` is unowned; the attacher keeps it alive until the
+    ///   measurement ends. Beware ARC: an object is releasable after its last
+    ///   source use, while instrumented edges keep dispatching — hold it with
+    ///   `withExtendedLifetime` through `endMeasurement` (which severs the
+    ///   recorder).
+    static func attachRecorder(
+        _ recorder: EdgeHook,
+        data: UnsafeMutableRawPointer? = nil,
+        to context: MeasurementContext
+    ) {
+        sancov_context_set_recorder(context.rawContext, recorder, data)
     }
 
-    /// Attach a path trie to a measurement context.
-    /// The trie edge hook reads the trie from the context on every edge hit.
+    /// Attach a path trie to a measurement context: installs the trie recorder
+    /// with the trie as its data.
     static func attachTrie(_ trie: PathTrie, to context: MeasurementContext) {
         trie.attach(to: context.rawContext)
     }

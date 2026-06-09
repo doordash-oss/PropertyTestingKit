@@ -27,7 +27,11 @@ struct PathTrieStrategyTests {
     func firstIterationTriePathNotEmpty() {
         let strategy: CoverageEvaluator<Int> = CoverageStrategy<Int>.pathTrie.makeEvaluator()
         let context = SanCovCounters.beginMeasurement()
-        defer { SanCovCounters.endMeasurement(context) }
+        // The evaluator owns the strategy's trie, and the attached trie recorder
+        // keeps dispatching until endMeasurement severs it — keep the evaluator
+        // alive through endMeasurement (ARC would otherwise release it after
+        // its last use, leaving the recorder pointed at a freed trie).
+        defer { withExtendedLifetime(strategy) { SanCovCounters.endMeasurement(context) } }
         let coverageClient = CoverageCountersClient.liveValue
         let corpus = Corpus<Int>()
 
@@ -38,9 +42,9 @@ struct PathTrieStrategyTests {
         var g0: UInt32 = 0
         var g1: UInt32 = 1
         var g2: UInt32 = 2
-        sancov_record_edge(&g0)
-        sancov_record_edge(&g1)
-        sancov_record_edge(&g2)
+        sancov_dispatch_edge(&g0)
+        sancov_dispatch_edge(&g1)
+        sancov_dispatch_edge(&g2)
 
         // Evaluate the strategy
         let didAdd = strategy.evaluate(42, nil, context, coverageClient, corpus)
@@ -52,9 +56,9 @@ struct PathTrieStrategyTests {
         // If the trie recorded the path on iteration 1, this is not novel.
         coverageClient.resetCoverage(context)
         g0 = 0; g1 = 1; g2 = 2
-        sancov_record_edge(&g0)
-        sancov_record_edge(&g1)
-        sancov_record_edge(&g2)
+        sancov_dispatch_edge(&g0)
+        sancov_dispatch_edge(&g1)
+        sancov_dispatch_edge(&g2)
 
         let didAddSecond = strategy.evaluate(42, nil, context, coverageClient, corpus)
 

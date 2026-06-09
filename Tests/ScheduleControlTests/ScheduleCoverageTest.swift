@@ -155,7 +155,9 @@ struct ScheduleCoverageTest {
         let isNovel = trie.isUniquePath
         print("After branchingCode(111): isUniquePath=\(isNovel)")
 
-        SanCovCounters.endMeasurement(ctx)
+        // Keep the trie alive until endMeasurement severs the recorder —
+        // instrumented edges keep dispatching into it until then.
+        withExtendedLifetime(trie) { SanCovCounters.endMeasurement(ctx) }
 
         // The trie must have advanced from root — g_target_context routes edges
         // to the measurement context, and the trie hook records them.

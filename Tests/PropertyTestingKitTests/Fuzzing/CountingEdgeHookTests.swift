@@ -30,7 +30,7 @@ struct CountingEdgeHookTests {
         defer { sancov_end_measurement(ctx) }
 
         var guardVal: UInt32 = 0
-        countingEdgeHook(&guardVal)
+        sancov_record_edge_counting(&guardVal)
 
         let map = ctx.pointee.coverage_map!
         #expect(map[0] == 1)
@@ -43,7 +43,7 @@ struct CountingEdgeHookTests {
 
         var guardVal: UInt32 = 0
         for _ in 0..<10 {
-            countingEdgeHook(&guardVal)
+            sancov_record_edge_counting(&guardVal)
         }
 
         let map = ctx.pointee.coverage_map!
@@ -57,7 +57,7 @@ struct CountingEdgeHookTests {
 
         var guardVal: UInt32 = 0
         for _ in 0..<300 {
-            countingEdgeHook(&guardVal)
+            sancov_record_edge_counting(&guardVal)
         }
 
         let map = ctx.pointee.coverage_map!
@@ -73,10 +73,10 @@ struct CountingEdgeHookTests {
         var guard1: UInt32 = 1
 
         for _ in 0..<5 {
-            countingEdgeHook(&guard0)
+            sancov_record_edge_counting(&guard0)
         }
         for _ in 0..<20 {
-            countingEdgeHook(&guard1)
+            sancov_record_edge_counting(&guard1)
         }
 
         let map = ctx.pointee.coverage_map!
@@ -92,11 +92,11 @@ struct CountingEdgeHookTests {
         var guard3: UInt32 = 3
         var guard7: UInt32 = 7
 
-        countingEdgeHook(&guard3)
-        countingEdgeHook(&guard7)
+        sancov_record_edge_counting(&guard3)
+        sancov_record_edge_counting(&guard7)
         // Subsequent hits should NOT add more indices
-        countingEdgeHook(&guard3)
-        countingEdgeHook(&guard3)
+        sancov_record_edge_counting(&guard3)
+        sancov_record_edge_counting(&guard3)
 
         #expect(ctx.pointee.covered_count == 2)
         #expect(ctx.pointee.covered_indices[0] == 3)
@@ -110,7 +110,7 @@ struct CountingEdgeHookTests {
 
         var guardVal: UInt32 = 0
         for _ in 0..<50 {
-            countingEdgeHook(&guardVal)
+            sancov_record_edge_counting(&guardVal)
         }
 
         #expect(ctx.pointee.coverage_map![0] == 50)
@@ -128,14 +128,14 @@ struct CountingEdgeHookTests {
 
         var guardVal: UInt32 = 0
         for _ in 0..<10 {
-            countingEdgeHook(&guardVal)
+            sancov_record_edge_counting(&guardVal)
         }
         #expect(ctx.pointee.coverage_map![0] == 10)
 
         sancov_reset_coverage(ctx)
 
         for _ in 0..<100 {
-            countingEdgeHook(&guardVal)
+            sancov_record_edge_counting(&guardVal)
         }
         // Map should reflect only the second batch
         #expect(ctx.pointee.coverage_map![0] == 100)
@@ -148,7 +148,7 @@ struct CountingEdgeHookTests {
 
         var guardVal: UInt32 = 0
         for _ in 0..<50 {
-            defaultEdgeHook(&guardVal)
+            sancov_record_edge(&guardVal)
         }
 
         let map = ctx.pointee.coverage_map!
