@@ -74,6 +74,34 @@ import PropertyTestingKit
 **On subsequent runs:**
 - Replays saved corpus to check for crashes (regression testing)
 
+### Coverage strategies
+
+`fuzz(coverageStrategy:)` decides what makes an input *interesting* — i.e. worth
+saving to the corpus and mutating further. Four strategies are available, from
+finest-grained to coarsest:
+
+| `CoverageStrategyKind` | An input is interesting when… | Notes |
+|------|----------|-------|
+| `.pathTrie` *(default)* | its full **ordered execution path** is new | Tracks each unique edge *sequence* in a trie, so `A→B→C` differs from `A→C→B`. O(1) per edge hit; installs its edge hook automatically. The most sensitive — separates inputs that hit the same edges in a different order. |
+| `.signatureMatch` | the **exact set** of covered edges is new | Inverted-index match with no hashing, so no false positives. Order-insensitive. |
+| `.newEdge` | **any** previously-unseen edge is hit | AFL/libFuzzer-style bitmap merge. Coarsest — fastest, smallest corpus. |
+| `.alwaysInteresting` | always | Every input is saved unconditionally. For tests that need deterministic corpus growth independent of coverage. |
+
+```swift
+@Test func testParser() async throws {
+    // AFL-style: keep an input only when it reaches a brand-new edge
+    try await fuzz(coverageStrategy: .newEdge) { (input: String) in
+        parse(input)
+    }
+}
+```
+
+Finer strategies (`.pathTrie`, `.signatureMatch`) keep more inputs and explore
+harder; `.newEdge` keeps the fewest and runs fastest. Reach for `.pathTrie` when
+*order* matters — most notably schedule fuzzing (see below), where the same
+operations interleaving differently is exactly the bug you're hunting — and
+`.newEdge` when you want a small corpus and maximum throughput.
+
 ### Corpus Storage
 
 The corpus is saved alongside your test files:
