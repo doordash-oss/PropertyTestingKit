@@ -73,4 +73,34 @@ struct FuzzStatsAccountingTests {
         #expect(result.stats.mutations > result.stats.generations,
                 "mutations(\(result.stats.mutations)) should dominate generations(\(result.stats.generations)) for a trivial body")
     }
+
+    @Test("should_hold_accounting_identity_across_parallel_engines")
+    func accountingIdentityHoldsInParallel() async throws {
+        let result = try await fuzz(
+            duration: .seconds(0.2),
+            persistence: .ephemeral,
+            parallelism: 4
+        ) { (_: Int) in }
+
+        #expect(
+            result.stats.seeds + result.stats.mutations + result.stats.generations
+                == result.stats.totalInputs,
+            "merged stats must keep the identity: seeds(\(result.stats.seeds)) + mutations(\(result.stats.mutations)) + generations(\(result.stats.generations)) != totalInputs(\(result.stats.totalInputs))"
+        )
+    }
+
+    @Test("should_hold_accounting_identity_under_schedule_fuzzing")
+    func accountingIdentityHoldsWithScheduleFuzzing() async throws {
+        let result = try await fuzz(
+            duration: .seconds(0.2),
+            persistence: .ephemeral,
+            scheduleFuzzing: true
+        ) { (_: Int) in }
+
+        #expect(
+            result.stats.seeds + result.stats.mutations + result.stats.generations
+                == result.stats.totalInputs,
+            "scheduled stats must keep the identity: seeds(\(result.stats.seeds)) + mutations(\(result.stats.mutations)) + generations(\(result.stats.generations)) != totalInputs(\(result.stats.totalInputs))"
+        )
+    }
 }
