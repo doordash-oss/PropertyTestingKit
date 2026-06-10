@@ -45,7 +45,7 @@ struct FlattenedScheduleTests {
         let extended = FuzzResult<[UInt8], Int, String>(
             corpus: CorpusSnapshot(entries: [entry], coveredIndices: [1, 2]),
             failures: [(input: ([5, 6], 7, "bye"), error: PeelTestError(), timeElapsed: 0.25, scheduleBytes: nil)],
-            stats: FuzzStats(totalInputs: 1, mutations: 0, generations: 1, duration: 0.5),
+            stats: FuzzStats(totalInputs: 1, seeds: 0, mutations: 0, generations: 1, duration: 0.5),
             wasRegression: false
         )
 

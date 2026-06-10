@@ -413,6 +413,9 @@ private func reportFuzzResult<each Input: Codable & Sendable>(
         // Add context about the fuzz run
         message += "\n\nFuzz run stats:"
         message += "\n  - Total inputs tested: \(result.stats.totalInputs)"
+        message += "\n  - Seeds run: \(result.stats.seeds)"
+        message += "\n  - Mutants run: \(result.stats.mutations)"
+        message += "\n  - Fresh generations run: \(result.stats.generations)"
         message += "\n  - Stop reason: \(result.stats.stopReason.rawValue)"
 
         Issue.record(

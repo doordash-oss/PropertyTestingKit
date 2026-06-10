@@ -167,6 +167,7 @@ final class FuzzEngine<each Input: Codable & Sendable>: @unchecked Sendable {
                 failures: [],
                 stats: FuzzStats(
                     totalInputs: 0,
+                    seeds: 0,
                     mutations: 0,
                     generations: 0,
                     duration: 0,

@@ -139,7 +139,7 @@ struct FuzzAPITests {
             input: "badInput",
             underlyingError: NSError(domain: "test", code: 1),
             timeElapsed: 0,
-            stats: FuzzStats(totalInputs: 0, mutations: 0, generations: 0, duration: 0)
+            stats: FuzzStats(totalInputs: 0, seeds: 0, mutations: 0, generations: 0, duration: 0)
         )
         #expect(testFailedError.errorDescription?.contains("badInput") == true)
         #expect(testFailedError.errorDescription?.contains("Fuzz test failed") == true)

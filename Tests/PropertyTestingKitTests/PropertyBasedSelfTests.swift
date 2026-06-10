@@ -343,7 +343,7 @@ struct FuzzErrorTests {
 
     @Test("FuzzError.testFailed has correct description")
     func testTestFailedDescription() async throws {
-        let error = FuzzError.testFailed(input: "test input", underlyingError: NSError(domain: "test", code: 1), timeElapsed: 0, stats: FuzzStats(totalInputs: 0, mutations: 0, generations: 0, duration: 0))
+        let error = FuzzError.testFailed(input: "test input", underlyingError: NSError(domain: "test", code: 1), timeElapsed: 0, stats: FuzzStats(totalInputs: 0, seeds: 0, mutations: 0, generations: 0, duration: 0))
         let desc = error.errorDescription ?? ""
         #expect(desc.contains("test input"))
         #expect(desc.contains("Fuzz test failed"))

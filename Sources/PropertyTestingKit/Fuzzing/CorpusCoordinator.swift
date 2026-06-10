@@ -464,6 +464,7 @@ private func mergeResults<each Input: Codable & Sendable>(
 
     // Merge stats: sum counts, take max duration
     let totalInputs = results.reduce(0) { $0 + $1.stats.totalInputs }
+    let totalSeeds = results.reduce(0) { $0 + $1.stats.seeds }
     let totalMutations = results.reduce(0) { $0 + $1.stats.mutations }
     let totalGenerations = results.reduce(0) { $0 + $1.stats.generations }
     let maxDuration = results.map { $0.stats.duration }.max() ?? 0
@@ -478,6 +479,7 @@ private func mergeResults<each Input: Codable & Sendable>(
 
     let mergedStats = FuzzStats(
         totalInputs: totalInputs,
+        seeds: totalSeeds,
         mutations: totalMutations,
         generations: totalGenerations,
         duration: maxDuration,

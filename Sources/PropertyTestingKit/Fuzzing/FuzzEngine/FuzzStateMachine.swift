@@ -54,7 +54,12 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
     /// is wrapped in `ScheduleController.run` to fuzz task interleaving.
     private let scheduleBytesExtractor: @Sendable ((repeat each Input)) -> [UInt8]?
 
-    private var mutationsCount: Int = 0
+    /// Seed inputs executed. Seeds are enqueued before the loop starts and the
+    /// queue is FIFO with mutations appended behind them, so the first
+    /// `seeds.count` queue pops are exactly the seeds.
+    private var seedsRunCount: Int = 0
+    /// Mutated inputs executed (queue pops after the seeds drained).
+    private var mutantsRunCount: Int = 0
 
     /// The coverage strategy that determines interestingness.
     private let coverageStrategy: CoverageStrategy<repeat each Input>
@@ -189,6 +194,11 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
                     if !pendingInputs.isEmpty {
                         input = pendingInputs.removeFirstUnchecked()
                         fromMutationQueue = true
+                        if seedsRunCount < seeds.count {
+                            seedsRunCount += 1
+                        } else {
+                            mutantsRunCount += 1
+                        }
                     } else {
                         // Generate directly - no closure indirection
                         input = (repeat (each mutators).generate(&rng))
@@ -296,7 +306,8 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
 
         let stats = FuzzStats(
             totalInputs: iterationCount,
-            mutations: mutationsCount,
+            seeds: seedsRunCount,
+            mutations: mutantsRunCount,
             generations: generatedCount,
             duration: startTime.distance(to: dateClient.now()),
             stopReason: haltReason ?? .timeLimit,
@@ -379,7 +390,6 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
             // part of `generateMutations`, so schedule mutation is unified with
             // input mutation — no separate schedule-byte pass.
             pendingInputs.append(contentsOf: generateMutations(mutationAction.input))
-            mutationsCount += 1
 
         case .submitToCorpus(let corpusAction):
             addToCorpus(
