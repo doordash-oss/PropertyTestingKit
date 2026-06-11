@@ -23,12 +23,11 @@
 //  context (never installed process-globally), so concurrent tests with
 //  different recorders don't interfere.
 //
-//  This is the LOW-LEVEL surface: a raw `@convention(c)` recorder that
-//  replaces the map-write semantics wholesale (e.g. `countingEdgeHook`'s 8-bit
-//  saturating counters). Strategy-level per-edge work — "call my Swift
-//  function when an edge is hit" — does not live here: pass a closure to
-//  `CoverageStrategy(onEdge:)` in PropertyTestingKit, which may capture state
-//  freely (the `.pathTrie` strategy captures its trie that way).
+//  This is the LOW-LEVEL surface: a raw `@convention(c)` recorder replaces
+//  the map-write semantics wholesale. Strategy-level per-edge work — "call my
+//  Swift function when an edge is hit" — does not live here: pass a closure
+//  to `CoverageStrategy(onEdge:)` in PropertyTestingKit, which may capture
+//  state freely (the `.pathTrie` strategy captures its trie that way).
 //
 //  The recorder surface (and the raw SanCovHooks C API beneath it) is
 //  `package`-scoped: it names C types, has no public attach path, and
@@ -54,14 +53,6 @@ package typealias EdgeHook = @convention(c) (
     _ map: UnsafeMutablePointer<UInt8>?,
     _ context: UnsafeMutablePointer<SanCovMeasurementContext>?
 ) -> Void
-
-/// The default recorder. Binary hit recording (first hit -> 1, subsequent
-/// skipped) plus covered-indices bookkeeping.
-package let defaultEdgeHook: EdgeHook = sancov_recorder_default
-
-/// Counting recorder. Uses 8-bit saturating counters for hit-count bucketing.
-/// On first hit records the edge index; subsequent hits increment up to 255.
-package let countingEdgeHook: EdgeHook = sancov_recorder_counting
 
 // MARK: - Path Trie
 

@@ -1384,7 +1384,7 @@ static uint8_t* get_current_coverage_map(void) {
     tls_cached_task = task;
     tls_cached_task_map = tls_coverage_map;
     tls_cached_generation = resolve_epoch;
-    // Clear stale measurement context so sancov_record_edge doesn't append
+    // Clear stale measurement context so dispatched edges don't append
     // edges from this task into another test's measurement context.
     set_tls_measurement_context(NULL);
     return tls_coverage_map;
@@ -1489,34 +1489,6 @@ bool sancov_observer_enter(void) {
 
 void sancov_observer_exit(void) {
     tls_in_edge_observer = false;
-}
-
-void sancov_recorder_counting(uint32_t* guard, uint8_t* map, SanCovMeasurementContext* ctx) {
-    if (!map || *guard >= g_guard_count) return;
-    if (!record_first_hit(*guard, map, ctx)) {
-        // Already first-hit. Saturating 8-bit increment for counting mode.
-        // Relaxed because exact count per iteration isn't required for
-        // bucketing — any count >= 1 means "hit" and saturates at 255.
-        uint8_t cur = __atomic_load_n(&map[*guard], __ATOMIC_RELAXED);
-        while (cur < 255) {
-            if (__atomic_compare_exchange_n(&map[*guard], &cur, (uint8_t)(cur + 1),
-                                             false, __ATOMIC_RELAXED, __ATOMIC_RELAXED)) {
-                break;
-            }
-        }
-    }
-}
-
-__attribute__((noinline))
-void sancov_record_edge(uint32_t *guard) {
-    uint8_t* map = get_current_coverage_map();
-    sancov_recorder_default(guard, map, tls_cached_measurement_context);
-}
-
-__attribute__((noinline))
-void sancov_record_edge_counting(uint32_t *guard) {
-    uint8_t* map = get_current_coverage_map();
-    sancov_recorder_counting(guard, map, tls_cached_measurement_context);
 }
 
 // MARK: - Schedule-Aware Target Context

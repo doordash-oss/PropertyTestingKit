@@ -103,7 +103,6 @@
 		6A0F5613921D49D2A8E2E295 /* TrieEdgeHookTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B6528B38B2BEED018604E6FC /* TrieEdgeHookTests.swift */; };
 		6C92AFA4A8A89008D14C5645 /* SanCovIsolationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 34658F2420967EA35E38058D /* SanCovIsolationTests.swift */; };
 		6CD0FA53019EDA7916CADDFB /* InterleavingContrastTest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5AB4321B41C4D8E4DA5D3BA0 /* InterleavingContrastTest.swift */; };
-		6EA52009D7E48F7CE7FB0A61 /* CountingEdgeHookTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C464278A88D0764906067B1 /* CountingEdgeHookTests.swift */; };
 		6FC71167936E2046141EAA6B /* DWARFSymbolizerHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = A179A4CAD0B9C0FC0DF76A85 /* DWARFSymbolizerHelper.swift */; };
 		7087CB0E363CDDB5E8D0B815 /* InheritanceTest.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1F82BCFBF0645CBC9D5149D /* InheritanceTest.swift */; };
 		7177FDDC6C703BE6ED195B56 /* PhoneNumberMutator.swift in Sources */ = {isa = PBXBuildFile; fileRef = F13B7E4AC8104D85F98B8418 /* PhoneNumberMutator.swift */; };
@@ -552,7 +551,6 @@
 		7ACFE600DD67A8E2CC79D829 /* ck_pr.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ck_pr.h; sourceTree = "<group>"; };
 		7C0EB12824A02A80F8D4EB77 /* BoolMutators.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BoolMutators.swift; sourceTree = "<group>"; };
 		7C237EB63D16AB69083B9010 /* ck_limits.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ck_limits.h; sourceTree = "<group>"; };
-		7C464278A88D0764906067B1 /* CountingEdgeHookTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CountingEdgeHookTests.swift; sourceTree = "<group>"; };
 		7C98CB65B3ADE29BB300C7EA /* ShrinkStats.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShrinkStats.swift; sourceTree = "<group>"; };
 		7DA5B74380237260F7E42D71 /* TestCaseShrinker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TestCaseShrinker.swift; sourceTree = "<group>"; };
 		801978DFD141E3190DC8219D /* DWARFSourceLocation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DWARFSourceLocation.swift; sourceTree = "<group>"; };
@@ -1411,7 +1409,6 @@
 				00EBA13944AF0B757005638A /* ConcurrentFuzzLoadTest.swift */,
 				CB81D025D3C307D01FD829DB /* CorpusCoordinatorTests.swift */,
 				9E53225F99BA35278DB06DA6 /* CorpusTests.swift */,
-				7C464278A88D0764906067B1 /* CountingEdgeHookTests.swift */,
 				9791710C8985E9069A0AAEA9 /* CoverageEngineTests.swift */,
 				A5A7DD272E538B8E8CFE5C75 /* CoverageGapDetectorTests.swift */,
 				3DCC188A42F8F55099B6EC2C /* CoverageGapPluginTests.swift */,
@@ -1953,7 +1950,6 @@
 				F63BA597B8068668511D3B8E /* ContextRecorderTests.swift in Sources */,
 				F9E2D4EA13931A5F9FFC4736 /* CorpusCoordinatorTests.swift in Sources */,
 				808DEDCEF3F72F26E4C97724 /* CorpusTests.swift in Sources */,
-				6EA52009D7E48F7CE7FB0A61 /* CountingEdgeHookTests.swift in Sources */,
 				ADF49AE0B09D08080E515387 /* CoverageCountersTests.swift in Sources */,
 				0AF273C35C44F4B57C9AE477 /* CoverageEngineTests.swift in Sources */,
 				0AEA251D3FF9432F04D9FC04 /* CoverageGapDetectorTests.swift in Sources */,

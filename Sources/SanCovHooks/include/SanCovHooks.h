@@ -288,11 +288,6 @@ typedef void (*SanCovRecorderDataFn)(void* data);
 /// The default recorder: binary first-hit (atomic 0→1) + covered_indices append.
 void sancov_recorder_default(uint32_t* guard, uint8_t* map, SanCovMeasurementContext* context);
 
-/// Counting recorder: first hit like the default (map 1 + index append),
-/// subsequent hits increment an 8-bit saturating counter up to 255. Enables
-/// hit-count bucketing strategies (libFuzzer-style).
-void sancov_recorder_counting(uint32_t* guard, uint8_t* map, SanCovMeasurementContext* context);
-
 /// Set (or with NULL clear) the context's edge recorder, its opaque state, and
 /// the state's lifecycle hooks. Stores data/hooks before fn (release) so a
 /// dispatcher that observes the fn (acquire) observes everything it needs.
@@ -351,13 +346,6 @@ void sancov_observer_exit(void);
 /// Called by __sanitizer_cov_trace_pc_guard for every recorded edge; public so
 /// tests can drive the real dispatch path with synthetic guards.
 void sancov_dispatch_edge(uint32_t* guard);
-
-/// Single-argument convenience: resolve routing, then run the DEFAULT recorder.
-/// Does NOT dispatch to the context's recorder (so it can never recurse).
-void sancov_record_edge(uint32_t *guard);
-
-/// Single-argument convenience: resolve routing, then run the counting recorder.
-void sancov_record_edge_counting(uint32_t *guard);
 
 // MARK: - Schedule-Aware Coverage
 //

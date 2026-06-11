@@ -49,8 +49,8 @@ struct ContextRecorderTests {
 
         var datum: Int = 0
         withUnsafeMutablePointer(to: &datum) { data in
-            sancov_context_set_recorder(ctx, countingEdgeHook, UnsafeMutableRawPointer(data), nil, nil)
-            #expect(sancov_context_get_recorder_for_testing(ctx) == recorderBits(countingEdgeHook))
+            sancov_context_set_recorder(ctx, sancov_recorder_default, UnsafeMutableRawPointer(data), nil, nil)
+            #expect(sancov_context_get_recorder_for_testing(ctx) == recorderBits(sancov_recorder_default))
             #expect(sancov_context_get_recorder_data(ctx) == UnsafeMutableRawPointer(data))
 
             // Clearing: NULL recorder resets both fields.
@@ -84,26 +84,8 @@ struct ContextRecorderTests {
     }
 
     // MARK: - Dispatch routes to the attached recorder
-
-    @Test("Dispatch runs the context's counting recorder, not the default")
-    func dispatchUsesAttachedCountingRecorder() {
-        let context = SanCovCounters.beginMeasurement()
-        defer { SanCovCounters.endMeasurement(context) }
-
-        SanCovCounters.attachRecorder(countingEdgeHook, to: context)
-
-        // Fire the same synthetic guard twice through the dispatch entry.
-        // The default recorder is binary (a cell never exceeds 1); only the
-        // counting recorder can take it to >= 2. Real instrumented edges may
-        // add one first-hit to this cell, so assert >= 2, not == 2.
-        var g7: UInt32 = 7
-        sancov_dispatch_edge(&g7)
-        sancov_dispatch_edge(&g7)
-
-        let cell = context.rawContext.pointee.coverage_map?[7]
-        #expect((cell ?? 0) >= 2,
-                "Counting recorder should have incremented past the binary 1")
-    }
+    // (Pinned via the observer tests below: an attached observer recorder
+    // receiving dispatched edges IS dispatch-to-attached-recorder routing.)
 
     @Test("Dispatch with no recorder attached uses the binary default")
     func dispatchDefaultsToBinaryRecording() {

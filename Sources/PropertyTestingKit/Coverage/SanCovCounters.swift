@@ -141,34 +141,6 @@ enum SanCovCounters {
     }
 }
 
-// MARK: - Edge Recorders
-
-extension SanCovCounters {
-    /// Attach a raw C edge recorder (and its opaque state) to a measurement
-    /// context. Low-level seam for recorders with bespoke map semantics (e.g.
-    /// `countingEdgeHook`); strategy-level per-edge work uses `attachObserver`
-    /// instead, which gives the context shared ownership of its state.
-    ///
-    /// The recorder runs for every edge that routes to this context — there is
-    /// no process-global hook, so concurrent measurements with different
-    /// recorders don't interfere. `sancov_end_measurement` severs the recorder,
-    /// so stragglers that retain the context fall back to the default recorder.
-    ///
-    /// - Important: this raw form attaches no release hook, so the context
-    ///   takes NO ownership of `data`: the caller must keep it alive until the
-    ///   context's LAST reference drops — which is later than
-    ///   `endMeasurement` (stragglers' TLS caches hold references, and
-    ///   `recorder_data` stays set for them). For co-owned Swift state use
-    ///   `attachObserver`, which transfers ownership via a release hook.
-    static func attachRecorder(
-        _ recorder: EdgeHook,
-        data: UnsafeMutableRawPointer? = nil,
-        to context: MeasurementContext
-    ) {
-        sancov_context_set_recorder(context.rawContext, recorder, data, nil, nil)
-    }
-}
-
 // MARK: - Source Location Mapping
 
 // Swift runtime demangling function
