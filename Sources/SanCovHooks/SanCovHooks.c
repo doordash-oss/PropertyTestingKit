@@ -621,6 +621,10 @@ static void ctx_retain(SanCovMeasurementContext* ctx) {
     }
 }
 
+// Defined below with the recorder API; ONE release path so a future fix to
+// the data-release semantics cannot land in one copy and miss the other.
+static void release_recorder_data(SanCovMeasurementContext* context);
+
 // Release a measurement context (decrement refcount, free if zero)
 static void ctx_release(SanCovMeasurementContext* ctx) {
     if (ctx) {
@@ -630,12 +634,7 @@ static void ctx_release(SanCovMeasurementContext* ctx) {
             // recorder data now: the fn was severed at end_measurement, and
             // with the last reference gone no thread can still dispatch into
             // this context, so releasing the data here can race nothing.
-            SanCovRecorderDataFn release =
-                (SanCovRecorderDataFn)__atomic_load_n(&ctx->recorder_release_bits, __ATOMIC_ACQUIRE);
-            void* data = __atomic_load_n(&ctx->recorder_data, __ATOMIC_ACQUIRE);
-            if (release && data) {
-                release(data);
-            }
+            release_recorder_data(ctx);
             cleanup_task_map(ctx);
             free(ctx->covered_indices);
             free(ctx);
@@ -700,6 +699,15 @@ static SanCovMeasurementContext* retain_inherited_if_valid(uint64_t handle) {
     return ctx;
 }
 
+// xmalloc does not zero: every freshly allocated context must start with the
+// recorder fields cleared (default recorder, no data, no lifecycle hooks).
+static void init_recorder_fields(SanCovMeasurementContext* ctx) {
+    ctx->edge_recorder_bits = 0;
+    ctx->recorder_data = NULL;
+    ctx->recorder_reset_bits = 0;
+    ctx->recorder_release_bits = 0;
+}
+
 SanCovMeasurementContext* sancov_begin_measurement(void) {
     SanCovMeasurementContext* ctx = (SanCovMeasurementContext*)xmalloc(sizeof(SanCovMeasurementContext));
     ctx->coverage_map = NULL;
@@ -714,11 +722,7 @@ SanCovMeasurementContext* sancov_begin_measurement(void) {
     size_t initial_cap = g_guard_count > 64 ? g_guard_count : 64;
     ctx->covered_indices_capacity = initial_cap;
     ctx->covered_indices = (uint32_t*)xmalloc(ctx->covered_indices_capacity * sizeof(uint32_t));
-    // xmalloc does not zero: the recorder fields must start cleared (default recorder).
-    ctx->edge_recorder_bits = 0;
-    ctx->recorder_data = NULL;
-    ctx->recorder_reset_bits = 0;
-    ctx->recorder_release_bits = 0;
+    init_recorder_fields(ctx);
     atomic_init(&ctx->refcount, 1);  // Start with refcount of 1 (owner reference)
 
     // Associate this measurement context with the current task
@@ -757,10 +761,7 @@ SanCovMeasurementContext* sancov_create_dummy_context(void) {
     ctx->generation = (uint16_t)atomic_fetch_add_explicit(&g_next_generation, 1, memory_order_relaxed);
     ctx->covered_indices_capacity = 0;
     ctx->covered_indices = NULL;
-    ctx->edge_recorder_bits = 0;
-    ctx->recorder_data = NULL;
-    ctx->recorder_reset_bits = 0;
-    ctx->recorder_release_bits = 0;
+    init_recorder_fields(ctx);
     atomic_init(&ctx->refcount, 1);
     return ctx;
 }
