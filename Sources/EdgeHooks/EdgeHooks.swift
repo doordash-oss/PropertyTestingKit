@@ -156,26 +156,4 @@ public final class PathTrie: @unchecked Sendable {
         current = root
         isNovel = false
     }
-
-    /// Print all terminal paths in the trie to stderr.
-    public func dump() {
-        lock.lock()
-        defer { lock.unlock() }
-        var path: [UInt32] = []
-        var count = 0
-        func walk(_ node: Node) {
-            if node.isTerminal {
-                count += 1
-                FileHandle.standardError.write(Data("[trie] \(path.map(String.init).joined(separator: " -> "))\n".utf8))
-            }
-            for (edge, child) in node.children.sorted(by: { $0.key < $1.key }) {
-                path.append(edge)
-                walk(child)
-                path.removeLast()
-            }
-        }
-        FileHandle.standardError.write(Data("[trie] dumping all terminal paths:\n".utf8))
-        walk(root)
-        FileHandle.standardError.write(Data("[trie] total terminal paths: \(count)\n".utf8))
-    }
 }
