@@ -256,6 +256,58 @@ struct ContextRecorderTests {
                 "The final context release must release the observer")
     }
 
+    // MARK: - Target-context interludes (schedule fuzzing's routing)
+
+    /// A schedule-drain interlude (`sancov_set_target_context`) rebinds the
+    /// thread's cached measurement context to the target but leaves the
+    /// per-task fast path's (task, map) pairing intact. A post-interlude
+    /// dispatch must not pair the task's own map with the target's context —
+    /// that silently appends covered indices (and fires recorder/observer)
+    /// on the schedule engine. Companion facet of issue #49.
+    @Test("Ending a target-context interlude stops routing into the target")
+    func targetContextInterludeRepairsPairing() {
+        // The target context is begun (and later ended) on its OWN thread,
+        // like a schedule engine's: this thread's task keeps its own routing.
+        let targetReady = DispatchSemaphore(value: 0)
+        let finish = DispatchSemaphore(value: 0)
+        let targetBox = PropertyTestingKit.SyncBox<UnsafeMutablePointer<SanCovMeasurementContext>?>(nil)
+        let owner = Thread {
+            targetBox.value = sancov_begin_measurement()
+            targetReady.signal()
+            finish.wait()
+            if let target = targetBox.value { sancov_end_measurement(target) }
+        }
+        owner.start()
+        targetReady.wait()
+        guard let target = targetBox.value else {
+            finish.signal()
+            Issue.record("begin_measurement failed on the owner thread")
+            return
+        }
+        defer { finish.signal() }
+
+        // Synthetic tail-of-table indices: cold edges, so the instrumented
+        // test code firing real edges during the interlude can't collide.
+        let n = UInt32(sancov_get_counter_count())
+        var gPrime: UInt32 = n - 3
+        var gDuring: UInt32 = n - 2
+        var gAfter: UInt32 = n - 1
+
+        sancov_dispatch_edge(&gPrime)        // prime this thread's own routing
+        sancov_set_target_context(target)
+        sancov_dispatch_edge(&gDuring)       // interlude: routes to the target
+        sancov_set_target_context(nil)
+        sancov_dispatch_edge(&gAfter)        // must NOT keep flowing to the target
+
+        var count = 0
+        let indices = sancov_get_covered_indices(target, &count)
+        let covered = Set(UnsafeBufferPointer(start: indices, count: count))
+        #expect(covered.contains(gDuring),
+                "the interlude dispatch routes to the target context")
+        #expect(!covered.contains(gAfter),
+                "after the interlude, edges must not land on the target context")
+    }
+
     // MARK: - Strategies attach observers via setup
 
     @Test("Dispatch advances the pathTrie observer's trie and still appends covered indices")

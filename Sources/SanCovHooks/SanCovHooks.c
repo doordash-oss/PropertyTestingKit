@@ -1516,6 +1516,15 @@ void sancov_record_edge_counting(uint32_t *guard) {
 
 void sancov_set_target_context(SanCovMeasurementContext* context) {
     g_target_context = context;
+    // The target interlude rebinds tls_cached_measurement_context to the
+    // target while leaving the per-task fast path's (task, map) pairing
+    // intact. A post-interlude dispatch would then take the fast path and
+    // pair the task's own map with the target's still-cached context —
+    // silently appending covered indices (and firing the recorder/observer)
+    // on the wrong engine. Dropping the task cache forces the next dispatch
+    // through the full resolve, which re-pairs map and context together.
+    tls_cached_task = NULL;
+    tls_cached_task_map = NULL;
 }
 
 // MARK: - Coverage Inheritance (Task-Local Propagation)
