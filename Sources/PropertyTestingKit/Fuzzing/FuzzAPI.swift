@@ -95,8 +95,11 @@ import Dependencies
 ///     fuzzing, use `regress(...)` instead. Can be overridden suite-wide via the
 ///     `FUZZ_CORPUS_MODE` environment variable.
 ///   - coverageStrategy: How an input is judged "interesting" (default: `.pathTrie`).
-///     A strategy also carries the edge-recording hook it needs; for custom recording
-///     (e.g. counting buckets) build a custom `CoverageStrategy`.
+///     A strategy carries its own per-edge measurement (`onEdge` sees every
+///     hit, with the first-hit bit) and judgement (`decide`); build a custom
+///     `CoverageStrategy` for custom per-edge measurement — e.g. tallying
+///     hit-count buckets per engine. Raw map-write semantics (what a hit
+///     stores in the coverage map) are not customizable from here.
 ///   - scheduleFuzzing: When `true`, also fuzz the interleaving order of concurrent
 ///     tasks. The schedule bytes are folded into the input pack as element 0
 ///     (`([UInt8], repeat each Input)`) and mutated/stored/persisted like any input;
@@ -307,8 +310,11 @@ func regressInternal<each Input: Codable & Sendable>(
 ///     To verify a corpus without fuzzing, use `regress(...)`. Can be overridden
 ///     suite-wide via `FUZZ_CORPUS_MODE`.
 ///   - coverageStrategy: How an input is judged "interesting" (default: `.pathTrie`).
-///     A strategy also carries the edge-recording hook it needs; for custom recording
-///     (e.g. counting buckets) build a custom `CoverageStrategy`.
+///     A strategy carries its own per-edge measurement (`onEdge` sees every
+///     hit, with the first-hit bit) and judgement (`decide`); build a custom
+///     `CoverageStrategy` for custom per-edge measurement — e.g. tallying
+///     hit-count buckets per engine. Raw map-write semantics (what a hit
+///     stores in the coverage map) are not customizable from here.
 ///   - scheduleFuzzing: When `true`, also fuzz the interleaving order of concurrent
 ///     tasks. The schedule bytes are folded into the input pack as element 0 and
 ///     mutated/stored/persisted like any input; your `test` still receives only its
