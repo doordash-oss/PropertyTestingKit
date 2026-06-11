@@ -800,12 +800,16 @@ void sancov_reset_coverage(SanCovMeasurementContext* ctx) {
 // Release the context's current recorder data through its release hook (if
 // any), consuming both fields. Callers must have already cleared the recorder
 // fn so no new dispatch can reach the data being released.
+//
+// Atomic exchanges, not load-then-store: two concurrent releasers would each
+// load the same (release, data) pair and double-invoke the hook. With
+// exchanges each field is taken exactly once, so at most one caller can hold
+// both — a race degrades to a leak, never a double release. (In-tree callers
+// never race; this closes the latent header-contract violation for free.)
 static void release_recorder_data(SanCovMeasurementContext* context) {
     SanCovRecorderDataFn release =
-        (SanCovRecorderDataFn)__atomic_load_n(&context->recorder_release_bits, __ATOMIC_ACQUIRE);
-    void* data = __atomic_load_n(&context->recorder_data, __ATOMIC_ACQUIRE);
-    __atomic_store_n(&context->recorder_release_bits, 0, __ATOMIC_RELEASE);
-    __atomic_store_n(&context->recorder_data, NULL, __ATOMIC_RELEASE);
+        (SanCovRecorderDataFn)__atomic_exchange_n(&context->recorder_release_bits, 0, __ATOMIC_ACQ_REL);
+    void* data = __atomic_exchange_n(&context->recorder_data, NULL, __ATOMIC_ACQ_REL);
     if (release && data) {
         release(data);
     }
@@ -832,6 +836,11 @@ void sancov_context_set_recorder(
         __atomic_store_n(&context->recorder_data, data, __ATOMIC_RELEASE);
         __atomic_store_n(&context->recorder_reset_bits, (uintptr_t)reset, __ATOMIC_RELEASE);
         __atomic_store_n(&context->edge_recorder_bits, (uintptr_t)recorder, __ATOMIC_RELEASE);
+    } else if (release && data) {
+        // Clearing while passing a payload: ownership still transferred, so
+        // honor the header's "release is called exactly once" instead of
+        // silently dropping it.
+        release(data);
     }
 }
 

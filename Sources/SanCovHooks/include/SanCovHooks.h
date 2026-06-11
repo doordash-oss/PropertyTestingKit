@@ -290,9 +290,16 @@ void sancov_recorder_counting(uint32_t* guard, uint8_t* map, SanCovMeasurementCo
 /// dispatcher that observes the fn (acquire) observes everything it needs.
 ///
 /// `release`, when non-NULL, transfers ownership of `data` to the context:
-/// it is called exactly once — when the context's last reference drops, or
-/// immediately if the recorder is later replaced/cleared by another call here.
+/// it is called exactly once — when the context's last reference drops,
+/// immediately if the recorder is later replaced/cleared by another call
+/// here, or immediately if `recorder` is NULL in this same call (a
+/// clear-with-payload never silently drops ownership).
 /// `reset`, when non-NULL, is called by sancov_reset_coverage with `data`.
+///
+/// When `release` is NULL, the context takes NO ownership: the attacher must
+/// keep `data` alive until the context's last reference drops — note that is
+/// later than sancov_end_measurement, which severs the recorder fn but
+/// deliberately leaves `data` set for straggler dispatchers.
 ///
 /// Replacing/clearing while edges are actively dispatching is unsupported
 /// (the replaced data is released immediately, racing any in-flight reader);

@@ -59,6 +59,29 @@ struct ContextRecorderTests {
         }
     }
 
+    /// The header promises "release is called exactly once" for any
+    /// ownership-transferring set_recorder call. That must hold for the
+    /// degenerate clear-with-payload shape too — silently dropping the
+    /// payload would leak whatever the release hook was meant to free.
+    @Test("Clearing the recorder with a payload still releases it exactly once")
+    func clearingReleasesPassedPayload() {
+        let ctx = sancov_create_dummy_context()
+        defer { sancov_release_for_testing(ctx) }
+
+        var releaseCount = 0
+        withUnsafeMutablePointer(to: &releaseCount) { counter in
+            sancov_context_set_recorder(
+                ctx, nil, UnsafeMutableRawPointer(counter), nil,
+                { data in data?.assumingMemoryBound(to: Int.self).pointee += 1 }
+            )
+        }
+
+        #expect(releaseCount == 1,
+                "ownership transferred to a cleared slot is released, not dropped")
+        #expect(sancov_context_get_recorder_data(ctx) == nil,
+                "the cleared slot stores nothing")
+    }
+
     // MARK: - Dispatch routes to the attached recorder
 
     @Test("Dispatch runs the context's counting recorder, not the default")

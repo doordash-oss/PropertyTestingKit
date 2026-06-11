@@ -149,6 +149,13 @@ extension SanCovCounters {
     /// no process-global hook, so concurrent measurements with different
     /// recorders don't interfere. `sancov_end_measurement` severs the recorder,
     /// so stragglers that retain the context fall back to the default recorder.
+    ///
+    /// - Important: this raw form attaches no release hook, so the context
+    ///   takes NO ownership of `data`: the caller must keep it alive until the
+    ///   context's LAST reference drops — which is later than
+    ///   `endMeasurement` (stragglers' TLS caches hold references, and
+    ///   `recorder_data` stays set for them). For co-owned Swift state use
+    ///   `attachObserver`, which transfers ownership via a release hook.
     static func attachRecorder(
         _ recorder: EdgeHook,
         data: UnsafeMutableRawPointer? = nil,
