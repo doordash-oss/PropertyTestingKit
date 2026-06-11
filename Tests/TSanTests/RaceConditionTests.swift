@@ -70,11 +70,6 @@ private func makeSparse(indices: [Int]) -> SparseCoverage {
     SparseCoverage(indices: indices.map { UInt32($0) })
 }
 
-/// Helper to create a CoverageSignature from a set of indices (for signature-specific tests)
-private func makeSignature(indices: [Int]) -> CoverageSignature {
-    CoverageSignature(sparse: makeSparse(indices: indices))
-}
-
 // MARK: - FuzzEngine Concurrency Tests
 
 @Suite("FuzzEngine Race Detection")
@@ -120,49 +115,6 @@ struct FuzzEngineRaceTests {
             }
 
             try await group.waitForAll()
-        }
-    }
-}
-
-// MARK: - Coverage Signature Concurrency Tests
-
-@Suite("CoverageSignature Race Detection")
-struct CoverageSignatureRaceTests {
-
-    @Test("Concurrent signature operations")
-    func concurrentSignatureOperations() async {
-        let signatures = (0..<20).map { i in
-            makeSignature(indices: Array(0..<(i + 1) * 5))
-        }
-
-        await withTaskGroup(of: CoverageSignature.self) { group in
-            // Concurrent unions
-            for i in 0..<signatures.count {
-                for j in 0..<signatures.count where i != j {
-                    group.addTask {
-                        signatures[i].union(with: signatures[j])
-                    }
-                }
-            }
-
-            for await _ in group {}
-        }
-    }
-
-    @Test("Concurrent signature creation and comparison")
-    func concurrentSignatureCreationAndComparison() async {
-        // Create signatures concurrently and compare them
-        await withTaskGroup(of: Bool.self) { group in
-            for i in 0..<100 {
-                group.addTask {
-                    let sig1 = makeSignature(indices: [i, i + 100])
-                    let sig2 = makeSignature(indices: [i + 50, i + 150])
-                    let union = sig1.union(with: sig2)
-                    return union.executedIndices.count >= sig1.executedIndices.count
-                }
-            }
-
-            for await _ in group {}
         }
     }
 }

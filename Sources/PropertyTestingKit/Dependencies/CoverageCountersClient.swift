@@ -55,13 +55,6 @@ struct CoverageCountersClient: Sendable {
     /// This bypasses TLS lookup, providing O(1) performance even after task hops.
     var snapshotCoveredArraysWithContext: @Sendable (SanCovCounters.MeasurementContext) throws -> SparseCoverage
 
-    /// Access raw coverage data without creating a Swift array.
-    var withRawCoverage: @Sendable (SanCovCounters.MeasurementContext, @escaping (UnsafePointer<UInt32>?, Int) throws -> Bool) throws -> Bool
-
-    /// Compute signature hash from coverage data without allocation.
-    /// This matches the SparseCoverage.signatureHash algorithm.
-    var computeSignatureHash: @Sendable (SanCovCounters.MeasurementContext) -> Int
-
     init(
         isAvailable: @escaping @Sendable () -> Bool = unimplemented(
             "isAvailable",
@@ -80,14 +73,6 @@ struct CoverageCountersClient: Sendable {
         snapshotCoveredArraysWithContext: @escaping @Sendable (SanCovCounters.MeasurementContext) throws -> SparseCoverage = unimplemented(
             "snapshotCoveredArraysWithContext",
             placeholder: SparseCoverage()
-        ),
-        withRawCoverage: @escaping @Sendable (SanCovCounters.MeasurementContext, @escaping (UnsafePointer<UInt32>?, Int) throws -> Bool) throws -> Bool = unimplemented(
-            "withRawCoverage",
-            placeholder: false
-        ),
-        computeSignatureHash: @escaping @Sendable (SanCovCounters.MeasurementContext) -> Int = unimplemented(
-            "computeSignatureHash",
-            placeholder: 0
         )
     ) {
         self.isAvailable = isAvailable
@@ -95,8 +80,6 @@ struct CoverageCountersClient: Sendable {
         self.endMeasurement = endMeasurement
         self.resetCoverage = resetCoverage
         self.snapshotCoveredArraysWithContext = snapshotCoveredArraysWithContext
-        self.withRawCoverage = withRawCoverage
-        self.computeSignatureHash = computeSignatureHash
     }
 }
 
@@ -108,9 +91,7 @@ extension CoverageCountersClient: DependencyKey {
         beginMeasurement: { SanCovCounters.beginMeasurement() },
         endMeasurement: { SanCovCounters.endMeasurement($0) },
         resetCoverage: { SanCovCounters.resetCoverage($0) },
-        snapshotCoveredArraysWithContext: { try SanCovCounters.snapshotCoveredArrays(with: $0) },
-        withRawCoverage: { context, body in try SanCovCounters.withRawCoverage(context: context, body: body) },
-        computeSignatureHash: { SanCovCounters.computeSignatureHash(context: $0) }
+        snapshotCoveredArraysWithContext: { try SanCovCounters.snapshotCoveredArrays(with: $0) }
     )
 
     /// Test value uses live coverage counters since they're read-only and safe.

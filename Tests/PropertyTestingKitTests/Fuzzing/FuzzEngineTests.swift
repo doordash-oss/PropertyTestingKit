@@ -35,9 +35,7 @@ private func makeMockCoverageClient(
                 indices.append(UInt32(index))
             }
             return SparseCoverage(indices: indices)
-        },
-        withRawCoverage: { _, _ in false },
-        computeSignatureHash: { _ in 0 }
+        }
     )
 }
 
@@ -51,9 +49,7 @@ private func makeThrowingCoverageClient() -> CoverageCountersClient {
         beginMeasurement: { SanCovCounters.MeasurementContext.testInstance() },
         endMeasurement: { _ in },
         resetCoverage: { _ in },
-        snapshotCoveredArraysWithContext: { _ in throw MockCoverageUnavailableError() },
-        withRawCoverage: { _, _ in false },
-        computeSignatureHash: { _ in 0 }
+        snapshotCoveredArraysWithContext: { _ in throw MockCoverageUnavailableError() }
     )
 }
 
@@ -279,9 +275,7 @@ struct FuzzEngineTests {
                 beginMeasurement: { SanCovCounters.MeasurementContext.testInstance() },
                 endMeasurement: { _ in },
                 resetCoverage: { _ in },
-                snapshotCoveredArraysWithContext: { _ in snapshotCoveredArraysFn() },
-                withRawCoverage: { _, _ in false },
-                computeSignatureHash: { _ in 0 }
+                snapshotCoveredArraysWithContext: { _ in snapshotCoveredArraysFn() }
             )
         } operation: {
             await fuzzEngineWithMaxIterations(maxIterations: 50) { (input: Int) in
@@ -315,9 +309,7 @@ struct FuzzEngineTests {
                     // Unique index each time so the strategy accepts every run
                     snapshotCount.update { $0 += 1 }
                     return SparseCoverage(indices: [UInt32(snapshotCount.value)])
-                },
-                withRawCoverage: { _, _ in false },
-                computeSignatureHash: { _ in 0 }
+                }
             )
         } operation: {
             await fuzzEngineWithMaxIterations(maxIterations: 10) { (_: Int) in }
@@ -348,9 +340,7 @@ struct FuzzEngineTests {
                     endCount.update { $0 += 1 }
                 },
                 resetCoverage: { _ in },
-                snapshotCoveredArraysWithContext: { _ in SparseCoverage(indices: [1]) },
-                withRawCoverage: { _, _ in false },
-                computeSignatureHash: { _ in 0 }
+                snapshotCoveredArraysWithContext: { _ in SparseCoverage(indices: [1]) }
             )
         } operation: {
             await fuzzEngineWithMaxIterations(maxIterations: 50) { (_: Int) in }
@@ -394,9 +384,7 @@ struct FuzzEngineTests {
                     events.update { $0.append(.coverageCheck) }
                     checkCounter.update { $0 += 1 }
                     return SparseCoverage(indices: [UInt32(checkCounter.value)])
-                },
-                withRawCoverage: { _, _ in false },
-                computeSignatureHash: { _ in 0 }
+                }
             )
         } operation: {
             await fuzzEngineWithMaxIterations(maxIterations: 5) { (_: Int) in }

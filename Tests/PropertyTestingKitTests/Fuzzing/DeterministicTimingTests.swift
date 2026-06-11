@@ -38,9 +38,7 @@ private func makeMockCoverageClient(
                 indices.append(UInt32(index))
             }
             return SparseCoverage(indices: indices)
-        },
-        withRawCoverage: { _, _ in false },
-        computeSignatureHash: { _ in 0 }
+        }
     )
 }
 

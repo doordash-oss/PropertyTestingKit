@@ -116,14 +116,6 @@ enum SanCovCounters {
         sancov_get_counter_count()
     }
 
-    /// Get the number of edges covered by the current task.
-    ///
-    /// This only counts coverage from the current Swift task.
-    /// Coverage from other concurrent tasks is not included.
-    static var currentCoveredCount: Int {
-        sancov_get_covered_count()
-    }
-
     /// Filter out compiler-generated edges (outlined destroyers, lazy witness
     /// table accessors, lazy metadata accessors, etc.) by setting their guard
     /// values to `UINT32_MAX`. This makes the hot-path check
@@ -270,53 +262,6 @@ extension SanCovCounters {
         return SparseCoverage(indices: indices)
     }
 
-    /// Get raw coverage data without creating a Swift array.
-    ///
-    /// This is useful when you want to check coverage uniqueness before allocating.
-    /// The closure receives the raw pointer and count - do NOT store the pointer
-    /// as it will be freed when the closure returns.
-    ///
-    /// - Parameters:
-    ///   - context: The measurement context.
-    ///   - body: Closure that receives the raw indices pointer and count.
-    /// - Returns: The result of the closure.
-    static func withRawCoverage<T>(
-        context: MeasurementContext,
-        body: @escaping (UnsafePointer<UInt32>?, Int) throws -> T
-    ) throws -> T {
-        try checkAvailabilty()
-
-        let count = getCoveredCount(with: context)
-        guard count > 0 else {
-            return try body(nil, 0)
-        }
-
-        guard let ptr = sancov_snapshot_covered_indices_with_context(context.rawContext) else {
-            return try body(nil, 0)
-        }
-        defer { free(ptr) }
-
-        return try body(ptr, count)
-    }
-
-    /// Compute signature hash from coverage data without allocation.
-    /// This matches the SparseCoverage.signatureHash algorithm.
-    ///
-    /// - Parameter context: The measurement context.
-    /// - Returns: The signature hash, or 0 if no coverage.
-    static func computeSignatureHash(context: MeasurementContext) -> Int {
-        guard isAvailable else { return 0 }
-        return Int(sancov_compute_signature_hash(context.rawContext))
-    }
-
-    /// Compute signature hash from an explicit array of edge indices.
-    /// Pure function — no dependency on live coverage counters.
-    /// Uses the same algorithm as `computeSignatureHash(context:)`.
-    static func computeSignatureHash(indices: [UInt32]) -> Int {
-        indices.withUnsafeBufferPointer { buffer in
-            Int(sancov_compute_hash_from_indices(buffer.baseAddress, buffer.count))
-        }
-    }
 }
 
 // MARK: Coverage Gap Detection

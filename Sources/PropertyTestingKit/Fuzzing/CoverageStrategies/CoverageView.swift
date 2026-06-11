@@ -55,12 +55,6 @@ public final class CoverageView {
     /// The edge indices the run covered (see `sparse`).
     public var indices: [UInt32] { sparse.indices }
 
-    /// Number of covered edges (see `sparse`).
-    public var count: Int { sparse.count }
-
-    /// Whether no edges were covered (see `sparse`).
-    public var isEmpty: Bool { sparse.isEmpty }
-
     /// Materialize the snapshot on first call; `nil` when coverage is
     /// unavailable — distinct from the empty-`sparse` fallback the public
     /// accessors present, so storage can refuse broken measurements.

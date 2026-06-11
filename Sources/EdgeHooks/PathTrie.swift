@@ -54,29 +54,17 @@ public final class PathTrie: @unchecked Sendable {
         current = root
     }
 
-    /// Whether the current path is unique (not seen before): it either created
-    /// a new node, or ends at a node no previous run terminated on (prefix
-    /// semantics — a strict prefix of a known path is still unique).
-    public var isUniquePath: Bool {
-        lock.lock()
-        defer { lock.unlock() }
-        return isNovel || !current.isTerminal
-    }
-
-    /// Mark the current path as complete (a terminal node in the trie).
-    public func markTerminal() {
-        lock.lock()
-        defer { lock.unlock() }
-        current.isTerminal = true
-    }
-
-    /// Judge and mark in ONE critical section: if the current path is unique
-    /// (see `isUniquePath`), mark it terminal and report `true`.
+    /// Judge and mark in ONE critical section: if the current path is unique,
+    /// mark it terminal and report `true`.
     ///
-    /// Prefer this over a separate `isUniquePath` check followed by
-    /// `markTerminal()`: between two acquisitions a straggler `advance` (an
-    /// un-awaited child task's edge) can move the cursor, putting the
-    /// terminal mark on a deeper, wrong node.
+    /// A path is unique (not seen before) when it either created a new node,
+    /// or ends at a node no previous run terminated on (prefix semantics — a
+    /// strict prefix of a known path is still unique).
+    ///
+    /// Judge-and-mark is deliberately one operation: with separate check and
+    /// mark calls, a straggler `advance` (an un-awaited child task's edge)
+    /// could move the cursor between them, putting the terminal mark on a
+    /// deeper, wrong node.
     public func markTerminalIfUnique() -> Bool {
         lock.lock()
         defer { lock.unlock() }
