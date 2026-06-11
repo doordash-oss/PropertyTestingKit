@@ -58,8 +58,7 @@ private func makePathTrieEngine() -> CoverageEngine {
 /// immunity: re-executing a loop must not lengthen the path) — the observer
 /// mechanism reports every hit and hands over the C layer's lock-free
 /// first-hit bit, which resets stay synced with (`sancov_reset_coverage`
-/// clears the map before invoking `onReset`). Shared by the `.pathTrie`
-/// built-in's engine and `SanCovCounters.attachTrie`.
+/// clears the map before invoking `onReset`).
 func makeTrieHooks(
     _ trie: PathTrie
 ) -> (onEdge: @Sendable (UInt32, Bool) -> Void, onReset: @Sendable () -> Void) {

@@ -341,17 +341,19 @@ struct ContextRecorderTests {
     func dispatchObserverAdvancesTrieAndSnapshots() throws {
         let context = SanCovCounters.beginMeasurement()
         defer { SanCovCounters.endMeasurement(context) }
+        let coverageClient = CoverageCountersClient.liveValue
+        let corpus = Corpus<Int>()
 
-        let trie = PathTrie()
-        SanCovCounters.attachTrie(trie, to: context)
+        // The PRODUCTION .pathTrie engine: setup attaches its trie observer,
+        // evaluate judges (and marks) the run's path in one critical section.
+        let evaluator: CoverageEvaluator<Int> = CoverageStrategy.pathTrie.makeEvaluator()
+        evaluator.setup?(context)
 
         // Both passes must execute IDENTICAL instrumented code between the
-        // coverage reset and the uniqueness read — this test file is itself
+        // coverage reset and the judgement — this test file is itself
         // instrumented, and its edges dispatch into the observer too. A single
-        // local function gives both passes the same edge sequence; read and
-        // mark are adjacent straight-line calls so no instrumented branch edge
-        // can land between them and extend the path past the read point.
-        func firePass() -> Bool {
+        // local function gives both passes the same edge sequence.
+        func firePass(_ input: Int) -> Bool {
             SanCovCounters.resetCoverage(context)   // onReset resets the trie to root
             var g0: UInt32 = 0
             var g1: UInt32 = 1
@@ -360,18 +362,16 @@ struct ContextRecorderTests {
             sancov_dispatch_edge(&g1)
             sancov_dispatch_edge(&g1)   // repeat hit: the TRIE strategy gates it out
             sancov_dispatch_edge(&g2)
-            let unique = trie.isUniquePath
-            trie.markTerminal()    // marking an already-terminal node is a no-op
-            return unique
+            return evaluator.evaluate(input, nil, context, coverageClient, corpus) != nil
         }
 
-        let firstPassUnique = firePass()
+        let firstPassUnique = firePass(1)
 
         // The observer recorder must keep feeding covered_indices — corpus
         // entries snapshot sparse coverage from it.
         let sparse = try SanCovCounters.snapshotCoveredArrays(with: context)
 
-        let secondPassUnique = firePass()
+        let secondPassUnique = firePass(2)
 
         #expect(firstPassUnique, "First pass over a path is novel")
         #expect(sparse.count >= 3, "The observer recorder must append covered indices")
@@ -387,14 +387,16 @@ struct ContextRecorderTests {
     func repeatHitCountsDoNotLengthenTriePath() {
         let context = SanCovCounters.beginMeasurement()
         defer { SanCovCounters.endMeasurement(context) }
+        let coverageClient = CoverageCountersClient.liveValue
+        let corpus = Corpus<Int>()
 
-        let trie = PathTrie()
-        SanCovCounters.attachTrie(trie, to: context)
+        let evaluator: CoverageEvaluator<Int> = CoverageStrategy.pathTrie.makeEvaluator()
+        evaluator.setup?(context)
 
         // One parameterized local function keeps the passes' instrumented
         // code identical (see the dispatch test above); only the repeat
         // count differs, which is exactly what loop immunity must absorb.
-        func firePass(repeats: Int) -> Bool {
+        func firePass(repeats: Int, input: Int) -> Bool {
             SanCovCounters.resetCoverage(context)
             var g50: UInt32 = 50
             var g51: UInt32 = 51
@@ -402,13 +404,11 @@ struct ContextRecorderTests {
             for _ in 0..<repeats {
                 sancov_dispatch_edge(&g51)
             }
-            let unique = trie.isUniquePath
-            trie.markTerminal()
-            return unique
+            return evaluator.evaluate(input, nil, context, coverageClient, corpus) != nil
         }
 
-        let firstPassUnique = firePass(repeats: 2)
-        let secondPassUnique = firePass(repeats: 3)
+        let firstPassUnique = firePass(repeats: 2, input: 1)
+        let secondPassUnique = firePass(repeats: 3, input: 2)
 
         #expect(firstPassUnique, "First pass over the path is novel")
         #expect(!secondPassUnique,

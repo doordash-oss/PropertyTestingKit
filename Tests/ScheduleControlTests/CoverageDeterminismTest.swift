@@ -178,8 +178,8 @@ private actor StreamActor {
     }
 }
 
-/// Helper: run a body N times under schedule control with a PathTrie,
-/// return the number of unique paths observed.
+/// Helper: run a body N times under schedule control, judged by the
+/// PRODUCTION `.pathTrie` engine; return the number of unique paths observed.
 private func measureDeterminism(
     iterations: Int,
     scheduleBytes: [UInt8],
@@ -190,15 +190,16 @@ private func measureDeterminism(
         await body()
     }
 
-    let trie = PathTrie()
     let ctx = SanCovCounters.beginMeasurement()
-    SanCovCounters.attachTrie(trie, to: ctx)
+    let evaluator: CoverageEvaluator<Int> = CoverageStrategy.pathTrie.makeEvaluator()
+    evaluator.setup?(ctx)
+    let coverageClient = CoverageCountersClient.liveValue
+    let corpus = Corpus<Int>()
 
     var uniqueCount = 0
 
-    for _ in 0..<iterations {
+    for i in 0..<iterations {
         SanCovCounters.resetCoverage(ctx)
-        trie.reset()
 
         try await ScheduleController.run(
             scheduleBytes: scheduleBytes,
@@ -207,9 +208,8 @@ private func measureDeterminism(
             await body()
         }
 
-        if trie.isUniquePath {
+        if evaluator.evaluate(i, nil, ctx, coverageClient, corpus) != nil {
             uniqueCount += 1
-            trie.markTerminal()
         }
     }
 
@@ -402,23 +402,26 @@ struct PathTrieReuseTest {
 
     @Test("PathTrie identifies repeated path as non-unique after reset")
     func trieResetPreservesTerminals() {
-        let trie = PathTrie()
+        // The PRODUCTION .pathTrie engine: evaluate judges-and-marks the
+        // run's path; resetCoverage rewinds the cursor but keeps terminals.
         let ctx = SanCovCounters.beginMeasurement()
-        SanCovCounters.attachTrie(trie, to: ctx)
+        let evaluator: CoverageEvaluator<Int> = CoverageStrategy.pathTrie.makeEvaluator()
+        evaluator.setup?(ctx)
+        let coverageClient = CoverageCountersClient.liveValue
+        let corpus = Corpus<Int>()
 
         // Run 1: first path should be unique
         Self.stableCode()
-        let firstUnique = trie.isUniquePath
+        let firstUnique = evaluator.evaluate(1, nil, ctx, coverageClient, corpus) != nil
         print("Run 1: isUnique=\(firstUnique)")
         #expect(firstUnique, "First run should always be unique")
-        trie.markTerminal()
 
         // Reset for run 2
         SanCovCounters.resetCoverage(ctx)
 
         // Run 2: same code, same path — should NOT be unique
         Self.stableCode()
-        let secondUnique = trie.isUniquePath
+        let secondUnique = evaluator.evaluate(2, nil, ctx, coverageClient, corpus) != nil
         print("Run 2: isUnique=\(secondUnique)")
         #expect(!secondUnique, "Second run with identical code should NOT be unique — trie should recognize the path")
 
@@ -447,9 +450,11 @@ struct PathTrieReuseTest {
             await body()
         }
 
-        let trie = PathTrie()
         let ctx = SanCovCounters.beginMeasurement()
-        SanCovCounters.attachTrie(trie, to: ctx)
+        let evaluator: CoverageEvaluator<Int> = CoverageStrategy.pathTrie.makeEvaluator()
+        evaluator.setup?(ctx)
+        let coverageClient = CoverageCountersClient.liveValue
+        let corpus = Corpus<Int>()
 
         // Run 3 times in a loop using the same closure + same call site
         var results: [Bool] = []
@@ -463,12 +468,9 @@ struct PathTrieReuseTest {
                 await body()
             }
 
-            let isUnique = trie.isUniquePath
+            let isUnique = evaluator.evaluate(i, nil, ctx, coverageClient, corpus) != nil
             results.append(isUnique)
             print("Scheduled run \(i): isUnique=\(isUnique)")
-            if isUnique {
-                trie.markTerminal()
-            }
         }
 
         SanCovCounters.endMeasurement(ctx)

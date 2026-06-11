@@ -114,16 +114,19 @@ struct InterleavingContrastTest {
         // task's enqueues pass through `original` regardless of installation.
         SanCovCounters.applyEdgeFilter()
 
-        let trie = PathTrie()
+        // The PRODUCTION .pathTrie engine: setup attaches its trie observer,
+        // evaluate judges the run's path (and resets the trie for the next).
         let ctx = SanCovCounters.beginMeasurement()
-        SanCovCounters.attachTrie(trie, to: ctx)
         defer { SanCovCounters.endMeasurement(ctx) }
+        let evaluator: CoverageEvaluator<Int> = CoverageStrategy.pathTrie.makeEvaluator()
+        evaluator.setup?(ctx)
+        let coverageClient = CoverageCountersClient.liveValue
+        let corpus = Corpus<Int>()
 
         var unique = 0
         let iters = 500
-        for _ in 0..<iters {
+        for i in 0..<iters {
             SanCovCounters.resetCoverage(ctx)
-            trie.reset()
 
             let ctxBits = UInt(bitPattern: ctx.rawContext)
             await CoverageInheritance.$context.withValue(ctxBits) {
@@ -131,7 +134,7 @@ struct InterleavingContrastTest {
                 await Self.body()
             }
 
-            if trie.isUniquePath { unique += 1; trie.markTerminal() }
+            if evaluator.evaluate(i, nil, ctx, coverageClient, corpus) != nil { unique += 1 }
         }
         print("UNCONTROLLED: \(unique) unique paths in \(iters) iterations")
         // The contrast that matters: without schedule control the lanes race on
@@ -153,16 +156,17 @@ struct InterleavingContrastTest {
             await Self.body()
         }
 
-        let trie = PathTrie()
         let ctx = SanCovCounters.beginMeasurement()
-        SanCovCounters.attachTrie(trie, to: ctx)
         defer { SanCovCounters.endMeasurement(ctx) }
+        let evaluator: CoverageEvaluator<Int> = CoverageStrategy.pathTrie.makeEvaluator()
+        evaluator.setup?(ctx)
+        let coverageClient = CoverageCountersClient.liveValue
+        let corpus = Corpus<Int>()
 
         var unique = 0
         let iters = 200
-        for _ in 0..<iters {
+        for i in 0..<iters {
             SanCovCounters.resetCoverage(ctx)
-            trie.reset()
 
             try await ScheduleController.run(
                 scheduleBytes: Self.scheduleBytes,
@@ -171,7 +175,7 @@ struct InterleavingContrastTest {
                 await Self.body()
             }
 
-            if trie.isUniquePath { unique += 1; trie.markTerminal() }
+            if evaluator.evaluate(i, nil, ctx, coverageClient, corpus) != nil { unique += 1 }
         }
         print("CONTROLLED: \(unique) unique paths in \(iters) iterations")
         #expect(unique == 1, "Expected 1 unique path under schedule control, got \(unique)")
