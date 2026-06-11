@@ -166,6 +166,18 @@ func fuzzInternal<each Input: Codable & Sendable>(
     test: @escaping @Sendable ((repeat each Input)) async throws -> Void
 ) async throws -> FuzzResult<repeat each Input> {
     @Dependency(\.environment) var environment
+    @Dependency(\.coverageCounters) var coverageCounters
+
+    // Every strategy decision is judgement over a coverage snapshot, so an
+    // uninstrumented binary can only ever build empty corpora. Fail loudly at
+    // campaign start instead of silently fuzzing to no effect. (Replay paths
+    // stay exempt: they judge against loaded snapshots and run fine without
+    // instrumentation.)
+    func requireCoverage() throws {
+        guard coverageCounters.isAvailable() else {
+            throw FuzzError.coverageUnavailable
+        }
+    }
 
     let testFilePath = String(describing: filePath)
     let verbose = environment.environment()["FUZZ_VERBOSE"] != nil
@@ -182,6 +194,7 @@ func fuzzInternal<each Input: Codable & Sendable>(
     // The call-site `persistence` is used directly (the suite-level env override does
     // not apply to scheduled runs).
     if scheduleFuzzing {
+        try requireCoverage()
         // Strategies are pack-agnostic (pure judgement over coverage), so the
         // user's strategy — built-in or custom — passes straight into the
         // extended-pack run; its single engine builds from the same makeEngine.
@@ -208,6 +221,7 @@ func fuzzInternal<each Input: Codable & Sendable>(
     let result: FuzzResult<repeat each Input>
     switch CorpusPersistence.resolveForFuzz(callSite: persistence) {
     case .fuzz(let resolved):
+        try requireCoverage()
         result = await runFuzz(
             mutators: mutators,
             userSeeds: seeds,

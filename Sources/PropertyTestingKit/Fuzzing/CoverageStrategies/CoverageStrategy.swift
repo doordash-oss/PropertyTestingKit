@@ -31,7 +31,8 @@ import EdgeHooks
 /// - `.signatureMatch`: Exact edge-set matching via inverted index. Zero false positives.
 /// - `.newEdge`: Any previously-unseen edge is interesting. Matches AFL/libFuzzer.
 /// - `.pathTrie` (default): Trie-based ordered-path tracking. O(1) per edge hit and uniqueness check.
-/// - `.alwaysInteresting`: Every input is added. Useful for testing without coverage.
+/// - `.alwaysInteresting`: Every input is added. Useful when corpus growth
+///   should not depend on coverage novelty (instrumentation is still required).
 ///
 /// Custom strategies use the same surface (see `init(makeEngine:)`):
 /// ```swift

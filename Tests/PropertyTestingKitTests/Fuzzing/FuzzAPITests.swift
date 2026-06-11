@@ -132,6 +132,27 @@ struct FuzzAPITests {
         #expect(result.stats.totalInputs > 0)
     }
 
+    /// Every strategy decision is judgement over a coverage snapshot, so an
+    /// uninstrumented binary can only ever build empty corpora. That must
+    /// fail loudly at campaign start, not silently fuzz to no effect.
+    @Test("Fuzzing without coverage instrumentation throws")
+    func fuzzThrowsWhenCoverageUnavailable() async {
+        let error = await #expect(throws: FuzzError.self) {
+            try await withDependencies {
+                $0.coverageCounters = CoverageCountersClient(isAvailable: { false })
+            } operation: {
+                _ = try await fuzzWithMaxIterations(
+                    maxIterations: 5,
+                    persistence: .ephemeral
+                ) { (_: Int) in }
+            }
+        }
+        guard case .coverageUnavailable = error else {
+            Issue.record("expected .coverageUnavailable, got \(String(describing: error))")
+            return
+        }
+    }
+
     @Test("FuzzError errorDescription covers all cases")
     func testFuzzErrorDescriptions() {
         // Test .testFailed
