@@ -44,9 +44,14 @@ packages:
     url: https://github.com/ordo-one/package-benchmark.git
     from: 1.27.3
 targets:
-  # C target for value profile hooks
+  # C target for value profile hooks.
+  # MUST be dynamic (framework): the hooks hold process-global state (guard
+  # registry, coverage maps). As a static library every framework that linked
+  # it got its own copy — instrumented code registered guards into one copy
+  # while the fuzz engine queried another, so coverage was "unavailable" in
+  # Xcode runs and mutation feedback silently degraded to random generation.
   SanCovHooks:
-    type: library.static
+    type: framework
     platform: macOS
     sources:
       - path: Sources/SanCovHooks
@@ -56,11 +61,23 @@ targets:
         buildPhase: none
     settings:
       base:
+        GENERATE_INFOPLIST_FILE: YES
         PRODUCT_NAME: SanCovHooks
-        PUBLIC_HEADERS_FOLDER_PATH: $(CONTENTS_FOLDER_PATH)/Headers
-        MODULEMAP_FILE: $(SRCROOT)/Sources/SanCovHooks/include/module.modulemap
+        PRODUCT_BUNDLE_IDENTIFIER: com.propertytestingkit.sancovhooks
+        # No MODULEMAP_FILE / DEFINES_MODULE: dependents import the module via
+        # SWIFT_INCLUDE_PATHS → Sources/SanCovHooks/include (source modulemap),
+        # same as when this was a static library. The framework exists solely so
+        # the hooks' process-global state has exactly one copy at runtime.
+        DEFINES_MODULE: NO
         HEADER_SEARCH_PATHS:
           - $(SRCROOT)/Sources/SanCovHooks/include
+        # swift_task_getCurrent comes from the Swift Concurrency runtime of
+        # whatever process loads us (local toolchain or system) — resolve at
+        # load time rather than pinning a runtime dylib at link time.
+        OTHER_LDFLAGS: >-
+          $(inherited)
+          -Xlinker -undefined
+          -Xlinker dynamic_lookup
 
   # C++ target for LLVM symbolizer
   CLLVMSymbolizer:
@@ -229,6 +246,8 @@ targets:
           - "**/Corpus/**"
           - "**/FuzzableMacroTests.swift"
     dependencies:
+      - target: SanCovHooks
+        link: true
       - target: PropertyTestingKit
       - package: swift-dependencies
         product: Dependencies
@@ -278,6 +297,8 @@ targets:
         excludes:
           - "**/Corpus/**"
     dependencies:
+      - target: SanCovHooks
+        link: true
       - target: ScheduleControl
       - target: PropertyTestingKit
       - target: GenericTimerPoller
@@ -322,6 +343,8 @@ targets:
         excludes:
           - "**/Corpus/**"
     dependencies:
+      - target: SanCovHooks
+        link: true
       - target: GenericTimerPoller
       - target: PropertyTestingKit
       - target: ScheduleControl
@@ -361,6 +384,8 @@ targets:
         excludes:
           - "**/Corpus/**"
     dependencies:
+      - target: SanCovHooks
+        link: true
       - target: PropertyTestingKit
       - package: swift-dependencies
         product: Dependencies
@@ -401,6 +426,8 @@ targets:
     sources:
       - path: Tests/SanCovTests
     dependencies:
+      - target: SanCovHooks
+        link: true
       - target: PropertyTestingKit
     settings:
       base:
@@ -437,6 +464,8 @@ targets:
     sources:
       - path: Tests/TSanTests
     dependencies:
+      - target: SanCovHooks
+        link: true
       - target: PropertyTestingKit
     settings:
       base:
@@ -475,6 +504,8 @@ targets:
         excludes:
           - "**/Corpus/**"
     dependencies:
+      - target: SanCovHooks
+        link: true
       - target: PropertyTestingKit
       - package: package-benchmark
         product: Benchmark
@@ -506,6 +537,8 @@ targets:
     sources:
       - path: Benchmarks/ProfiledBenchmark
     dependencies:
+      - target: SanCovHooks
+        link: true
       - target: PropertyTestingKit
       - package: package-benchmark
         product: Benchmark

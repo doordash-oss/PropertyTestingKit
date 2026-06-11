@@ -51,13 +51,16 @@ public struct FuzzResult<each Input: Codable & Sendable>: Sendable {
 
 /// Statistics about a fuzz run.
 public struct FuzzStats: Sendable {
-    /// Total inputs tested.
+    /// Total inputs tested. Always `seeds + mutations + generations`.
     public let totalInputs: Int
 
-    /// Number of mutations performed.
+    /// Seed inputs run (the mutators' seed values plus any caller-provided seeds).
+    public let seeds: Int
+
+    /// Mutated inputs run (inputs consumed from the mutation queue).
     public let mutations: Int
 
-    /// Number of fresh generations.
+    /// Freshly generated inputs run (queue was empty, a random input was synthesized).
     public let generations: Int
 
     /// Time spent fuzzing.
@@ -104,6 +107,7 @@ public struct FuzzStats: Sendable {
 
     public init(
         totalInputs: Int,
+        seeds: Int,
         mutations: Int,
         generations: Int,
         duration: TimeInterval,
@@ -111,6 +115,7 @@ public struct FuzzStats: Sendable {
         failures: Int = 0,
     ) {
         self.totalInputs = totalInputs
+        self.seeds = seeds
         self.mutations = mutations
         self.generations = generations
         self.duration = duration
@@ -129,6 +134,7 @@ extension FuzzResult {
         )
         let emptyStats = FuzzStats(
             totalInputs: 0,
+            seeds: 0,
             mutations: 0,
             generations: 0,
             duration: 0,

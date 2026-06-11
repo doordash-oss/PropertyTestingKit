@@ -264,6 +264,7 @@ struct CoverageGapDetectorTests {
         let emptySnapshot = await emptyCorpus.snapshot()
         let stats = FuzzStats(
             totalInputs: 0,
+            seeds: 0,
             mutations: 0,
             generations: 0,
             duration: 0
@@ -305,7 +306,7 @@ struct CoverageGapDetectorTests {
         // This test intentionally creates a coverage gap to verify detection works.
         // The detector reports the edge AFTER the unreachable body — i.e. the line
         // of the `} else if input < 0 {` above. Update if the function above is edited.
-        let expectedLine = 298
+        let expectedLine = 299
 
         // Realistic regression test: replay the on-disk corpus
         // (Corpus/realisticCoverageGapTest/corpus.json = [[0],[-1]]; 0 → `else`,
