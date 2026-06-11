@@ -35,11 +35,7 @@ private func makeMockCoverageClient(
                 indices.append(UInt32(index))
             }
             return SparseCoverage(indices: indices)
-        },
-        withRawCoverage: { _, _ in false },
-        mergeCoverageIntoBitmap: { _, _, _, _ in false },
-        computeSignatureHash: { _ in 0 },
-        withCoveredIndices: { _, _ in false }
+        }
     )
 }
 
@@ -53,11 +49,7 @@ private func makeThrowingCoverageClient() -> CoverageCountersClient {
         beginMeasurement: { SanCovCounters.MeasurementContext.testInstance() },
         endMeasurement: { _ in },
         resetCoverage: { _ in },
-        snapshotCoveredArraysWithContext: { _ in throw MockCoverageUnavailableError() },
-        withRawCoverage: { _, _ in false },
-        mergeCoverageIntoBitmap: { _, _, _, _ in false },
-        computeSignatureHash: { _ in 0 },
-        withCoveredIndices: { _, _ in false }
+        snapshotCoveredArraysWithContext: { _ in throw MockCoverageUnavailableError() }
     )
 }
 
@@ -89,13 +81,13 @@ struct FuzzEngineTests {
     func testFuzzEngineDiscoversPaths() async {
         let config = FuzzEngineConfig(
             maxDuration: .seconds(10),
-            verbose: false,
-            coverageStrategy: .alwaysInteresting
+            verbose: false
         )
 
         let result = await fuzzEngineWithMaxIterations(
             maxIterations: 100,
             config: config,
+            coverageStrategy: .alwaysInteresting,
             additionalSeeds: [0, 1, -1, 42]
         ) { (_: Int) in }
 
@@ -109,14 +101,14 @@ struct FuzzEngineTests {
 
         let config = FuzzEngineConfig(
             maxDuration: .seconds(10),
-            verbose: false,
-            coverageStrategy: .alwaysInteresting
+            verbose: false
         )
 
         // Include 42 in seeds to guarantee we hit the failure case
         let result = await fuzzEngineWithMaxIterations(
             maxIterations: 100,
             config: config,
+            coverageStrategy: .alwaysInteresting,
             additionalSeeds: [0, 1, 42, -1]
         ) { (input: Int) in
             if input == 42 {
@@ -132,13 +124,13 @@ struct FuzzEngineTests {
     func testVerboseMode() async {
         let config = FuzzEngineConfig(
             maxDuration: .seconds(10),
-            verbose: true,
-            coverageStrategy: .alwaysInteresting
+            verbose: true
         )
 
         let result = await fuzzEngineWithMaxIterations(
             maxIterations: 100,
             config: config,
+            coverageStrategy: .alwaysInteresting,
             additionalSeeds: [0, 1, -1, 42]
         ) { (_: Int) in }
 
@@ -151,14 +143,14 @@ struct FuzzEngineTests {
 
         let config = FuzzEngineConfig(
             maxDuration: .seconds(10),
-            verbose: false,
-            coverageStrategy: .alwaysInteresting
+            verbose: false
         )
 
         // Include multiples of 10 in seeds to guarantee failures
         let result = await fuzzEngineWithMaxIterations(
             maxIterations: 100,
             config: config,
+            coverageStrategy: .alwaysInteresting,
             additionalSeeds: [0, 10, 20, 1, 2]
         ) { (input: Int) in
             if input % 10 == 0 {
@@ -229,13 +221,13 @@ struct FuzzEngineTests {
     func testNewCoverageVerboseInIterations() async {
         let config = FuzzEngineConfig(
             maxDuration: .seconds(10),
-            verbose: true,
-            coverageStrategy: .alwaysInteresting
+            verbose: true
         )
 
         let result = await fuzzEngineWithMaxIterations(
             maxIterations: 50,
-            config: config
+            config: config,
+            coverageStrategy: .alwaysInteresting
         ) { (_: Int) in }
 
         #expect(result.corpus.count >= 1, "Should have corpus entries")
@@ -283,11 +275,7 @@ struct FuzzEngineTests {
                 beginMeasurement: { SanCovCounters.MeasurementContext.testInstance() },
                 endMeasurement: { _ in },
                 resetCoverage: { _ in },
-                snapshotCoveredArraysWithContext: { _ in snapshotCoveredArraysFn() },
-                withRawCoverage: { _, _ in false },
-                mergeCoverageIntoBitmap: { _, _, _, _ in false },
-                computeSignatureHash: { _ in 0 },
-                withCoveredIndices: { _, _ in false }
+                snapshotCoveredArraysWithContext: { _ in snapshotCoveredArraysFn() }
             )
         } operation: {
             await fuzzEngineWithMaxIterations(maxIterations: 50) { (input: Int) in
@@ -307,7 +295,7 @@ struct FuzzEngineTests {
     @Test("FuzzEngine resetCoverage is called between iterations")
     func testResetCoverageCalledBetweenIterations() async {
         let resetCount = SyncBox(0)
-        let coveredIndicesCheckCount = SyncBox(0)
+        let snapshotCount = SyncBox(0)
 
         let result = await withDependencies {
             $0.coverageCounters = CoverageCountersClient(
@@ -318,29 +306,22 @@ struct FuzzEngineTests {
                     resetCount.update { $0 += 1 }
                 },
                 snapshotCoveredArraysWithContext: { _ in
-                    // Return sparse coverage with a unique index each time
-                    SparseCoverage(indices: [UInt32(coveredIndicesCheckCount.value)])
-                },
-                withRawCoverage: { _, _ in false },
-                mergeCoverageIntoBitmap: { _, _, _, _ in false },
-                computeSignatureHash: { _ in 0 },
-                withCoveredIndices: { _, body in
-                    coveredIndicesCheckCount.update { $0 += 1 }
-                    // Return unique index each time so corpus accepts it
-                    let index = UInt32(coveredIndicesCheckCount.value)
-                    return [index].withUnsafeBufferPointer { body($0) }
+                    // Unique index each time so the strategy accepts every run
+                    snapshotCount.update { $0 += 1 }
+                    return SparseCoverage(indices: [UInt32(snapshotCount.value)])
                 }
             )
         } operation: {
             await fuzzEngineWithMaxIterations(maxIterations: 10) { (_: Int) in }
         }
 
-        // Reset should be called once per iteration
-        // withCoveredIndices should be called once per iteration (for signature match check)
+        // Reset should be called once per iteration.
+        // Every strategy decision runs over the iteration's sparse snapshot,
+        // so the snapshot is taken once per iteration.
         #expect(resetCount.value == result.stats.totalInputs,
                 "resetCoverage should be called once per iteration: got \(resetCount.value), expected \(result.stats.totalInputs)")
-        #expect(coveredIndicesCheckCount.value == result.stats.totalInputs,
-                "withCoveredIndices should be called once per iteration")
+        #expect(snapshotCount.value == result.stats.totalInputs,
+                "the coverage snapshot should be taken once per iteration")
     }
 
     @Test("FuzzEngine beginMeasurement called only once")
@@ -359,11 +340,7 @@ struct FuzzEngineTests {
                     endCount.update { $0 += 1 }
                 },
                 resetCoverage: { _ in },
-                snapshotCoveredArraysWithContext: { _ in SparseCoverage(indices: [1]) },
-                withRawCoverage: { _, _ in false },
-                mergeCoverageIntoBitmap: { _, _, _, _ in false },
-                computeSignatureHash: { _ in 0 },
-                withCoveredIndices: { _, _ in false }
+                snapshotCoveredArraysWithContext: { _ in SparseCoverage(indices: [1]) }
             )
         } operation: {
             await fuzzEngineWithMaxIterations(maxIterations: 50) { (_: Int) in }
@@ -402,16 +379,11 @@ struct FuzzEngineTests {
                     events.update { $0.append(.reset) }
                 },
                 snapshotCoveredArraysWithContext: { _ in
-                    SparseCoverage(indices: [UInt32(checkCounter.value)])
-                },
-                withRawCoverage: { _, _ in false },
-                mergeCoverageIntoBitmap: { _, _, _, _ in false },
-                computeSignatureHash: { _ in 0 },
-                withCoveredIndices: { _, body in
+                    // The strategy decision reads coverage through the
+                    // per-iteration snapshot — that read IS the coverage check.
                     events.update { $0.append(.coverageCheck) }
                     checkCounter.update { $0 += 1 }
-                    let index = UInt32(checkCounter.value)
-                    return [index].withUnsafeBufferPointer { body($0) }
+                    return SparseCoverage(indices: [UInt32(checkCounter.value)])
                 }
             )
         } operation: {
@@ -451,6 +423,7 @@ struct FuzzEngineTests {
             return await fuzzEngineWithMaxIterations(
                 maxIterations: 100,
                 config: config,
+                coverageStrategy: .pathTrie,
                 additionalSeeds: [0, 1, -1, 100, -100, Int.max, Int.min]
             ) { (input: Int) in
                 // Exercise different code paths based on input

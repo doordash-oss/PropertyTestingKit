@@ -143,4 +143,66 @@ struct FlattenedScheduleTests {
             }
         }
     }
+
+    /// Custom strategies are first-class under schedule fuzzing: the strategy
+    /// is non-generic, so the same value crosses into the extended-pack run —
+    /// no silent fallback to a built-in.
+    @Test("Scheduled fuzz runs the user's custom strategy", .timeLimit(.minutes(1)))
+    func scheduledFuzzUsesCustomStrategy() async throws {
+        // This is the flagship pin of the no-fallback contract, so unlike the
+        // sibling scheduled tests it must not pass vacuously: retry starved
+        // runs (heavy parallel load can zero out 200 ms) until iterations
+        // happen, then ALWAYS assert. The time limit backstops the retries.
+        for attempt in 1...20 {
+            let decideRan = ObservedFlag()
+            let custom = CoverageStrategy(makeEngine: {
+                CoverageEngine { _ in
+                    decideRan.set()
+                    return true
+                }
+            })
+
+            let result = try await withDependencies {
+                $0.continuousClock = ImmediateClock()
+            } operation: {
+                try await fuzz(
+                    using: Mutator<Int>(seeds: [1, 2, 3], mutate: { [$0 &+ 1] }),
+                    duration: .milliseconds(200),
+                    persistence: .ephemeral,
+                    coverageStrategy: custom,
+                    scheduleFuzzing: true
+                ) { (_: Int) in }
+            }
+            guard result.stats.totalInputs > 0 else { continue }
+
+            #expect(decideRan.value,
+                    "the CUSTOM strategy's decide must run under schedule fuzzing")
+            #expect(!result.corpus.entries.isEmpty,
+                    "an always-true custom decision must produce entries")
+            if attempt > 1 {
+                print("scheduledFuzzUsesCustomStrategy: needed \(attempt) attempts")
+            }
+            return
+        }
+        Issue.record("scheduled run starved to zero iterations in all 20 attempts")
+    }
+}
+
+/// Minimal thread-safe flag for observing strategy callbacks across the
+/// engine's threads.
+private final class ObservedFlag: @unchecked Sendable {
+    private let lock = NSLock()
+    private var flag = false
+
+    var value: Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return flag
+    }
+
+    func set() {
+        lock.lock()
+        defer { lock.unlock() }
+        flag = true
+    }
 }

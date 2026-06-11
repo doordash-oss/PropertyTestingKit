@@ -22,7 +22,11 @@
 import Foundation
 import os
 import SanCovHooks
-@_exported import EdgeHooks
+import EdgeHooks
+// PathTrie is part of the public custom-strategy recipes (see
+// `CoverageStrategy.init(makeEngine:)`). The rest of EdgeHooks — and the raw
+// SanCovHooks C surface beneath it — stays an implementation detail.
+@_exported import class EdgeHooks.PathTrie
 import MachO
 
 /// Namespace for SanitizerCoverage APIs with task-level isolation.
@@ -112,14 +116,6 @@ enum SanCovCounters {
         sancov_get_counter_count()
     }
 
-    /// Get the number of edges covered by the current task.
-    ///
-    /// This only counts coverage from the current Swift task.
-    /// Coverage from other concurrent tasks is not included.
-    static var currentCoveredCount: Int {
-        sancov_get_covered_count()
-    }
-
     /// Filter out compiler-generated edges (outlined destroyers, lazy witness
     /// table accessors, lazy metadata accessors, etc.) by setting their guard
     /// values to `UINT32_MAX`. This makes the hot-path check
@@ -134,28 +130,6 @@ enum SanCovCounters {
     /// The number of edges disabled by `applyEdgeFilter()`.
     static var filteredEdgeCount: Int {
         sancov_get_filtered_count()
-    }
-}
-
-// MARK: - Edge Hook
-
-extension SanCovCounters {
-    /// Install a custom edge hook that will be called on every edge hit.
-    ///
-    /// The hook receives the guard pointer — dereference it to get the edge index.
-    /// Call `sancov_record_edge(guardPtr)` from your hook for default behavior.
-    ///
-    /// Pass `nil` to restore the default.
-    ///
-    /// - Important: Must be called before fuzzing starts. Not safe to call during fuzzing.
-    public static func setEdgeHook(_ hook: EdgeHook?) {
-        sancov_install_swift_hook(hook ?? defaultEdgeHook)
-    }
-
-    /// Attach a path trie to a measurement context.
-    /// The trie edge hook reads the trie from the context on every edge hit.
-    static func attachTrie(_ trie: PathTrie, to context: MeasurementContext) {
-        trie.attach(to: context.rawContext)
     }
 }
 
@@ -288,93 +262,6 @@ extension SanCovCounters {
         return SparseCoverage(indices: indices)
     }
 
-    /// Get raw coverage data without creating a Swift array.
-    ///
-    /// This is useful when you want to check coverage uniqueness before allocating.
-    /// The closure receives the raw pointer and count - do NOT store the pointer
-    /// as it will be freed when the closure returns.
-    ///
-    /// - Parameters:
-    ///   - context: The measurement context.
-    ///   - body: Closure that receives the raw indices pointer and count.
-    /// - Returns: The result of the closure.
-    static func withRawCoverage<T>(
-        context: MeasurementContext,
-        body: @escaping (UnsafePointer<UInt32>?, Int) throws -> T
-    ) throws -> T {
-        try checkAvailabilty()
-
-        let count = getCoveredCount(with: context)
-        guard count > 0 else {
-            return try body(nil, 0)
-        }
-
-        guard let ptr = sancov_snapshot_covered_indices_with_context(context.rawContext) else {
-            return try body(nil, 0)
-        }
-        defer { free(ptr) }
-
-        return try body(ptr, count)
-    }
-
-    /// Merge coverage from a measurement context directly into a bitmap.
-    /// This is the fastest path - no allocation, early exit on first new coverage.
-    ///
-    /// - Parameters:
-    ///   - context: The measurement context to read coverage from.
-    ///   - bitmap: The bitmap storage to merge into.
-    ///   - wordCount: Number of UInt64 words in the bitmap.
-    ///   - mergeAll: If true, merge all edges; if false, return early on first new edge.
-    /// - Returns: true if any new coverage was found, false otherwise.
-    static func mergeCoverageIntoBitmap(
-        context: MeasurementContext,
-        bitmap: UnsafeMutablePointer<UInt64>,
-        wordCount: Int,
-        mergeAll: Bool
-    ) -> Bool {
-        guard isAvailable else { return false }
-        return sancov_merge_coverage_into_bitmap(
-            context.rawContext,
-            bitmap,
-            wordCount,
-            mergeAll
-        )
-    }
-
-    /// Compute signature hash from coverage data without allocation.
-    /// This matches the SparseCoverage.signatureHash algorithm.
-    ///
-    /// - Parameter context: The measurement context.
-    /// - Returns: The signature hash, or 0 if no coverage.
-    static func computeSignatureHash(context: MeasurementContext) -> Int {
-        guard isAvailable else { return 0 }
-        return Int(sancov_compute_signature_hash(context.rawContext))
-    }
-
-    /// Compute signature hash from an explicit array of edge indices.
-    /// Pure function — no dependency on live coverage counters.
-    /// Uses the same algorithm as `computeSignatureHash(context:)`.
-    static func computeSignatureHash(indices: [UInt32]) -> Int {
-        indices.withUnsafeBufferPointer { buffer in
-            Int(sancov_compute_hash_from_indices(buffer.baseAddress, buffer.count))
-        }
-    }
-
-    /// Access the covered indices buffer directly (zero-copy).
-    /// The pointer is valid until the next `resetCoverage` or `endMeasurement` call.
-    ///
-    /// - Returns: A buffer pointer to the covered indices, or nil if no coverage.
-    static func withCoveredIndices<R>(
-        context: MeasurementContext,
-        body: (UnsafeBufferPointer<UInt32>) -> R
-    ) -> R {
-        var count: Int = 0
-        let ptr = sancov_get_covered_indices(context.rawContext, &count)
-        if let ptr, count > 0 {
-            return body(UnsafeBufferPointer(start: ptr, count: count))
-        }
-        return body(UnsafeBufferPointer(start: nil, count: 0))
-    }
 }
 
 // MARK: Coverage Gap Detection

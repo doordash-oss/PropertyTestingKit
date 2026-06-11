@@ -142,25 +142,32 @@ struct ScheduleCoverageTest {
             let _ = Self.branchingCode(0)
         }
 
-        let trie = PathTrie()
+        // The PRODUCTION .pathTrie engine, judged via its evaluator.
         let ctx = SanCovCounters.beginMeasurement()
-        SanCovCounters.attachTrie(trie, to: ctx)
-        SanCovCounters.resetCoverage(ctx)
+        defer { SanCovCounters.endMeasurement(ctx) }
+        let evaluator: CoverageEvaluator<Int> = CoverageStrategy.pathTrie.makeEvaluator()
+        evaluator.setup?(ctx)
+        let coverageClient = CoverageCountersClient.liveValue
+        let corpus = Corpus<Int>()
 
-        // Run branchingCode(111) under schedule control with g_target_context
-        try await ScheduleController.run(scheduleBytes: [0], coverageContext: ctx.rawContext) {
-            let _ = Self.branchingCode(111)
+        // Two runs over DIFFERENT branches. If g_target_context routes edges
+        // into the context, both paths advance the trie and both judge
+        // unique. If routing were broken, both paths would be EMPTY: run 1
+        // would mark the root terminal and run 2 would judge non-unique.
+        func judgedRun(_ input: Int) async throws -> Bool {
+            SanCovCounters.resetCoverage(ctx)
+            try await ScheduleController.run(scheduleBytes: [0], coverageContext: ctx.rawContext) {
+                let _ = Self.branchingCode(input)
+            }
+            return evaluator.evaluate(input, nil, ctx, coverageClient, corpus) != nil
         }
 
-        let isNovel = trie.isUniquePath
-        print("After branchingCode(111): isUniquePath=\(isNovel)")
+        let first = try await judgedRun(111)
+        let second = try await judgedRun(222)
+        print("After branchingCode(111)/(222): unique=\(first)/\(second)")
 
-        SanCovCounters.endMeasurement(ctx)
-
-        // The trie must have advanced from root — g_target_context routes edges
-        // to the measurement context, and the trie hook records them.
-        // Without this fix, tls_cached_measurement_context would be NULL and
-        // the trie would never advance (isUniquePath would always be false).
-        #expect(isNovel, "Trie must advance under g_target_context — edges must reach the trie")
+        #expect(first, "First path must reach the trie under g_target_context")
+        #expect(second,
+                "A DIFFERENT branch must judge unique — an empty (unrouted) path would have terminal-marked the root")
     }
 }

@@ -13,7 +13,7 @@
 // limitations under the License.
 
 //  Tests for the trie-based path tracking.
-//  Uses sancov_trie_advance directly to test the trie data structure
+//  Drives PathTrie.advance directly to test the trie data structure
 //  without going through the coverage system (avoids framework edge pollution).
 //
 
@@ -31,7 +31,7 @@ struct TrieEdgeHookTests {
         let trie = PathTrie()
         trie.advance(0)
         trie.advance(1)
-        #expect(trie.isUniquePath)
+        #expect(trie.markTerminalIfUnique())
     }
 
     @Test("Same path twice is not unique")
@@ -41,14 +41,13 @@ struct TrieEdgeHookTests {
         // First run: 0 → 1
         trie.advance(0)
         trie.advance(1)
-        #expect(trie.isUniquePath)
-        trie.markTerminal()
+        #expect(trie.markTerminalIfUnique())
         trie.reset()
 
         // Second run: same path 0 → 1
         trie.advance(0)
         trie.advance(1)
-        #expect(!trie.isUniquePath)
+        #expect(!trie.markTerminalIfUnique())
     }
 
     @Test("Different path is unique")
@@ -58,13 +57,13 @@ struct TrieEdgeHookTests {
         // First run: 0 → 1
         trie.advance(0)
         trie.advance(1)
-        trie.markTerminal()
+        _ = trie.markTerminalIfUnique()
         trie.reset()
 
         // Second run: 0 → 2 (different second edge)
         trie.advance(0)
         trie.advance(2)
-        #expect(trie.isUniquePath)
+        #expect(trie.markTerminalIfUnique())
     }
 
     @Test("Reversed path is unique")
@@ -74,13 +73,13 @@ struct TrieEdgeHookTests {
         // First run: 0 → 1
         trie.advance(0)
         trie.advance(1)
-        trie.markTerminal()
+        _ = trie.markTerminalIfUnique()
         trie.reset()
 
         // Second run: 1 → 0
         trie.advance(1)
         trie.advance(0)
-        #expect(trie.isUniquePath)
+        #expect(trie.markTerminalIfUnique())
     }
 
     // MARK: - Length Sensitivity
@@ -93,13 +92,13 @@ struct TrieEdgeHookTests {
         trie.advance(0)
         trie.advance(1)
         trie.advance(2)
-        trie.markTerminal()
+        _ = trie.markTerminalIfUnique()
         trie.reset()
 
         // Second run: 0 → 1 (prefix)
         trie.advance(0)
         trie.advance(1)
-        #expect(trie.isUniquePath, "Prefix of existing path should be unique")
+        #expect(trie.markTerminalIfUnique(), "Prefix of existing path should be unique")
     }
 
     @Test("Extension of existing path is unique")
@@ -109,14 +108,14 @@ struct TrieEdgeHookTests {
         // First run: 0 → 1
         trie.advance(0)
         trie.advance(1)
-        trie.markTerminal()
+        _ = trie.markTerminalIfUnique()
         trie.reset()
 
         // Second run: 0 → 1 → 2 (extension — novel because edge 2 added new node)
         trie.advance(0)
         trie.advance(1)
         trie.advance(2)
-        #expect(trie.isUniquePath, "Extension of existing path should be unique")
+        #expect(trie.markTerminalIfUnique(), "Extension of existing path should be unique")
     }
 
     // MARK: - Multiple Paths
@@ -129,15 +128,14 @@ struct TrieEdgeHookTests {
         for i: UInt32 in 0..<5 {
             trie.advance(0)
             trie.advance(i + 1)
-            #expect(trie.isUniquePath)
-            trie.markTerminal()
+            #expect(trie.markTerminalIfUnique())
             trie.reset()
         }
 
         // Replay path 0 → 3 (already stored)
         trie.advance(0)
         trie.advance(3)
-        #expect(!trie.isUniquePath, "Previously stored path should not be unique")
+        #expect(!trie.markTerminalIfUnique(), "Previously stored path should not be unique")
     }
 
     // MARK: - Novel Flag
@@ -149,20 +147,20 @@ struct TrieEdgeHookTests {
         // First run: 0 → 1
         trie.advance(0)
         trie.advance(1)
-        trie.markTerminal()
+        _ = trie.markTerminalIfUnique()
         trie.reset()
 
         // Second run: 0 → 1 is terminal, so NOT unique
         trie.advance(0)
         trie.advance(1)
-        #expect(!trie.isUniquePath)
+        #expect(!trie.markTerminalIfUnique())
         trie.reset()
 
         // Third run: 0 → 1 → 5 — novel flag should be set
         trie.advance(0)
         trie.advance(1)
         trie.advance(5)
-        #expect(trie.isUniquePath, "Path with new edge should be unique via novel flag")
+        #expect(trie.markTerminalIfUnique(), "Path with new edge should be unique via novel flag")
     }
 
     // MARK: - Reset
@@ -173,12 +171,12 @@ struct TrieEdgeHookTests {
 
         trie.advance(0)
         trie.advance(1)
-        trie.markTerminal()
+        _ = trie.markTerminalIfUnique()
         trie.reset()
 
         // After reset, a completely new path should be unique
         trie.advance(9)
-        #expect(trie.isUniquePath)
+        #expect(trie.markTerminalIfUnique())
     }
 
     // MARK: - Loop Immunity
@@ -190,36 +188,70 @@ struct TrieEdgeHookTests {
         // First run: edges 0, 1 (each advanced once — trie only sees first hits)
         trie.advance(0)
         trie.advance(1)
-        trie.markTerminal()
+        _ = trie.markTerminalIfUnique()
         trie.reset()
 
         // Second run: same edges, same order — should be duplicate
         trie.advance(0)
         trie.advance(1)
-        #expect(!trie.isUniquePath, "Same edge sequence should be duplicate")
+        #expect(!trie.markTerminalIfUnique(), "Same edge sequence should be duplicate")
+    }
+
+    // MARK: - Compound judge-and-mark
+
+    /// Check-then-mark as two lock acquisitions lets a straggler `advance`
+    /// (an un-awaited child task's edge) move the cursor between them,
+    /// putting the terminal mark on the wrong node. The compound form judges
+    /// and marks in one critical section.
+    @Test("markTerminalIfUnique accepts and marks a novel path")
+    func markTerminalIfUniqueAcceptsNovel() {
+        let trie = PathTrie()
+        trie.advance(0)
+        trie.advance(1)
+        #expect(trie.markTerminalIfUnique(), "First sight of a path is unique")
+    }
+
+    @Test("markTerminalIfUnique rejects a replayed path")
+    func markTerminalIfUniqueRejectsReplay() {
+        let trie = PathTrie()
+        trie.advance(0)
+        trie.advance(1)
+        _ = trie.markTerminalIfUnique()
+        trie.reset()
+
+        trie.advance(0)
+        trie.advance(1)
+        #expect(!trie.markTerminalIfUnique(), "An identical replay is not unique")
     }
 
     // MARK: - Integration with Coverage System
 
-    @Test("Trie advances on first-hit via sancov_record_edge")
-    func trieAdvancesViaRecordEdge() {
-        let ctx = sancov_begin_measurement()!
-        let trie = PathTrie()
-        trie.attach(to: ctx)
-        defer { sancov_end_measurement(ctx) }
+    @Test("Trie advances on first-hit via the dispatched trie observer")
+    func trieAdvancesViaDispatch() {
+        let context = SanCovCounters.beginMeasurement()
+        defer { SanCovCounters.endMeasurement(context) }
+
+        // The PRODUCTION .pathTrie engine: the context co-owns the observer
+        // (and so the trie) — no lifetime pinning needed even though
+        // instrumented edges keep dispatching.
+        let evaluator: CoverageEvaluator<Int> = CoverageStrategy.pathTrie.makeEvaluator()
+        evaluator.setup?(context)
 
         var g0: UInt32 = 0
         var g1: UInt32 = 1
-        sancov_record_edge(&g0)
-        sancov_record_edge(&g1)
+        sancov_dispatch_edge(&g0)
+        sancov_dispatch_edge(&g1)
 
-        // The trie should have been advanced by sancov_record_edge
-        #expect(trie.isUniquePath)
+        // The dispatched edges must have advanced the engine's trie: a first
+        // sight of this path judges unique.
+        let coverageClient = CoverageCountersClient.liveValue
+        let corpus = Corpus<Int>()
+        #expect(evaluator.evaluate(1, nil, context, coverageClient, corpus) != nil)
 
         // Also verify coverage map was written
-        let map = ctx.pointee.coverage_map!
-        #expect(map[0] == 1)
-        #expect(map[1] == 1)
+        let map = context.rawContext.pointee.coverage_map
+        #expect(map?[0] == 1)
+        #expect(map?[1] == 1)
     }
 
     // MARK: - Empty Path
@@ -227,14 +259,14 @@ struct TrieEdgeHookTests {
     @Test("Empty path is unique on first run")
     func emptyPathFirstRun() {
         let trie = PathTrie()
-        #expect(trie.isUniquePath)
+        #expect(trie.markTerminalIfUnique())
     }
 
     @Test("Empty path is not unique after marking terminal")
     func emptyPathAfterTerminal() {
         let trie = PathTrie()
-        trie.markTerminal()
+        _ = trie.markTerminalIfUnique()
         trie.reset()
-        #expect(!trie.isUniquePath)
+        #expect(!trie.markTerminalIfUnique())
     }
 }

@@ -1,5 +1,5 @@
 {
-  "originHash" : "ab9e1d64c1b677b7df99548448864038e175b800d477b6ebeedf8b5abd1a186d",
+  "originHash" : "c238157c242dbc7d3bc2e6137e46d5c588b7780d9e740224d6caae2d44ac9b74",
   "pins" : [
     {
       "identity" : "combine-schedulers",
@@ -35,6 +35,15 @@
       "state" : {
         "branch" : "runtime_forwarding",
         "revision" : "5f7d00d7384fe6828aaa0ce25804f96f08cd697f"
+      }
+    },
+    {
+      "identity" : "package-jemalloc",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/ordo-one/package-jemalloc.git",
+      "state" : {
+        "revision" : "e8a5db026963f5bfeac842d9d3f2cc8cde323b49",
+        "version" : "1.0.0"
       }
     },
     {

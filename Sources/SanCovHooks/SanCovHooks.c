@@ -18,7 +18,6 @@
 #include "include/SanCovHooks.h"
 #include <string.h>
 #include <dlfcn.h>
-#include <os/lock.h>
 #include <fcntl.h>
 #include <unistd.h>
 #include <sys/stat.h>
@@ -622,22 +621,20 @@ static void ctx_retain(SanCovMeasurementContext* ctx) {
     }
 }
 
-// Break the bidirectional context<->trie link as the context is being freed, so
-// a trie that outlives this context never writes through a dangling
-// owner_context in sancov_trie_destroy. Defined below (needs the SanCovPathTrie
-// definition and g_trie_lock); performs the unlink under g_trie_lock.
-static void detach_trie_from_dying_context(SanCovMeasurementContext* ctx);
+// Defined below with the recorder API; ONE release path so a future fix to
+// the data-release semantics cannot land in one copy and miss the other.
+static void release_recorder_data(SanCovMeasurementContext* context);
 
 // Release a measurement context (decrement refcount, free if zero)
 static void ctx_release(SanCovMeasurementContext* ctx) {
     if (ctx) {
         int old_count = atomic_fetch_sub(&ctx->refcount, 1);
         if (old_count == 1) {
-            // Refcount dropped to zero, free the context. First sever the link
-            // with any attached trie: clear our forward pointer AND the trie's
-            // back-pointer to us, so a later trie destroy can't dereference this
-            // freed context (the root cause of the parallel-fuzz heap corruption).
-            detach_trie_from_dying_context(ctx);
+            // Refcount dropped to zero, free the context. Drop the co-owned
+            // recorder data now: the fn was severed at end_measurement, and
+            // with the last reference gone no thread can still dispatch into
+            // this context, so releasing the data here can race nothing.
+            release_recorder_data(ctx);
             cleanup_task_map(ctx);
             free(ctx->covered_indices);
             free(ctx);
@@ -702,10 +699,19 @@ static SanCovMeasurementContext* retain_inherited_if_valid(uint64_t handle) {
     return ctx;
 }
 
+// xmalloc does not zero: every freshly allocated context must start with the
+// recorder fields cleared (default recorder, no data, no lifecycle hooks).
+static void init_recorder_fields(SanCovMeasurementContext* ctx) {
+    ctx->edge_recorder_bits = 0;
+    ctx->recorder_data = NULL;
+    ctx->recorder_reset_bits = 0;
+    ctx->recorder_release_bits = 0;
+}
+
 SanCovMeasurementContext* sancov_begin_measurement(void) {
     SanCovMeasurementContext* ctx = (SanCovMeasurementContext*)xmalloc(sizeof(SanCovMeasurementContext));
     ctx->coverage_map = NULL;
-    ctx->covered_count = 0;
+    atomic_init(&ctx->covered_count, 0);
     // Generation tag for the inheritance handle. Monotonic (mod 2^16); two
     // contexts that share a tag are >= 65536 begin_measurement calls apart, far
     // beyond the lifetime of any straggler that could alias a recycled address.
@@ -716,7 +722,7 @@ SanCovMeasurementContext* sancov_begin_measurement(void) {
     size_t initial_cap = g_guard_count > 64 ? g_guard_count : 64;
     ctx->covered_indices_capacity = initial_cap;
     ctx->covered_indices = (uint32_t*)xmalloc(ctx->covered_indices_capacity * sizeof(uint32_t));
-    ctx->path_trie = NULL;
+    init_recorder_fields(ctx);
     atomic_init(&ctx->refcount, 1);  // Start with refcount of 1 (owner reference)
 
     // Associate this measurement context with the current task
@@ -751,11 +757,11 @@ SanCovMeasurementContext* sancov_begin_measurement(void) {
 SanCovMeasurementContext* sancov_create_dummy_context(void) {
     SanCovMeasurementContext* ctx = (SanCovMeasurementContext*)xmalloc(sizeof(SanCovMeasurementContext));
     ctx->coverage_map = NULL;
-    ctx->covered_count = 0;
+    atomic_init(&ctx->covered_count, 0);
     ctx->generation = (uint16_t)atomic_fetch_add_explicit(&g_next_generation, 1, memory_order_relaxed);
     ctx->covered_indices_capacity = 0;
     ctx->covered_indices = NULL;
-    ctx->path_trie = NULL;
+    init_recorder_fields(ctx);
     atomic_init(&ctx->refcount, 1);
     return ctx;
 }
@@ -768,7 +774,7 @@ void sancov_reset_coverage(SanCovMeasurementContext* ctx) {
     if (ctx->coverage_map != NULL && g_guard_count > 0) {
         memset(ctx->coverage_map, 0, g_guard_count);
     }
-    ctx->covered_count = 0;
+    atomic_store_explicit(&ctx->covered_count, 0, memory_order_relaxed);
     // covered_indices buffer is reused — just reset the count (capacity stays)
 
     // Clear the calling thread's TLS-cached coverage map pointer so the next
@@ -781,15 +787,94 @@ void sancov_reset_coverage(SanCovMeasurementContext* ctx) {
     // before any edge fired to refresh the cache). Wiping it silently dropped
     // coverage in foreign concurrent measurements (parallelEngineIsolation).
 
-    // Reset the trie if attached (move pointer back to root, clear novel flag)
-    if (ctx->path_trie) {
-        sancov_trie_reset(ctx->path_trie);
+    // Reset per-iteration recorder state (e.g. a path-trie cursor back to
+    // root) through the generic hook, so strategy state replays from a clean
+    // slate each iteration just like the coverage map does.
+    SanCovRecorderDataFn reset =
+        (SanCovRecorderDataFn)__atomic_load_n(&ctx->recorder_reset_bits, __ATOMIC_ACQUIRE);
+    if (reset) {
+        reset(__atomic_load_n(&ctx->recorder_data, __ATOMIC_ACQUIRE));
     }
+
+}
+
+// Release the context's current recorder data through its release hook (if
+// any), consuming both fields. Callers must have already cleared the recorder
+// fn so no new dispatch can reach the data being released.
+//
+// Atomic exchanges, not load-then-store: two concurrent releasers would each
+// load the same (release, data) pair and double-invoke the hook. With
+// exchanges each field is taken exactly once, so at most one caller can hold
+// both — a race degrades to a leak, never a double release. (In-tree callers
+// never race; this closes the latent header-contract violation for free.)
+static void release_recorder_data(SanCovMeasurementContext* context) {
+    SanCovRecorderDataFn release =
+        (SanCovRecorderDataFn)__atomic_exchange_n(&context->recorder_release_bits, 0, __ATOMIC_ACQ_REL);
+    void* data = __atomic_exchange_n(&context->recorder_data, NULL, __ATOMIC_ACQ_REL);
+    if (release && data) {
+        release(data);
+    }
+}
+
+void sancov_context_set_recorder(
+    SanCovMeasurementContext* context,
+    SanCovEdgeRecorder recorder,
+    void* data,
+    SanCovRecorderDataFn reset,
+    SanCovRecorderDataFn release) {
+    if (context == NULL) return;
+
+    // Stop new dispatch/reset against the OLD state, then drop ownership of it.
+    // (Replacing while edges actively dispatch is unsupported; see header.)
+    __atomic_store_n(&context->edge_recorder_bits, 0, __ATOMIC_RELEASE);
+    __atomic_store_n(&context->recorder_reset_bits, 0, __ATOMIC_RELEASE);
+    release_recorder_data(context);
+
+    if (recorder) {
+        // Data and hooks first, then the fn (release): a dispatcher that
+        // observes the fn (acquire) is guaranteed to observe what it needs.
+        __atomic_store_n(&context->recorder_release_bits, (uintptr_t)release, __ATOMIC_RELEASE);
+        __atomic_store_n(&context->recorder_data, data, __ATOMIC_RELEASE);
+        __atomic_store_n(&context->recorder_reset_bits, (uintptr_t)reset, __ATOMIC_RELEASE);
+        __atomic_store_n(&context->edge_recorder_bits, (uintptr_t)recorder, __ATOMIC_RELEASE);
+    } else if (release && data) {
+        // Clearing while passing a payload: ownership still transferred, so
+        // honor the header's "release is called exactly once" instead of
+        // silently dropping it.
+        release(data);
+    }
+}
+
+// sancov_context_get_recorder_data lives in the header as static inline (hot path).
+
+// TESTING ONLY seams (see SanCovHooks.h).
+void* sancov_context_get_recorder_for_testing(SanCovMeasurementContext* context) {
+    if (context == NULL) return NULL;
+    return (void*)__atomic_load_n(&context->edge_recorder_bits, __ATOMIC_ACQUIRE);
+}
+
+void sancov_release_for_testing(SanCovMeasurementContext* context) {
+    ctx_release(context);
+}
+
+void sancov_retain_for_testing(SanCovMeasurementContext* context) {
+    ctx_retain(context);
 }
 
 /// Cleanup caches, etc
 void sancov_end_measurement(SanCovMeasurementContext* ctx) {
     if (ctx == NULL) return;
+
+    // Sever the recorder fn FIRST: stragglers that retain this context past
+    // `end` must dispatch to the default recorder. The recorder DATA (and its
+    // release hook) deliberately stay: a straggler that loaded the fn just
+    // before this store may still read the data, and every thread that can
+    // dispatch holds a context reference via its TLS cache — so the data is
+    // released only when the last reference drops (see ctx_release). That
+    // closes the in-flight use-after-free window the old "attacher keeps the
+    // data alive" contract merely documented.
+    __atomic_store_n(&ctx->edge_recorder_bits, 0, __ATOMIC_RELEASE);
+    __atomic_store_n(&ctx->recorder_reset_bits, 0, __ATOMIC_RELEASE);
 
     // Drop the inheritance registration first so concurrent routing decisions
     // stop matching this context by value pointer before we tear it down.
@@ -831,9 +916,9 @@ static const uint8_t* get_counters_with_context(SanCovMeasurementContext* ctx) {
 // Get covered count for a measurement context (O(1)).
 size_t sancov_get_covered_count_with_context(SanCovMeasurementContext* ctx) {
     if (!ctx) return 0;
-    // Atomic load: covered_count is bumped via __atomic_fetch_add on edge-firing
-    // threads, so a plain read here is a data race (TSan-confirmed).
-    return __atomic_load_n(&ctx->covered_count, __ATOMIC_RELAXED);
+    // covered_count is bumped on edge-firing threads (record_first_hit), so a
+    // plain read here is a data race (TSan-confirmed). The field is _Atomic.
+    return atomic_load_explicit(&ctx->covered_count, memory_order_relaxed);
 }
 
 // Allocate and fill an array of covered edge indices.
@@ -843,7 +928,7 @@ const uint32_t* sancov_get_covered_indices(SanCovMeasurementContext* ctx, size_t
         if (out_count) *out_count = 0;
         return NULL;
     }
-    size_t count = ctx->covered_count;
+    size_t count = atomic_load_explicit(&ctx->covered_count, memory_order_relaxed);
     *out_count = count;
     if (count == 0 || !ctx->covered_indices) return NULL;
     return ctx->covered_indices;
@@ -860,7 +945,7 @@ const uint32_t* sancov_get_covered_indices(SanCovMeasurementContext* ctx, size_t
 uint32_t* sancov_snapshot_covered_indices_with_context(SanCovMeasurementContext* ctx) {
     if (!ctx) return NULL;
 
-    size_t count = ctx->covered_count;
+    size_t count = atomic_load_explicit(&ctx->covered_count, memory_order_relaxed);
     if (count == 0) return NULL;
 
     // Fast path: copy from covered indices buffer — O(covered_edges)
@@ -939,168 +1024,6 @@ uint32_t* sancov_snapshot_covered_indices_with_context(SanCovMeasurementContext*
     return indices;
 }
 
-// Helper: Check if bit is set in bitmap
-static inline bool bitmap_contains(uint64_t* bitmap, size_t bitmap_word_count, uint32_t index) {
-    size_t word_idx = index >> 6;  // index / 64
-    if (word_idx >= bitmap_word_count) return false;
-    uint64_t bit = 1ULL << (index & 63);  // index % 64
-    return (bitmap[word_idx] & bit) != 0;
-}
-
-// Helper: Set bit in bitmap, return true if it was newly set
-static inline bool bitmap_insert(uint64_t* bitmap, size_t bitmap_word_count, uint32_t index) {
-    size_t word_idx = index >> 6;
-    if (word_idx >= bitmap_word_count) return false;
-    uint64_t bit = 1ULL << (index & 63);
-    uint64_t old = bitmap[word_idx];
-    if ((old & bit) != 0) return false;  // Already set
-    bitmap[word_idx] = old | bit;
-    return true;
-}
-
-// Compute signature hash from coverage data without allocation.
-// This matches the SparseCoverage.signatureHash algorithm:
-//   hash = XOR of (index * 0x9e3779b97f4a7c15) for each covered index
-//   hash ^= count * 0x517cc1b727220a95
-// Uses the same SIMD iteration as other coverage functions.
-int64_t sancov_compute_hash_from_indices(const uint32_t* indices, size_t count) {
-    if (!indices || count == 0) return 0;
-
-    const int64_t INDEX_PRIME = 0x9e3779b97f4a7c15LL;
-    const int64_t COUNT_PRIME = 0x517cc1b727220a95LL;
-
-    int64_t hash = 0;
-    for (size_t i = 0; i < count; i++) {
-        int64_t mixed = (int64_t)indices[i] * INDEX_PRIME;
-        hash ^= mixed;
-    }
-    hash ^= (int64_t)count * COUNT_PRIME;
-    return hash;
-}
-
-int64_t sancov_compute_signature_hash(SanCovMeasurementContext* ctx) {
-    if (!ctx) return 0;
-
-    size_t count = ctx->covered_count;
-    if (count == 0) return 0;
-
-    // Fast path: use the covered indices buffer — O(covered_edges) not O(total_edges)
-    if (ctx->covered_indices && count <= ctx->covered_indices_capacity) {
-        return sancov_compute_hash_from_indices(ctx->covered_indices, count);
-    }
-
-    // Fallback: buffer overflow, scan counters (should be rare)
-    const uint8_t* counters = get_counters_with_context(ctx);
-    size_t counter_count = sancov_get_counter_count();
-    if (!counters || counter_count == 0) return 0;
-
-    const int64_t INDEX_PRIME = 0x9e3779b97f4a7c15LL;
-    const int64_t COUNT_PRIME = 0x517cc1b727220a95LL;
-
-    int64_t hash = 0;
-
-    for (size_t i = 0; i < counter_count; i++) {
-        if (counters[i] != 0) {
-            int64_t mixed = (int64_t)i * INDEX_PRIME;
-            hash ^= mixed;
-        }
-    }
-
-    hash ^= (int64_t)count * COUNT_PRIME;
-    return hash;
-}
-
-// Merge coverage from context directly into bitmap.
-// Returns true if any new coverage was found.
-// If merge_all is false, returns immediately on first new coverage.
-// If merge_all is true, merges all coverage and returns whether any was new.
-bool sancov_merge_coverage_into_bitmap(
-    SanCovMeasurementContext* ctx,
-    uint64_t* bitmap,
-    size_t bitmap_word_count,
-    bool merge_all
-) {
-    if (!ctx || !bitmap || bitmap_word_count == 0) return false;
-
-    size_t count = ctx->covered_count;
-    if (count == 0) return false;
-
-    const uint8_t* counters = get_counters_with_context(ctx);
-    size_t counter_count = sancov_get_counter_count();
-    if (!counters || counter_count == 0) return false;
-
-    bool found_new = false;
-
-#if USE_NEON_SIMD
-
-    size_t i = 0;
-    uint8x16_t zero = vdupq_n_u8(0);
-
-    for (; i + 16 <= counter_count; i += 16) {
-        uint8x16_t chunk = vld1q_u8(counters + i);
-        uint8x16_t cmp = vcgtq_u8(chunk, zero);
-        uint64x2_t cmp64 = vreinterpretq_u64_u8(cmp);
-
-        uint64_t low = vgetq_lane_u64(cmp64, 0);
-        uint64_t high = vgetq_lane_u64(cmp64, 1);
-
-        // Skip entirely zero chunks (common case - coverage is sparse)
-        if (low == 0 && high == 0) {
-            continue;
-        }
-
-        // Process low 8 bytes using CTZ
-        while (low) {
-            int tz = __builtin_ctzll(low);
-            int byte_pos = tz >> 3;
-            uint32_t index = (uint32_t)(i + byte_pos);
-
-            if (bitmap_insert(bitmap, bitmap_word_count, index)) {
-                if (!merge_all) return true;
-                found_new = true;
-            }
-            low &= ~(0xFFULL << (byte_pos << 3));
-        }
-
-        // Process high 8 bytes
-        while (high) {
-            int tz = __builtin_ctzll(high);
-            int byte_pos = tz >> 3;
-            uint32_t index = (uint32_t)(i + 8 + byte_pos);
-
-            if (bitmap_insert(bitmap, bitmap_word_count, index)) {
-                if (!merge_all) return true;
-                found_new = true;
-            }
-            high &= ~(0xFFULL << (byte_pos << 3));
-        }
-    }
-
-    // Handle remaining bytes
-    for (; i < counter_count; i++) {
-        if (counters[i] != 0) {
-            if (bitmap_insert(bitmap, bitmap_word_count, (uint32_t)i)) {
-                if (!merge_all) return true;
-                found_new = true;
-            }
-        }
-    }
-
-#else
-    // Scalar fallback
-    for (size_t i = 0; i < counter_count; i++) {
-        if (counters[i] != 0) {
-            if (bitmap_insert(bitmap, bitmap_word_count, (uint32_t)i)) {
-                if (!merge_all) return true;
-                found_new = true;
-            }
-        }
-    }
-#endif
-
-    return found_new;
-}
-
 // Ensure thread-local fallback map is allocated
 static void ensure_tls_coverage_map(void) {
     if (tls_coverage_map == NULL && g_guard_count > 0) {
@@ -1136,8 +1059,8 @@ static uint8_t* get_current_coverage_map(void) {
     if (g_target_context != NULL) {
         atomic_fetch_add_explicit(&g_route_target_ctx, 1, memory_order_relaxed);
         // Route all edges to the target context. Set tls_cached_measurement_context
-        // so the trie and covered_indices are maintained. Trie operations are
-        // protected by g_trie_lock to handle concurrent access from pool threads.
+        // so the attached recorder/observer and covered_indices are maintained
+        // (observer state guards its own concurrent access from pool threads).
         set_tls_measurement_context(g_target_context);
         tls_cached_coverage_map = g_target_context->coverage_map;
         return g_target_context->coverage_map;
@@ -1299,7 +1222,7 @@ static uint8_t* get_current_coverage_map(void) {
     tls_cached_task = task;
     tls_cached_task_map = tls_coverage_map;
     tls_cached_generation = resolve_epoch;
-    // Clear stale measurement context so sancov_record_edge doesn't append
+    // Clear stale measurement context so dispatched edges don't append
     // edges from this task into another test's measurement context.
     set_tls_measurement_context(NULL);
     return tls_coverage_map;
@@ -1353,331 +1276,72 @@ void __sanitizer_cov_trace_pc_guard_init(uint32_t *start, uint32_t *stop) {
     // else: Same section passed again (harmless, can happen during re-initialization)
 }
 
-// Forward declaration — implemented after trie types are defined
-static void maybe_advance_trie(SanCovMeasurementContext* ctx, uint32_t edge_index);
+// MARK: - Edge Recorders
+//
+// Recorders receive the guard plus the already-resolved (map, ctx) so the hot
+// path never runs routing twice. ctx may be NULL (no-measurement TLS fallback).
 
-__attribute__((noinline))
-void sancov_record_edge(uint32_t *guard) {
-    uint8_t* map = get_current_coverage_map();
+/// Atomic first-hit: only ONE thread transitions a map cell 0→1. Concurrent
+/// child tasks inheriting the same measurement context may race on the cell;
+/// compare-and-swap ensures only the winner appends to covered_indices.
+/// The indices append uses atomic fetch_add so each concurrent child task gets
+/// a unique slot; the buffer is sized to g_guard_count in
+/// sancov_begin_measurement so there can be no realloc race here.
+/// Returns true on the first hit.
+static inline bool record_first_hit(uint32_t edge, uint8_t* map, SanCovMeasurementContext* ctx) {
+    uint8_t expected = 0;
+    if (!__atomic_compare_exchange_n(&map[edge], &expected, (uint8_t)1,
+                                     false, __ATOMIC_ACQ_REL, __ATOMIC_RELAXED)) {
+        return false;
+    }
+    if (ctx) {
+        size_t idx = atomic_fetch_add_explicit(&ctx->covered_count, 1, memory_order_relaxed);
+        if (idx < ctx->covered_indices_capacity) {
+            ctx->covered_indices[idx] = edge;
+        }
+    }
+    return true;
+}
+
+void sancov_recorder_default(uint32_t* guard, uint8_t* map, SanCovMeasurementContext* ctx) {
     if (map && *guard < g_guard_count) {
-        // Atomic first-hit check: only ONE thread transitions 0→1. Concurrent
-        // child tasks inheriting the same measurement context may race on this
-        // cell; atomic compare-and-swap ensures only the winner proceeds to
-        // trie advance / indices append.
-        uint8_t expected = 0;
-        if (__atomic_compare_exchange_n(&map[*guard], &expected, (uint8_t)1,
-                                         false, __ATOMIC_ACQ_REL, __ATOMIC_RELAXED)) {
-            SanCovMeasurementContext* ctx = tls_cached_measurement_context;
-            if (ctx) {
-                // Atomic fetch_add so each concurrent child task gets a
-                // unique slot in covered_indices. The buffer is sized to
-                // g_guard_count in sancov_begin_measurement so there can
-                // be no realloc race here.
-                size_t idx = __atomic_fetch_add(&ctx->covered_count, 1, __ATOMIC_RELAXED);
-                maybe_advance_trie(ctx, *guard);
-                if (idx < ctx->covered_indices_capacity) {
-                    ctx->covered_indices[idx] = *guard;
-                }
-            }
-        }
+        record_first_hit(*guard, map, ctx);
     }
 }
 
-__attribute__((noinline))
-void sancov_record_edge_counting(uint32_t *guard) {
-    uint8_t* map = get_current_coverage_map();
-    if (map && *guard < g_guard_count) {
-        // Atomic first-hit check so concurrent child tasks (under
-        // CoverageInheritance) can't both observe 0 and both record first-hit.
-        uint8_t expected = 0;
-        if (__atomic_compare_exchange_n(&map[*guard], &expected, (uint8_t)1,
-                                         false, __ATOMIC_ACQ_REL, __ATOMIC_RELAXED)) {
-            SanCovMeasurementContext* ctx = tls_cached_measurement_context;
-            if (ctx) {
-                size_t idx = __atomic_fetch_add(&ctx->covered_count, 1, __ATOMIC_RELAXED);
-                if (idx < ctx->covered_indices_capacity) {
-                    ctx->covered_indices[idx] = *guard;
-                }
-            }
-        } else {
-            // Already first-hit. Saturating 8-bit increment for counting mode.
-            // Relaxed because exact count per iteration isn't required for
-            // bucketing — any count >= 1 means "hit" and saturates at 255.
-            uint8_t cur = __atomic_load_n(&map[*guard], __ATOMIC_RELAXED);
-            while (cur < 255) {
-                if (__atomic_compare_exchange_n(&map[*guard], &cur, (uint8_t)(cur + 1),
-                                                 false, __ATOMIC_RELAXED, __ATOMIC_RELAXED)) {
-                    break;
-                }
-            }
-        }
-    }
+SanCovEdgeRecording sancov_record_edge_first_hit(uint32_t* guard, uint8_t* map, SanCovMeasurementContext* ctx) {
+    if (!guard || !map || *guard >= g_guard_count) return SANCOV_EDGE_SKIPPED;
+    return record_first_hit(*guard, map, ctx) ? SANCOV_EDGE_FIRST_HIT : SANCOV_EDGE_REPEAT;
 }
 
-// MARK: - Trie Edge Hook
+// Set while the calling thread is inside an observer callback, so edges fired
+// BY the callback never re-enter it (see header: re-entry deadlocks any
+// non-reentrant lock the callback holds).
+static _Thread_local bool tls_in_edge_observer = false;
 
-// Trie node: children stored as a sorted array of (edge_index, child_pointer) pairs.
-// For typical coverage (~10-50 unique edges per node), linear scan is faster than hash table.
-typedef struct TrieNode {
-    uint32_t *child_edges;          // Sorted array of edge indices
-    struct TrieNode **child_nodes;  // Parallel array of child pointers
-    uint16_t child_count;
-    uint16_t child_capacity;
-    bool is_terminal;
-} TrieNode;
-
-static TrieNode* trie_node_create(void) {
-    TrieNode* node = (TrieNode*)xmalloc(sizeof(TrieNode));
-    node->child_edges = NULL;
-    node->child_nodes = NULL;
-    node->child_count = 0;
-    node->child_capacity = 0;
-    node->is_terminal = false;
-    return node;
+bool sancov_observer_enter(void) {
+    if (tls_in_edge_observer) return false;
+    tls_in_edge_observer = true;
+    return true;
 }
 
-static void trie_node_destroy(TrieNode* node) {
-    if (!node) return;
-    for (uint16_t i = 0; i < node->child_count; i++) {
-        trie_node_destroy(node->child_nodes[i]);
-    }
-    free(node->child_edges);
-    free(node->child_nodes);
-    free(node);
-}
-
-// Find child for edge_index. Returns the child node or NULL.
-static inline TrieNode* trie_node_find_child(TrieNode* node, uint32_t edge_index) {
-    // Linear scan — fast for small child counts (typical: 1-5 children per node)
-    for (uint16_t i = 0; i < node->child_count; i++) {
-        if (node->child_edges[i] == edge_index) {
-            return node->child_nodes[i];
-        }
-    }
-    return NULL;
-}
-
-// Add a child for edge_index. Returns the new child node.
-static TrieNode* trie_node_add_child(TrieNode* node, uint32_t edge_index) {
-    if (node->child_count == node->child_capacity) {
-        uint16_t new_cap = node->child_capacity == 0 ? 4 : node->child_capacity * 2;
-        node->child_edges = (uint32_t*)realloc(node->child_edges, new_cap * sizeof(uint32_t));
-        node->child_nodes = (TrieNode**)realloc(node->child_nodes, new_cap * sizeof(TrieNode*));
-        node->child_capacity = new_cap;
-    }
-    TrieNode* child = trie_node_create();
-    node->child_edges[node->child_count] = edge_index;
-    node->child_nodes[node->child_count] = child;
-    node->child_count++;
-    return child;
-}
-
-// Path trie state
-struct SanCovPathTrie {
-    TrieNode* root;
-    TrieNode* current;
-    bool is_novel;
-    SanCovMeasurementContext* owner_context; // Back-pointer for cleanup
-};
-
-// Lock protecting trie advancement. When g_target_context routes all threads'
-// edges to one context, multiple pool threads can advance the same trie.
-static os_unfair_lock g_trie_lock = OS_UNFAIR_LOCK_INIT;
-
-// Advance trie on first-hit if context has one attached.
-// Called from sancov_record_edge on every first-hit edge.
-static bool g_trie_debug = false;
-
-static void maybe_advance_trie(SanCovMeasurementContext* ctx, uint32_t edge_index) {
-    SanCovPathTrie* trie = ctx->path_trie;
-    if (!trie) return;
-    if (g_trie_debug) {
-        fprintf(stderr, "[trie-adv] edge=%u\n", edge_index);
-    }
-
-    os_unfair_lock_lock(&g_trie_lock);
-    TrieNode* child = trie_node_find_child(trie->current, edge_index);
-    if (child) {
-        trie->current = child;
-    } else {
-        trie->current = trie_node_add_child(trie->current, edge_index);
-        trie->is_novel = true;
-    }
-    os_unfair_lock_unlock(&g_trie_lock);
-}
-
-void sancov_context_set_trie(SanCovMeasurementContext* context, SanCovPathTrie* trie) {
-    // Mutate the cross-pointers under g_trie_lock so a concurrent teardown
-    // (sancov_trie_destroy / detach_trie_from_dying_context) observes a
-    // consistent link and the two pointers never disagree.
-    os_unfair_lock_lock(&g_trie_lock);
-    if (context) context->path_trie = trie;
-    if (trie) trie->owner_context = context;
-    os_unfair_lock_unlock(&g_trie_lock);
-}
-
-// Sever the context<->trie link from the CONTEXT side as it is freed. After this
-// the trie's owner_context no longer points at the (about-to-be-freed) context,
-// so sancov_trie_destroy will not write through a dangling pointer.
-static void detach_trie_from_dying_context(SanCovMeasurementContext* ctx) {
-    os_unfair_lock_lock(&g_trie_lock);
-    SanCovPathTrie* trie = ctx->path_trie;
-    if (trie && trie->owner_context == ctx) {
-        trie->owner_context = NULL;
-    }
-    ctx->path_trie = NULL;
-    os_unfair_lock_unlock(&g_trie_lock);
-}
-
-SanCovPathTrie* sancov_trie_create(void) {
-    SanCovPathTrie* trie = (SanCovPathTrie*)xmalloc(sizeof(SanCovPathTrie));
-    trie->root = trie_node_create();
-    trie->current = trie->root;
-    trie->is_novel = false;
-    trie->owner_context = NULL;
-    return trie;
-}
-
-void sancov_trie_destroy(SanCovPathTrie* trie) {
-    if (!trie) return;
-    // Sever the link from BOTH sides under g_trie_lock before freeing: clear the
-    // owner context's forward pointer (so it won't use this freed trie) AND our
-    // own back-pointer. Holding the lock keeps this consistent with a concurrent
-    // detach_trie_from_dying_context / sancov_context_set_trie. The owner pointer
-    // is only dereferenced while linked under the lock, so it is never dangling
-    // here (a freed context clears this back-pointer via the detach path).
-    os_unfair_lock_lock(&g_trie_lock);
-    SanCovMeasurementContext* owner = trie->owner_context;
-    if (owner && owner->path_trie == trie) {
-        owner->path_trie = NULL;
-    }
-    trie->owner_context = NULL;
-    os_unfair_lock_unlock(&g_trie_lock);
-
-    trie_node_destroy(trie->root);
-    free(trie);
-}
-
-// TESTING ONLY seams (see SanCovHooks.h).
-void sancov_release_for_testing(SanCovMeasurementContext* context) {
-    ctx_release(context);
-}
-
-SanCovMeasurementContext* sancov_trie_owner_context_for_testing(const SanCovPathTrie* trie) {
-    if (!trie) return NULL;
-    os_unfair_lock_lock(&g_trie_lock);
-    SanCovMeasurementContext* owner = trie->owner_context;
-    os_unfair_lock_unlock(&g_trie_lock);
-    return owner;
-}
-
-
-bool sancov_trie_is_unique_path(SanCovPathTrie* trie) {
-    if (!trie) return false;
-    if (trie->is_novel) return true;
-    return !trie->current->is_terminal;
-}
-
-void sancov_trie_mark_terminal(SanCovPathTrie* trie) {
-    if (trie) trie->current->is_terminal = true;
-}
-
-void sancov_trie_reset(SanCovPathTrie* trie) {
-    if (!trie) return;
-    trie->current = trie->root;
-    trie->is_novel = false;
-}
-
-// Temporary dump functions for trie analysis
-uintptr_t sancov_get_pc(size_t edge_index);
-
-static const char* resolve_edge_symbol(uint32_t edge_index) {
-    uintptr_t pc = sancov_get_pc(edge_index);
-    if (pc == 0) return "?";
-    Dl_info info;
-    if (dladdr((void*)pc, &info) == 0 || !info.dli_sname) return "?";
-    return info.dli_sname;
-}
-
-static void trie_dump_recursive(TrieNode* node, uint32_t* path_buf, int depth, int* path_count) {
-    if (node->is_terminal) {
-        fprintf(stderr, "  path %d (len=%d):\n", *path_count, depth);
-        for (int i = 0; i < depth; i++) {
-            fprintf(stderr, "    [%d] edge %u = %s\n", i, path_buf[i], resolve_edge_symbol(path_buf[i]));
-        }
-        (*path_count)++;
-    }
-    for (uint16_t i = 0; i < node->child_count; i++) {
-        if (depth < 4096) {
-            path_buf[depth] = node->child_edges[i];
-            trie_dump_recursive(node->child_nodes[i], path_buf, depth + 1, path_count);
-        }
-    }
-}
-
-void sancov_trie_dump(SanCovPathTrie* trie) {
-    if (!trie || !trie->root) {
-        fprintf(stderr, "[trie] empty\n");
-        return;
-    }
-    uint32_t* buf = (uint32_t*)malloc(4096 * sizeof(uint32_t));
-    int count = 0;
-    fprintf(stderr, "[trie] dumping all terminal paths:\n");
-    trie_dump_recursive(trie->root, buf, 0, &count);
-    fprintf(stderr, "[trie] total terminal paths: %d\n", count);
-    free(buf);
-}
-
-void sancov_trie_set_debug(bool enable) { g_trie_debug = enable; }
-
-void sancov_trie_advance(SanCovPathTrie* trie, uint32_t edge_index) {
-    if (!trie) return;
-    if (g_trie_debug) {
-        fprintf(stderr, "[trie-adv] edge=%u\n", edge_index);
-    }
-    os_unfair_lock_lock(&g_trie_lock);
-    TrieNode* child = trie_node_find_child(trie->current, edge_index);
-    if (child) {
-        trie->current = child;
-    } else {
-        trie->current = trie_node_add_child(trie->current, edge_index);
-        trie->is_novel = true;
-    }
-    os_unfair_lock_unlock(&g_trie_lock);
-}
-
-__attribute__((noinline))
-void sancov_record_edge_trie(uint32_t *guard) {
-    uint8_t* map = get_current_coverage_map();
-    if (!map || *guard >= g_guard_count) return;
-
-    // Check first-hit and mark the map. Skip covered_indices bookkeeping —
-    // the trie strategy doesn't need it (uniqueness comes from the trie, not post-hoc).
-    if (map[*guard]) return;
-    map[*guard] = 1;
-
-    // Advance the trie on first hit only — loop-immune.
-    SanCovMeasurementContext* ctx = tls_cached_measurement_context;
-    if (!ctx) return;
-    SanCovPathTrie* trie = ctx->path_trie;
-    if (!trie) return;
-
-    uint32_t edge_index = *guard;
-    os_unfair_lock_lock(&g_trie_lock);
-    TrieNode* child = trie_node_find_child(trie->current, edge_index);
-    if (child) {
-        trie->current = child;
-    } else {
-        trie->current = trie_node_add_child(trie->current, edge_index);
-        trie->is_novel = true;
-    }
-    os_unfair_lock_unlock(&g_trie_lock);
+void sancov_observer_exit(void) {
+    tls_in_edge_observer = false;
 }
 
 // MARK: - Schedule-Aware Target Context
 
 void sancov_set_target_context(SanCovMeasurementContext* context) {
     g_target_context = context;
+    // The target interlude rebinds tls_cached_measurement_context to the
+    // target while leaving the per-task fast path's (task, map) pairing
+    // intact. A post-interlude dispatch would then take the fast path and
+    // pair the task's own map with the target's still-cached context —
+    // silently appending covered indices (and firing the recorder/observer)
+    // on the wrong engine. Dropping the task cache forces the next dispatch
+    // through the full resolve, which re-pairs map and context together.
+    tls_cached_task = NULL;
+    tls_cached_task_map = NULL;
 }
 
 // MARK: - Coverage Inheritance (Task-Local Propagation)
@@ -1736,26 +1400,27 @@ void sancov_rebuild_covered_indices_from_map(SanCovMeasurementContext* ctx) {
             count++;
         }
     }
-    ctx->covered_count = count;
+    atomic_store_explicit(&ctx->covered_count, count, memory_order_relaxed);
 }
 
-// Edge hook function pointer — set by Swift via sancov_install_swift_hook().
-// Before Swift init, falls back to sancov_record_edge directly. Atomic because
-// parallel fuzzing installs the (same) hook from many engine threads at once
-// while the per-edge hot path reads it concurrently (TSan-confirmed write/read
-// race under `fuzz(parallelism:)` × N concurrent calls).
-// Stored as atomic pointer-sized bits (the __atomic builtins reject a
-// function-pointer _Atomic directly); cast on store/load. Function-pointer ↔
-// uintptr_t round-trips losslessly on every supported target (same assumption
-// dlsym relies on).
-typedef void (*EdgeHookFn)(uint32_t*);
-// Plain (not _Atomic-qualified): accessed via the __atomic_* builtins, which
-// provide atomic load/store on plain types — matching how g_edge_state and the
-// map cells are handled elsewhere in this file.
-static uintptr_t g_edge_hook_bits = 0;
-
-void sancov_install_swift_hook(void (*hook)(uint32_t*)) {
-    __atomic_store_n(&g_edge_hook_bits, (uintptr_t)hook, __ATOMIC_RELEASE);
+// Per-edge dispatch: resolve routing once, then run the context's recorder.
+// There is NO process-global hook — the recorder choice lives on the
+// measurement context (edge_recorder_bits), so concurrent tests/engines with
+// different strategies never stomp each other. ctx->edge_recorder_bits is read
+// with the __atomic builtins (a fn-ptr _Atomic is rejected; cast on load —
+// fn-ptr ↔ uintptr_t round-trips losslessly on every supported target, the
+// same assumption dlsym relies on).
+void sancov_dispatch_edge(uint32_t *guard) {
+    uint8_t* map = get_current_coverage_map();
+    SanCovMeasurementContext* ctx = tls_cached_measurement_context;
+    if (ctx) {
+        SanCovEdgeRecorder r = (SanCovEdgeRecorder)__atomic_load_n(&ctx->edge_recorder_bits, __ATOMIC_ACQUIRE);
+        if (r) {
+            r(guard, map, ctx);
+            return;
+        }
+    }
+    sancov_recorder_default(guard, map, ctx);
 }
 
 // Forward declarations for lazy edge filter (defined later in file alongside
@@ -1790,12 +1455,7 @@ void __sanitizer_cov_trace_pc_guard(uint32_t *guard) {
         }
     }
 
-    EdgeHookFn hook = (EdgeHookFn)__atomic_load_n(&g_edge_hook_bits, __ATOMIC_ACQUIRE);
-    if (hook) {
-        hook(guard);
-    } else {
-        sancov_record_edge(guard);
-    }
+    sancov_dispatch_edge(guard);
 }
 
 // MARK: - PC Storage for Source Mapping
@@ -1821,23 +1481,6 @@ bool sancov_counters_available(void) {
 
 size_t sancov_get_counter_count(void) {
     return g_guard_count;
-}
-
-size_t sancov_get_covered_count(void) {
-    if (g_guard_count == 0) return 0;
-
-    uint8_t* map = get_current_coverage_map();
-    if (!map) return 0;
-
-    size_t count = 0;
-    for (size_t i = 0; i < g_guard_count; i++) {
-        if (map[i]) count++;
-    }
-    return count;
-}
-
-const uint8_t* sancov_get_counters(void) {
-    return get_current_coverage_map();
 }
 
 // MARK: - PC-to-Source Mapping Implementation
@@ -1874,27 +1517,6 @@ bool sancov_get_source_location(size_t edge_index, SanCovSourceLocation* locatio
     }
 
     return true;
-}
-
-size_t sancov_get_covered_locations(SanCovSourceLocation* locations, size_t max_locations) {
-    const uint8_t* counters = sancov_get_counters();
-    size_t counter_count = sancov_get_counter_count();
-
-    if (!counters || counter_count == 0) return 0;
-
-    size_t covered_count = 0;
-
-    // First pass: count covered edges (or fill array)
-    for (size_t i = 0; i < counter_count; i++) {
-        if (counters[i] != 0) {
-            if (locations != NULL && covered_count < max_locations) {
-                sancov_get_source_location(i, &locations[covered_count]);
-            }
-            covered_count++;
-        }
-    }
-
-    return covered_count;
 }
 
 // MARK: - Edge Filter

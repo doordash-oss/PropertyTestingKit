@@ -22,106 +22,6 @@ import Dependencies
 import FunctionSpy
 @testable import PropertyTestingKit
 
-// MARK: - CoverageSignature Property Tests
-
-@Suite("CoverageSignature Properties")
-struct CoverageSignaturePropertyTests {
-
-    // MARK: - Signature Algebra Properties
-
-    @Test("Signature union is commutative")
-    func testUnionCommutative() async throws {
-        // Property: A ∪ B = B ∪ A
-        let sig1 = CoverageSignature(edges: Set<UInt32>([0, 1, 2]))
-        let sig2 = CoverageSignature(edges: Set<UInt32>([1, 2, 3]))
-
-        let union1 = sig1.union(with: sig2)
-        let union2 = sig2.union(with: sig1)
-
-        #expect(union1 == union2, "Union should be commutative")
-    }
-
-    @Test("Signature union is associative")
-    func testUnionAssociative() async throws {
-        // Property: (A ∪ B) ∪ C = A ∪ (B ∪ C)
-        let sig1 = CoverageSignature(edges: Set<UInt32>([0, 1]))
-        let sig2 = CoverageSignature(edges: Set<UInt32>([1, 2]))
-        let sig3 = CoverageSignature(edges: Set<UInt32>([2, 3]))
-
-        let leftAssoc = sig1.union(with: sig2).union(with: sig3)
-        let rightAssoc = sig1.union(with: sig2.union(with: sig3))
-
-        #expect(leftAssoc == rightAssoc, "Union should be associative")
-    }
-
-    @Test("Signature union with empty is identity")
-    func testUnionIdentity() async throws {
-        let sig = CoverageSignature(edges: Set<UInt32>([0, 5, 10]))
-        let empty = CoverageSignature(edges: Set<UInt32>([]))
-
-        #expect(sig.union(with: empty) == sig, "Union with empty should be identity")
-        #expect(empty.union(with: sig) == sig, "Empty union with sig should be identity")
-    }
-
-    @Test("Signature union combines all edges")
-    func testUnionCombinesEdges() async throws {
-        let sig1 = CoverageSignature(edges: Set<UInt32>([0, 1, 2]))
-        let sig2 = CoverageSignature(edges: Set<UInt32>([2, 3, 4]))
-
-        let union = sig1.union(with: sig2)
-
-        #expect(union.edges == Set([0, 1, 2, 3, 4]), "Union should contain all edges from both")
-    }
-
-    @Test("uniqueIndices and commonIndices are complementary")
-    func testIndexSetOperations() async throws {
-        let sig1 = CoverageSignature(edges: Set<UInt32>([0, 1, 2]))
-        let sig2 = CoverageSignature(edges: Set<UInt32>([1, 2, 3]))
-
-        let unique1 = sig1.uniqueIndices(comparedTo: sig2)
-        let unique2 = sig2.uniqueIndices(comparedTo: sig1)
-        let common = sig1.commonIndices(with: sig2)
-
-        // Property: unique1 ∩ common = ∅
-        #expect(unique1.intersection(common).isEmpty, "Unique and common should be disjoint")
-        #expect(unique2.intersection(common).isEmpty, "Unique and common should be disjoint")
-
-        // Property: unique1 ∪ common = sig1.indices
-        #expect(unique1.union(common) == sig1.executedIndices, "Unique + common = all indices")
-    }
-
-    @Test("hasUniqueCoverage consistent with uniqueIndices")
-    func testHasUniqueCoverage() async throws {
-        let sig1 = CoverageSignature(edges: Set<UInt32>([0, 1]))
-        let sig2 = CoverageSignature(edges: Set<UInt32>([1]))
-        let sig3 = CoverageSignature(edges: Set<UInt32>([0, 1]))
-
-        #expect(sig1.hasUniqueCoverage(comparedTo: sig2) == true, "sig1 has index 0 not in sig2")
-        #expect(sig2.hasUniqueCoverage(comparedTo: sig1) == false, "sig2 is subset of sig1")
-        #expect(sig1.hasUniqueCoverage(comparedTo: sig3) == false, "sig1 indices are subset of sig3")
-    }
-
-    // MARK: - Serialization Properties
-
-    @Test("CoverageSignature round-trips through Codable")
-    func testSignatureCodableRoundTrip() async throws {
-        let signatures = [
-            CoverageSignature(edges: Set<UInt32>([])),
-            CoverageSignature(edges: Set<UInt32>([0])),
-            CoverageSignature(edges: Set<UInt32>([0, 100, 1000])),
-        ]
-
-        let encoder = JSONEncoder.corpusEncoder()
-        let decoder = JSONDecoder.corpusDecoder()
-
-        for original in signatures {
-            let data = try encoder.encode(original)
-            let decoded = try decoder.decode(CoverageSignature.self, from: data)
-            #expect(decoded == original, "Signature should round-trip through JSON")
-        }
-    }
-}
-
 // MARK: - MutatorProviding Property Tests
 
 @Suite("MutatorProviding Properties")
@@ -317,25 +217,6 @@ struct CorpusEntryPropertyTests {
     }
 }
 
-// MARK: - Integration Property Tests
-
-@Suite("Integration Properties")
-struct IntegrationPropertyTests {
-
-    @Test("Signature from sparse coverage contains only specified indices")
-    func testSignatureFromSparseCoverage() async throws {
-        // SparseCoverage only contains the indices that were covered
-        let sparse = SparseCoverage(indices: [1, 3, 6])
-        let signature = CoverageSignature(sparse: sparse)
-
-        #expect(signature.executedCount == 3, "Should have 3 covered edges")
-        #expect(!signature.edges.contains(0), "Index 0 should not be in edges")
-        #expect(signature.edges.contains(1), "Index 1 should be in edges")
-        #expect(signature.edges.contains(3), "Index 3 should be in edges")
-        #expect(signature.edges.contains(6), "Index 6 should be in edges")
-    }
-}
-
 // MARK: - FuzzError Tests
 
 @Suite("FuzzError Properties")
@@ -370,19 +251,6 @@ struct FuzzErrorTests {
 @Suite("Edge Cases")
 struct EdgeCaseTests {
 
-    @Test("Signature with many indices")
-    func testManyIndices() async throws {
-        let edges = Set((0..<1000).map { UInt32($0) })
-        let sig = CoverageSignature(edges: edges)
-
-        #expect(sig.executedCount == 1000)
-        #expect(!sig.isEmpty)
-
-        // Union with self should be idempotent
-        let selfUnion = sig.union(with: sig)
-        #expect(selfUnion == sig)
-    }
-
     @Test("Corpus with complex input types")
     func testCorpusComplexTypes() throws {
         var corpus = Corpus<[String]>()
@@ -404,14 +272,6 @@ struct EdgeCaseTests {
         #expect(count == 3)
     }
 
-    @Test("CoverageSignature description")
-    func testSignatureDescription() async throws {
-        let sig = CoverageSignature(edges: Set<UInt32>([0, 1, 2]))
-        #expect(sig.description == "CoverageSignature(3 edges)")
-
-        let empty = CoverageSignature(edges: Set<UInt32>([]))
-        #expect(empty.description == "CoverageSignature(0 edges)")
-    }
 }
 
 // MARK: - Fuzz API Property Tests

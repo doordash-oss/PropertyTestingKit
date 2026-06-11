@@ -95,8 +95,11 @@ import Dependencies
 ///     fuzzing, use `regress(...)` instead. Can be overridden suite-wide via the
 ///     `FUZZ_CORPUS_MODE` environment variable.
 ///   - coverageStrategy: How an input is judged "interesting" (default: `.pathTrie`).
-///   - edgeHook: Optional custom hook invoked on every edge hit; when `nil`, the
-///     default binary edge recording is used.
+///     A strategy carries its own per-edge measurement (`onEdge` sees every
+///     hit, with the first-hit bit) and judgement (`decide`); build a custom
+///     `CoverageStrategy` for custom per-edge measurement — e.g. tallying
+///     hit-count buckets per engine. Raw map-write semantics (what a hit
+///     stores in the coverage map) are not customizable from here.
 ///   - scheduleFuzzing: When `true`, also fuzz the interleaving order of concurrent
 ///     tasks. The schedule bytes are folded into the input pack as element 0
 ///     (`([UInt8], repeat each Input)`) and mutated/stored/persisted like any input;
@@ -124,8 +127,7 @@ public func fuzz<each Input: Codable & Sendable>(
     seeds: [(repeat each Input)] = [],
     duration: Duration = .seconds(60),
     persistence: CorpusPersistence = .auto,
-    coverageStrategy: CoverageStrategyKind = .pathTrie,
-    edgeHook: EdgeHook? = nil,
+    coverageStrategy: CoverageStrategy = .pathTrie,
     scheduleFuzzing: Bool = false,
     parallelism: Int = ProcessInfo.processInfo.processorCount,
     plugins: @escaping @Sendable () -> [FuzzPlugin<repeat each Input>] = { [.corpusMutation()] },
@@ -140,7 +142,6 @@ public func fuzz<each Input: Codable & Sendable>(
         duration: duration,
         persistence: persistence,
         coverageStrategy: coverageStrategy,
-        edgeHook: edgeHook,
         scheduleFuzzing: scheduleFuzzing,
         parallelism: parallelism,
         plugins: plugins,
@@ -158,8 +159,7 @@ func fuzzInternal<each Input: Codable & Sendable>(
     seeds: [(repeat each Input)],
     duration: Duration,
     persistence: CorpusPersistence,
-    coverageStrategy: CoverageStrategyKind,
-    edgeHook: EdgeHook?,
+    coverageStrategy: CoverageStrategy,
     scheduleFuzzing: Bool,
     parallelism: Int,
     plugins: @escaping @Sendable () -> [FuzzPlugin<repeat each Input>],
@@ -169,6 +169,18 @@ func fuzzInternal<each Input: Codable & Sendable>(
     test: @escaping @Sendable ((repeat each Input)) async throws -> Void
 ) async throws -> FuzzResult<repeat each Input> {
     @Dependency(\.environment) var environment
+    @Dependency(\.coverageCounters) var coverageCounters
+
+    // Every strategy decision is judgement over a coverage snapshot, so an
+    // uninstrumented binary can only ever build empty corpora. Fail loudly at
+    // campaign start instead of silently fuzzing to no effect. (Replay paths
+    // stay exempt: they judge against loaded snapshots and run fine without
+    // instrumentation.)
+    func requireCoverage() throws {
+        guard coverageCounters.isAvailable() else {
+            throw FuzzError.coverageUnavailable
+        }
+    }
 
     let testFilePath = String(describing: filePath)
     let verbose = environment.environment()["FUZZ_VERBOSE"] != nil
@@ -185,6 +197,10 @@ func fuzzInternal<each Input: Codable & Sendable>(
     // The call-site `persistence` is used directly (the suite-level env override does
     // not apply to scheduled runs).
     if scheduleFuzzing {
+        try requireCoverage()
+        // Strategies are pack-agnostic (pure judgement over coverage), so the
+        // user's strategy — built-in or custom — passes straight into the
+        // extended-pack run; its single engine builds from the same makeEngine.
         let peeled = await runFlattenedSchedule(
             mutators: (repeat each mutators),
             seeds: seeds,
@@ -193,7 +209,6 @@ func fuzzInternal<each Input: Codable & Sendable>(
             duration: duration,
             verbose: verbose,
             coverageStrategy: coverageStrategy,
-            edgeHook: edgeHook,
             projectPath: projectPath(from: filePath),
             sourceFileID: testFilePath,
             sourceFilePath: testFilePath,
@@ -209,6 +224,7 @@ func fuzzInternal<each Input: Codable & Sendable>(
     let result: FuzzResult<repeat each Input>
     switch CorpusPersistence.resolveForFuzz(callSite: persistence) {
     case .fuzz(let resolved):
+        try requireCoverage()
         result = await runFuzz(
             mutators: mutators,
             userSeeds: seeds,
@@ -218,7 +234,6 @@ func fuzzInternal<each Input: Codable & Sendable>(
             duration: duration,
             verbose: verbose,
             coverageStrategy: coverageStrategy,
-            edgeHook: edgeHook,
             projectPath: projectPath(from: filePath),
             sourceFileID: testFilePath,
             sourceFilePath: testFilePath,
@@ -295,8 +310,11 @@ func regressInternal<each Input: Codable & Sendable>(
 ///     To verify a corpus without fuzzing, use `regress(...)`. Can be overridden
 ///     suite-wide via `FUZZ_CORPUS_MODE`.
 ///   - coverageStrategy: How an input is judged "interesting" (default: `.pathTrie`).
-///   - edgeHook: Optional custom hook invoked on every edge hit; when `nil`, the
-///     default binary edge recording is used.
+///     A strategy carries its own per-edge measurement (`onEdge` sees every
+///     hit, with the first-hit bit) and judgement (`decide`); build a custom
+///     `CoverageStrategy` for custom per-edge measurement — e.g. tallying
+///     hit-count buckets per engine. Raw map-write semantics (what a hit
+///     stores in the coverage map) are not customizable from here.
 ///   - scheduleFuzzing: When `true`, also fuzz the interleaving order of concurrent
 ///     tasks. The schedule bytes are folded into the input pack as element 0 and
 ///     mutated/stored/persisted like any input; your `test` still receives only its
@@ -318,8 +336,7 @@ public func fuzz<each Input: MutatorProviding & Codable & Sendable>(
     seeds: [(repeat each Input)] = [],
     duration: Duration = .seconds(60),
     persistence: CorpusPersistence = .auto,
-    coverageStrategy: CoverageStrategyKind = .pathTrie,
-    edgeHook: EdgeHook? = nil,
+    coverageStrategy: CoverageStrategy = .pathTrie,
     scheduleFuzzing: Bool = false,
     parallelism: Int = ProcessInfo.processInfo.processorCount,
     plugins: @escaping @Sendable () -> [FuzzPlugin<repeat each Input>] = { [.corpusMutation()] },
@@ -334,7 +351,6 @@ public func fuzz<each Input: MutatorProviding & Codable & Sendable>(
         duration: duration,
         persistence: persistence,
         coverageStrategy: coverageStrategy,
-        edgeHook: edgeHook,
         scheduleFuzzing: scheduleFuzzing,
         parallelism: parallelism,
         plugins: plugins,
@@ -352,7 +368,7 @@ public func fuzz<each Input: MutatorProviding & Codable & Sendable>(
 /// Unlike `fuzz(...)`, this never explores: it runs exactly the inputs in the saved
 /// corpus and fails if any of them now trips the test. Because it only replays, it
 /// takes none of the fuzz-only knobs (`seeds`, `coverageStrategy`, `parallelism`,
-/// `edgeHook`, mutators) — they would be meaningless here. Its plugins are
+/// mutators) — they would be meaningless here. Its plugins are
 /// `AnalysisPlugin`s, which can only emit `stop`/`recordIssue`, so a replay can never be
 /// handed a plugin that would mutate the run or the corpus. If no corpus exists, the run
 /// is a no-op (it does not fail), so a suite-wide regression pass tolerates not-yet-fuzzed

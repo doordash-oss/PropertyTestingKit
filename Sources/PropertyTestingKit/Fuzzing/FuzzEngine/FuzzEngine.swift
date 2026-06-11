@@ -66,6 +66,10 @@ final class FuzzEngine<each Input: Codable & Sendable>: @unchecked Sendable {
     /// regression replay so they wrap execution in `ScheduleController.run`.
     private let scheduleBytesExtractor: @Sendable ((repeat each Input)) -> [UInt8]?
 
+    /// The coverage strategy. Its evaluator is built fresh in `run()` so each parallel
+    /// engine gets its own per-engine state (e.g. a distinct trie/index).
+    private let coverageStrategy: CoverageStrategy
+
     /// Initialize with mutators.
     ///
     /// - Parameters:
@@ -91,11 +95,13 @@ final class FuzzEngine<each Input: Codable & Sendable>: @unchecked Sendable {
     init(
         mutators: repeat Mutator<each Input>,
         config: FuzzEngineConfig,
+        coverageStrategy: CoverageStrategy,
         scheduleBytesExtractor: @escaping @Sendable ((repeat each Input)) -> [UInt8]?
     ) {
         self.config = config
         self.mutators = (repeat each mutators)
         self.inputSize = Self.inputCount(for: repeat (each Input).self)
+        self.coverageStrategy = coverageStrategy
         self.scheduleBytesExtractor = scheduleBytesExtractor
     }
 
@@ -103,11 +109,13 @@ final class FuzzEngine<each Input: Codable & Sendable>: @unchecked Sendable {
     /// no-op schedule-bytes extractor.
     convenience init(
         mutators: repeat Mutator<each Input>,
-        config: FuzzEngineConfig = FuzzEngineConfig()
+        config: FuzzEngineConfig = FuzzEngineConfig(),
+        coverageStrategy: CoverageStrategy = .pathTrie
     ) {
         self.init(
             mutators: repeat each mutators,
             config: config,
+            coverageStrategy: coverageStrategy,
             scheduleBytesExtractor: { _ in nil }
         )
     }
@@ -152,8 +160,9 @@ final class FuzzEngine<each Input: Codable & Sendable>: @unchecked Sendable {
 
         let startTime = dateClient.now()
 
-        // Install custom edge hook if configured
-        SanCovCounters.setEdgeHook(config.edgeHook)
+        // No global edge-hook install: the strategy's recorder (its measurement
+        // half) is attached to this engine's measurement context during the
+        // evaluator's setup phase, so concurrent engines never interfere.
 
         // Early exit if no seeds and no way to generate inputs
         if seeds.isEmpty {
@@ -178,14 +187,15 @@ final class FuzzEngine<each Input: Codable & Sendable>: @unchecked Sendable {
         }
 
         let corpus: Corpus<repeat each Input> = corpusRegistry.getCorpus()
-        let coverageStrategy: CoverageStrategy<repeat each Input> = makeCoverageStrategy(config.coverageStrategy)
+        // Build a fresh evaluator per engine so each gets its own trie/index state.
+        let coverageEvaluator: CoverageEvaluator<repeat each Input> = coverageStrategy.makeEvaluator()
 
         let stateMachine = FuzzStateMachine<repeat each Input>(
             seeds: seeds,
             mutators: mutators,
             inputSize: inputSize,
             corpus: corpus,
-            coverageStrategy: coverageStrategy,
+            coverageEvaluator: coverageEvaluator,
             processSyncPlugins: processSyncPlugins,
             processAsyncPlugins: processAsyncPlugins,
             config: config,

@@ -61,8 +61,8 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
     /// Mutated inputs executed (queue pops after the seeds drained).
     private var mutantsRunCount: Int = 0
 
-    /// The coverage strategy that determines interestingness.
-    private let coverageStrategy: CoverageStrategy<repeat each Input>
+    /// The coverage evaluator that determines interestingness.
+    private let coverageEvaluator: CoverageEvaluator<repeat each Input>
 
     // Simple loop state (replaces WorkerPool)
     private var pendingInputs: SimpleRingBuffer<(repeat each Input)>
@@ -76,7 +76,7 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
         mutators: (repeat Mutator<each Input>),
         inputSize: Int,
         corpus: Corpus<repeat each Input>,
-        coverageStrategy: CoverageStrategy<repeat each Input>,
+        coverageEvaluator: CoverageEvaluator<repeat each Input>,
         processSyncPlugins: @escaping SyncPluginProcessorFn,
         processAsyncPlugins: @escaping AsyncPluginProcessorFn,
         config: FuzzEngineConfig,
@@ -91,7 +91,7 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
         self.seeds = seeds
         self.mutators = mutators
         self.inputSize = inputSize
-        self.coverageStrategy = coverageStrategy
+        self.coverageEvaluator = coverageEvaluator
         self.processSyncPlugins = processSyncPlugins
         self.processAsyncPlugins = processAsyncPlugins
         self.config = config
@@ -156,10 +156,10 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
             let coverageContext = coverageCountersClient.beginMeasurement()
             defer { coverageCountersClient.endMeasurement(coverageContext) }
 
-            // Set up the coverage strategy before the first test execution.
+            // Set up the coverage evaluator before the first test execution.
             // pathTrie needs to attach its trie to the context so edges
             // advance the trie during the very first iteration.
-            coverageStrategy.setup?(coverageContext)
+            coverageEvaluator.setup?(coverageContext)
 
             // Check time limit every N iterations to avoid per-iteration Date.init() overhead.
             // With ~10M iterations/sec and default interval of 1000, this means ~10K checks/sec.
@@ -241,21 +241,17 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
                         failureRecorded = true
                     }
 
-                    // Delegate interestingness check to the coverage strategy (O(1) for trie strategy)
-                    let discoveredNewCoverage = coverageStrategy.evaluate(
+                    // Delegate interestingness to the coverage evaluator. It returns
+                    // the run's coverage when the input was interesting (the sparse
+                    // snapshot it already took for the decision — no re-snapshot
+                    // here), nil otherwise.
+                    let iterationCoverage = coverageEvaluator.evaluate(
                         input,
                         currentScheduleBytes,
                         coverageContext,
                         coverageCountersClient,
                         corpus
                     )
-
-                    // Snapshot coverage only when new edges were found — amortizes
-                    // allocation cost since new coverage is rare (~0.1% of iterations).
-                    let iterationCoverage =
-                        discoveredNewCoverage
-                        ? (try? coverageCountersClient.snapshotCoveredArraysWithContext(coverageContext))
-                        : nil
 
                     // Process iteration event before failure event
                     var events = [

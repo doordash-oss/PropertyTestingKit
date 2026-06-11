@@ -7,6 +7,7 @@ Coverage-guided fuzz testing for Swift.
 PropertyTestingKit brings coverage-guided fuzzing to Swift Testing:
 
 - **Coverage-guided fuzzing** - Automatically discover inputs that exercise new code paths
+- **Swappable coverage strategies** - Choose how "interesting" is judged (path-, edge-, or set-novelty), or write your own
 - **Corpus persistence** - Save and replay interesting inputs across test runs
 - **Regression testing** - Replay saved corpus to catch regressions
 - **Schedule fuzzing** - Deterministically explore concurrent task interleavings to surface order-dependent races
@@ -80,11 +81,11 @@ import PropertyTestingKit
 saving to the corpus and mutating further. Four strategies are available, from
 finest-grained to coarsest:
 
-| `CoverageStrategyKind` | An input is interesting when… | Notes |
+| `CoverageStrategy` | An input is interesting when… | Notes |
 |------|----------|-------|
-| `.pathTrie` *(default)* | its full **ordered execution path** is new | Tracks each unique edge *sequence* in a trie, so `A→B→C` differs from `A→C→B`. O(1) per edge hit; installs its edge hook automatically. The most sensitive — separates inputs that hit the same edges in a different order. |
+| `.pathTrie` *(default)* | its full **ordered execution path** is new | Tracks each unique edge *sequence* in a trie, so `A→B→C` differs from `A→C→B`. O(1) per edge hit, judged from a per-edge observer. The most sensitive — separates inputs that hit the same edges in a different order. |
 | `.signatureMatch` | the **exact set** of covered edges is new | Inverted-index match with no hashing, so no false positives. Order-insensitive. |
-| `.newEdge` | **any** previously-unseen edge is hit | AFL/libFuzzer-style bitmap merge. Coarsest — fastest, smallest corpus. |
+| `.newEdge` | **any** previously-unseen edge is hit | AFL/libFuzzer style. Coarsest — fastest, smallest corpus. |
 | `.alwaysInteresting` | always | Every input is saved unconditionally. For tests that need deterministic corpus growth independent of coverage. |
 
 ```swift
@@ -102,6 +103,48 @@ harder; `.newEdge` keeps the fewest and runs fastest. Reach for `.pathTrie` when
 operations interleaving differently is exactly the bug you're hunting — and
 `.newEdge` when you want a small corpus and maximum throughput.
 
+**Custom strategies** are first-class — every built-in is defined through the
+same public API. A strategy is *pure judgement*: its decision sees a lazy view
+of the run's coverage and returns whether the input was interesting. Storage
+is the engine's job; strategies never touch the corpus.
+
+```swift
+// Stateless: judge each run's covered edges directly.
+let lowEdgeCount = CoverageStrategy { coverage in
+    coverage.indices.count > 100
+}
+```
+
+For stateful strategies, build the state inside `makeEngine` — it's called
+once per parallel engine, so state never crosses engines:
+
+```swift
+let myTrie = CoverageStrategy(makeEngine: {
+    let trie = PathTrie()                       // this engine's state
+    return CoverageEngine(
+        // The measurement half: called on EVERY hit of every edge that
+        // routes to this engine. The second parameter is the first-hit
+        // bit — gate on it for loop immunity, like the built-in .pathTrie.
+        onEdge: { edge, isFirstHit in
+            if isFirstHit { trie.advance(edge) }
+        },
+        onReset: { trie.reset() }               // runs between iterations
+    ) { _ in                                    // the judgement half
+        defer { trie.reset() }
+        return trie.markTerminalIfUnique()
+    }
+})
+```
+
+Notes:
+- `decide` only pays for the coverage snapshot if it reads it — strategies
+  that judge from their own `onEdge` state (like `.pathTrie`) reject
+  allocation-free.
+- Custom strategies work everywhere a built-in does, including under
+  `scheduleFuzzing: true`.
+- Edges fired by your own `onEdge`/`decide` code are recorded but not
+  re-observed, so they can live in instrumented code and take locks safely.
+
 ### Corpus Storage
 
 The corpus is saved alongside your test files:
@@ -112,7 +155,7 @@ Tests/
     ParserTests.swift
     Corpus/                      # Created automatically
       testParser/
-        corpus.json              # Saved inputs + coverage signatures
+        corpus.json              # Saved inputs (coverage is re-measured on replay)
 ```
 
 Commit the `Corpus/` directory to version control for deterministic CI runs.
@@ -467,8 +510,10 @@ Everything outside your test's tasks runs untouched. Practically: the interleavi
 as just more fuzzed input (so it's mutated, persisted, and replayed like any input, while your
 `test` closure still receives only its own `(repeat each Input)`); `parallelism` is forced to 1
 since the schedule itself now controls ordering; and the default `corpusMutation` plugin is used
-(custom `plugins` are not applied to scheduled runs). The machinery lives in the separate
-`ScheduleControl` module, which `scheduleFuzzing: true` wires into the fuzz loop for you.
+(custom `plugins` are not applied to scheduled runs). Coverage strategies — built-in or
+[custom](#coverage-strategies) — apply unchanged: the interleaving is judged by the same
+decision as any other input. The machinery lives in the separate `ScheduleControl` module,
+which `scheduleFuzzing: true` wires into the fuzz loop for you.
 
 ### Building with Coverage
 
@@ -491,6 +536,12 @@ Then run tests normally:
 ```bash
 swift test
 ```
+
+Instrumentation is required: every strategy judges coverage, so an
+uninstrumented binary can only ever build empty corpora. `fuzz(...)` throws
+`FuzzError.coverageUnavailable` at campaign start rather than silently fuzzing
+to no effect. (Replays — `regress(...)` and `FUZZ_CORPUS_MODE=regressiononly` —
+run fine without instrumentation.)
 
 ## Performance
 

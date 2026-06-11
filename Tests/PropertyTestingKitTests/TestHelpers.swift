@@ -41,7 +41,7 @@ func fuzzWithMaxIterations<each Input: MutatorProviding & Codable & Sendable>(
     seeds: [(repeat each Input)] = [],
     duration: Duration = .seconds(60),
     persistence: CorpusPersistence = .auto,
-    coverageStrategy: CoverageStrategyKind = .signatureMatch,
+    coverageStrategy: CoverageStrategy = .signatureMatch,
     parallelism: Int = 1,
     filePath: StaticString = #filePath,
     function: StaticString = #function,
@@ -97,7 +97,7 @@ func fuzzWithMaxIterations<each Input: MutatorProviding & Codable & Sendable>(
 func fuzzEngineWithMaxIterations<each Input: MutatorProviding & Codable & Sendable>(
     maxIterations: Int,
     config: FuzzEngineConfig? = nil,
-    coverageStrategy: CoverageStrategyKind? = nil,
+    coverageStrategy: CoverageStrategy = .signatureMatch,
     additionalSeeds: [(repeat each Input)] = [],
     test: @escaping @Sendable ((repeat each Input)) async throws -> Void
 ) async -> FuzzResult<repeat each Input> {
@@ -115,23 +115,21 @@ func fuzzEngineWithMaxIterations<each Input: MutatorProviding & Codable & Sendab
         })
     }, operation: {
         // Use timeLimitCheckInterval: 1 for precise iteration control in tests
-        let effectiveStrategy = coverageStrategy ?? config?.coverageStrategy ?? .signatureMatch
         let effectiveConfig = config.map {
             FuzzEngineConfig(
                 maxDuration: $0.maxDuration,
                 verbose: $0.verbose,
-                timeLimitCheckInterval: $0.timeLimitCheckInterval,
-                coverageStrategy: effectiveStrategy
+                timeLimitCheckInterval: $0.timeLimitCheckInterval
             )
         } ?? FuzzEngineConfig(
             maxDuration: .seconds(10),
-            timeLimitCheckInterval: 1,
-            coverageStrategy: effectiveStrategy
+            timeLimitCheckInterval: 1
         )
         let mutators = (repeat (each Input).defaultMutator)
         let engine = FuzzEngine(
             mutators: repeat each mutators,
-            config: effectiveConfig
+            config: effectiveConfig,
+            coverageStrategy: coverageStrategy
         )
         // The engine runs exactly the seeds it's given — assemble the mutators' seed
         // values plus any caller-provided seeds, mirroring a fuzz campaign.
@@ -170,7 +168,7 @@ func runFuzzWithMaxIterations<each Input: MutatorProviding & Codable & Sendable>
     maxIterations: Int,
     corpusDir: URL,
     persistence: CorpusPersistence,
-    coverageStrategy: CoverageStrategyKind = .alwaysInteresting,
+    coverageStrategy: CoverageStrategy = .alwaysInteresting,
     parallelism: Int = 1,
     makeHandlers: @escaping @Sendable () -> [FuzzPlugin<repeat each Input>] = { [.corpusMutation()] },
     additionalSeeds: [(repeat each Input)] = [],
@@ -195,7 +193,6 @@ func runFuzzWithMaxIterations<each Input: MutatorProviding & Codable & Sendable>
             duration: .seconds(10),
             verbose: false,
             coverageStrategy: coverageStrategy,
-            edgeHook: nil,
             projectPath: nil,
             sourceFileID: "PropertyTestingKitTests/TestHelpers.swift",
             sourceFilePath: "PropertyTestingKitTests/TestHelpers.swift",
@@ -268,7 +265,7 @@ func fuzzWithMaxIterations<each Input: Codable & Sendable>(
     using mutators: repeat Mutator<each Input>,
     seeds: [(repeat each Input)] = [],
     persistence: CorpusPersistence = .auto,
-    coverageStrategy: CoverageStrategyKind = .signatureMatch,
+    coverageStrategy: CoverageStrategy = .signatureMatch,
     parallelism: Int = 1,
     filePath: StaticString = #filePath,
     function: StaticString = #function,

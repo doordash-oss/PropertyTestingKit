@@ -117,7 +117,7 @@ let benchmarks: @Sendable () -> Void = {
     }
 
     Benchmark(
-        "fuzz(Int) counting hook - iterations/sec",
+        "fuzz(Int) onEdge observer - iterations/sec",
         configuration: .init(
             metrics: [
                 .custom("Iterations/sec (K)", polarity: .prefersLarger, useScalingFactor: false),
@@ -134,10 +134,15 @@ let benchmarks: @Sendable () -> Void = {
             let startCPU = getCPUTimeNanos()
             let startWall = DispatchTime.now().uptimeNanoseconds
 
+            // Exercise the Swift per-edge observer (the C->Swift dispatch the
+            // pathTrie strategy also rides) via a custom strategy with a no-op
+            // onEdge — measures observer dispatch throughput. decide rejects
+            // everything: accepting would put corpus appends, mutation
+            // enqueues, and the end-of-run merge inside the measured time.
             let result = try await fuzz(
                 duration: .seconds(0.1),
                 persistence: .replace,
-                edgeHook: countingEdgeHook,
+                coverageStrategy: CoverageStrategy(onEdge: { edge, _ in blackHole(edge) }) { _ in false },
                 parallelism: 16
             ) { (input: Int) in
                 blackHole(input)
