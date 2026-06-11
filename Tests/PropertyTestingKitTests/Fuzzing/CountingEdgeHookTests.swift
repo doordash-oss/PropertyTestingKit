@@ -98,7 +98,9 @@ struct CountingEdgeHookTests {
         sancov_record_edge_counting(&guard3)
         sancov_record_edge_counting(&guard3)
 
-        #expect(ctx.pointee.covered_count == 2)
+        // covered_count is _Atomic (not importable as a Swift member); read it
+        // through the C getter like production code does.
+        #expect(sancov_get_covered_count_with_context(ctx) == 2)
         #expect(ctx.pointee.covered_indices[0] == 3)
         #expect(ctx.pointee.covered_indices[1] == 7)
     }
