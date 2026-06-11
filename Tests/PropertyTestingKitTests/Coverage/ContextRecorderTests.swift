@@ -265,6 +265,43 @@ struct ContextRecorderTests {
         #expect(!secondPassUnique, "Identical replayed path must not be novel")
     }
 
+    /// Loop immunity is the trie strategy's own policy (the observer reports
+    /// every hit), so it is regression-able and needs a direct pin: the two
+    /// passes hit the SAME edges but with DIFFERENT repeat counts. With
+    /// first-hit gating the paths match (replay → not unique); without it the
+    /// extra repeat lengthens pass 2's path into a spuriously unique one.
+    @Test("Repeat hit counts don't lengthen the trie path (loop immunity)")
+    func repeatHitCountsDoNotLengthenTriePath() {
+        let context = SanCovCounters.beginMeasurement()
+        defer { SanCovCounters.endMeasurement(context) }
+
+        let trie = PathTrie()
+        SanCovCounters.attachTrie(trie, to: context)
+
+        // One parameterized local function keeps the passes' instrumented
+        // code identical (see the dispatch test above); only the repeat
+        // count differs, which is exactly what loop immunity must absorb.
+        func firePass(repeats: Int) -> Bool {
+            SanCovCounters.resetCoverage(context)
+            var g50: UInt32 = 50
+            var g51: UInt32 = 51
+            sancov_dispatch_edge(&g50)
+            for _ in 0..<repeats {
+                sancov_dispatch_edge(&g51)
+            }
+            let unique = trie.isUniquePath
+            trie.markTerminal()
+            return unique
+        }
+
+        let firstPassUnique = firePass(repeats: 2)
+        let secondPassUnique = firePass(repeats: 3)
+
+        #expect(firstPassUnique, "First pass over the path is novel")
+        #expect(!secondPassUnique,
+                "An extra repeat of an already-hit edge must not make the path unique")
+    }
+
     @Test("pathTrie's setup attaches an edge observer carrying its trie")
     func pathTrieSetupAttachesObserver() {
         let context = SanCovCounters.beginMeasurement()
