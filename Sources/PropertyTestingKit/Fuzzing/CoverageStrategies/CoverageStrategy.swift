@@ -19,8 +19,9 @@ import EdgeHooks
 
 /// Determines how the fuzzer decides if an input is "interesting" (worth adding to the corpus).
 ///
-/// A strategy is **pure judgement** over coverage: its decision sees only the
-/// run's `SparseCoverage` and returns whether the input was interesting.
+/// A strategy is **pure judgement** over coverage: its decision sees only a
+/// (lazy) view of the run's coverage and returns whether the input was
+/// interesting.
 /// Storage is the engine's job — when the decision says yes, the engine records
 /// the input (with its coverage and schedule bytes) in the corpus. Strategies
 /// never see the corpus, the typed input, or schedule bytes, which also makes
@@ -114,28 +115,32 @@ extension CoverageStrategy {
             }
             : nil
         return CoverageEvaluator(setup: setup, evaluate: { input, scheduleBytes, context, coverageClient, corpus in
-            // No coverage, no judgement: a decision over coverage cannot
-            // run when the snapshot is unavailable, so the input is not
-            // interesting. (Synthesizing empty coverage instead would make
-            // a broken measurement look like a novel empty edge set.)
-            guard let sparse = try? coverageClient.snapshotCoveredArraysWithContext(context) else {
-                return nil
-            }
+            // The snapshot is lazy: decisions that never read coverage (the
+            // default .pathTrie judges with its own trie) reject without
+            // paying the O(covered-edges) snapshot.
+            let coverage = CoverageView(context: context, client: coverageClient)
             // `decide` runs under the observer gate for the same reason
             // `onEdge`/`onReset` do: it may live in instrumented code, so
             // edges its own execution fires must not dispatch synchronously
             // into the engine's `onEdge` — sharing a non-reentrant lock
-            // between the two would deadlock. The judged snapshot is already
-            // taken, and decide's edges still land in the map (cleared by the
-            // next iteration's reset).
+            // between the two would deadlock. decide's edges still land in
+            // the map (cleared by the next iteration's reset). Note the
+            // snapshot, when decide reads it, is taken inside the gated
+            // window — its C reader fires no edges.
             let gated = sancov_observer_enter()
-            let interesting = engine.decide(sparse)
+            let interesting = engine.decide(coverage)
             if gated { sancov_observer_exit() }
             guard interesting else {
                 return nil
             }
             // Judgement said yes; recording the input is the engine's job,
-            // not the strategy's.
+            // not the strategy's. The decision's snapshot is reused — or
+            // taken now if it never read one. No coverage, no recording:
+            // storing empty coverage would make a broken measurement look
+            // like a novel empty edge set.
+            guard let sparse = coverage.materialized() else {
+                return nil
+            }
             corpus.mergeCoverageAndAdd(input: input, scheduleBytes: scheduleBytes, sparse: sparse)
             return sparse
         })
@@ -143,10 +148,12 @@ extension CoverageStrategy {
 }
 
 /// A coverage-interestingness decision: pure judgement over the edges the run
-/// covered. Return `true` if the input was interesting — the engine records it
-/// in the corpus (with its coverage and schedule bytes); strategies never see
+/// covered, seen through a lazy `CoverageView` (the snapshot is taken on
+/// first read and reused for storage — never reading it costs nothing).
+/// Return `true` if the input was interesting — the engine records it in the
+/// corpus (with its coverage and schedule bytes); strategies never see
 /// storage.
-public typealias CoverageDecision = @Sendable (_ sparse: SparseCoverage) -> Bool
+public typealias CoverageDecision = @Sendable (_ coverage: CoverageView) -> Bool
 
 /// A closure that decides if an input is interesting and records it.
 ///

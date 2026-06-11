@@ -198,6 +198,56 @@ struct CoverageEngineTests {
                 "Engine 2 judges with its OWN state — the corpus already holding these edges must not decide for it")
     }
 
+    /// The default `.pathTrie`'s decision never reads coverage — its oracle
+    /// is its own trie — and rejects the vast majority of iterations. Those
+    /// rejects must not pay for a sparse snapshot (a malloc plus two
+    /// O(covered-edges) copies per iteration).
+    @Test("Decisions that never read coverage take no snapshot")
+    func rejectWithoutCoverageReadTakesNoSnapshot() {
+        let context = SanCovCounters.MeasurementContext.testInstance()
+        let snapshots = PropertyTestingKit.SyncBox<Int>(0)
+        let client = CoverageCountersClient(
+            snapshotCoveredArraysWithContext: { _ in
+                snapshots.update { $0 += 1 }
+                return SparseCoverage(indices: [1])
+            }
+        )
+        let corpus = Corpus<Int>()
+
+        let strategy = CoverageStrategy { _ in false }
+        let evaluator: CoverageEvaluator<Int> = strategy.makeEvaluator()
+        for input in 0..<10 {
+            _ = evaluator.evaluate(input, nil, context, client, corpus)
+        }
+
+        #expect(snapshots.value == 0,
+                "a rejecting decision that never reads coverage must not snapshot")
+    }
+
+    /// When the decision does read coverage and accepts, the materialized
+    /// snapshot is shared with the corpus add: exactly one per iteration.
+    @Test("An accepting run snapshots exactly once")
+    func acceptingRunSnapshotsOnce() {
+        let context = SanCovCounters.MeasurementContext.testInstance()
+        let snapshots = PropertyTestingKit.SyncBox<Int>(0)
+        let client = CoverageCountersClient(
+            snapshotCoveredArraysWithContext: { _ in
+                snapshots.update { $0 += 1 }
+                return SparseCoverage(indices: [5])
+            }
+        )
+        let corpus = Corpus<Int>()
+
+        let strategy = CoverageStrategy { coverage in !coverage.indices.isEmpty }
+        let evaluator: CoverageEvaluator<Int> = strategy.makeEvaluator()
+        let sparse = evaluator.evaluate(1, nil, context, client, corpus)
+
+        #expect(snapshots.value == 1,
+                "the decision's snapshot is reused for the corpus add")
+        #expect(corpus.entries.first?.sparseCoverage == sparse,
+                "the entry carries the judged coverage")
+    }
+
     /// `decide` may live in instrumented code (a user's test target). Edges it
     /// fires must be recorded in the map but NOT dispatched into the same
     /// engine's `onEdge` — observing them would deadlock any non-reentrant

@@ -81,6 +81,7 @@
 		52C260E19A743BA5BCADC703 /* CoverageSignature.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BD8E7DDBFB1256A08DEBE05 /* CoverageSignature.swift */; };
 		53170A331CFF41FC3C904294 /* ScheduleABITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E08CBC9D53E1482257F8512B /* ScheduleABITests.swift */; };
 		534C8AE7D3768059DDAEA18D /* Benchmark in Frameworks */ = {isa = PBXBuildFile; productRef = FD911ACF527827DA331405BD /* Benchmark */; };
+		53CC4160D51D5F0BB93BF0DC /* CoverageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 78CCD0EE426F8A208203ED16 /* CoverageView.swift */; };
 		5423650CE3DD60B1F7996FF1 /* ActorDeinitSchedulingTest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89B1AFF0FF50A24C9CF91760 /* ActorDeinitSchedulingTest.swift */; };
 		56BD6A924A8704F7BB65D7CD /* ArrayPositionAwareMutator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E9F5016469E3378725DCE64 /* ArrayPositionAwareMutator.swift */; };
 		56D29B8C49300786D2ACBD1A /* NegativeIntMutator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4091F4EF6449C34BCC32E57C /* NegativeIntMutator.swift */; };
@@ -546,6 +547,7 @@
 		7592E82B282E9A2AEA8D1386 /* StragglerCoverageInheritanceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StragglerCoverageInheritanceTests.swift; sourceTree = "<group>"; };
 		7769DE997855D0C94C1C405F /* FuzzResult.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FuzzResult.swift; sourceTree = "<group>"; };
 		779153C9B2EE2604BB0510F4 /* GenericTimerPollerReproductionTest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GenericTimerPollerReproductionTest.swift; sourceTree = "<group>"; };
+		78CCD0EE426F8A208203ED16 /* CoverageView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoverageView.swift; sourceTree = "<group>"; };
 		797B369A783CF8DA4F7C9190 /* RaceConditionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RaceConditionTests.swift; sourceTree = "<group>"; };
 		7ACFE600DD67A8E2CC79D829 /* ck_pr.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ck_pr.h; sourceTree = "<group>"; };
 		7C0EB12824A02A80F8D4EB77 /* BoolMutators.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BoolMutators.swift; sourceTree = "<group>"; };
@@ -1297,6 +1299,7 @@
 				EB988F36432EEA023A812BEA /* AlwaysInterestingStrategy.swift */,
 				FDD1EC805CD71A270C692864 /* CoverageEngine.swift */,
 				672D5DCDC1A16C1291F8044B /* CoverageStrategy.swift */,
+				78CCD0EE426F8A208203ED16 /* CoverageView.swift */,
 				0E6744BAE7780BE09993D850 /* NewEdgeStrategy.swift */,
 				D0BCEAA419004D9808AB03E0 /* PathTrieStrategy.swift */,
 				43B310BD1F88DB6894FF1F29 /* SignatureMatchStrategy.swift */,
@@ -2044,6 +2047,7 @@
 				01C409E9A774CE4770B6DC3B /* CoverageGapReport.swift in Sources */,
 				52C260E19A743BA5BCADC703 /* CoverageSignature.swift in Sources */,
 				2FDA41240A10E1E9C94D007A /* CoverageStrategy.swift in Sources */,
+				53CC4160D51D5F0BB93BF0DC /* CoverageView.swift in Sources */,
 				E22FD5BA11720007BFEC6E1E /* DWARFSourceLocation.swift in Sources */,
 				4B46C972C1518B04075D7EED /* DWARFSymbolizer.swift in Sources */,
 				D0C65F0813EFB9C22E7A24EC /* DWARFSymbolizerError.swift in Sources */,
