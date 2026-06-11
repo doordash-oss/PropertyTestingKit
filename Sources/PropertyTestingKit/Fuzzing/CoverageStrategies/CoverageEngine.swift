@@ -34,6 +34,10 @@ public struct CoverageEngine: Sendable {
     /// The judgement half: decides per iteration whether the run's coverage
     /// makes the input interesting. The engine records interesting inputs in
     /// the corpus.
+    ///
+    /// Runs under the same per-thread gate as `onEdge`/`onReset`: edges fired
+    /// by `decide`'s own code are recorded in the map but not observed, so
+    /// `decide` may live in instrumented code and share locks with `onEdge`.
     let decide: CoverageDecision
 
     public init(

@@ -15,6 +15,8 @@
 //  Swappable coverage strategies that determine when a fuzz input is "interesting."
 //
 
+import EdgeHooks
+
 /// Determines how the fuzzer decides if an input is "interesting" (worth adding to the corpus).
 ///
 /// A strategy is **pure judgement** over coverage: its decision sees only the
@@ -118,7 +120,17 @@ extension CoverageStrategy {
             guard let sparse = try? coverageClient.snapshotCoveredArraysWithContext(context) else {
                 return nil
             }
-            guard engine.decide(sparse) else {
+            // `decide` runs under the observer gate for the same reason
+            // `onEdge`/`onReset` do: it may live in instrumented code, so
+            // edges its own execution fires must not dispatch synchronously
+            // into the engine's `onEdge` — sharing a non-reentrant lock
+            // between the two would deadlock. The judged snapshot is already
+            // taken, and decide's edges still land in the map (cleared by the
+            // next iteration's reset).
+            let gated = sancov_observer_enter()
+            let interesting = engine.decide(sparse)
+            if gated { sancov_observer_exit() }
+            guard interesting else {
                 return nil
             }
             // Judgement said yes; recording the input is the engine's job,

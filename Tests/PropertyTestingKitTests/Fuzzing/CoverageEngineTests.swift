@@ -198,6 +198,41 @@ struct CoverageEngineTests {
                 "Engine 2 judges with its OWN state — the corpus already holding these edges must not decide for it")
     }
 
+    /// `decide` may live in instrumented code (a user's test target). Edges it
+    /// fires must be recorded in the map but NOT dispatched into the same
+    /// engine's `onEdge` — observing them would deadlock any non-reentrant
+    /// lock shared between `decide` and `onEdge`, the natural shape for a
+    /// stateful custom strategy.
+    @Test("Edges fired inside decide are not observed")
+    func decideEdgesAreNotObserved() {
+        let context = SanCovCounters.beginMeasurement()
+        defer { SanCovCounters.endMeasurement(context) }
+        let coverageClient = CoverageCountersClient.liveValue
+        let corpus = Corpus<Int>()
+
+        let observed = PropertyTestingKit.SyncBox<Set<UInt32>>([])
+        let strategy = CoverageStrategy(makeEngine: {
+            CoverageEngine(
+                onEdge: { edge in observed.update { _ = $0.insert(edge) } },
+                { _ in
+                    var g99: UInt32 = 99
+                    sancov_dispatch_edge(&g99)  // decide's own code covers an edge
+                    return true
+                }
+            )
+        })
+        let evaluator: CoverageEvaluator<Int> = strategy.makeEvaluator()
+        evaluator.setup?(context)
+
+        _ = evaluator.evaluate(1, nil, context, coverageClient, corpus)
+
+        #expect(!observed.value.contains(99),
+                "decide's own edges must not re-enter the engine's onEdge")
+        let after = try? coverageClient.snapshotCoveredArraysWithContext(context)
+        #expect(after?.indices.contains(99) == true,
+                "decide's edges are still recorded in the coverage map")
+    }
+
     @Test("A parallel fuzz run builds one engine per parallel engine")
     func makeEngineCalledPerParallelEngine() async throws {
         // Deliberately SHARED across engines: counts makeEngine invocations.
