@@ -47,7 +47,7 @@ let benchmarks: @Sendable () -> Void = {
 
             let result = try await fuzz(
                 duration: .seconds(0.1),
-                persistence: .replace,
+                persistence: .ephemeral,
                 parallelism: 16
             ) { (input: Int) in
                 blackHole(input)
@@ -93,7 +93,7 @@ let benchmarks: @Sendable () -> Void = {
 
             let result = try await fuzz(
                 duration: .seconds(0.1),
-                persistence: .replace,
+                persistence: .ephemeral,
                 coverageStrategy: .newEdge,
                 parallelism: 16
             ) { (input: Int) in
@@ -141,7 +141,7 @@ let benchmarks: @Sendable () -> Void = {
             // enqueues, and the end-of-run merge inside the measured time.
             let result = try await fuzz(
                 duration: .seconds(0.1),
-                persistence: .replace,
+                persistence: .ephemeral,
                 coverageStrategy: CoverageStrategy(onEdge: { edge, _ in blackHole(edge) }) { _ in false },
                 parallelism: 16
             ) { (input: Int) in
@@ -184,7 +184,7 @@ let benchmarks: @Sendable () -> Void = {
 
             let result = try await fuzz(
                 duration: .seconds(0.1),
-                persistence: .replace,
+                persistence: .ephemeral,
                 coverageStrategy: .pathTrie,
                 parallelism: 16
             ) { (input: Int) in
@@ -230,7 +230,7 @@ let benchmarks: @Sendable () -> Void = {
                     group.addTask {
                         let result = try? await fuzz(
                             duration: .seconds(0.1),
-                            persistence: .replace,
+                            persistence: .ephemeral,
                             parallelism: 16
                         ) { (input: Int) in
                             blackHole(input)
@@ -282,7 +282,7 @@ let benchmarks: @Sendable () -> Void = {
                     group.addTask {
                         let result = try? await fuzz(
                             duration: .seconds(0.1),
-                            persistence: .replace,
+                            persistence: .ephemeral,
                             parallelism: 16
                         ) { (input: Int) in
                             blackHole(input)
@@ -331,7 +331,7 @@ let benchmarks: @Sendable () -> Void = {
 //
 //                let result = try await fuzz(
 //                    duration: .seconds(0.1),
-//                    persistence: .replace,
+//                    persistence: .ephemeral,
 //                    parallelism: p
 //                ) { (input: Int) in
 //                    blackHole(input)
