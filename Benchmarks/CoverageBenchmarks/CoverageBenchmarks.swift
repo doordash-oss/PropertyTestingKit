@@ -136,11 +136,13 @@ let benchmarks: @Sendable () -> Void = {
 
             // Exercise the Swift per-edge observer (the C->Swift dispatch the
             // pathTrie strategy also rides) via a custom strategy with a no-op
-            // onEdge — measures observer dispatch throughput.
+            // onEdge — measures observer dispatch throughput. decide rejects
+            // everything: accepting would put corpus appends, mutation
+            // enqueues, and the end-of-run merge inside the measured time.
             let result = try await fuzz(
                 duration: .seconds(0.1),
                 persistence: .replace,
-                coverageStrategy: CoverageStrategy(onEdge: { edge, _ in blackHole(edge) }) { _ in true },
+                coverageStrategy: CoverageStrategy(onEdge: { edge, _ in blackHole(edge) }) { _ in false },
                 parallelism: 16
             ) { (input: Int) in
                 blackHole(input)
