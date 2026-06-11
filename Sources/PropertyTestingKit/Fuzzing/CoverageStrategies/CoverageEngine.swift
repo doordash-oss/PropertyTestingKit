@@ -16,8 +16,14 @@
 //
 
 /// A strategy's per-engine bundle: the measurement hooks and the decision,
-/// sharing one parallel engine's state. Built fresh by `makeEngine` for each
-/// engine, so state captured by these closures never crosses engines.
+/// sharing one parallel engine's state.
+///
+/// Isolation is a property of `makeEngine`, not of the bundle: state created
+/// *inside* `makeEngine` is engine-isolated because each parallel engine gets
+/// its own call. Engines built by the `CoverageStrategy(onEdge:_:)`
+/// convenience wrap the SAME closures into every engine, so anything those
+/// closures capture IS shared across engines — that form is for stateless
+/// hooks.
 ///
 /// The bundle is pure judgement: it never sees the corpus, the typed input,
 /// or schedule bytes — which is what lets one strategy value serve any input

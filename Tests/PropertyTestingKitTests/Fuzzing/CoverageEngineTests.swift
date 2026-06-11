@@ -16,7 +16,9 @@
 //  builds a fresh `CoverageEngine` — onEdge/onReset hooks plus the decision,
 //  sharing one engine's state — once per parallel engine. This is what makes
 //  custom stateful strategies (like a user-written pathTrie) correct under
-//  parallelism: engines never share mutable strategy state.
+//  parallelism: state created inside `makeEngine` never crosses engines.
+//  (The `CoverageStrategy(onEdge:_:)` convenience shares its closures across
+//  all engines — stateless hooks only.)
 //
 
 import Testing
