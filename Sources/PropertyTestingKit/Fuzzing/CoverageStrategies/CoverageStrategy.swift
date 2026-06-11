@@ -91,9 +91,7 @@ public struct CoverageStrategy: Sendable {
     ///         onReset: { trie.reset() }
     ///     ) { _ in                                    // judgement half
     ///         defer { trie.reset() }
-    ///         guard trie.isUniquePath else { return false }
-    ///         trie.markTerminal()
-    ///         return true
+    ///         return trie.markTerminalIfUnique()
     ///     }
     /// })
     /// ```

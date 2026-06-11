@@ -199,6 +199,33 @@ struct TrieEdgeHookTests {
         #expect(!trie.isUniquePath, "Same edge sequence should be duplicate")
     }
 
+    // MARK: - Compound judge-and-mark
+
+    /// Check-then-mark as two lock acquisitions lets a straggler `advance`
+    /// (an un-awaited child task's edge) move the cursor between them,
+    /// putting the terminal mark on the wrong node. The compound form judges
+    /// and marks in one critical section.
+    @Test("markTerminalIfUnique accepts and marks a novel path")
+    func markTerminalIfUniqueAcceptsNovel() {
+        let trie = PathTrie()
+        trie.advance(0)
+        trie.advance(1)
+        #expect(trie.markTerminalIfUnique(), "First sight of a path is unique")
+    }
+
+    @Test("markTerminalIfUnique rejects a replayed path")
+    func markTerminalIfUniqueRejectsReplay() {
+        let trie = PathTrie()
+        trie.advance(0)
+        trie.advance(1)
+        _ = trie.markTerminalIfUnique()
+        trie.reset()
+
+        trie.advance(0)
+        trie.advance(1)
+        #expect(!trie.markTerminalIfUnique(), "An identical replay is not unique")
+    }
+
     // MARK: - Integration with Coverage System
 
     @Test("Trie advances on first-hit via the dispatched trie observer")

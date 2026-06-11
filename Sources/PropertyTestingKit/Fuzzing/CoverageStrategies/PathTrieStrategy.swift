@@ -45,12 +45,10 @@ private func makePathTrieEngine() -> CoverageEngine {
             trie.reset()
         }
 
-        guard trie.isUniquePath else {
-            return false
-        }
-
-        trie.markTerminal()
-        return true
+        // One critical section for judge-and-mark: a straggler advance
+        // between a separate check and mark would move the cursor and put
+        // the terminal mark on the wrong node.
+        return trie.markTerminalIfUnique()
     }
 }
 

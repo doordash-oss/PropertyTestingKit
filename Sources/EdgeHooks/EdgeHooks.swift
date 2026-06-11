@@ -69,7 +69,7 @@ public let countingEdgeHook: EdgeHook = sancov_recorder_counting
 /// ```swift
 /// let trie = PathTrie()
 /// // per edge hit:        trie.advance(edgeIndex)
-/// // after each run:      if trie.isUniquePath { trie.markTerminal() /* corpus */ }
+/// // after each run:      if trie.markTerminalIfUnique() { /* corpus */ }
 /// // between iterations:  trie.reset()
 /// ```
 /// Thread-safety: `advance` may be called from any thread (edge observers run
@@ -113,6 +113,21 @@ public final class PathTrie: @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
         current.isTerminal = true
+    }
+
+    /// Judge and mark in ONE critical section: if the current path is unique
+    /// (see `isUniquePath`), mark it terminal and report `true`.
+    ///
+    /// Prefer this over a separate `isUniquePath` check followed by
+    /// `markTerminal()`: between two acquisitions a straggler `advance` (an
+    /// un-awaited child task's edge) can move the cursor, putting the
+    /// terminal mark on a deeper, wrong node.
+    public func markTerminalIfUnique() -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        guard isNovel || !current.isTerminal else { return false }
+        current.isTerminal = true
+        return true
     }
 
     /// Advance the trie for an edge index: follow the existing child, or grow
