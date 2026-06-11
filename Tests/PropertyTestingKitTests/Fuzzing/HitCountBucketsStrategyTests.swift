@@ -132,6 +132,83 @@ struct HitCountBucketsStrategyTests {
                 "Engine 2 judges with its OWN bucket state — engine 1 having seen these buckets must not decide for it")
     }
 
+    // MARK: - Engine unit tests (no dispatch)
+    //
+    // The bucket table is pure logic, so it gets exhaustive hermetic coverage:
+    // the engine's closures are driven by hand — no sancov dispatch, no
+    // evaluator, no ambient-edge noise. The integration tests above own the
+    // wiring properties (observer routing, per-engine isolation, storage).
+
+    /// One engine, judged by hand: hit `edge` `hits` times, then decide.
+    /// The decision never reads the view, so a stub client suffices.
+    private static func makeJudge() -> (_ edge: UInt32, _ hits: Int) -> Bool {
+        let engine = CoverageStrategy.hitCountBuckets.makeEngine()
+        let context = SanCovCounters.MeasurementContext.testInstance()
+        let client = CoverageCountersClient(
+            snapshotCoveredArraysWithContext: { _ in SparseCoverage() }
+        )
+        return { edge, hits in
+            engine.onReset?()
+            for hit in 0..<hits {
+                engine.onEdge?(edge, hit == 0)
+            }
+            return engine.decide(CoverageView(context: context, client: client))
+        }
+    }
+
+    /// The AFL++ bucket table as (lowest count, highest count) per bucket.
+    private static let bucketBounds: [(lo: Int, hi: Int)] = [
+        (1, 1), (2, 2), (3, 3), (4, 7), (8, 15), (16, 31), (32, 127), (128, 1_000_000)
+    ]
+
+    @Test("A bucket's lowest and highest counts judge as the same bucket",
+          arguments: bucketBounds)
+    func bucketBoundsShareABucket(bounds: (lo: Int, hi: Int)) {
+        let judge = Self.makeJudge()
+        #expect(judge(70, bounds.lo), "Count \(bounds.lo): first sight of the bucket")
+        #expect(!judge(70, bounds.hi),
+                "Count \(bounds.hi) must land in the same bucket as \(bounds.lo)")
+    }
+
+    @Test("Adjacent buckets are distinct at their boundary",
+          arguments: zip(bucketBounds.dropLast(), bucketBounds.dropFirst()))
+    func adjacentBucketsAreDistinctAtTheBoundary(
+        lower: (lo: Int, hi: Int), upper: (lo: Int, hi: Int)
+    ) {
+        let judge = Self.makeJudge()
+        #expect(judge(71, lower.hi), "Count \(lower.hi): first sight of the lower bucket")
+        #expect(judge(71, upper.lo),
+                "Count \(upper.lo) must cross into the next bucket — an off-by-one in the bucket table would merge them")
+    }
+
+    @Test("decide clears the per-run counts itself")
+    func decideClearsPerRunCounts() {
+        let engine = CoverageStrategy.hitCountBuckets.makeEngine()
+        let context = SanCovCounters.MeasurementContext.testInstance()
+        let client = CoverageCountersClient(
+            snapshotCoveredArraysWithContext: { _ in SparseCoverage() }
+        )
+        func judgeOneHit() -> Bool {
+            engine.onEdge?(72, true)
+            return engine.decide(CoverageView(context: context, client: client))
+        }
+
+        #expect(judgeOneHit(), "Count 1: bucket {1} is unseen")
+        // No reset between runs: if decide had not cleared the counts, this
+        // run would read count 2 — bucket {2}, spuriously interesting.
+        #expect(!judgeOneHit(), "Count must be 1 again, not an accumulated 2")
+    }
+
+    @Test("onReset clears the per-run counts")
+    func onResetClearsPerRunCounts() {
+        let judge = Self.makeJudge()  // makeJudge resets before every run
+
+        #expect(judge(73, 1), "Count 1: bucket {1} is unseen")
+        // If onReset did not clear, this run would read count 2 — bucket {2},
+        // spuriously interesting.
+        #expect(!judge(73, 1), "A reset run must judge count 1 again")
+    }
+
     @Test("hitCountBuckets drives a real parallel fuzz run")
     func hitCountBucketsSmokeTest() async throws {
         let result = try await fuzzWithMaxIterations(
