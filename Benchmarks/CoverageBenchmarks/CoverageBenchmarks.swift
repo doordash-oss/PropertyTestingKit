@@ -140,7 +140,7 @@ let benchmarks: @Sendable () -> Void = {
             let result = try await fuzz(
                 duration: .seconds(0.1),
                 persistence: .replace,
-                coverageStrategy: CoverageStrategy(onEdge: { blackHole($0) }) { _ in true },
+                coverageStrategy: CoverageStrategy(onEdge: { edge, _ in blackHole(edge) }) { _ in true },
                 parallelism: 16
             ) { (input: Int) in
                 blackHole(input)

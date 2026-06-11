@@ -57,14 +57,16 @@ public struct CoverageStrategy: Sendable {
     ///   half. Called on EVERY hit of edges that route to the engine's
     ///   measurement context, loop re-executions included — gating (loop
     ///   immunity, dedup, hit-count bucketing) is your strategy's decision, the
-    ///   way `.pathTrie` gates itself to first hits. The context co-owns the
-    ///   closure's state, so capture freely. `nil` (the default) leaves the
-    ///   plain map recording.
+    ///   way `.pathTrie` gates itself to first hits. The second parameter is
+    ///   the first-hit bit (`true` exactly once per edge per iteration),
+    ///   computed by the recorder anyway — gate on it for free loop immunity.
+    ///   The context co-owns the closure's state, so capture freely. `nil`
+    ///   (the default) leaves the plain map recording.
     /// - Note: `onEdge` and `decide` are shared across parallel engines. Keep
     ///   them free of mutable state, or use `init(makeEngine:)` to give each
     ///   engine its own.
     public init(
-        onEdge: (@Sendable (UInt32) -> Void)? = nil,
+        onEdge: (@Sendable (UInt32, Bool) -> Void)? = nil,
         _ decide: @escaping CoverageDecision
     ) {
         self.init(makeEngine: { CoverageEngine(onEdge: onEdge, decide) })
@@ -81,7 +83,11 @@ public struct CoverageStrategy: Sendable {
     /// CoverageStrategy(makeEngine: {
     ///     let trie = PathTrie()                       // this engine's state
     ///     return CoverageEngine(
-    ///         onEdge: { edge in trie.advance(edge) }, // measurement half
+    ///         // measurement half; gating on the first-hit bit gives the
+    ///         // path loop immunity, exactly like the built-in .pathTrie
+    ///         onEdge: { edge, isFirstHit in
+    ///             if isFirstHit { trie.advance(edge) }
+    ///         },
     ///         onReset: { trie.reset() }
     ///     ) { _ in                                    // judgement half
     ///         defer { trie.reset() }
@@ -109,7 +115,7 @@ extension CoverageStrategy {
         let setup: CoverageStrategySetup? = (engine.onEdge != nil || engine.onReset != nil)
             ? { context in
                 SanCovCounters.attachObserver(
-                    EdgeObserver(onEdge: engine.onEdge ?? { _ in }, onReset: engine.onReset),
+                    EdgeObserver(onEdge: engine.onEdge ?? { _, _ in }, onReset: engine.onReset),
                     to: context
                 )
             }

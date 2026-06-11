@@ -44,15 +44,20 @@ final class EdgeObserver: Sendable {
     /// (per-thread reentrancy gate), so the closure may live in instrumented
     /// code and take locks safely.
     ///
+    /// The second parameter is the C layer's first-hit bit: `true` exactly
+    /// once per edge per reset window, computed by the recording CAS the hot
+    /// path performs anyway — strategies gating on first hits (the trie's
+    /// loop immunity) use it instead of recomputing the answer under a lock.
+    ///
     /// - Important: this runs once per HIT on the hot path — a hot loop can
     ///   call it millions of times per second.
-    let onEdge: @Sendable (UInt32) -> Void
+    let onEdge: @Sendable (_ edge: UInt32, _ isFirstHit: Bool) -> Void
 
     /// Called when the context's coverage is reset between iterations, so
     /// per-iteration state (e.g. a path-trie cursor) starts each run clean.
     let onReset: (@Sendable () -> Void)?
 
-    init(onEdge: @escaping @Sendable (UInt32) -> Void, onReset: (@Sendable () -> Void)? = nil) {
+    init(onEdge: @escaping @Sendable (UInt32, Bool) -> Void, onReset: (@Sendable () -> Void)? = nil) {
         self.onEdge = onEdge
         self.onReset = onReset
     }
@@ -67,11 +72,14 @@ let edgeObserverRecorder: EdgeHook = { guardPtr, map, context in
     // Explicit bounds check: record_edge_first_hit's false conflates "repeat
     // hit" (observed) with "out of range / filtered" (not observed).
     guard guardPtr.pointee < sancov_get_counter_count() else { return }
-    _ = sancov_record_edge_first_hit(guardPtr, map, context)
+    // Past the bounds guard, the recording CAS's result is exactly "first
+    // hit of this edge since the last reset" — passed to the observer so
+    // strategies don't recompute it.
+    let isFirstHit = sancov_record_edge_first_hit(guardPtr, map, context)
     guard let data = sancov_context_get_recorder_data(context) else { return }
     guard sancov_observer_enter() else { return }
     defer { sancov_observer_exit() }
-    Unmanaged<EdgeObserver>.fromOpaque(data).takeUnretainedValue().onEdge(guardPtr.pointee)
+    Unmanaged<EdgeObserver>.fromOpaque(data).takeUnretainedValue().onEdge(guardPtr.pointee, isFirstHit)
 }
 
 /// Reset hook: forwards `sancov_reset_coverage` to the observer. Shares the

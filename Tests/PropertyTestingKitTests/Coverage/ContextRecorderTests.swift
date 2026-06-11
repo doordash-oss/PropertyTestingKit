@@ -103,7 +103,7 @@ struct ContextRecorderTests {
 
         let hits = PropertyTestingKit.SyncBox<[UInt32]>([])
         SanCovCounters.attachObserver(
-            EdgeObserver(onEdge: { edge in hits.update { $0.append(edge) } }),
+            EdgeObserver(onEdge: { edge, _ in hits.update { $0.append(edge) } }),
             to: context
         )
 
@@ -127,6 +127,40 @@ struct ContextRecorderTests {
                 "The observer recorder must keep feeding covered_indices")
     }
 
+    /// The C layer already computes "first hit this measurement" with a
+    /// lock-free CAS on the map bit; the observer passes that bit through so
+    /// strategies that want loop immunity (like the trie) don't recompute it
+    /// under a lock on every hit. (A real instrumented edge sharing index 17
+    /// can only add hits — the map bit still yields exactly one `true` per
+    /// reset window, so the counts below are collision-proof.)
+    @Test("An observer receives the C first-hit bit per hit")
+    func observerReceivesFirstHitBit() {
+        let context = SanCovCounters.beginMeasurement()
+        defer { SanCovCounters.endMeasurement(context) }
+
+        let firstHits = PropertyTestingKit.SyncBox<[Bool]>([])
+        SanCovCounters.attachObserver(
+            EdgeObserver(onEdge: { edge, isFirstHit in
+                if edge == 17 { firstHits.update { $0.append(isFirstHit) } }
+            }),
+            to: context
+        )
+
+        var g17: UInt32 = 17
+        sancov_dispatch_edge(&g17)
+        sancov_dispatch_edge(&g17)
+        let phase1 = firstHits.value
+        SanCovCounters.resetCoverage(context)
+        sancov_dispatch_edge(&g17)
+        let phase2 = Array(firstHits.value.dropFirst(phase1.count))
+
+        #expect(phase1.count >= 2, "both dispatched hits are observed")
+        #expect(phase1.filter { $0 }.count == 1,
+                "exactly one first-hit before the reset")
+        #expect(phase2.filter { $0 }.count == 1,
+                "the reset re-arms the first-hit bit")
+    }
+
     @Test("An observer's onReset fires when coverage is reset")
     func observerOnResetFiresOnResetCoverage() {
         let context = SanCovCounters.beginMeasurement()
@@ -134,7 +168,7 @@ struct ContextRecorderTests {
 
         let resets = PropertyTestingKit.SyncBox<Int>(0)
         SanCovCounters.attachObserver(
-            EdgeObserver(onEdge: { _ in }, onReset: { resets.update { $0 += 1 } }),
+            EdgeObserver(onEdge: { _, _ in }, onReset: { resets.update { $0 += 1 } }),
             to: context
         )
 
@@ -153,7 +187,7 @@ struct ContextRecorderTests {
             let canary = Canary()
             weakCanary = canary
             SanCovCounters.attachObserver(
-                EdgeObserver(onEdge: { _ in withExtendedLifetime(canary) {} }),
+                EdgeObserver(onEdge: { _, _ in withExtendedLifetime(canary) {} }),
                 to: context
             )
         }
@@ -178,13 +212,13 @@ struct ContextRecorderTests {
             let canary = Canary()
             weakCanary = canary
             SanCovCounters.attachObserver(
-                EdgeObserver(onEdge: { _ in withExtendedLifetime(canary) {} }),
+                EdgeObserver(onEdge: { _, _ in withExtendedLifetime(canary) {} }),
                 to: context
             )
         }
         #expect(weakCanary != nil)
 
-        SanCovCounters.attachObserver(EdgeObserver(onEdge: { _ in }), to: context)
+        SanCovCounters.attachObserver(EdgeObserver(onEdge: { _, _ in }), to: context)
         #expect(weakCanary == nil,
                 "Replacing the recorder must release the old observer")
     }
@@ -204,7 +238,7 @@ struct ContextRecorderTests {
             let canary = Canary()
             weakCanary = canary
             SanCovCounters.attachObserver(
-                EdgeObserver(onEdge: { _ in withExtendedLifetime(canary) {} }),
+                EdgeObserver(onEdge: { _, _ in withExtendedLifetime(canary) {} }),
                 to: context
             )
         }
@@ -322,7 +356,7 @@ struct ContextRecorderTests {
 
         let hits = PropertyTestingKit.SyncBox<[UInt32]>([])
         let strategy = CoverageStrategy(
-            onEdge: { edge in hits.update { $0.append(edge) } }
+            onEdge: { edge, _ in hits.update { $0.append(edge) } }
         ) { _ in false }
 
         let evaluator: CoverageEvaluator<Int> = strategy.makeEvaluator()

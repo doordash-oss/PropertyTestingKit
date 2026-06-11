@@ -64,7 +64,7 @@ struct CoverageEngineTests {
         let strategy = CoverageStrategy(makeEngine: {
             let edges = PropertyTestingKit.SyncBox<Set<UInt32>>([])
             return CoverageEngine(
-                onEdge: { edge in edges.update { _ = $0.insert(edge) } },
+                onEdge: { edge, _ in edges.update { _ = $0.insert(edge) } },
                 { _ in edges.value.contains(21) }
             )
         })
@@ -87,7 +87,7 @@ struct CoverageEngineTests {
         let resets = PropertyTestingKit.SyncBox<Int>(0)
         let strategy = CoverageStrategy(makeEngine: {
             CoverageEngine(
-                onEdge: { _ in },
+                onEdge: { _, _ in },
                 onReset: { resets.update { $0 += 1 } },
                 { _ in false }
             )
@@ -263,7 +263,7 @@ struct CoverageEngineTests {
         let observed = PropertyTestingKit.SyncBox<Set<UInt32>>([])
         let strategy = CoverageStrategy(makeEngine: {
             CoverageEngine(
-                onEdge: { edge in observed.update { _ = $0.insert(edge) } },
+                onEdge: { edge, _ in observed.update { _ = $0.insert(edge) } },
                 { _ in
                     var g99: UInt32 = 99
                     sancov_dispatch_edge(&g99)  // decide's own code covers an edge

@@ -24,8 +24,11 @@
 /// pack (including schedule fuzzing's extended pack).
 public struct CoverageEngine: Sendable {
     /// Called on every hit of edges routing to this engine's measurement
-    /// context (see `CoverageStrategy.init(onEdge:_:)` for semantics).
-    let onEdge: (@Sendable (UInt32) -> Void)?
+    /// context (see `CoverageStrategy.init(onEdge:_:)` for semantics). The
+    /// second parameter is `true` exactly once per edge per iteration — the
+    /// first-hit bit the recorder computes anyway — so strategies that gate
+    /// on first hits (loop immunity, like `.pathTrie`) get it for free.
+    let onEdge: (@Sendable (_ edge: UInt32, _ isFirstHit: Bool) -> Void)?
 
     /// Called when the engine's coverage resets between iterations, so
     /// per-iteration state starts each run clean.
@@ -41,7 +44,7 @@ public struct CoverageEngine: Sendable {
     let decide: CoverageDecision
 
     public init(
-        onEdge: (@Sendable (UInt32) -> Void)? = nil,
+        onEdge: (@Sendable (UInt32, Bool) -> Void)? = nil,
         onReset: (@Sendable () -> Void)? = nil,
         _ decide: @escaping CoverageDecision
     ) {
