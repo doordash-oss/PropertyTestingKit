@@ -703,7 +703,7 @@ static SanCovMeasurementContext* retain_inherited_if_valid(uint64_t handle) {
 SanCovMeasurementContext* sancov_begin_measurement(void) {
     SanCovMeasurementContext* ctx = (SanCovMeasurementContext*)xmalloc(sizeof(SanCovMeasurementContext));
     ctx->coverage_map = NULL;
-    ctx->covered_count = 0;
+    atomic_init(&ctx->covered_count, 0);
     // Generation tag for the inheritance handle. Monotonic (mod 2^16); two
     // contexts that share a tag are >= 65536 begin_measurement calls apart, far
     // beyond the lifetime of any straggler that could alias a recycled address.
@@ -753,7 +753,7 @@ SanCovMeasurementContext* sancov_begin_measurement(void) {
 SanCovMeasurementContext* sancov_create_dummy_context(void) {
     SanCovMeasurementContext* ctx = (SanCovMeasurementContext*)xmalloc(sizeof(SanCovMeasurementContext));
     ctx->coverage_map = NULL;
-    ctx->covered_count = 0;
+    atomic_init(&ctx->covered_count, 0);
     ctx->generation = (uint16_t)atomic_fetch_add_explicit(&g_next_generation, 1, memory_order_relaxed);
     ctx->covered_indices_capacity = 0;
     ctx->covered_indices = NULL;
@@ -773,7 +773,7 @@ void sancov_reset_coverage(SanCovMeasurementContext* ctx) {
     if (ctx->coverage_map != NULL && g_guard_count > 0) {
         memset(ctx->coverage_map, 0, g_guard_count);
     }
-    ctx->covered_count = 0;
+    atomic_store_explicit(&ctx->covered_count, 0, memory_order_relaxed);
     // covered_indices buffer is reused — just reset the count (capacity stays)
 
     // Clear the calling thread's TLS-cached coverage map pointer so the next
@@ -918,9 +918,9 @@ static const uint8_t* get_counters_with_context(SanCovMeasurementContext* ctx) {
 // Get covered count for a measurement context (O(1)).
 size_t sancov_get_covered_count_with_context(SanCovMeasurementContext* ctx) {
     if (!ctx) return 0;
-    // Atomic load: covered_count is bumped via __atomic_fetch_add on edge-firing
-    // threads, so a plain read here is a data race (TSan-confirmed).
-    return __atomic_load_n(&ctx->covered_count, __ATOMIC_RELAXED);
+    // covered_count is bumped on edge-firing threads (record_first_hit), so a
+    // plain read here is a data race (TSan-confirmed). The field is _Atomic.
+    return atomic_load_explicit(&ctx->covered_count, memory_order_relaxed);
 }
 
 // Allocate and fill an array of covered edge indices.
@@ -930,7 +930,7 @@ const uint32_t* sancov_get_covered_indices(SanCovMeasurementContext* ctx, size_t
         if (out_count) *out_count = 0;
         return NULL;
     }
-    size_t count = ctx->covered_count;
+    size_t count = atomic_load_explicit(&ctx->covered_count, memory_order_relaxed);
     *out_count = count;
     if (count == 0 || !ctx->covered_indices) return NULL;
     return ctx->covered_indices;
@@ -947,7 +947,7 @@ const uint32_t* sancov_get_covered_indices(SanCovMeasurementContext* ctx, size_t
 uint32_t* sancov_snapshot_covered_indices_with_context(SanCovMeasurementContext* ctx) {
     if (!ctx) return NULL;
 
-    size_t count = ctx->covered_count;
+    size_t count = atomic_load_explicit(&ctx->covered_count, memory_order_relaxed);
     if (count == 0) return NULL;
 
     // Fast path: copy from covered indices buffer — O(covered_edges)
@@ -1068,7 +1068,7 @@ int64_t sancov_compute_hash_from_indices(const uint32_t* indices, size_t count) 
 int64_t sancov_compute_signature_hash(SanCovMeasurementContext* ctx) {
     if (!ctx) return 0;
 
-    size_t count = ctx->covered_count;
+    size_t count = atomic_load_explicit(&ctx->covered_count, memory_order_relaxed);
     if (count == 0) return 0;
 
     // Fast path: use the covered indices buffer — O(covered_edges) not O(total_edges)
@@ -1109,7 +1109,7 @@ bool sancov_merge_coverage_into_bitmap(
 ) {
     if (!ctx || !bitmap || bitmap_word_count == 0) return false;
 
-    size_t count = ctx->covered_count;
+    size_t count = atomic_load_explicit(&ctx->covered_count, memory_order_relaxed);
     if (count == 0) return false;
 
     const uint8_t* counters = get_counters_with_context(ctx);
@@ -1459,7 +1459,7 @@ static inline bool record_first_hit(uint32_t edge, uint8_t* map, SanCovMeasureme
         return false;
     }
     if (ctx) {
-        size_t idx = __atomic_fetch_add(&ctx->covered_count, 1, __ATOMIC_RELAXED);
+        size_t idx = atomic_fetch_add_explicit(&ctx->covered_count, 1, memory_order_relaxed);
         if (idx < ctx->covered_indices_capacity) {
             ctx->covered_indices[idx] = edge;
         }
@@ -1592,7 +1592,7 @@ void sancov_rebuild_covered_indices_from_map(SanCovMeasurementContext* ctx) {
             count++;
         }
     }
-    ctx->covered_count = count;
+    atomic_store_explicit(&ctx->covered_count, count, memory_order_relaxed);
 }
 
 // Per-edge dispatch: resolve routing once, then run the context's recorder.

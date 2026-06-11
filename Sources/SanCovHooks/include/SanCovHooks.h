@@ -104,7 +104,10 @@ size_t sancov_get_covered_locations(SanCovSourceLocation* locations, size_t max_
 /// hold references across thread hops in the worker pool model.
 typedef struct {
     uint8_t* coverage_map;
-    size_t covered_count;
+    /// _Atomic like the adjacent refcount: bumped by edge-firing threads
+    /// (record_first_hit) while reset/snapshot/hash readers run concurrently
+    /// with stragglers — mixed plain/atomic access is a C11 data race.
+    _Atomic size_t covered_count;
     _Atomic int refcount;
     /// Per-context generation tag, assigned at begin_measurement. Packed into
     /// the inheritance handle's high bits so a stale task-local handle whose
