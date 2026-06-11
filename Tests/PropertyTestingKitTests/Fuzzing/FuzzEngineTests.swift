@@ -37,9 +37,7 @@ private func makeMockCoverageClient(
             return SparseCoverage(indices: indices)
         },
         withRawCoverage: { _, _ in false },
-        mergeCoverageIntoBitmap: { _, _, _, _ in false },
-        computeSignatureHash: { _ in 0 },
-        withCoveredIndices: { _, _ in false }
+        computeSignatureHash: { _ in 0 }
     )
 }
 
@@ -55,9 +53,7 @@ private func makeThrowingCoverageClient() -> CoverageCountersClient {
         resetCoverage: { _ in },
         snapshotCoveredArraysWithContext: { _ in throw MockCoverageUnavailableError() },
         withRawCoverage: { _, _ in false },
-        mergeCoverageIntoBitmap: { _, _, _, _ in false },
-        computeSignatureHash: { _ in 0 },
-        withCoveredIndices: { _, _ in false }
+        computeSignatureHash: { _ in 0 }
     )
 }
 
@@ -285,9 +281,7 @@ struct FuzzEngineTests {
                 resetCoverage: { _ in },
                 snapshotCoveredArraysWithContext: { _ in snapshotCoveredArraysFn() },
                 withRawCoverage: { _, _ in false },
-                mergeCoverageIntoBitmap: { _, _, _, _ in false },
-                computeSignatureHash: { _ in 0 },
-                withCoveredIndices: { _, _ in false }
+                computeSignatureHash: { _ in 0 }
             )
         } operation: {
             await fuzzEngineWithMaxIterations(maxIterations: 50) { (input: Int) in
@@ -323,9 +317,7 @@ struct FuzzEngineTests {
                     return SparseCoverage(indices: [UInt32(snapshotCount.value)])
                 },
                 withRawCoverage: { _, _ in false },
-                mergeCoverageIntoBitmap: { _, _, _, _ in false },
-                computeSignatureHash: { _ in 0 },
-                withCoveredIndices: { _, _ in false }
+                computeSignatureHash: { _ in 0 }
             )
         } operation: {
             await fuzzEngineWithMaxIterations(maxIterations: 10) { (_: Int) in }
@@ -358,9 +350,7 @@ struct FuzzEngineTests {
                 resetCoverage: { _ in },
                 snapshotCoveredArraysWithContext: { _ in SparseCoverage(indices: [1]) },
                 withRawCoverage: { _, _ in false },
-                mergeCoverageIntoBitmap: { _, _, _, _ in false },
-                computeSignatureHash: { _ in 0 },
-                withCoveredIndices: { _, _ in false }
+                computeSignatureHash: { _ in 0 }
             )
         } operation: {
             await fuzzEngineWithMaxIterations(maxIterations: 50) { (_: Int) in }
@@ -406,9 +396,7 @@ struct FuzzEngineTests {
                     return SparseCoverage(indices: [UInt32(checkCounter.value)])
                 },
                 withRawCoverage: { _, _ in false },
-                mergeCoverageIntoBitmap: { _, _, _, _ in false },
-                computeSignatureHash: { _ in 0 },
-                withCoveredIndices: { _, _ in false }
+                computeSignatureHash: { _ in 0 }
             )
         } operation: {
             await fuzzEngineWithMaxIterations(maxIterations: 5) { (_: Int) in }

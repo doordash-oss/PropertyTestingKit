@@ -327,30 +327,6 @@ extension SanCovCounters {
         return try body(ptr, count)
     }
 
-    /// Merge coverage from a measurement context directly into a bitmap.
-    /// This is the fastest path - no allocation, early exit on first new coverage.
-    ///
-    /// - Parameters:
-    ///   - context: The measurement context to read coverage from.
-    ///   - bitmap: The bitmap storage to merge into.
-    ///   - wordCount: Number of UInt64 words in the bitmap.
-    ///   - mergeAll: If true, merge all edges; if false, return early on first new edge.
-    /// - Returns: true if any new coverage was found, false otherwise.
-    static func mergeCoverageIntoBitmap(
-        context: MeasurementContext,
-        bitmap: UnsafeMutablePointer<UInt64>,
-        wordCount: Int,
-        mergeAll: Bool
-    ) -> Bool {
-        guard isAvailable else { return false }
-        return sancov_merge_coverage_into_bitmap(
-            context.rawContext,
-            bitmap,
-            wordCount,
-            mergeAll
-        )
-    }
-
     /// Compute signature hash from coverage data without allocation.
     /// This matches the SparseCoverage.signatureHash algorithm.
     ///
@@ -368,22 +344,6 @@ extension SanCovCounters {
         indices.withUnsafeBufferPointer { buffer in
             Int(sancov_compute_hash_from_indices(buffer.baseAddress, buffer.count))
         }
-    }
-
-    /// Access the covered indices buffer directly (zero-copy).
-    /// The pointer is valid until the next `resetCoverage` or `endMeasurement` call.
-    ///
-    /// - Returns: A buffer pointer to the covered indices, or nil if no coverage.
-    static func withCoveredIndices<R>(
-        context: MeasurementContext,
-        body: (UnsafeBufferPointer<UInt32>) -> R
-    ) -> R {
-        var count: Int = 0
-        let ptr = sancov_get_covered_indices(context.rawContext, &count)
-        if let ptr, count > 0 {
-            return body(UnsafeBufferPointer(start: ptr, count: count))
-        }
-        return body(UnsafeBufferPointer(start: nil, count: 0))
     }
 }
 
