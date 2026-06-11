@@ -113,15 +113,6 @@ extension SanCovCounters {
         )
     }
 
-    /// Attach a path trie as an edge observer using the standard gated trie
-    /// hooks (see `makeTrieHooks`).
-    static func attachTrie(_ trie: PathTrie, to context: MeasurementContext) {
-        let hooks = makeTrieHooks(trie)
-        attachObserver(
-            EdgeObserver(onEdge: hooks.onEdge, onReset: hooks.onReset),
-            to: context
-        )
-    }
 }
 
 // The trie strategy's gated hooks (`makeTrieHooks`) live with the strategy in
