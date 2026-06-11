@@ -30,12 +30,15 @@
 //  `CoverageStrategy(onEdge:)` in PropertyTestingKit, which may capture state
 //  freely (the `.pathTrie` strategy captures its trie that way).
 //
+//  The recorder surface (and the raw SanCovHooks C API beneath it) is
+//  `package`-scoped: it names C types, has no public attach path, and
+//  exporting it would make the C module un-reorganizable public API — with
+//  one-liner footguns like sancov_release_for_testing on a live context.
+//  Only `PathTrie` is public, as part of the custom-strategy recipes.
+//
 
 import Foundation
-
-// Re-exported: the EdgeHook typealias references SanCovMeasurementContext, so
-// anyone who can name an EdgeHook needs the C types visible too.
-@_exported import SanCovHooks
+import SanCovHooks
 
 /// The type of an edge recorder.
 ///
@@ -46,7 +49,7 @@ import Foundation
 /// active. Recorders never re-run routing on the hot path.
 ///
 /// - Important: This runs millions of times per second. Keep it fast.
-public typealias EdgeHook = @convention(c) (
+package typealias EdgeHook = @convention(c) (
     _ guard: UnsafeMutablePointer<UInt32>?,
     _ map: UnsafeMutablePointer<UInt8>?,
     _ context: UnsafeMutablePointer<SanCovMeasurementContext>?
@@ -54,11 +57,11 @@ public typealias EdgeHook = @convention(c) (
 
 /// The default recorder. Binary hit recording (first hit -> 1, subsequent
 /// skipped) plus covered-indices bookkeeping.
-public let defaultEdgeHook: EdgeHook = sancov_recorder_default
+package let defaultEdgeHook: EdgeHook = sancov_recorder_default
 
 /// Counting recorder. Uses 8-bit saturating counters for hit-count bucketing.
 /// On first hit records the edge index; subsequent hits increment up to 255.
-public let countingEdgeHook: EdgeHook = sancov_recorder_counting
+package let countingEdgeHook: EdgeHook = sancov_recorder_counting
 
 // MARK: - Path Trie
 

@@ -22,6 +22,7 @@
 import Testing
 import Foundation
 import SanCovHooks
+import EdgeHooks
 @testable import PropertyTestingKit
 
 /// Raw pointer bits of a recorder, for comparing against the getter seam.

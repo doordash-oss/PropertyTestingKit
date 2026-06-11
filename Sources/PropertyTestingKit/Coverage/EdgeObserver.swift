@@ -32,6 +32,7 @@
 
 import Foundation
 import EdgeHooks
+import SanCovHooks
 
 /// A strategy's per-edge callback (and optional per-iteration reset), called
 /// from the edge-dispatch hot path for edges that route to the context it is

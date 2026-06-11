@@ -22,7 +22,11 @@
 import Foundation
 import os
 import SanCovHooks
-@_exported import EdgeHooks
+import EdgeHooks
+// PathTrie is part of the public custom-strategy recipes (see
+// `CoverageStrategy.init(makeEngine:)`). The rest of EdgeHooks — and the raw
+// SanCovHooks C surface beneath it — stays an implementation detail.
+@_exported import class EdgeHooks.PathTrie
 import MachO
 
 /// Namespace for SanitizerCoverage APIs with task-level isolation.

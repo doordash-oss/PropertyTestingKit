@@ -16,6 +16,7 @@
 //
 
 import EdgeHooks
+import SanCovHooks
 
 /// Determines how the fuzzer decides if an input is "interesting" (worth adding to the corpus).
 ///
