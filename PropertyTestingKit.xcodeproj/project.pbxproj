@@ -218,6 +218,7 @@
 		EBEE3E7D3979455A86AF45AD /* Clocks in Frameworks */ = {isa = PBXBuildFile; productRef = 75307C61A778CA9F0809F76C /* Clocks */; };
 		EE31AE34D338AEF804DF8E8A /* PropertyTestingKit.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 2595E9AD80DBFC77F241A7E7 /* PropertyTestingKit.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		EED2A378ADF17C64DC50D6C8 /* ArrayMutators.swift in Sources */ = {isa = PBXBuildFile; fileRef = D82933D55EE528E5E866C257 /* ArrayMutators.swift */; };
+		F052FC5AD62C0559D4631284 /* PathTrie.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0949B41FDB1F7399BF85852B /* PathTrie.swift */; };
 		F175208C6823ED3BC2A92224 /* PropertyTestingKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 2595E9AD80DBFC77F241A7E7 /* PropertyTestingKit.framework */; };
 		F4F5214CABA1CC0BBFD80985 /* IntBoundaryMutator.swift in Sources */ = {isa = PBXBuildFile; fileRef = E88B1563B358C2EE651C20E4 /* IntBoundaryMutator.swift */; };
 		F63BA597B8068668511D3B8E /* ContextRecorderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 257B1E9613373B2BF2E9934E /* ContextRecorderTests.swift */; };
@@ -454,6 +455,7 @@
 		06BA035A58BDC3A577E01065 /* CrossSessionContaminationTest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CrossSessionContaminationTest.swift; sourceTree = "<group>"; };
 		06ED1D87CAF04357C6E3DFE9 /* ScheduleHooks.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = ScheduleHooks.c; sourceTree = "<group>"; };
 		080B558DCF0B7BC8051813FB /* ScratchPad.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScratchPad.swift; sourceTree = "<group>"; };
+		0949B41FDB1F7399BF85852B /* PathTrie.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PathTrie.swift; sourceTree = "<group>"; };
 		0968653A4EEE0DAB7906E61C /* ck_f_pr.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ck_f_pr.h; sourceTree = "<group>"; };
 		09B488F4DEDD008E96E7F6C3 /* CorpusCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CorpusCoordinator.swift; sourceTree = "<group>"; };
 		09F9A66C1671353C4CCF4F16 /* CoverageSignatureTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoverageSignatureTests.swift; sourceTree = "<group>"; };
@@ -1327,6 +1329,7 @@
 			isa = PBXGroup;
 			children = (
 				24A467224B8821AF297298A6 /* EdgeHooks.swift */,
+				0949B41FDB1F7399BF85852B /* PathTrie.swift */,
 			);
 			name = EdgeHooks;
 			path = Sources/EdgeHooks;
@@ -1911,6 +1914,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				246F4DE4D1646F70F78D238C /* EdgeHooks.swift in Sources */,
+				F052FC5AD62C0559D4631284 /* PathTrie.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
