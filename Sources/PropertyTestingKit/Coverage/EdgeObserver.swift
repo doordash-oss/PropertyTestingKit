@@ -70,17 +70,16 @@ final class EdgeObserver: Sendable {
 /// second; the observer box is reached through one acquire load on the context.
 let edgeObserverRecorder: EdgeHook = { guardPtr, map, context in
     guard let guardPtr, let context else { return }
-    // Explicit bounds check: record_edge_first_hit's false conflates "repeat
-    // hit" (observed) with "out of range / filtered" (not observed).
-    guard guardPtr.pointee < sancov_get_counter_count() else { return }
-    // Past the bounds guard, the recording CAS's result is exactly "first
-    // hit of this edge since the last reset" — passed to the observer so
-    // strategies don't recompute it.
-    let isFirstHit = sancov_record_edge_first_hit(guardPtr, map, context)
+    // One call records AND classifies the hit: skipped guards (out of
+    // range / filtered) are never observed, and the first-hit bit rides
+    // along to the observer so strategies don't recompute it.
+    let recording = sancov_record_edge_first_hit(guardPtr, map, context)
+    guard recording != SANCOV_EDGE_SKIPPED else { return }
     guard let data = sancov_context_get_recorder_data(context) else { return }
     guard sancov_observer_enter() else { return }
     defer { sancov_observer_exit() }
-    Unmanaged<EdgeObserver>.fromOpaque(data).takeUnretainedValue().onEdge(guardPtr.pointee, isFirstHit)
+    Unmanaged<EdgeObserver>.fromOpaque(data).takeUnretainedValue()
+        .onEdge(guardPtr.pointee, recording == SANCOV_EDGE_FIRST_HIT)
 }
 
 /// Reset hook: forwards `sancov_reset_coverage` to the observer. Shares the

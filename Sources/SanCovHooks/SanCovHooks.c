@@ -845,10 +845,7 @@ void sancov_context_set_recorder(
     }
 }
 
-void* sancov_context_get_recorder_data(SanCovMeasurementContext* context) {
-    if (context == NULL) return NULL;
-    return __atomic_load_n(&context->recorder_data, __ATOMIC_ACQUIRE);
-}
+// sancov_context_get_recorder_data lives in the header as static inline (hot path).
 
 // TESTING ONLY seams (see SanCovHooks.h).
 void* sancov_context_get_recorder_for_testing(SanCovMeasurementContext* context) {
@@ -1474,9 +1471,9 @@ void sancov_recorder_default(uint32_t* guard, uint8_t* map, SanCovMeasurementCon
     }
 }
 
-bool sancov_record_edge_first_hit(uint32_t* guard, uint8_t* map, SanCovMeasurementContext* ctx) {
-    if (!guard || !map || *guard >= g_guard_count) return false;
-    return record_first_hit(*guard, map, ctx);
+SanCovEdgeRecording sancov_record_edge_first_hit(uint32_t* guard, uint8_t* map, SanCovMeasurementContext* ctx) {
+    if (!guard || !map || *guard >= g_guard_count) return SANCOV_EDGE_SKIPPED;
+    return record_first_hit(*guard, map, ctx) ? SANCOV_EDGE_FIRST_HIT : SANCOV_EDGE_REPEAT;
 }
 
 // Set while the calling thread is inside an observer callback, so edges fired

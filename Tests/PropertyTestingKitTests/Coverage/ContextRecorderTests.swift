@@ -151,6 +151,27 @@ struct ContextRecorderTests {
                 "The observer recorder must keep feeding covered_indices")
     }
 
+    /// Out-of-range (or filtered) guards are recorded nowhere and must not
+    /// be observed either — a raw dispatch with a bogus index cannot reach
+    /// strategy state.
+    @Test("Out-of-range edges are not observed")
+    func outOfRangeEdgesAreNotObserved() {
+        let context = SanCovCounters.beginMeasurement()
+        defer { SanCovCounters.endMeasurement(context) }
+
+        let observed = PropertyTestingKit.SyncBox<Set<UInt32>>([])
+        SanCovCounters.attachObserver(
+            EdgeObserver(onEdge: { edge, _ in observed.update { _ = $0.insert(edge) } }),
+            to: context
+        )
+
+        var gBeyond = UInt32(sancov_get_counter_count())
+        sancov_dispatch_edge(&gBeyond)
+
+        #expect(!observed.value.contains(gBeyond),
+                "an out-of-range guard must not reach onEdge")
+    }
+
     /// The C layer already computes "first hit this measurement" with a
     /// lock-free CAS on the map bit; the observer passes that bit through so
     /// strategies that want loop immunity (like the trie) don't recompute it

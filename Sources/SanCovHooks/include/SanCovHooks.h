@@ -193,9 +193,14 @@ void sancov_retain_for_testing(SanCovMeasurementContext* context);
 /// default recorder is in effect).
 void* sancov_context_get_recorder_for_testing(SanCovMeasurementContext* context);
 
-/// Read the context's opaque recorder data (acquire). Hot-path safe: used by
-/// Swift observer recorders to reach their box; NULL when nothing is attached.
-void* sancov_context_get_recorder_data(SanCovMeasurementContext* context);
+/// Read the context's opaque recorder data (acquire). Used by Swift observer
+/// recorders once per hit to reach their box; NULL when nothing is attached.
+/// static inline — the struct is fully visible here, so the hot path pays a
+/// single acquire load instead of an out-of-line call.
+static inline void* sancov_context_get_recorder_data(SanCovMeasurementContext* context) {
+    if (context == NULL) return NULL;
+    return __atomic_load_n(&context->recorder_data, __ATOMIC_ACQUIRE);
+}
 
 /// The coverage-inheritance handle for a measurement context: a 64-bit value
 /// that packs the context's generation tag (high 16 bits) with its pointer
@@ -314,11 +319,22 @@ void sancov_context_set_recorder(
     SanCovRecorderDataFn reset,
     SanCovRecorderDataFn release);
 
-/// Record a first hit for `guard` (atomic map 0→1 + covered_indices append)
-/// with the standard bounds checks. Returns true iff this call recorded the
-/// first hit. Building block for Swift observer recorders: gate per-edge work
-/// on the return value to stay loop-immune.
-bool sancov_record_edge_first_hit(uint32_t* guard, uint8_t* map, SanCovMeasurementContext* context);
+/// How a hit was recorded — see sancov_record_edge_first_hit.
+typedef enum {
+    /// Out of range / filtered / no map: recorded nowhere; do not observe.
+    SANCOV_EDGE_SKIPPED = -1,
+    /// Already hit since the last reset (recorded earlier).
+    SANCOV_EDGE_REPEAT = 0,
+    /// This call recorded the edge's first hit.
+    SANCOV_EDGE_FIRST_HIT = 1,
+} SanCovEdgeRecording;
+
+/// Record a hit for `guard` (atomic map 0→1 + covered_indices append) with
+/// the standard bounds checks, classifying the hit in the same call so the
+/// per-hit path needs no separate range check. Building block for Swift
+/// observer recorders: skip SANCOV_EDGE_SKIPPED entirely, and gate
+/// loop-immune per-edge work on SANCOV_EDGE_FIRST_HIT.
+SanCovEdgeRecording sancov_record_edge_first_hit(uint32_t* guard, uint8_t* map, SanCovMeasurementContext* context);
 
 /// Per-thread observer reentrancy gate. An observer callback that lives in
 /// instrumented code fires edges of its own, which dispatch back into the
