@@ -29,9 +29,10 @@ import SanCovHooks
 /// every strategy — built-in or custom — usable under any input pack and under
 /// schedule fuzzing.
 ///
-/// PropertyTestingKit ships four built-in strategies as static factories:
+/// PropertyTestingKit ships five built-in strategies as static factories:
 /// - `.signatureMatch`: Exact edge-set matching via inverted index. Zero false positives.
-/// - `.newEdge`: Any previously-unseen edge is interesting. Matches AFL/libFuzzer.
+/// - `.newEdge`: Any previously-unseen edge is interesting (edge coverage only).
+/// - `.hitCountBuckets`: An unseen AFL++/libFuzzer hit-count bucket on any edge is interesting.
 /// - `.pathTrie` (default): Trie-based ordered-path tracking. O(1) per edge hit and uniqueness check.
 /// - `.alwaysInteresting`: Every input is added. Useful when corpus growth
 ///   should not depend on coverage novelty (instrumentation is still required).

@@ -138,6 +138,7 @@
 		8D4A983DD7DF4F96D9676B31 /* PathTrieStrategy.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0BCEAA419004D9808AB03E0 /* PathTrieStrategy.swift */; };
 		902AD170388F6A40C15ECCA5 /* MutatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C2AB425C1886E9C43DA056F /* MutatorTests.swift */; };
 		92C0A97FA308BAE7318F09BE /* UInt+MutatorProviding.swift in Sources */ = {isa = PBXBuildFile; fileRef = C94A378F579D36D7A0DE6F8D /* UInt+MutatorProviding.swift */; };
+		92DE5B77D7ECE3A78779C1F6 /* HitCountBucketsStrategy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0D8CCA1129D052D6BF52BCC1 /* HitCountBucketsStrategy.swift */; };
 		930C4CD6291AF3BB931A9FB3 /* GenericTimerPoller.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 5AAFECCE3AA98E503089E0B7 /* GenericTimerPoller.framework */; };
 		938AEE5F4F543864E107511E /* RoutingBranchTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3F2C248AA992042CBD7C555D /* RoutingBranchTests.swift */; };
 		93A29BA964CA290588A5D762 /* IntMutators.swift in Sources */ = {isa = PBXBuildFile; fileRef = CED4705CAFB71E914729EBE5 /* IntMutators.swift */; };
@@ -217,6 +218,7 @@
 		E2D5097DE99044658C7AE9D1 /* PropertyTestingKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 2595E9AD80DBFC77F241A7E7 /* PropertyTestingKit.framework */; };
 		E2ED9AA8879A99B92480A646 /* URLMutator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 233B765E89E5C522C4158B51 /* URLMutator.swift */; };
 		E4970896F2ECFC3E2AD274B5 /* SimpleRingBuffer.swift in Sources */ = {isa = PBXBuildFile; fileRef = F403263325C80307990034DB /* SimpleRingBuffer.swift */; };
+		E546F7532EEF4E099063ED08 /* HitCountBucketsStrategyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4CD58350A367890040C1786A /* HitCountBucketsStrategyTests.swift */; };
 		E5CE85300E9595AE8CF1F398 /* UncoveredRegion.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9DA6786D89438D0199BF0412 /* UncoveredRegion.swift */; };
 		E61304C8BC4F785E82EF8E3D /* StringMutators.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8070E3D26516154F5EEEC862 /* StringMutators.swift */; };
 		E687CB03E2FB5282DDF5EE66 /* BoolMutators.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C0EB12824A02A80F8D4EB77 /* BoolMutators.swift */; };
@@ -537,6 +539,7 @@
 		0A5FD30F272F4610F9D0637A /* FileManagerClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileManagerClient.swift; sourceTree = "<group>"; };
 		0BC4138150CDC1ABC2DE7C65 /* FuzzEngineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FuzzEngineTests.swift; sourceTree = "<group>"; };
 		0BF3BAC10EF47D6C57388C35 /* SanCovHooks.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = SanCovHooks.h; sourceTree = "<group>"; };
+		0D8CCA1129D052D6BF52BCC1 /* HitCountBucketsStrategy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HitCountBucketsStrategy.swift; sourceTree = "<group>"; };
 		0E6744BAE7780BE09993D850 /* NewEdgeStrategy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NewEdgeStrategy.swift; sourceTree = "<group>"; };
 		0F9D24C887A6D36D7A6EFDB8 /* ck_pr.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ck_pr.h; sourceTree = "<group>"; };
 		116EA3D65CF2576CA4164C85 /* GenericTimerPollerPropertyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GenericTimerPollerPropertyTests.swift; sourceTree = "<group>"; };
@@ -578,6 +581,7 @@
 		4787D3EC4C3D5D95A956AD02 /* PercentageMutator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PercentageMutator.swift; sourceTree = "<group>"; };
 		49412A507ECD93C3E85C649B /* CorpusEntryType.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CorpusEntryType.swift; sourceTree = "<group>"; };
 		4AB79C5014695DD269F6E198 /* ExecutorAffinityTest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExecutorAffinityTest.swift; sourceTree = "<group>"; };
+		4CD58350A367890040C1786A /* HitCountBucketsStrategyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HitCountBucketsStrategyTests.swift; sourceTree = "<group>"; };
 		4E987090D06715A5F99BEC1A /* Double+MutatorProviding.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Double+MutatorProviding.swift"; sourceTree = "<group>"; };
 		4E9F5016469E3378725DCE64 /* ArrayPositionAwareMutator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArrayPositionAwareMutator.swift; sourceTree = "<group>"; };
 		5150147016EC8550F07948A1 /* ArraySequenceInsertionMutator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArraySequenceInsertionMutator.swift; sourceTree = "<group>"; };
@@ -1378,6 +1382,7 @@
 				FDD1EC805CD71A270C692864 /* CoverageEngine.swift */,
 				672D5DCDC1A16C1291F8044B /* CoverageStrategy.swift */,
 				78CCD0EE426F8A208203ED16 /* CoverageView.swift */,
+				0D8CCA1129D052D6BF52BCC1 /* HitCountBucketsStrategy.swift */,
 				0E6744BAE7780BE09993D850 /* NewEdgeStrategy.swift */,
 				D0BCEAA419004D9808AB03E0 /* PathTrieStrategy.swift */,
 				43B310BD1F88DB6894FF1F29 /* SignatureMatchStrategy.swift */,
@@ -1500,6 +1505,7 @@
 				99DF2D2D7A9C78BEFDA1C9FF /* FuzzAPITests.swift */,
 				0BC4138150CDC1ABC2DE7C65 /* FuzzEngineTests.swift */,
 				8955074B94D7B6D470F922F2 /* FuzzStatsAccountingTests.swift */,
+				4CD58350A367890040C1786A /* HitCountBucketsStrategyTests.swift */,
 				2C2AB425C1886E9C43DA056F /* MutatorTests.swift */,
 				63C99FD379289FA24BBE7A5B /* ParallelEarlyCancelTest.swift */,
 				F5E409E9172BADE44207E55E /* PathTrieStrategyTests.swift */,
@@ -2053,6 +2059,7 @@
 				244F543DDFAA24140A76485F /* FuzzEngineTests.swift in Sources */,
 				6CB2ABCF9D35BB094D3D11ED /* FuzzStatsAccountingTests.swift in Sources */,
 				B589BFFA6C70C0D16C75E1AD /* FuzzableProtocolTests.swift in Sources */,
+				E546F7532EEF4E099063ED08 /* HitCountBucketsStrategyTests.swift in Sources */,
 				7087CB0E363CDDB5E8D0B815 /* InheritanceTest.swift in Sources */,
 				E8ED514CBE637B3DB6879755 /* IssueDetectionTests.swift in Sources */,
 				19E5E7F83FA7FB0675B65818 /* MockDatabase.swift in Sources */,
@@ -2157,6 +2164,7 @@
 				125D3FB66141B63E3542572E /* FuzzResult.swift in Sources */,
 				3D278F94AC182188C4B835AF /* FuzzStateMachine.swift in Sources */,
 				C6E708A0F04FED6D2E5A5DF0 /* HTTPStatusCodeMutator.swift in Sources */,
+				92DE5B77D7ECE3A78779C1F6 /* HitCountBucketsStrategy.swift in Sources */,
 				1226F62189C28475B8A01EE4 /* Int+MutatorProviding.swift in Sources */,
 				F4F5214CABA1CC0BBFD80985 /* IntBoundaryMutator.swift in Sources */,
 				93A29BA964CA290588A5D762 /* IntMutators.swift in Sources */,
