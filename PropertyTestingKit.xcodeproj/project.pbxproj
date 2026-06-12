@@ -133,6 +133,7 @@
 		808DEDCEF3F72F26E4C97724 /* CorpusTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9E53225F99BA35278DB06DA6 /* CorpusTests.swift */; };
 		814309179FD818830027854B /* SanCovHooks.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 662FDA7546F253A8CAE418AB /* SanCovHooks.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		8310E72CA875CD48836F2A44 /* ScheduleController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 248B03EF2ED5C071ABDB9FA2 /* ScheduleController.swift */; };
+		85831BC8A71C93AF8B6270D1 /* EntropicPolicyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 24F66CDF058D72AAB14F4EA5 /* EntropicPolicyTests.swift */; };
 		8583A6B9CC8AE06E1F34F8C4 /* CoverageBenchmarks.swift in Sources */ = {isa = PBXBuildFile; fileRef = EF833B020283C4892D55D53C /* CoverageBenchmarks.swift */; };
 		86364D3C2F2DBEA2A9B62EA0 /* PowerOfTwoMutator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 88F5B7FC44F425E39676B1D3 /* PowerOfTwoMutator.swift */; };
 		87CB37DFCDC351E3E53BE7F1 /* TestCaseShrinker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7DA5B74380237260F7E42D71 /* TestCaseShrinker.swift */; };
@@ -143,6 +144,7 @@
 		8BD6A306A5F55973C4C54AEB /* EdgeObserver.swift in Sources */ = {isa = PBXBuildFile; fileRef = C95BCE905C5A7F433C213114 /* EdgeObserver.swift */; };
 		8D4A983DD7DF4F96D9676B31 /* PathTrieStrategy.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0BCEAA419004D9808AB03E0 /* PathTrieStrategy.swift */; };
 		902AD170388F6A40C15ECCA5 /* MutatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C2AB425C1886E9C43DA056F /* MutatorTests.swift */; };
+		924A59BD7737F5F4CDEAA00C /* EntropicWeightPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2D9CBF00C2790631DB6EE4F9 /* EntropicWeightPolicy.swift */; };
 		92C0A97FA308BAE7318F09BE /* UInt+MutatorProviding.swift in Sources */ = {isa = PBXBuildFile; fileRef = C94A378F579D36D7A0DE6F8D /* UInt+MutatorProviding.swift */; };
 		92DE5B77D7ECE3A78779C1F6 /* HitCountBucketsStrategy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0D8CCA1129D052D6BF52BCC1 /* HitCountBucketsStrategy.swift */; };
 		930C4CD6291AF3BB931A9FB3 /* GenericTimerPoller.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 5AAFECCE3AA98E503089E0B7 /* GenericTimerPoller.framework */; };
@@ -565,6 +567,7 @@
 		248285724DB5F6586AE70506 /* FuzzStateMachine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FuzzStateMachine.swift; sourceTree = "<group>"; };
 		248B03EF2ED5C071ABDB9FA2 /* ScheduleController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScheduleController.swift; sourceTree = "<group>"; };
 		24A467224B8821AF297298A6 /* EdgeHooks.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EdgeHooks.swift; sourceTree = "<group>"; };
+		24F66CDF058D72AAB14F4EA5 /* EntropicPolicyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EntropicPolicyTests.swift; sourceTree = "<group>"; };
 		257B1E9613373B2BF2E9934E /* ContextRecorderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContextRecorderTests.swift; sourceTree = "<group>"; };
 		2595E9AD80DBFC77F241A7E7 /* PropertyTestingKit.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = PropertyTestingKit.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		25D1A7AC964578057CD75715 /* ScheduleChoiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScheduleChoiceTests.swift; sourceTree = "<group>"; };
@@ -572,6 +575,7 @@
 		2BACD85D7C5B37A9C6BE9ED5 /* PCResolutionTest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PCResolutionTest.swift; sourceTree = "<group>"; };
 		2C2AB425C1886E9C43DA056F /* MutatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MutatorTests.swift; sourceTree = "<group>"; };
 		2CF3A4D9068E7899D99B8C01 /* FailureInfo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FailureInfo.swift; sourceTree = "<group>"; };
+		2D9CBF00C2790631DB6EE4F9 /* EntropicWeightPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EntropicWeightPolicy.swift; sourceTree = "<group>"; };
 		2F5D17F7EF3F37D6C60A6EBF /* ck_stdbool.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ck_stdbool.h; sourceTree = "<group>"; };
 		32C98BE97EE9221146867989 /* CorpusPersistence.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CorpusPersistence.swift; sourceTree = "<group>"; };
 		34658F2420967EA35E38058D /* SanCovIsolationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SanCovIsolationTests.swift; sourceTree = "<group>"; };
@@ -1371,6 +1375,7 @@
 		9F55EDA14DC6F058F1B3F32B /* Scheduler */ = {
 			isa = PBXGroup;
 			children = (
+				2D9CBF00C2790631DB6EE4F9 /* EntropicWeightPolicy.swift */,
 				9F2E59331674D16FC32BD5A7 /* FeatureOwnershipLedger.swift */,
 				48E05741C671DFC85D8A63A2 /* MutationScheduler.swift */,
 				8880B06469BC19A431248CDE /* PoolPlugin.swift */,
@@ -1545,6 +1550,7 @@
 				683A330BCB90F626B21D2422 /* CustomFuzzableTests.swift */,
 				5DE9A7DAD99528274ED05439 /* DeterministicTimingTests.swift */,
 				7338026EE0E559A10E5ECC55 /* EnergyMutationTests.swift */,
+				24F66CDF058D72AAB14F4EA5 /* EntropicPolicyTests.swift */,
 				B69E2CAD9A2DA23DFBCC5890 /* FeatureOwnershipTests.swift */,
 				8D5B1DD3570EBB6E7D12F912 /* FuzzableProtocolTests.swift */,
 				99DF2D2D7A9C78BEFDA1C9FF /* FuzzAPITests.swift */,
@@ -2125,6 +2131,7 @@
 				C7E34069BEF0AD37D592911A /* DependencyLiveValueIsolationTests.swift in Sources */,
 				CD4CF90D44574C94590CCE3F /* DeterministicTimingTests.swift in Sources */,
 				C0E5C0ED4094D06754BC00C3 /* EnergyMutationTests.swift in Sources */,
+				85831BC8A71C93AF8B6270D1 /* EntropicPolicyTests.swift in Sources */,
 				94597A6D6154EF4888C34AB1 /* FeatureOwnershipTests.swift in Sources */,
 				3AE90F2D2F5E78080AAB081C /* FuzzAPITests.swift in Sources */,
 				244F543DDFAA24140A76485F /* FuzzEngineTests.swift in Sources */,
@@ -2226,6 +2233,7 @@
 				8BD6A306A5F55973C4C54AEB /* EdgeObserver.swift in Sources */,
 				FD441F5D3E24D693D0A26B7B /* EmailMutator.swift in Sources */,
 				C029DB863E81D5730107E9F9 /* EmptyStringMutator.swift in Sources */,
+				924A59BD7737F5F4CDEAA00C /* EntropicWeightPolicy.swift in Sources */,
 				A11656F32C1DA89DAC5AE4B1 /* EnvironmentClient.swift in Sources */,
 				995888DFC95845A88625B91A /* FailureInfo.swift in Sources */,
 				1E0EEE32832CF291F65B09FC /* FastRNG.swift in Sources */,
