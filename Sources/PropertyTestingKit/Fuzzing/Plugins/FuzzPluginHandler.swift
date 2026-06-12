@@ -121,53 +121,6 @@ extension FuzzPlugin {
         )
     }
 
-    /// Creates a corpus-cycling mutation plugin.
-    ///
-    /// Extends the basic mutation plugin with AFL-style corpus cycling:
-    /// when the pending mutation queue is exhausted (the state machine fell back
-    /// to fresh generation), this plugin picks a random previously-interesting
-    /// input and re-queues its mutations. This keeps the fuzzer exploring the
-    /// neighborhood of known-good inputs rather than relying on pure random
-    /// generation to re-discover interesting territory.
-    ///
-    /// The plugin maintains its own list of interesting inputs independently of
-    /// the corpus, so it works correctly in parallel fuzz mode where each engine
-    /// has its own plugin instance.
-    public static func corpusMutation() -> FuzzPlugin<repeat each Input> {
-        // One list of (input, scheduleBytes) pairs — the same payload we emit —
-        // instead of two arrays kept in lockstep by index (which could silently
-        // drift out of sync).
-        var interesting: [FuzzPluginAction<repeat each Input>.SelectForMutationAction] = []
-        @Dependency(\.fastRNG) var fastRNG: FastRNG
-        let seedRNG: FastRNG = fastRNG
-
-        return FuzzPlugin(
-            id: "corpus_mutation",
-            handleSync: { event in
-                switch event {
-                case let .iteration(context):
-                    if context.newCoverage != nil {
-                        let entry = FuzzPluginAction<repeat each Input>.SelectForMutationAction(
-                            input: context.input, scheduleBytes: context.scheduleBytes)
-                        interesting.append(entry)
-                        return [.selectForMutation(entry)]
-                    }
-
-                    // When the mutation queue was exhausted (state machine fell back to
-                    // fresh generation) and we have previously-interesting inputs, pick
-                    // one at random and schedule its mutations.
-                    if !context.fromMutationQueue, !interesting.isEmpty {
-                        var rng = seedRNG
-                        let idx = Int.random(in: 0..<interesting.count, using: &rng)
-                        return [.selectForMutation(interesting[idx])]
-                    }
-
-                    return []
-                }
-            }
-        )
-    }
-
     /// Creates a shrinking plugin that minimizes failing inputs using delta debugging.
     ///
     /// When a test failure is found, this plugin attempts to find a smaller
@@ -231,96 +184,12 @@ extension FuzzPlugin {
         )
     }
 
-    /// Creates an energy-based mutation plugin using the Entropic algorithm.
-    ///
-    /// Ports libFuzzer's Entropic energy scheduler. Each interesting input is
-    /// assigned an energy score based on how many globally-rare coverage edges it
-    /// covers. When the mutation queue drains, the next input to mutate is chosen
-    /// by weighted-random selection proportional to `2^energy`, so inputs covering
-    /// rare edges are selected more often.
-    ///
-    /// Energy formula (Shannon entropy of rare-feature incidence distribution):
-    /// - For each rare feature covered by the entry, subtract `(globalFreq+1)*log(globalFreq+1)`
-    ///   from the energy and add `(globalFreq+1)` to the sum of incidences.
-    /// - Add an abundance term: `-(mutations+1)*log(mutations+1)` to penalise
-    ///   over-mutated inputs.
-    /// - Normalize: `energy = energy/sumIncidence + log(sumIncidence)`.
-    /// - Over-fuzzing guard: if an entry has been mutated more than
-    ///   `kMaxMutationFactor × average`, its weight is set to zero.
-    ///
-    /// A feature is considered "rare" when fewer than `rareFeatureThreshold`
-    /// corpus entries cover it (default: 3).
-    public static func energyMutation(
-        rareFeatureThreshold: Int = 3,
-        maxMutationFactor: Int = 20
-    ) -> FuzzPlugin<repeat each Input> {
-        // (input, scheduleBytes) as one list of the payload we emit, rather than
-        // two index-aligned arrays. entryFeatures/entryMutations stay parallel —
-        // they're per-entry bookkeeping, not redundant with the input itself.
-        var entries: [FuzzPluginAction<repeat each Input>.SelectForMutationAction] = []
-        var entryFeatures: [[UInt32]] = []
-        var entryMutations: [Int] = []
-        var globalFeatureFreqs: [UInt32: Int] = [:]
-        var totalMutations = 0
-
-        @Dependency(\.fastRNG) var fastRNG: FastRNG
-        let seedRNG: FastRNG = fastRNG
-
-        return FuzzPlugin(
-            id: "energy_mutation",
-            handleSync: { event in
-                switch event {
-                case let .iteration(context):
-                    if let coverage = context.newCoverage {
-                        // Register new entry with its features.
-                        for feature in coverage.indices {
-                            globalFeatureFreqs[feature, default: 0] += 1
-                        }
-                        let entry = FuzzPluginAction<repeat each Input>.SelectForMutationAction(
-                            input: context.input, scheduleBytes: context.scheduleBytes)
-                        entries.append(entry)
-                        entryFeatures.append(coverage.indices)
-                        entryMutations.append(0)
-
-                        // Immediately schedule mutations for the newly-interesting input.
-                        return [.selectForMutation(entry)]
-                    }
-
-                    // When the mutation queue has drained, pick the next entry to
-                    // mutate using energy-weighted selection.
-                    if !context.fromMutationQueue, !entries.isEmpty {
-                        var rng = seedRNG
-                        let count = entries.count
-                        let totalRareFeatures = globalFeatureFreqs.values
-                            .filter { $0 <= rareFeatureThreshold }.count
-
-                        let weights = (0..<count).map { i in
-                            entropicWeight(
-                                features: entryFeatures[i],
-                                mutations: entryMutations[i],
-                                globalFreqs: globalFeatureFreqs,
-                                totalRareFeatures: totalRareFeatures,
-                                totalMutations: totalMutations,
-                                corpusSize: count,
-                                rareFeatureThreshold: rareFeatureThreshold,
-                                maxMutationFactor: maxMutationFactor
-                            )
-                        }
-
-                        let selectedIdx = weightedRandomIndex(weights: weights, using: &rng)
-                        entryMutations[selectedIdx] += 1
-                        totalMutations += 1
-
-                        return [.selectForMutation(entries[selectedIdx])]
-                    }
-
-                    return []
-                }
-            }
-        )
-    }
-
 }
+
+// The bus-plugin schedulers (`corpusMutation`, Entropic `energyMutation`) are
+// gone: mutation scheduling is the `MutationScheduler` pool's job. The pure
+// Entropic scoring math below (`entropicWeightCombining` & co.) stays, pinned
+// by its characterization tests, for the pool's entropic weight advisor.
 
 // MARK: - Built-in Analysis Plugins
 //
@@ -723,15 +592,111 @@ private func fileIDFromPath(_ path: String) -> String {
 
 // MARK: - Entropic Energy Helpers
 
+/// Per-entry rarity terms of the entropic energy: everything that depends on
+/// the entry's features and the GLOBAL feature frequencies — which change
+/// only when a new entry joins the corpus. Caching these moves the
+/// O(features) work to acceptance time; the drain-time hot path combines
+/// them with the abundance term in O(1) per entry.
+struct EntropicRarityTerms {
+    /// `-Σ (freq+1)·ln(freq+1)` over the entry's rare features.
+    let energy: Double
+    /// `Σ (freq+1)` over the entry's rare features.
+    let sumIncidence: Double
+    /// How many rare features the entry covers.
+    let coveredRare: Int
+}
+
+/// Compute an entry's rarity terms from its OBSERVATION YIELD — how many
+/// times each rare feature has been seen across this seed's accepted mutants
+/// (its own discovery counts as the first observation). This is Entropic's
+/// information-gain form: repeated rare observations contribute
+/// `-count·ln(count)` entropy and `count` incidence, so seeds whose mutants
+/// keep eliciting rare features hold energy, while the abundance term decays
+/// seeds that execute without yielding.
+func entropicYieldRarityTerms(
+    yield: [UInt64: Int],
+    globalFreqs: [UInt64: Int],
+    rareFeatureThreshold: Int
+) -> EntropicRarityTerms {
+    var energy = 0.0
+    var sumIncidence = 0.0
+    var coveredRare = 0
+    for (feature, count) in yield {
+        let globalFreq = globalFreqs[feature] ?? 1
+        guard globalFreq <= rareFeatureThreshold else { continue }
+        let localIncidence = Double(count)
+        energy -= localIncidence * log(localIncidence)
+        sumIncidence += localIncidence
+        coveredRare += 1
+    }
+    return EntropicRarityTerms(energy: energy, sumIncidence: sumIncidence, coveredRare: coveredRare)
+}
+
+/// Compute an entry's rarity terms from the current global frequencies.
+/// Called at acceptance time (frequencies only change then), not per drain.
+func entropicRarityTerms(
+    features: [UInt64],
+    globalFreqs: [UInt64: Int],
+    rareFeatureThreshold: Int
+) -> EntropicRarityTerms {
+    var energy = 0.0
+    var sumIncidence = 0.0
+    var coveredRare = 0
+    for feature in features {
+        let globalFreq = globalFreqs[feature] ?? 1
+        guard globalFreq <= rareFeatureThreshold else { continue }
+        let localIncidence = Double(globalFreq + 1)
+        energy -= localIncidence * log(localIncidence)
+        sumIncidence += localIncidence
+        coveredRare += 1
+    }
+    return EntropicRarityTerms(energy: energy, sumIncidence: sumIncidence, coveredRare: coveredRare)
+}
+
+/// Combine cached rarity terms with the per-drain abundance term. O(1).
+/// Must agree exactly with `entropicWeight` (see the equivalence test).
+func entropicWeightCombining(
+    cache: EntropicRarityTerms,
+    mutations: Int,
+    totalRareFeatures: Int,
+    totalMutations: Int,
+    corpusSize: Int,
+    maxMutationFactor: Int
+) -> Double {
+    if corpusSize > 0, totalMutations > 0 {
+        let avgMutations = totalMutations / corpusSize
+        if avgMutations > 0, mutations / maxMutationFactor > avgMutations {
+            return 0.0
+        }
+    }
+
+    var energy = cache.energy
+    var sumIncidence = cache.sumIncidence
+
+    let uncoveredRare = max(0, totalRareFeatures - cache.coveredRare)
+    sumIncidence += Double(uncoveredRare)
+
+    let abundanceIncidence = Double(mutations + 1)
+    energy -= abundanceIncidence * log(abundanceIncidence)
+    sumIncidence += abundanceIncidence
+
+    guard sumIncidence > 0 else { return 1.0 }
+    return pow(2.0, energy / sumIncidence + log(sumIncidence))
+}
+
 /// Compute the Entropic energy weight for a corpus entry.
 ///
 /// Returns `pow(2, energy)` — always positive, so entries with higher energy
 /// get proportionally more mutations. Returns 1.0 (uniform) when no rare
 /// features have been recorded yet.
-private func entropicWeight(
-    features: [UInt32],
+///
+/// Reference (fused) form of `entropicRarityTerms` + `entropicWeightCombining`;
+/// the plugin's hot path uses the split form, and the equivalence test holds
+/// the two together.
+func entropicWeight(
+    features: [UInt64],
     mutations: Int,
-    globalFreqs: [UInt32: Int],
+    globalFreqs: [UInt64: Int],
     totalRareFeatures: Int,
     totalMutations: Int,
     corpusSize: Int,
@@ -774,7 +739,7 @@ private func entropicWeight(
 }
 
 /// Weighted-random index selection. Falls back to uniform random if all weights are zero.
-private func weightedRandomIndex(weights: [Double], using rng: inout some RandomNumberGenerator) -> Int {
+func weightedRandomIndex(weights: [Double], using rng: inout some RandomNumberGenerator) -> Int {
     let total = weights.reduce(0.0, +)
     guard total > 0 else {
         return Int.random(in: 0..<weights.count, using: &rng)

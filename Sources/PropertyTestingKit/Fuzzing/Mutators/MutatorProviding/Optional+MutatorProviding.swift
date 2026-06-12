@@ -20,12 +20,20 @@ extension Optional: MutatorProviding where Wrapped: MutatorProviding {
 
         return Mutator<Optional<Wrapped>>(
             seeds: [nil] + wrappedMutator.seeds.map { .some($0) },
-            mutate: { value in
+            mutate: { value, rng in
                 switch value {
                 case .none:
-                    return wrappedMutator.seeds.map { .some($0) }
+                    // Wake up nil by picking a random wrapped seed
+                    let seeds = wrappedMutator.seeds
+                    guard !seeds.isEmpty else { return .some(wrappedMutator.generate(&rng)) }
+                    return .some(seeds[Int.random(in: 0..<seeds.count, using: &rng)])
                 case .some(let wrapped):
-                    return [nil] + wrappedMutator.mutate(wrapped).map { .some($0) }
+                    // 20% chance of flipping to nil, otherwise mutate the wrapped value
+                    if Int.random(in: 0..<5, using: &rng) == 0 {
+                        return nil
+                    } else {
+                        return .some(wrappedMutator.mutate(wrapped, &rng))
+                    }
                 }
             },
             generate: { rng in

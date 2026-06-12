@@ -24,8 +24,11 @@ private let _digits: [Character] = Array("0123456789")
 private let _whitespace: [Character] = [" ", "\t", "\n", "\r"]
 private let _emojis: [Character] = ["😀", "🎉", "🚀", "💡", "⚡", "🔥", "✨", "🌟"]
 
-private func _characterMutate(_ value: Character) -> [Character] {
-    _characterSeeds.filter { $0 != value }
+private func _characterMutate(_ value: Character, _ rng: inout FastRNG) -> Character {
+    let mutations = _characterSeeds.filter { $0 != value }
+
+    guard !mutations.isEmpty else { return value }
+    return mutations[Int.random(in: 0..<mutations.count, using: &rng)]
 }
 
 private func _characterGenerate(_ rng: inout FastRNG) -> Character {

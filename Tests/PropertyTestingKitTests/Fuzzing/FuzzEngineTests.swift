@@ -53,22 +53,23 @@ private func makeThrowingCoverageClient() -> CoverageCountersClient {
     )
 }
 
-/// A MutatorProviding type that returns empty seeds and empty mutations.
-/// Used to test guard branches in FuzzEngine.
+/// A MutatorProviding type that returns empty seeds and identity mutations.
+/// Used to test guard branches in FuzzEngine. (The single-value mutate API
+/// cannot express "no mutants"; identity is the nearest equivalent.)
 struct EmptyFuzzable: MutatorProviding, Codable, Sendable, Equatable {
     let value: Int
 
     static var defaultMutator: Mutator<EmptyFuzzable> {
-        Mutator(seeds: [], mutate: { _ in [] })
+        Mutator(seeds: [], mutate: { value, _ in value })
     }
 }
 
-/// A MutatorProviding type with values but empty mutations.
+/// A MutatorProviding type with values but identity mutations.
 struct EmptyMutationsFuzzable: MutatorProviding, Codable, Sendable, Equatable {
     let value: Int
 
     static var defaultMutator: Mutator<EmptyMutationsFuzzable> {
-        Mutator(seeds: [EmptyMutationsFuzzable(value: 1)], mutate: { _ in [] })
+        Mutator(seeds: [EmptyMutationsFuzzable(value: 1)], mutate: { value, _ in value })
     }
 }
 

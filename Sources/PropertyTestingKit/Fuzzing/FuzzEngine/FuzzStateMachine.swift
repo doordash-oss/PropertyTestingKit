@@ -64,8 +64,20 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
     /// The coverage evaluator that determines interestingness.
     private let coverageEvaluator: CoverageEvaluator<repeat each Input>
 
+    /// This engine's mutation pool owner: consulted for what to run when the
+    /// residual queue is empty, told about every iteration's outcome.
+    private let schedulerCore: WeightedPoolCore
+    /// Typed inputs for pool entries, index == pool entry ID. Append-only —
+    /// eviction is the scheduler's concern (live set), not storage's.
+    private var poolEntries: [(repeat each Input)] = []
+
     // Simple loop state (replaces WorkerPool)
     private var pendingInputs: SimpleRingBuffer<(repeat each Input)>
+    /// Lineage tags in lockstep with `pendingInputs`: the `originID` of the
+    /// `selectForMutation` action each queued mutant came from (`nil` for
+    /// seeds and plain `queueInputs`). Kept as a parallel buffer because the
+    /// input pack can't nest inside another tuple element cheaply.
+    private var pendingParents: SimpleRingBuffer<Int?>
     private var haltReason: FuzzStats.StopReason?
     /// Scope of the halt that ended the loop. `.campaign` means a plugin asked to
     /// stop the whole parallel run, not just this engine.
@@ -77,6 +89,7 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
         inputSize: Int,
         corpus: Corpus<repeat each Input>,
         coverageEvaluator: CoverageEvaluator<repeat each Input>,
+        schedulerCore: WeightedPoolCore,
         processSyncPlugins: @escaping SyncPluginProcessorFn,
         processAsyncPlugins: @escaping AsyncPluginProcessorFn,
         config: FuzzEngineConfig,
@@ -92,6 +105,7 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
         self.mutators = mutators
         self.inputSize = inputSize
         self.coverageEvaluator = coverageEvaluator
+        self.schedulerCore = schedulerCore
         self.processSyncPlugins = processSyncPlugins
         self.processAsyncPlugins = processAsyncPlugins
         self.config = config
@@ -99,6 +113,7 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
         self.test = test
         self.scheduleBytesExtractor = scheduleBytesExtractor
         self.pendingInputs = SimpleRingBuffer(minimumCapacity: 16)
+        self.pendingParents = SimpleRingBuffer(minimumCapacity: 16)
     }
 
     private func recordFailure(input: (repeat each Input), error: any Error) {
@@ -127,6 +142,8 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
         // schedule-bytes queue to seed — `scheduleBytesExtractor` reads them from
         // each input.
         pendingInputs = SimpleRingBuffer(seeds)
+        pendingParents = SimpleRingBuffer(minimumCapacity: max(16, seeds.count))
+        pendingParents.append(contentsOf: [Int?](repeating: nil, count: seeds.count))
 
         // Setup for test execution
         let coverageCountersClient = Self.fetchCoverageCounters()
@@ -185,14 +202,20 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
                         }
                     }
 
-                    // Get input: from pending queue or generate random.
+                    // Get input: the residual queue (seeds, queueInputs, bus
+                    // bursts) has priority; otherwise the scheduler directs —
+                    // mutate a pool entry or generate fresh.
                     // Schedule bytes (when scheduling) are element 0 of the input
                     // pack, generated/mutated by the prepended schedule mutator like
                     // any other element, and read back via `scheduleBytesExtractor`.
                     let input: (repeat each Input)
                     let fromMutationQueue: Bool
+                    let parentID: Int?
+                    let poolParentID: Int?
                     if !pendingInputs.isEmpty {
                         input = pendingInputs.removeFirstUnchecked()
+                        parentID = pendingParents.removeFirstUnchecked()
+                        poolParentID = nil
                         fromMutationQueue = true
                         if seedsRunCount < seeds.count {
                             seedsRunCount += 1
@@ -200,10 +223,21 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
                             mutantsRunCount += 1
                         }
                     } else {
-                        // Generate directly - no closure indirection
-                        input = (repeat (each mutators).generate(&rng))
-                        generatedCount += 1
-                        fromMutationQueue = false
+                        switch schedulerCore.next() {
+                        case .generate:
+                            // Generate directly - no closure indirection
+                            input = (repeat (each mutators).generate(&rng))
+                            generatedCount += 1
+                            fromMutationQueue = false
+                            parentID = nil
+                            poolParentID = nil
+                        case .mutate(let id):
+                            input = generateMutation(poolEntries[id])
+                            mutantsRunCount += 1
+                            fromMutationQueue = true
+                            parentID = nil
+                            poolParentID = id
+                        }
                     }
                     let currentScheduleBytes: [UInt8]? = scheduleBytesExtractor(input)
 
@@ -245,13 +279,33 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
                     // the run's coverage when the input was interesting (the sparse
                     // snapshot it already took for the decision — no re-snapshot
                     // here), nil otherwise.
-                    let iterationCoverage = coverageEvaluator.evaluate(
+                    let acceptance = coverageEvaluator.evaluate(
                         input,
                         currentScheduleBytes,
                         coverageContext,
                         coverageCountersClient,
                         corpus
                     )
+                    let iterationCoverage = acceptance?.sparse
+
+                    // Tell the scheduler what happened. On admission it hands
+                    // back the new entry's ID; the typed input is stored here
+                    // at that index (IDs are sequential, so they stay aligned).
+                    let poolSource: PoolIterationSource =
+                        poolParentID.map { .pool(parent: $0) }
+                        ?? (fromMutationQueue ? .queue : .generated)
+                    if schedulerCore.observe(
+                        PoolIterationOutcome(
+                            source: poolSource,
+                            newCoverage: iterationCoverage,
+                            features: acceptance?.features ?? nil,
+                            // Measured only on accepts — acceptance is rare,
+                            // size closures may traverse the whole input.
+                            inputSize: acceptance != nil ? measuredSize(of: input) : nil
+                        )
+                    ) != nil {
+                        poolEntries.append(input)
+                    }
 
                     // Process iteration event before failure event
                     var events = [
@@ -262,7 +316,9 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
                                     scheduleBytes: currentScheduleBytes,
                                     fromMutationQueue: fromMutationQueue,
                                     queueCount: queueCount,
-                                    newCoverage: iterationCoverage
+                                    newCoverage: iterationCoverage,
+                                    parentID: parentID,
+                                    poolParentID: poolParentID
                                 )
                             ))
                     ]
@@ -379,13 +435,19 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
 
         case .queueInputs(let queueAction):
             pendingInputs.append(contentsOf: queueAction.inputs)
+            pendingParents.append(contentsOf: [Int?](repeating: nil, count: queueAction.inputs.count))
 
         case .selectForMutation(let mutationAction):
-            // Generate input mutations. When scheduling, element 0 holds the
-            // schedule bytes and is mutated by the prepended schedule mutator as
-            // part of `generateMutations`, so schedule mutation is unified with
-            // input mutation — no separate schedule-byte pass.
-            pendingInputs.append(contentsOf: generateMutations(mutationAction.input))
+            // Queue a fixed burst of single-step mutants. When scheduling,
+            // element 0 holds the schedule bytes and is mutated by the
+            // prepended schedule mutator like any other position, so schedule
+            // mutation is unified with input mutation.
+            // Each mutant carries the action's originID so iteration events can
+            // report the lineage back to the emitting plugin.
+            for _ in 0..<mutationBurstLength {
+                pendingInputs.append(generateMutation(mutationAction.input))
+            }
+            pendingParents.append(contentsOf: [Int?](repeating: mutationAction.originID, count: mutationBurstLength))
 
         case .submitToCorpus(let corpusAction):
             addToCorpus(
@@ -411,21 +473,51 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
         corpus.add(input: input, scheduleBytes: scheduleBytes, sparse: sparse, entryType: type, failure: failureInfo)
     }
 
-    /// Generate mutations for an input by mutating one position at a time.
-    /// Returns the cartesian product of mutations across all positions.
-    private func generateMutations(_ input: (repeat each Input)) -> [(repeat each Input)] {
-        let positionsMutated: [(repeat [each Input])] = (0..<inputSize).map { replacementIndex in
-            var currentIndex = 0
-            return
-                (repeat {
-                    defer { currentIndex += 1 }
-                    if currentIndex == replacementIndex {
-                        return (each mutators).mutate(each input)
-                    } else {
-                        return [(each input)]
-                    }
-                }())
+    /// Sum of the mutator-measured sizes across the input pack — the pool's
+    /// real REDUCE/eviction size metric. `nil` when no mutator measures
+    /// (positions without a `size` closure contribute nothing).
+    private func measuredSize(of input: (repeat each Input)) -> Int? {
+        var total = 0
+        var measured = false
+        for (mutator, value) in repeat (each mutators, each input) {
+            guard let size = mutator.size else { continue }
+            total += size(value)
+            measured = true
         }
-        return positionsMutated.flatMap(cartesianProduct)
+        return measured ? total : nil
     }
+
+    /// Generate ONE mutant: a single mutation step at one randomly chosen
+    /// position of the input pack.
+    private func generateMutation(_ input: (repeat each Input)) -> (repeat each Input) {
+        var rng = FastRNG()
+        let position = inputSize == 1 ? 0 : Int.random(in: 0..<inputSize, using: &rng)
+        return mutateOnePosition(input, position: position, rng: &rng, mutators: repeat each mutators)
+    }
+}
+
+/// How many single-step mutants a `.selectForMutation` action queues.
+///
+/// Interim constant: effort per selection becomes scheduler state (focus +
+/// counter) when the pool scheduler lands; until then this preserves a
+/// burst-on-accept shape comparable to the old exhaustive-neighborhood burst.
+let mutationBurstLength = 16
+
+/// Mutate exactly `position` of the input pack with one mutator call, holding
+/// every other position fixed.
+func mutateOnePosition<each Input>(
+    _ input: (repeat each Input),
+    position: Int,
+    rng: inout FastRNG,
+    mutators: repeat Mutator<each Input>
+) -> (repeat each Input) {
+    var currentIndex = 0
+    return (repeat {
+        defer { currentIndex += 1 }
+        if currentIndex == position {
+            return (each mutators).mutate(each input, &rng)
+        } else {
+            return (each input)
+        }
+    }())
 }

@@ -38,29 +38,27 @@ public func arrayPositionAwareMutator<Element: MutatorProviding & Sendable>() ->
 
     return Mutator<[Element]>(
         seeds: seeds,
-        mutate: { value in
-            var results: [[Element]] = []
+        mutate: { value, rng in
             let importantIndices = [0, 3, 7, value.count / 2]
+            let seedElements = Array(elementMutator.seeds.prefix(5))
 
-            // Insert seed values at important indices
-            for element in elementMutator.seeds.prefix(5) {
-                for targetIndex in importantIndices where targetIndex <= value.count {
-                    var copy = value
-                    copy.insert(element, at: targetIndex)
-                    results.append(copy)
-                }
+            guard let element = seedElements.randomElement(using: &rng) else { return value }
+
+            // Insert a random seed value at a random important index,
+            // or replace the value at a random important index with it.
+            if Bool.random(using: &rng) {
+                let insertIndices = importantIndices.filter { $0 <= value.count }
+                guard let targetIndex = insertIndices.randomElement(using: &rng) else { return value }
+                var copy = value
+                copy.insert(element, at: targetIndex)
+                return copy
+            } else {
+                let replaceIndices = importantIndices.filter { $0 < value.count }
+                guard let targetIndex = replaceIndices.randomElement(using: &rng) else { return value }
+                var copy = value
+                copy[targetIndex] = element
+                return copy
             }
-
-            // Replace values at important indices with seeds
-            for element in elementMutator.seeds.prefix(5) {
-                for targetIndex in importantIndices where targetIndex < value.count {
-                    var copy = value
-                    copy[targetIndex] = element
-                    results.append(copy)
-                }
-            }
-
-            return results
         },
         generate: { rng in
             // Generate arrays with special values at important positions

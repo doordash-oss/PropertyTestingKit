@@ -20,13 +20,14 @@ private let _portSeeds: [Int] = [
     8080, 8443, 27017, 65535, 65536, -1,
 ]
 
-private func _portMutate(_ value: Int) -> [Int] {
+private func _portMutate(_ value: Int, _ rng: inout FastRNG) -> Int {
     var results: [Int] = []
     if value < 65535 { results.append(value + 1) }
     if value > 0 { results.append(value - 1) }
     results.append(value % 65536)
     if value > 0 && value < 1024 { results.append(value + 1024) }
-    return results
+    guard !results.isEmpty else { return value }
+    return results[Int.random(in: 0..<results.count, using: &rng)]
 }
 
 private func _portGenerate(_ rng: inout FastRNG) -> Int {
