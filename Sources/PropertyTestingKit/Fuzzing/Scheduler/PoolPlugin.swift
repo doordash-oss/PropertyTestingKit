@@ -37,15 +37,21 @@ public struct PoolIterationOutcome: Sendable {
     /// pairs). `nil` when the strategy publishes none — consumers fall back
     /// to the covered edge indices via `resolvedFeatures`.
     public let features: [UInt64]?
+    /// The input's real size (mutator-measured, summed across the pack) on
+    /// accepted runs. `nil` when no mutator measures — the pool then falls
+    /// back to the covered-edge count as its REDUCE/eviction size metric.
+    public let inputSize: Int?
 
     public init(
         source: PoolIterationSource,
         newCoverage: SparseCoverage?,
-        features: [UInt64]? = nil
+        features: [UInt64]? = nil,
+        inputSize: Int? = nil
     ) {
         self.source = source
         self.newCoverage = newCoverage
         self.features = features
+        self.inputSize = inputSize
     }
 
     /// The one vocabulary every pool component accounts in: the strategy's
@@ -110,7 +116,8 @@ public struct PoolAdmission: Sendable {
     }
 
     /// Builds a fresh per-engine judge over the accepted input's resolved
-    /// features and its size metric (covered-edge count).
+    /// features and its size metric (real input size when a mutator
+    /// measures it, covered-edge count otherwise).
     ///
     /// Admission bookkeeping deliberately outlives pool membership: an
     /// entry evicted for capacity stays a *ghost owner* of its features.
@@ -131,7 +138,8 @@ public struct PoolAdmission: Sendable {
 
     /// libFuzzer's corpus model: an input joins the pool only by *owning*
     /// coverage features — claiming unowned ones, or stealing from a larger
-    /// owner (REDUCE; the covered-edge count is the size metric, ties don't
+    /// owner (REDUCE; the size metric is the mutator-measured input size
+    /// when available, the covered-edge count otherwise; ties don't
     /// steal). An entry that loses its last feature leaves the pool. Bounds
     /// the pool by the feature space regardless of how often the coverage
     /// strategy says "interesting"; rejected accepts get no burst and no

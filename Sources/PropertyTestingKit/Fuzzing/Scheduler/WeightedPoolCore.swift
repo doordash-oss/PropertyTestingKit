@@ -48,6 +48,11 @@ final class WeightedPoolCore {
 
     /// Draw weight per entry ID (index == ID; grows append-only).
     private var weights: [Double] = []
+    /// Real (mutator-measured) input size per entry ID at admission, `nil`
+    /// when unmeasured (index == ID, grows append-only). Deliberately NOT
+    /// the covered-edge fallback: more covered edges mark a *better* entry,
+    /// so the proxy must never feed the eviction order.
+    private var sizes: [Int?] = []
     /// Live (drawable) entry IDs, swap-removed on eviction.
     private var live: [Int] = []
     /// Entry ID → its position in `live`.
@@ -82,7 +87,7 @@ final class WeightedPoolCore {
 
         guard let coverage = outcome.newCoverage else { return nil }
         let features = outcome.resolvedFeatures
-        let verdict = judge(features, coverage.count)
+        let verdict = judge(features, outcome.inputSize ?? coverage.count)
         guard verdict.admit else { return nil }
 
         // The admission's own displacements (REDUCE losers) go through the
@@ -98,6 +103,7 @@ final class WeightedPoolCore {
 
         let id = weights.count
         weights.append(1.0)
+        sizes.append(outcome.inputSize)
         livePos[id] = live.count
         live.append(id)
         if focusOnInsert {
@@ -175,17 +181,20 @@ final class WeightedPoolCore {
         }
     }
 
-    /// The resident a capacity overflow removes: lowest weight, ties to the
-    /// NEWEST. Evicting old residents makes the bounded pool a sliding
-    /// window over the mutation random walk — on fsub that walk drifts
-    /// toward ever-bigger terms, so the window holds monsters (probed:
-    /// FIFO eviction left executed-term size at 2.4x the edge baseline).
-    /// Keeping elders anchors the pool on the early, small, distinctive
-    /// inputs; newcomers visit, burst, and yield their slot unless a weight
-    /// advisor values them. With an advisor, eviction defers to it.
+    /// The resident a capacity overflow removes: lowest weight, then the
+    /// LARGEST measured input, then the NEWEST. Real sizes target the drift
+    /// disease directly — the mutation random walk grows inputs, and the
+    /// monsters go first. Without measured sizes, evicting old residents
+    /// makes the bounded pool a sliding window over that walk (probed:
+    /// FIFO eviction left executed-term size at 2.4x the edge baseline),
+    /// so the tie-break keeps elders: they anchor the pool on the early,
+    /// small, distinctive inputs; newcomers visit, burst, and yield their
+    /// slot unless a weight advisor values them. With an advisor, eviction
+    /// defers to it.
     private func capacityVictim() -> Int? {
         live.min { lhs, rhs in
-            (weights[lhs], -lhs) < (weights[rhs], -rhs)
+            (weights[lhs], -(sizes[lhs] ?? 0), -lhs)
+                < (weights[rhs], -(sizes[rhs] ?? 0), -rhs)
         }
     }
 

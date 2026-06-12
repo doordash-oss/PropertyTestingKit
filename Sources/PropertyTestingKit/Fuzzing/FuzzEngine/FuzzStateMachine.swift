@@ -298,7 +298,10 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
                         PoolIterationOutcome(
                             source: poolSource,
                             newCoverage: iterationCoverage,
-                            features: acceptance?.features ?? nil
+                            features: acceptance?.features ?? nil,
+                            // Measured only on accepts — acceptance is rare,
+                            // size closures may traverse the whole input.
+                            inputSize: acceptance != nil ? measuredSize(of: input) : nil
                         )
                     ) != nil {
                         poolEntries.append(input)
@@ -468,6 +471,20 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
         type: CorpusEntryType, failureInfo: FailureInfo?
     ) {
         corpus.add(input: input, scheduleBytes: scheduleBytes, sparse: sparse, entryType: type, failure: failureInfo)
+    }
+
+    /// Sum of the mutator-measured sizes across the input pack — the pool's
+    /// real REDUCE/eviction size metric. `nil` when no mutator measures
+    /// (positions without a `size` closure contribute nothing).
+    private func measuredSize(of input: (repeat each Input)) -> Int? {
+        var total = 0
+        var measured = false
+        for (mutator, value) in repeat (each mutators, each input) {
+            guard let size = mutator.size else { continue }
+            total += size(value)
+            measured = true
+        }
+        return measured ? total : nil
     }
 
     /// Generate ONE mutant: a single mutation step at one randomly chosen
