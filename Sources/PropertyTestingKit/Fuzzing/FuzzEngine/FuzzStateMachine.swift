@@ -66,6 +66,11 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
 
     // Simple loop state (replaces WorkerPool)
     private var pendingInputs: SimpleRingBuffer<(repeat each Input)>
+    /// Lineage tags in lockstep with `pendingInputs`: the `originID` of the
+    /// `selectForMutation` action each queued mutant came from (`nil` for
+    /// seeds and plain `queueInputs`). Kept as a parallel buffer because the
+    /// input pack can't nest inside another tuple element cheaply.
+    private var pendingParents: SimpleRingBuffer<Int?>
     private var haltReason: FuzzStats.StopReason?
     /// Scope of the halt that ended the loop. `.campaign` means a plugin asked to
     /// stop the whole parallel run, not just this engine.
@@ -99,6 +104,7 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
         self.test = test
         self.scheduleBytesExtractor = scheduleBytesExtractor
         self.pendingInputs = SimpleRingBuffer(minimumCapacity: 16)
+        self.pendingParents = SimpleRingBuffer(minimumCapacity: 16)
     }
 
     private func recordFailure(input: (repeat each Input), error: any Error) {
@@ -127,6 +133,8 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
         // schedule-bytes queue to seed — `scheduleBytesExtractor` reads them from
         // each input.
         pendingInputs = SimpleRingBuffer(seeds)
+        pendingParents = SimpleRingBuffer(minimumCapacity: max(16, seeds.count))
+        pendingParents.append(contentsOf: [Int?](repeating: nil, count: seeds.count))
 
         // Setup for test execution
         let coverageCountersClient = Self.fetchCoverageCounters()
@@ -191,8 +199,10 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
                     // any other element, and read back via `scheduleBytesExtractor`.
                     let input: (repeat each Input)
                     let fromMutationQueue: Bool
+                    let parentID: Int?
                     if !pendingInputs.isEmpty {
                         input = pendingInputs.removeFirstUnchecked()
+                        parentID = pendingParents.removeFirstUnchecked()
                         fromMutationQueue = true
                         if seedsRunCount < seeds.count {
                             seedsRunCount += 1
@@ -204,6 +214,7 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
                         input = (repeat (each mutators).generate(&rng))
                         generatedCount += 1
                         fromMutationQueue = false
+                        parentID = nil
                     }
                     let currentScheduleBytes: [UInt8]? = scheduleBytesExtractor(input)
 
@@ -262,7 +273,8 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
                                     scheduleBytes: currentScheduleBytes,
                                     fromMutationQueue: fromMutationQueue,
                                     queueCount: queueCount,
-                                    newCoverage: iterationCoverage
+                                    newCoverage: iterationCoverage,
+                                    parentID: parentID
                                 )
                             ))
                     ]
@@ -379,13 +391,18 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
 
         case .queueInputs(let queueAction):
             pendingInputs.append(contentsOf: queueAction.inputs)
+            pendingParents.append(contentsOf: [Int?](repeating: nil, count: queueAction.inputs.count))
 
         case .selectForMutation(let mutationAction):
             // Generate input mutations. When scheduling, element 0 holds the
             // schedule bytes and is mutated by the prepended schedule mutator as
             // part of `generateMutations`, so schedule mutation is unified with
             // input mutation — no separate schedule-byte pass.
-            pendingInputs.append(contentsOf: generateMutations(mutationAction.input))
+            // Each mutant carries the action's originID so iteration events can
+            // report the lineage back to the emitting plugin.
+            let mutants = generateMutations(mutationAction.input)
+            pendingInputs.append(contentsOf: mutants)
+            pendingParents.append(contentsOf: [Int?](repeating: mutationAction.originID, count: mutants.count))
 
         case .submitToCorpus(let corpusAction):
             addToCorpus(
