@@ -53,7 +53,9 @@ private let _intSeeds: [Int] = [
     -1_000_000,
 ]
 
-private func _intMutate(_ value: Int) -> [Int] {
+private func _intMutate(_ value: Int, _ rng: inout FastRNG) -> Int {
+    // Enumerate the candidate neighborhood, then pick ONE: the mutator's job
+    // is variety per call, not effort (issue #41).
     // Pre-allocate: up to 7 basic + 8 divisibility = 15 mutations
     var mutations: [Int] = []
     mutations.reserveCapacity(15)
@@ -82,7 +84,8 @@ private func _intMutate(_ value: Int) -> [Int] {
         }
     }
 
-    return mutations
+    guard !mutations.isEmpty else { return value }
+    return mutations[Int.random(in: 0..<mutations.count, using: &rng)]
 }
 
 private func _intGenerate(_ rng: inout FastRNG) -> Int {

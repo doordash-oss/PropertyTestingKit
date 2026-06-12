@@ -45,19 +45,34 @@ public enum SyncPluginEvent<each T: Sendable>: Sendable {
         /// The new coverage this iteration discovered, or `nil` if it covered
         /// nothing new. A non-nil value *is* the "discovered new coverage" signal.
         public let newCoverage: SparseCoverage?
+        /// The `originID` of the `selectForMutation` action this input was
+        /// mutated from, or `nil` for generated inputs, seeds, and
+        /// pool-scheduled mutants. Opaque to the engine — it round-trips
+        /// whatever the emitting plugin chose, so bus plugins can attribute
+        /// executions and discoveries to the seed that spawned them.
+        public let parentID: Int?
+        /// The mutation pool entry this input was mutated from, or `nil` for
+        /// everything not directed by the engine's scheduler. A separate
+        /// namespace from `parentID` on purpose: pool entry IDs belong to the
+        /// scheduler, `originID`s belong to the emitting bus plugin.
+        public let poolParentID: Int?
 
         public init(
             input: consuming (repeat each T),
             scheduleBytes: [UInt8]? = nil,
             fromMutationQueue: Bool = false,
             queueCount: Int = 0,
-            newCoverage: SparseCoverage? = nil
+            newCoverage: SparseCoverage? = nil,
+            parentID: Int? = nil,
+            poolParentID: Int? = nil
         ) {
             self.input = input
             self.scheduleBytes = scheduleBytes
             self.fromMutationQueue = fromMutationQueue
             self.queueCount = queueCount
             self.newCoverage = newCoverage
+            self.parentID = parentID
+            self.poolParentID = poolParentID
         }
     }
 }
@@ -219,10 +234,15 @@ public enum FuzzPluginAction<each T: Sendable>: Sendable {
         public let input: (repeat each T)
         /// Schedule bytes to mutate alongside the input.
         public let scheduleBytes: [UInt8]?
+        /// Opaque lineage tag: the engine stamps it on every mutant this
+        /// action generates and reports it back as `parentID` on the
+        /// iterations that execute them. `nil` opts out of attribution.
+        public let originID: Int?
 
-        public init(input: consuming (repeat each T), scheduleBytes: [UInt8]? = nil) {
+        public init(input: consuming (repeat each T), scheduleBytes: [UInt8]? = nil, originID: Int? = nil) {
             self.input = input
             self.scheduleBytes = scheduleBytes
+            self.originID = originID
         }
     }
 
