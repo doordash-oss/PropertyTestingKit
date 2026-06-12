@@ -63,8 +63,8 @@ import Dependencies
 /// }
 ///
 /// @Test func testWithGapDetection() throws {
-///     // Enable coverage gap detection alongside the default mutation behavior
-///     try fuzz(plugins: { [.corpusMutation(), .coverageGap()] }) { (input: String) in
+///     // Enable coverage gap detection (the scheduler drives mutation)
+///     try fuzz(plugins: { [.coverageGap()] }) { (input: String) in
 ///         parse(input)
 ///     }
 /// }
@@ -100,19 +100,22 @@ import Dependencies
 ///     `CoverageStrategy` for custom per-edge measurement — e.g. tallying
 ///     hit-count buckets per engine. Raw map-write semantics (what a hit
 ///     stores in the coverage map) are not customizable from here.
+///   - scheduler: Which inputs get mutated and when fresh ones are generated
+///     (default: `.weightedPool()`). The scheduler owns the per-engine mutation
+///     pool; admission and weighting compose inside it (`PoolAdmission`,
+///     `PoolPlugin`). Mutation scheduling no longer requires a bus plugin.
 ///   - scheduleFuzzing: When `true`, also fuzz the interleaving order of concurrent
 ///     tasks. The schedule bytes are folded into the input pack as element 0
 ///     (`([UInt8], repeat each Input)`) and mutated/stored/persisted like any input;
 ///     your `test` still receives only its own `(repeat each Input)`. Forces
-///     `parallelism` to 1, and uses the default `corpusMutation` plugin behavior
-///     (custom `plugins` are not applied to scheduled runs).
+///     `parallelism` to 1 (custom `plugins` are not applied to scheduled runs).
 ///   - parallelism: Number of parallel fuzz engines to run. Each engine runs
 ///     independently with its portion of seeds distributed round-robin.
 ///     Results are merged at the end. Defaults to the number of available processors.
 ///     Ignored (treated as 1) when `scheduleFuzzing` is enabled.
-///   - plugins: Factory for the per-engine plugins. Defaults to
-///     `{ [.corpusMutation()] }`. Analysis plugins (`AnalysisPlugin`) can be lifted in
-///     with `.asFuzzPlugin()`.
+///   - plugins: Factory for the per-engine observer plugins (default: none).
+///     Analysis plugins (`AnalysisPlugin`) can be lifted in with
+///     `.asFuzzPlugin()`.
 ///   - filePath: Source file path (auto-filled).
 ///   - function: Test function name (auto-filled).
 ///   - line: Source line (auto-filled).
@@ -128,9 +131,10 @@ public func fuzz<each Input: Codable & Sendable>(
     duration: Duration = .seconds(60),
     persistence: CorpusPersistence = .auto,
     coverageStrategy: CoverageStrategy = .pathTrie,
+    scheduler: MutationScheduler = .weightedPool(),
     scheduleFuzzing: Bool = false,
     parallelism: Int = ProcessInfo.processInfo.processorCount,
-    plugins: @escaping @Sendable () -> [FuzzPlugin<repeat each Input>] = { [.corpusMutation()] },
+    plugins: @escaping @Sendable () -> [FuzzPlugin<repeat each Input>] = { [] },
     filePath: StaticString = #filePath,
     function: StaticString = #function,
     line: Int = #line,
@@ -142,6 +146,7 @@ public func fuzz<each Input: Codable & Sendable>(
         duration: duration,
         persistence: persistence,
         coverageStrategy: coverageStrategy,
+        scheduler: scheduler,
         scheduleFuzzing: scheduleFuzzing,
         parallelism: parallelism,
         plugins: plugins,
@@ -160,6 +165,7 @@ func fuzzInternal<each Input: Codable & Sendable>(
     duration: Duration,
     persistence: CorpusPersistence,
     coverageStrategy: CoverageStrategy,
+    scheduler: MutationScheduler,
     scheduleFuzzing: Bool,
     parallelism: Int,
     plugins: @escaping @Sendable () -> [FuzzPlugin<repeat each Input>],
@@ -209,6 +215,7 @@ func fuzzInternal<each Input: Codable & Sendable>(
             duration: duration,
             verbose: verbose,
             coverageStrategy: coverageStrategy,
+            scheduler: scheduler,
             projectPath: projectPath(from: filePath),
             sourceFileID: testFilePath,
             sourceFilePath: testFilePath,
@@ -234,6 +241,7 @@ func fuzzInternal<each Input: Codable & Sendable>(
             duration: duration,
             verbose: verbose,
             coverageStrategy: coverageStrategy,
+            scheduler: scheduler,
             projectPath: projectPath(from: filePath),
             sourceFileID: testFilePath,
             sourceFilePath: testFilePath,
@@ -315,14 +323,15 @@ func regressInternal<each Input: Codable & Sendable>(
 ///     `CoverageStrategy` for custom per-edge measurement — e.g. tallying
 ///     hit-count buckets per engine. Raw map-write semantics (what a hit
 ///     stores in the coverage map) are not customizable from here.
+///   - scheduler: Which inputs get mutated and when fresh ones are generated
+///     (default: `.weightedPool()`).
 ///   - scheduleFuzzing: When `true`, also fuzz the interleaving order of concurrent
 ///     tasks. The schedule bytes are folded into the input pack as element 0 and
 ///     mutated/stored/persisted like any input; your `test` still receives only its
-///     own `(repeat each Input)`. Forces `parallelism` to 1 and uses the default
-///     `corpusMutation` plugin behavior.
+///     own `(repeat each Input)`. Forces `parallelism` to 1.
 ///   - parallelism: Number of parallel fuzz engines to run. Defaults to processor
 ///     count. Ignored (treated as 1) when `scheduleFuzzing` is enabled.
-///   - plugins: Factory for the per-engine plugins. Defaults to `{ [.corpusMutation()] }`.
+///   - plugins: Factory for the per-engine observer plugins (default: none).
 ///   - filePath: Source file path (auto-filled).
 ///   - function: Test function name (auto-filled).
 ///   - line: Source line (auto-filled).
@@ -337,9 +346,10 @@ public func fuzz<each Input: MutatorProviding & Codable & Sendable>(
     duration: Duration = .seconds(60),
     persistence: CorpusPersistence = .auto,
     coverageStrategy: CoverageStrategy = .pathTrie,
+    scheduler: MutationScheduler = .weightedPool(),
     scheduleFuzzing: Bool = false,
     parallelism: Int = ProcessInfo.processInfo.processorCount,
-    plugins: @escaping @Sendable () -> [FuzzPlugin<repeat each Input>] = { [.corpusMutation()] },
+    plugins: @escaping @Sendable () -> [FuzzPlugin<repeat each Input>] = { [] },
     filePath: StaticString = #filePath,
     function: StaticString = #function,
     line: Int = #line,
@@ -351,6 +361,7 @@ public func fuzz<each Input: MutatorProviding & Codable & Sendable>(
         duration: duration,
         persistence: persistence,
         coverageStrategy: coverageStrategy,
+        scheduler: scheduler,
         scheduleFuzzing: scheduleFuzzing,
         parallelism: parallelism,
         plugins: plugins,

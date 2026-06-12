@@ -170,7 +170,7 @@ func runFuzzWithMaxIterations<each Input: MutatorProviding & Codable & Sendable>
     persistence: CorpusPersistence,
     coverageStrategy: CoverageStrategy = .alwaysInteresting,
     parallelism: Int = 1,
-    makeHandlers: @escaping @Sendable () -> [FuzzPlugin<repeat each Input>] = { [.corpusMutation()] },
+    makeHandlers: @escaping @Sendable () -> [FuzzPlugin<repeat each Input>] = { [] },
     additionalSeeds: [(repeat each Input)] = [],
     test: @escaping @Sendable ((repeat each Input)) async throws -> Void
 ) async -> FuzzResult<repeat each Input> {
@@ -193,6 +193,7 @@ func runFuzzWithMaxIterations<each Input: MutatorProviding & Codable & Sendable>
             duration: .seconds(10),
             verbose: false,
             coverageStrategy: coverageStrategy,
+            scheduler: .weightedPool(),
             projectPath: nil,
             sourceFileID: "PropertyTestingKitTests/TestHelpers.swift",
             sourceFilePath: "PropertyTestingKitTests/TestHelpers.swift",
