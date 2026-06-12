@@ -106,6 +106,42 @@ struct EnergyMutationTests {
         #expect(abs(w - 1.0100243271635463) < 1e-9)
     }
 
+    // MARK: - Incremental (cached) weight equivalence
+
+    /// The drain-time hot path combines per-entry rarity terms (computed at
+    /// acceptance) with the abundance term in O(1). It must agree exactly
+    /// with the reference formula for any configuration.
+    @Test("Cached rarity terms + combine == reference entropicWeight")
+    func cachedCombineMatchesReference() {
+        var rng = FastRNG()
+        for _ in 0..<500 {
+            let featureCount = Int.random(in: 0...6, using: &rng)
+            let features = (0..<featureCount).map { _ in UInt32.random(in: 0...9, using: &rng) }
+            var freqs: [UInt32: Int] = [:]
+            for f in 0...9 { freqs[UInt32(f)] = Int.random(in: 1...6, using: &rng) }
+            let totalRare = freqs.values.filter { $0 <= 3 }.count
+            let mutations = Int.random(in: 0...100, using: &rng)
+            let totalMutations = Int.random(in: 0...200, using: &rng)
+            let corpusSize = Int.random(in: 1...10, using: &rng)
+
+            let reference = entropicWeight(
+                features: features, mutations: mutations,
+                globalFreqs: freqs, totalRareFeatures: totalRare,
+                totalMutations: totalMutations, corpusSize: corpusSize,
+                rareFeatureThreshold: 3, maxMutationFactor: 20)
+
+            let cache = entropicRarityTerms(
+                features: features, globalFreqs: freqs, rareFeatureThreshold: 3)
+            let combined = entropicWeightCombining(
+                cache: cache, mutations: mutations,
+                totalRareFeatures: totalRare, totalMutations: totalMutations,
+                corpusSize: corpusSize, maxMutationFactor: 20)
+
+            #expect(abs(reference - combined) < 1e-12,
+                    "split form must agree: features=\(features) m=\(mutations)")
+        }
+    }
+
     // MARK: - Plugin behavior
 
     private func iteration(
