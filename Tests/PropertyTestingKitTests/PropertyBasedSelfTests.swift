@@ -29,8 +29,9 @@ struct MutatorProvidingPropertyTests {
 
     @Test("Bool.defaultMutator.mutate always returns the opposite value")
     func testBoolMutate() async throws {
-        #expect(Bool.defaultMutator.mutate(true) == [false])
-        #expect(Bool.defaultMutator.mutate(false) == [true])
+        var rng = FastRNG()
+        #expect(Bool.defaultMutator.mutate(true, &rng) == false)
+        #expect(Bool.defaultMutator.mutate(false, &rng) == true)
     }
 
     @Test("Int.defaultMutator.mutate never returns the original value")
@@ -38,9 +39,12 @@ struct MutatorProvidingPropertyTests {
         // Test specific values including edge cases
         let testValues = [0, 1, -1, 42, -42, 1000, -1000, Int.max, Int.min, Int.max / 2, Int.min / 2]
 
+        var rng = FastRNG()
         for n in testValues {
-            let mutations = Int.defaultMutator.mutate(n)
-            #expect(!mutations.contains(n), "Mutations should not contain original value \(n)")
+            for _ in 0..<100 {
+                let mutant = Int.defaultMutator.mutate(n, &rng)
+                #expect(mutant != n, "Mutant should not equal original value \(n)")
+            }
         }
     }
 
@@ -49,11 +53,12 @@ struct MutatorProvidingPropertyTests {
         // Test edge cases explicitly
         let edgeCases = [Int.max, Int.min, 0, 1, -1]
 
+        var rng = FastRNG()
         for n in edgeCases {
-            let mutations = Int.defaultMutator.mutate(n)
-            // Should not crash and all mutations should be valid
-            for m in mutations {
-                #expect(m != n, "Mutation \(m) should differ from original \(n)")
+            // Should not crash (no overflow trap) and all mutants should be valid
+            for _ in 0..<100 {
+                let mutant = Int.defaultMutator.mutate(n, &rng)
+                #expect(mutant != n, "Mutant \(mutant) should differ from original \(n)")
             }
         }
     }
@@ -63,72 +68,96 @@ struct MutatorProvidingPropertyTests {
         // Test specific values from String.defaultMutator.seeds plus some extras
         let testValues = String.defaultMutator.seeds + ["test", "Hello World", "12345"]
 
+        var rng = FastRNG()
         for s in testValues {
-            let mutations = String.defaultMutator.mutate(s)
-            #expect(!mutations.contains(s), "Mutations should not contain original value '\(s)'")
+            for _ in 0..<100 {
+                let mutant = String.defaultMutator.mutate(s, &rng)
+                #expect(mutant != s, "Mutant should not equal original value '\(s)'")
+            }
         }
     }
 
-    @Test("Optional.defaultMutator.mutate includes nil when value is some")
+    @Test("Optional.defaultMutator.mutate draws nil when value is some")
     func testOptionalMutateIncludesNil() async throws {
-        let mutations = Optional<Int>.defaultMutator.mutate(42)
-        #expect(mutations.contains(nil), "Mutating some should include nil")
+        var rng = FastRNG()
+        var seen = Set<Int?>()
+        for _ in 0..<200 { seen.insert(Optional<Int>.defaultMutator.mutate(42, &rng)) }
+        #expect(seen.contains(nil), "Mutating some should sometimes draw nil")
     }
 
-    @Test("Optional.defaultMutator.mutate includes some values when value is nil")
+    @Test("Optional.defaultMutator.mutate returns some values when value is nil")
     func testOptionalMutateFromNil() async throws {
-        let mutations = Optional<Int>.defaultMutator.mutate(nil)
-        #expect(mutations.allSatisfy { $0 != nil }, "Mutating nil should only produce some values")
-        #expect(!mutations.isEmpty, "Mutating nil should produce some mutations")
+        var rng = FastRNG()
+        for _ in 0..<200 {
+            let mutant = Optional<Int>.defaultMutator.mutate(nil, &rng)
+            #expect(mutant != nil, "Mutating nil should only produce some values")
+        }
     }
 
-    @Test("Array.defaultMutator.mutate produces structural variations")
+    @Test("Array.defaultMutator.mutate draws structural variations")
     func testArrayMutate() async throws {
         let original = [1, 2, 3]
-        let mutations = Array<Int>.defaultMutator.mutate(original)
+
+        var rng = FastRNG()
+        var seen = Set<[Int]>()
+        for _ in 0..<200 { seen.insert(Array<Int>.defaultMutator.mutate(original, &rng)) }
 
         // Should include shorter arrays (element removal)
-        let hasShorter = mutations.contains { $0.count < original.count }
-        #expect(hasShorter, "Should have shorter mutations")
+        let hasShorter = seen.contains { $0.count < original.count }
+        #expect(hasShorter, "Should draw shorter mutations")
 
         // Should include longer arrays (element addition)
-        let hasLonger = mutations.contains { $0.count > original.count }
-        #expect(hasLonger, "Should have longer mutations")
+        let hasLonger = seen.contains { $0.count > original.count }
+        #expect(hasLonger, "Should draw longer mutations")
 
         // Should include reversed
-        let hasReversed = mutations.contains([3, 2, 1])
-        #expect(hasReversed, "Should include reversed array")
+        let hasReversed = seen.contains([3, 2, 1])
+        #expect(hasReversed, "Should draw reversed array")
     }
 
     @Test("UInt.defaultMutator.mutate respects bounds")
     func testUIntMutateBounds() async throws {
+        var rng = FastRNG()
+
         // Test UInt.max - should not overflow
-        let maxMutations = UInt.defaultMutator.mutate(UInt.max)
-        #expect(!maxMutations.isEmpty, "Should have mutations for UInt.max")
-        #expect(!maxMutations.contains(UInt.max), "Should not contain original")
+        for _ in 0..<100 {
+            let mutant = UInt.defaultMutator.mutate(UInt.max, &rng)
+            #expect(mutant != UInt.max, "Should not return original")
+        }
 
         // Test 0 - should not underflow
-        let zeroMutations = UInt.defaultMutator.mutate(0)
-        #expect(!zeroMutations.isEmpty, "Should have mutations for 0")
-        #expect(!zeroMutations.contains(0), "Should not contain original")
+        for _ in 0..<100 {
+            let mutant = UInt.defaultMutator.mutate(0, &rng)
+            #expect(mutant != 0, "Should not return original")
+        }
     }
 
     @Test("Double.defaultMutator.mutate handles special values")
     func testDoubleMutateSpecialValues() async throws {
+        var rng = FastRNG()
+
         // NaN should produce finite mutations
-        let nanMutations = Double.defaultMutator.mutate(Double.nan)
-        #expect(nanMutations.allSatisfy { $0.isFinite }, "NaN mutations should be finite")
+        for _ in 0..<100 {
+            let mutant = Double.defaultMutator.mutate(Double.nan, &rng)
+            #expect(mutant.isFinite, "NaN mutants should be finite")
+        }
 
         // Infinity should produce finite mutations
-        let infMutations = Double.defaultMutator.mutate(Double.infinity)
-        #expect(infMutations.allSatisfy { $0.isFinite }, "Infinity mutations should be finite")
+        for _ in 0..<100 {
+            let mutant = Double.defaultMutator.mutate(Double.infinity, &rng)
+            #expect(mutant.isFinite, "Infinity mutants should be finite")
+        }
     }
 
-    @Test("Character.defaultMutator.mutate returns all other fuzz characters")
+    @Test("Character.defaultMutator.mutate draws every other fuzz character")
     func testCharacterMutate() async throws {
-        let mutations = Character.defaultMutator.mutate("a")
-        #expect(!mutations.contains("a" as Character), "Should not contain original")
-        #expect(mutations.count == Character.defaultMutator.seeds.count - 1, "Should have all other fuzz chars")
+        var rng = FastRNG()
+        var seen = Set<Character>()
+        for _ in 0..<200 { seen.insert(Character.defaultMutator.mutate("a", &rng)) }
+
+        // Never the original; across draws, covers all other fuzz chars
+        let others = Set(Character.defaultMutator.seeds.filter { $0 != "a" })
+        #expect(seen == others, "Should draw exactly the other fuzz chars, never the original")
     }
 }
 

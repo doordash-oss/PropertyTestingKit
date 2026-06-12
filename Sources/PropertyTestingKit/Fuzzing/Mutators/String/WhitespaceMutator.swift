@@ -28,14 +28,15 @@ private let _whitespaceSeeds: [String] = [
     "\u{200B}", // zero-width space
 ]
 
-private func _whitespaceMutate(_ value: String) -> [String] {
+private func _whitespaceMutate(_ value: String, _ rng: inout FastRNG) -> String {
     var results: [String] = []
     results.append(" " + value)
     results.append(value + " ")
     results.append(" " + value + " ")
     results.append(value.replacingOccurrences(of: " ", with: "\t"))
     results.append(value.trimmingCharacters(in: .whitespaces))
-    return results
+    guard !results.isEmpty else { return value }
+    return results[Int.random(in: 0..<results.count, using: &rng)]
 }
 
 private func _whitespaceGenerate(_ rng: inout FastRNG) -> String {

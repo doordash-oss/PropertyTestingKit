@@ -36,15 +36,12 @@ public func arrayRepeatedValuesMutator<Element: MutatorProviding & Sendable>() -
 
     return Mutator<[Element]>(
         seeds: seeds,
-        mutate: { value in
+        mutate: { value, rng in
             var results: [[Element]] = []
 
-            // For each unique element in the array, create version with more of it
-            var seen = Set<Int>()
-            for i in value.indices {
-                let hash = "\(value[i])".hashValue
-                if seen.contains(hash) { continue }
-                seen.insert(hash)
+            // Create a version with more copies of a random existing element
+            if !value.isEmpty {
+                let i = Int.random(in: 0..<value.count, using: &rng)
 
                 // Add 2 more copies of this element
                 var copy = value
@@ -62,8 +59,8 @@ public func arrayRepeatedValuesMutator<Element: MutatorProviding & Sendable>() -
                 }
             }
 
-            // Create arrays with seeds repeated
-            for element in elementMutator.seeds.prefix(3) {
+            // Create an array with a random seed repeated
+            if let element = elementMutator.seeds.prefix(3).randomElement(using: &rng) {
                 var withRepeats = value
                 withRepeats.append(element)
                 withRepeats.append(element)
@@ -71,7 +68,8 @@ public func arrayRepeatedValuesMutator<Element: MutatorProviding & Sendable>() -
                 results.append(withRepeats)
             }
 
-            return results
+            guard !results.isEmpty else { return value }
+            return results[Int.random(in: 0..<results.count, using: &rng)]
         },
         generate: { rng in
             // Generate arrays with repeated values

@@ -28,11 +28,12 @@ public func arrayDuplicationMutator<Element: MutatorProviding & Sendable>() -> M
 
     return Mutator<[Element]>(
         seeds: seeds,
-        mutate: { value in
+        mutate: { value, rng in
             var results: [[Element]] = []
 
-            // Duplicate each element in place
-            for i in value.indices {
+            // Duplicate a random element in place
+            if !value.isEmpty {
+                let i = Int.random(in: 0..<value.count, using: &rng)
                 var copy = value
                 copy.insert(value[i], at: i)
                 results.append(copy)
@@ -43,15 +44,17 @@ public func arrayDuplicationMutator<Element: MutatorProviding & Sendable>() -> M
                 results.append(value + value)
             }
 
-            // Triple an element
-            for i in value.indices where value.count < 15 {
+            // Triple a random element
+            if !value.isEmpty && value.count < 15 {
+                let i = Int.random(in: 0..<value.count, using: &rng)
                 var copy = value
                 copy.insert(value[i], at: i)
                 copy.insert(value[i], at: i)
                 results.append(copy)
             }
 
-            return results
+            guard !results.isEmpty else { return value }
+            return results[Int.random(in: 0..<results.count, using: &rng)]
         },
         generate: { rng in
             // Generate arrays with duplicated elements

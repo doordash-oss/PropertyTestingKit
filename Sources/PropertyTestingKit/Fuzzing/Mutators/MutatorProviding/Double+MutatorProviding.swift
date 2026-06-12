@@ -34,8 +34,10 @@ private let _doubleSeeds: [Double] = [
     -Double.infinity,
 ]
 
-private func _doubleMutate(_ value: Double) -> [Double] {
-    guard value.isFinite else { return _doubleNonFiniteFallback }
+private func _doubleMutate(_ value: Double, _ rng: inout FastRNG) -> Double {
+    guard value.isFinite else {
+        return _doubleNonFiniteFallback[Int.random(in: 0..<_doubleNonFiniteFallback.count, using: &rng)]
+    }
 
     // Pre-allocate for up to 7 mutations
     var mutations: [Double] = []
@@ -47,7 +49,9 @@ private func _doubleMutate(_ value: Double) -> [Double] {
     mutations.append(value * 2)
     mutations.append(value + 0.1)
     mutations.append(value - 0.1)
-    return mutations
+
+    guard !mutations.isEmpty else { return value }
+    return mutations[Int.random(in: 0..<mutations.count, using: &rng)]
 }
 
 private func _doubleGenerate(_ rng: inout FastRNG) -> Double {

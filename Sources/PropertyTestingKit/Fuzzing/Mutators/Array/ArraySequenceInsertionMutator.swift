@@ -35,7 +35,7 @@ public func arraySequenceInsertionMutator<Element: MutatorProviding & Sendable>(
 
     return Mutator<[Element]>(
         seeds: seeds,
-        mutate: { value in
+        mutate: { value, rng in
             var results: [[Element]] = []
             let seedElements = Array(elementMutator.seeds.prefix(5))
 
@@ -61,7 +61,8 @@ public func arraySequenceInsertionMutator<Element: MutatorProviding & Sendable>(
                 }
             }
 
-            return results
+            guard !results.isEmpty else { return value }
+            return results[Int.random(in: 0..<results.count, using: &rng)]
         },
         generate: { rng in
             // Generate arrays containing seed sequences

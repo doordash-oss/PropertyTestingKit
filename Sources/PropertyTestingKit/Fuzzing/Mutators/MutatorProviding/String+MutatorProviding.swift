@@ -90,7 +90,7 @@ private func randomString(
     return result
 }
 
-private func _stringMutate(_ value: String) -> [String] {
+private func _stringMutate(_ value: String, _ rng: inout FastRNG) -> String {
     // Pre-allocate with estimated capacity to avoid reallocations
     var mutations: [String] = []
     mutations.reserveCapacity(20)
@@ -143,7 +143,8 @@ private func _stringMutate(_ value: String) -> [String] {
         }
     }
 
-    return mutations
+    guard !mutations.isEmpty else { return value }
+    return mutations[Int.random(in: 0..<mutations.count, using: &rng)]
 }
 
 private func _stringGenerate(_ rng: inout FastRNG) -> String {
