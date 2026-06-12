@@ -47,8 +47,8 @@ private struct SingleSeedInt: MutatorProviding, Codable, Sendable, Equatable {
     let value: Int
 
     static var defaultMutator: Mutator<SingleSeedInt> {
-        Mutator(seeds: [SingleSeedInt(value: 0)], mutate: { current in
-            [SingleSeedInt(value: current.value + 1)]
+        Mutator(seeds: [SingleSeedInt(value: 0)], mutate: { current, _ in
+            SingleSeedInt(value: current.value + 1)
         })
     }
 }

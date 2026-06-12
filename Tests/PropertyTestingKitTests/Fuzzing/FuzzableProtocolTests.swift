@@ -23,8 +23,9 @@ enum TestDirection: MutatorProviding, Equatable, Sendable {
     private static let _seeds: [TestDirection] = [.north, .south, .east, .west]
 
     static var defaultMutator: Mutator<TestDirection> {
-        Mutator(seeds: _seeds, mutate: { value in
-            _seeds.filter { $0 != value }
+        Mutator(seeds: _seeds, mutate: { value, rng in
+            let others = _seeds.filter { $0 != value }
+            return others[Int.random(in: 0..<others.count, using: &rng)]
         })
     }
 }
@@ -39,8 +40,9 @@ struct MutatorProvidingTests {
 
     @Test("Bool mutation flips value")
     func testBoolMutation() {
-        #expect(Bool.defaultMutator.mutate(true) == [false])
-        #expect(Bool.defaultMutator.mutate(false) == [true])
+        var rng = FastRNG()
+        #expect(Bool.defaultMutator.mutate(true, &rng) == false)
+        #expect(Bool.defaultMutator.mutate(false, &rng) == true)
     }
 
     @Test("Int seeds include boundary values")
@@ -53,14 +55,17 @@ struct MutatorProvidingTests {
         #expect(seeds.contains(Int.min))
     }
 
-    @Test("Int mutation produces nearby values")
+    @Test("Int mutation draws nearby values")
     func testIntMutation() {
-        let mutations = Int.defaultMutator.mutate(10)
-        #expect(mutations.contains(11))  // +1
-        #expect(mutations.contains(9))   // -1
-        #expect(mutations.contains(-10)) // negate
-        #expect(mutations.contains(5))   // /2
-        #expect(mutations.contains(20))  // *2
+        var rng = FastRNG()
+        var seen = Set<Int>()
+        for _ in 0..<200 { seen.insert(Int.defaultMutator.mutate(10, &rng)) }
+
+        #expect(seen.contains(11))  // +1
+        #expect(seen.contains(9))   // -1
+        #expect(seen.contains(-10)) // negate
+        #expect(seen.contains(5))   // /2
+        #expect(seen.contains(20))  // *2
     }
 
     @Test("String seeds include edge cases")
@@ -71,13 +76,16 @@ struct MutatorProvidingTests {
         #expect(seeds.contains { $0.count >= 100 }) // Long
     }
 
-    @Test("String mutation produces variations")
+    @Test("String mutation draws variations")
     func testStringMutation() {
-        let mutations = String.defaultMutator.mutate("hello")
-        #expect(mutations.contains("hell"))    // Drop last
-        #expect(mutations.contains("ello"))    // Drop first
-        #expect(mutations.contains("hellox"))  // Append
-        #expect(mutations.contains("HELLO"))   // Uppercase
+        var rng = FastRNG()
+        var seen = Set<String>()
+        for _ in 0..<200 { seen.insert(String.defaultMutator.mutate("hello", &rng)) }
+
+        #expect(seen.contains("hell"))    // Drop last
+        #expect(seen.contains("ello"))    // Drop first
+        #expect(seen.contains("hellox"))  // Append
+        #expect(seen.contains("HELLO"))   // Uppercase
     }
 
     @Test("Optional seeds include nil")
@@ -108,24 +116,30 @@ struct MutatorProvidingTests {
 
     @Test("Double mutation handles finite values")
     func testDoubleMutationFinite() {
-        let mutations = Double.defaultMutator.mutate(10.0)
-        #expect(mutations.contains(11.0))   // +1
-        #expect(mutations.contains(9.0))    // -1
-        #expect(mutations.contains(-10.0))  // negate
-        #expect(mutations.contains(5.0))    // /2
-        #expect(mutations.contains(20.0))   // *2
-        #expect(mutations.contains(10.1))   // +0.1
-        #expect(mutations.contains(9.9))    // -0.1
+        var rng = FastRNG()
+        var seen = Set<Double>()
+        for _ in 0..<200 { seen.insert(Double.defaultMutator.mutate(10.0, &rng)) }
+
+        #expect(seen.contains(11.0))   // +1
+        #expect(seen.contains(9.0))    // -1
+        #expect(seen.contains(-10.0))  // negate
+        #expect(seen.contains(5.0))    // /2
+        #expect(seen.contains(20.0))   // *2
+        #expect(seen.contains(10.1))   // +0.1
+        #expect(seen.contains(9.9))    // -0.1
     }
 
     @Test("Double mutation handles zero")
     func testDoubleMutationZero() {
-        let mutations = Double.defaultMutator.mutate(0.0)
-        #expect(mutations.contains(1.0))    // +1
-        #expect(mutations.contains(-1.0))   // -1
-        #expect(mutations.contains(0.0))    // *2 (0*2=0)
-        #expect(mutations.contains(0.1))    // +0.1
-        #expect(mutations.contains(-0.1))   // -0.1
+        var rng = FastRNG()
+        var seen = Set<Double>()
+        for _ in 0..<200 { seen.insert(Double.defaultMutator.mutate(0.0, &rng)) }
+
+        #expect(seen.contains(1.0))    // +1
+        #expect(seen.contains(-1.0))   // -1
+        #expect(seen.contains(0.0))    // *2 (0*2=0)
+        #expect(seen.contains(0.1))    // +0.1
+        #expect(seen.contains(-0.1))   // -0.1
         // Should NOT contain /2 since value is 0
     }
 
@@ -137,24 +151,27 @@ struct MutatorProvidingTests {
         #expect(seeds.contains(UInt.max))
     }
 
-    @Test("UInt mutation produces doubled value for small numbers")
+    @Test("UInt mutation draws doubled value for small numbers")
     func testUIntMutationDouble() {
         // Test with a value that's small enough to double without overflow
-        let mutations = UInt.defaultMutator.mutate(42)
-        #expect(mutations.contains(43))   // +1
-        #expect(mutations.contains(41))   // -1
-        #expect(mutations.contains(21))   // /2
-        #expect(mutations.contains(84))   // *2 (only for values <= UInt.max/2)
+        var rng = FastRNG()
+        var seen = Set<UInt>()
+        for _ in 0..<200 { seen.insert(UInt.defaultMutator.mutate(42, &rng)) }
+
+        #expect(seen.contains(43))   // +1
+        #expect(seen.contains(41))   // -1
+        #expect(seen.contains(21))   // /2
+        #expect(seen.contains(84))   // *2 (only for values <= UInt.max/2)
     }
 
     @Test("Custom MutatorProviding type")
     func testCustomMutatorProviding() {
         // TestDirection uses a custom MutatorProviding implementation
-        let mutations = TestDirection.defaultMutator.mutate(.north)
-        #expect(!mutations.contains(.north))  // Excludes current value
-        #expect(mutations.contains(.south))
-        #expect(mutations.contains(.east))
-        #expect(mutations.contains(.west))
-        #expect(mutations.count == 3)
+        var rng = FastRNG()
+        var seen = Set<TestDirection>()
+        for _ in 0..<200 { seen.insert(TestDirection.defaultMutator.mutate(.north, &rng)) }
+
+        // Draws every other direction, never the current value
+        #expect(seen == Set([.south, .east, .west]))
     }
 }

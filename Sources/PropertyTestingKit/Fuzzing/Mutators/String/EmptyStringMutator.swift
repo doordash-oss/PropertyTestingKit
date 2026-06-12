@@ -16,7 +16,7 @@ import Dependencies
 
 private let _emptyStringSeeds: [String] = ["", " ", "\t", "\n", "\0"]
 
-private func _emptyStringMutate(_ value: String) -> [String] {
+private func _emptyStringMutate(_ value: String, _ rng: inout FastRNG) -> String {
     var results: [String] = []
     if !value.isEmpty {
         results.append("")
@@ -28,7 +28,8 @@ private func _emptyStringMutate(_ value: String) -> [String] {
         }
     }
     results.append(value + value)
-    return results
+    guard !results.isEmpty else { return value }
+    return results[Int.random(in: 0..<results.count, using: &rng)]
 }
 
 private func _emptyStringGenerate(_ rng: inout FastRNG) -> String {

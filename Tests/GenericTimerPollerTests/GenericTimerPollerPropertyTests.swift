@@ -21,9 +21,8 @@ struct SequentialPollerOps: Codable, Hashable, Sendable, MutatorProviding {
                 SequentialPollerOps(ops: [.stopPolling, .stopPolling]),
                 SequentialPollerOps(ops: [.subscribe, .startPolling, .resumePolling]),
             ],
-            mutate: { input in
+            mutate: { input, rng in
                 var results: [SequentialPollerOps] = []
-                var rng = FastRNG()
                 if !input.ops.isEmpty {
                     var mutated = input.ops
                     let idx = Int.random(in: 0..<mutated.count, using: &rng)
@@ -39,7 +38,7 @@ struct SequentialPollerOps: Codable, Hashable, Sendable, MutatorProviding {
                     removed.remove(at: Int.random(in: 0..<removed.count, using: &rng))
                     results.append(SequentialPollerOps(ops: removed))
                 }
-                return results
+                return results[Int.random(in: 0..<results.count, using: &rng)]
             },
             generate: { rng in
                 let count = Int.random(in: 1...10, using: &rng)

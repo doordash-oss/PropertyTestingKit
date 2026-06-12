@@ -22,7 +22,7 @@ private let _doubleBoundarySeeds: [Double] = [
     -Double.greatestFiniteMagnitude,
 ]
 
-private func _doubleBoundaryMutate(_ value: Double) -> [Double] {
+private func _doubleBoundaryMutate(_ value: Double, _ rng: inout FastRNG) -> Double {
     var results: [Double] = []
     results.append(value + 1)
     results.append(value - 1)
@@ -31,7 +31,9 @@ private func _doubleBoundaryMutate(_ value: Double) -> [Double] {
     results.append(-value)
     results.append(value + 0.1)
     results.append(value - 0.1)
-    return results.filter(\.isFinite)
+    results = results.filter(\.isFinite)
+    guard !results.isEmpty else { return value }
+    return results[Int.random(in: 0..<results.count, using: &rng)]
 }
 
 private func _doubleBoundaryGenerate(_ rng: inout FastRNG) -> Double {

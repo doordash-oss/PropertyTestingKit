@@ -27,13 +27,15 @@ struct CustomMutatorProvidingTests {
         print("TestConfig.defaultMutator.seeds generated \(values.count) values")
     }
 
-    @Test("Custom struct mutations work")
+    @Test("Custom struct mutation always differs from original")
     func testCustomMutation() async {
         let original = TestConfig(timeout: 10, retries: 3)
-        let mutations = TestConfig.defaultMutator.mutate(original)
 
-        #expect(!mutations.isEmpty)
-        #expect(mutations.allSatisfy { $0 != original })
+        var rng = FastRNG()
+        for _ in 0..<200 {
+            let mutant = TestConfig.defaultMutator.mutate(original, &rng)
+            #expect(mutant != original)
+        }
     }
 
     @Test("FuzzEngine works with custom types")
@@ -77,15 +79,19 @@ struct TestConfig: MutatorProviding, Codable, Equatable, Sendable {
             }
         }
 
-        return Mutator(seeds: seeds, mutate: { value in
-            var mutations: [TestConfig] = []
-            for t in Int.defaultMutator.mutate(value.timeout).prefix(2) {
-                mutations.append(TestConfig(timeout: t, retries: value.retries))
+        return Mutator(seeds: seeds, mutate: { value, rng in
+            // Mutate ONE randomly chosen field per call
+            if Bool.random(using: &rng) {
+                return TestConfig(
+                    timeout: Int.defaultMutator.mutate(value.timeout, &rng),
+                    retries: value.retries
+                )
+            } else {
+                return TestConfig(
+                    timeout: value.timeout,
+                    retries: Int.defaultMutator.mutate(value.retries, &rng)
+                )
             }
-            for r in Int.defaultMutator.mutate(value.retries).prefix(2) {
-                mutations.append(TestConfig(timeout: value.timeout, retries: r))
-            }
-            return mutations
         })
     }
 }

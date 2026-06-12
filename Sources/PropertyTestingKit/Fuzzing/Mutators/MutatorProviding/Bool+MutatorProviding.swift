@@ -16,8 +16,9 @@ import Dependencies
 
 private let _boolSeeds: [Bool] = [true, false]
 
-private func _boolMutate(_ value: Bool) -> [Bool] {
-    [!value]
+private func _boolMutate(_ value: Bool, _ rng: inout FastRNG) -> Bool {
+    // The only meaningful mutation of a Bool is its negation.
+    !value
 }
 
 private func _boolGenerate(_ rng: inout FastRNG) -> Bool {

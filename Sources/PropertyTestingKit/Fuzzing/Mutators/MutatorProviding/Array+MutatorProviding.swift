@@ -33,23 +33,28 @@ extension Array: MutatorProviding where Element: MutatorProviding {
 
         return Mutator<[Element]>(
             seeds: seedsArray,
-            mutate: { value in
+            mutate: { value, rng in
+                // One candidate per variant family; a random index/element/seed
+                // stands in for the old per-position enumeration.
                 var mutations: [[Element]] = []
+                mutations.reserveCapacity(6)
 
-                // === Removal mutations ===
-                for i in value.indices {
+                // === Removal mutation (drop a random element) ===
+                if !value.isEmpty {
                     var copy = value
-                    copy.remove(at: i)
+                    copy.remove(at: Int.random(in: 0..<value.count, using: &rng))
                     mutations.append(copy)
                 }
 
-                // === Append elements (incremental growth) ===
-                for element in elementMutator.seeds.prefix(3) {
+                // === Append element (incremental growth) ===
+                if !elementSeeds.isEmpty {
+                    let element = elementSeeds[Int.random(in: 0..<elementSeeds.count, using: &rng)]
                     mutations.append(value + [element])
                 }
 
                 // === Prepend element ===
-                for element in elementMutator.seeds.prefix(2) {
+                if !elementSeeds.isEmpty {
+                    let element = elementSeeds[Int.random(in: 0..<Swift.min(2, elementSeeds.count), using: &rng)]
                     mutations.append([element] + value)
                 }
 
@@ -58,13 +63,12 @@ extension Array: MutatorProviding where Element: MutatorProviding {
                     mutations.append(value + value)
                 }
 
-                // === Mutate individual elements ===
-                for i in value.indices {
-                    for mutated in elementMutator.mutate(value[i]).prefix(2) {
-                        var copy = value
-                        copy[i] = mutated
-                        mutations.append(copy)
-                    }
+                // === Mutate a random element ===
+                if !value.isEmpty {
+                    let i = Int.random(in: 0..<value.count, using: &rng)
+                    var copy = value
+                    copy[i] = elementMutator.mutate(value[i], &rng)
+                    mutations.append(copy)
                 }
 
                 // === Reversal ===
@@ -72,7 +76,8 @@ extension Array: MutatorProviding where Element: MutatorProviding {
                     mutations.append(value.reversed())
                 }
 
-                return mutations
+                guard !mutations.isEmpty else { return value }
+                return mutations[Int.random(in: 0..<mutations.count, using: &rng)]
             },
             generate: { rng in
                 // Decide length with bias toward smaller arrays

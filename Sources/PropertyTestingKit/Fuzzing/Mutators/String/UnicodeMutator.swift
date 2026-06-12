@@ -27,14 +27,15 @@ private let _unicodeSeeds: [String] = [
     "ﬁﬂ", // ligatures
 ]
 
-private func _unicodeMutate(_ value: String) -> [String] {
+private func _unicodeMutate(_ value: String, _ rng: inout FastRNG) -> String {
     var results: [String] = []
     results.append(value.uppercased())
     results.append(value.lowercased())
     results.append(String(value.unicodeScalars.map { Character(UnicodeScalar($0.value + 1) ?? $0) }))
     results.append("\u{200B}" + value) // zero-width space
     results.append(value + "\u{FEFF}") // BOM
-    return results
+    guard !results.isEmpty else { return value }
+    return results[Int.random(in: 0..<results.count, using: &rng)]
 }
 
 private func _unicodeGenerate(_ rng: inout FastRNG) -> String {

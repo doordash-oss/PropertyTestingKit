@@ -27,7 +27,7 @@ private let _urlSeeds: [String] = [
     "https://evil.com@good.com",
 ]
 
-private func _urlMutate(_ value: String) -> [String] {
+private func _urlMutate(_ value: String, _ rng: inout FastRNG) -> String {
     var results: [String] = []
     results.append(value.replacingOccurrences(of: "https", with: "http"))
     results.append(value.replacingOccurrences(of: "http", with: "https"))
@@ -35,7 +35,8 @@ private func _urlMutate(_ value: String) -> [String] {
     results.append(value + "?<script>alert(1)</script>")
     results.append(value.replacingOccurrences(of: "/", with: "//"))
     results.append("javascript:" + value)
-    return results
+    guard !results.isEmpty else { return value }
+    return results[Int.random(in: 0..<results.count, using: &rng)]
 }
 
 private func _urlGenerate(_ rng: inout FastRNG) -> String {

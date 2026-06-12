@@ -119,8 +119,8 @@ struct FlattenedScheduleTests {
             $0.continuousClock = ImmediateClock()
         } operation: {
             let result = try await fuzz(
-                using: Mutator<Int>(seeds: [1, 2, 3], mutate: { [$0 &+ 1, $0 &- 1] }),
-                       Mutator<String>(seeds: ["a", "bb"], mutate: { [$0 + "x"] }),
+                using: Mutator<Int>(seeds: [1, 2, 3], mutate: { v, rng in Bool.random(using: &rng) ? v &+ 1 : v &- 1 }),
+                       Mutator<String>(seeds: ["a", "bb"], mutate: { s, _ in s + "x" }),
                 duration: .milliseconds(200),
                 persistence: .ephemeral,
                 scheduleFuzzing: true
@@ -166,7 +166,7 @@ struct FlattenedScheduleTests {
                 $0.continuousClock = ImmediateClock()
             } operation: {
                 try await fuzz(
-                    using: Mutator<Int>(seeds: [1, 2, 3], mutate: { [$0 &+ 1] }),
+                    using: Mutator<Int>(seeds: [1, 2, 3], mutate: { v, _ in v &+ 1 }),
                     duration: .milliseconds(200),
                     persistence: .ephemeral,
                     coverageStrategy: custom,

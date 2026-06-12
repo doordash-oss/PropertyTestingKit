@@ -23,7 +23,7 @@ private let _intBoundarySeeds: [Int] = [
     Int(UInt8.max), Int(UInt16.max),
 ]
 
-private func _intBoundaryMutate(_ value: Int) -> [Int] {
+private func _intBoundaryMutate(_ value: Int, _ rng: inout FastRNG) -> Int {
     var results: [Int] = []
     if value < Int.max { results.append(value + 1) }
     if value > Int.min { results.append(value - 1) }
@@ -33,7 +33,8 @@ private func _intBoundaryMutate(_ value: Int) -> [Int] {
     if value != 0 { results.append(value / 2) }
     // Use wrapping negation to avoid overflow when value is Int.min
     results.append(0 &- value)
-    return results
+    guard !results.isEmpty else { return value }
+    return results[Int.random(in: 0..<results.count, using: &rng)]
 }
 
 private func _intBoundaryGenerate(_ rng: inout FastRNG) -> Int {

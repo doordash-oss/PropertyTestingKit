@@ -23,7 +23,7 @@ private let _stringBoundarySeeds: [String] = [
     String(repeating: "🎉", count: 100),
 ]
 
-private func _stringBoundaryMutate(_ value: String) -> [String] {
+private func _stringBoundaryMutate(_ value: String, _ rng: inout FastRNG) -> String {
     var results: [String] = []
     results.append(value + value)
     results.append(String(repeating: value, count: 10))
@@ -31,7 +31,8 @@ private func _stringBoundaryMutate(_ value: String) -> [String] {
         let mid = value.index(value.startIndex, offsetBy: value.count / 2)
         results.append(String(value[..<mid]))
     }
-    return results
+    guard !results.isEmpty else { return value }
+    return results[Int.random(in: 0..<results.count, using: &rng)]
 }
 
 private func _stringBoundaryGenerate(_ rng: inout FastRNG) -> String {

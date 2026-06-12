@@ -27,7 +27,7 @@ private let _sqlInjectionSeeds: [String] = [
     "1'; WAITFOR DELAY '0:0:5'--",
 ]
 
-private func _sqlInjectionMutate(_ value: String) -> [String] {
+private func _sqlInjectionMutate(_ value: String, _ rng: inout FastRNG) -> String {
     var results: [String] = []
     results.append("'" + value)
     results.append(value + "'")
@@ -35,7 +35,8 @@ private func _sqlInjectionMutate(_ value: String) -> [String] {
     results.append(value + " OR 1=1")
     results.append(value.replacingOccurrences(of: "'", with: "''"))
     results.append(value + "/**/")
-    return results
+    guard !results.isEmpty else { return value }
+    return results[Int.random(in: 0..<results.count, using: &rng)]
 }
 
 private func _sqlInjectionGenerate(_ rng: inout FastRNG) -> String {

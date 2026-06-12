@@ -23,7 +23,7 @@ private let _specialDoubleSeeds: [Double] = [
     0.1 + 0.2, // classic floating point issue
 ]
 
-private func _specialDoubleMutate(_ value: Double) -> [Double] {
+private func _specialDoubleMutate(_ value: Double, _ rng: inout FastRNG) -> Double {
     var results: [Double] = []
     if value.isFinite {
         results.append(value.nextUp)
@@ -31,7 +31,8 @@ private func _specialDoubleMutate(_ value: Double) -> [Double] {
     }
     results.append(Double.nan)
     results.append(Double.infinity)
-    return results
+    guard !results.isEmpty else { return value }
+    return results[Int.random(in: 0..<results.count, using: &rng)]
 }
 
 private func _specialDoubleGenerate(_ rng: inout FastRNG) -> Double {
