@@ -37,7 +37,7 @@ enum PoolDirective: Equatable {
 /// Confinement: one instance per engine, driven on the engine's task. No
 /// internal synchronization.
 final class WeightedPoolCore {
-    private let judge: (SparseCoverage) -> Bool
+    private let judge: (SparseCoverage) -> PoolAdmission.Verdict
     private let policies: [any PoolPlugin]
     private let burstLength: Int
     private let focusOnInsert: Bool
@@ -74,9 +74,10 @@ final class WeightedPoolCore {
     func observe(_ outcome: PoolIterationOutcome) -> Int? {
         notifyAndApply(.iteration(outcome))
 
-        guard let coverage = outcome.newCoverage, judge(coverage) else {
-            return nil
-        }
+        guard let coverage = outcome.newCoverage else { return nil }
+        let verdict = judge(coverage)
+        guard verdict.admit else { return nil }
+
         let id = weights.count
         weights.append(1.0)
         livePos[id] = live.count
@@ -85,6 +86,9 @@ final class WeightedPoolCore {
             focus = id
             burstRemaining = burstLength
         }
+        // The admission's own displacements (REDUCE losers) go through the
+        // same removal path as child evictions, so every policy hears them.
+        apply(verdict.evict.map { .remove(id: $0) })
         notifyAndApply(.inserted(id: id, coverage: coverage))
         return id
     }

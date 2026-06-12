@@ -83,17 +83,43 @@ public protocol PoolPlugin: AnyObject {
 ///
 /// Admission is a dedicated role (not a regular `PoolPlugin`) so exactly one
 /// component decides membership — children advise weights and evictions but
-/// can never double-insert.
+/// can never double-insert. An admission verdict can carry evictions of its
+/// own (REDUCE: a winner bankrupting previous owners).
 public struct PoolAdmission: Sendable {
-    /// Builds a fresh per-engine judge: sees the accepted input's coverage,
-    /// returns whether it joins the pool.
-    let makeJudge: @Sendable () -> (SparseCoverage) -> Bool
+    struct Verdict {
+        let admit: Bool
+        /// Existing entries this admission displaces from the pool.
+        let evict: [Int]
+    }
 
-    init(makeJudge: @escaping @Sendable () -> (SparseCoverage) -> Bool) {
+    /// Builds a fresh per-engine judge over the accepted input's coverage.
+    let makeJudge: @Sendable () -> (SparseCoverage) -> Verdict
+
+    init(makeJudge: @escaping @Sendable () -> (SparseCoverage) -> Verdict) {
         self.makeJudge = makeJudge
     }
 
-    /// Every strategy-accepted input joins the pool. The behavior of the
-    /// classic corpus-mutation loop.
-    public static let everyDiscovery = PoolAdmission(makeJudge: { { _ in true } })
+    /// Every strategy-accepted input joins the pool, nothing ever leaves.
+    /// The behavior of the classic corpus-mutation loop.
+    public static let everyDiscovery = PoolAdmission(
+        makeJudge: { { _ in Verdict(admit: true, evict: []) } })
+
+    /// libFuzzer's corpus model: an input joins the pool only by *owning*
+    /// coverage features — claiming unowned ones, or stealing from a larger
+    /// owner (REDUCE; the covered-edge count is the size metric, ties don't
+    /// steal). An entry that loses its last feature leaves the pool. Bounds
+    /// the pool by the feature space regardless of how often the coverage
+    /// strategy says "interesting"; rejected accepts get no burst and no
+    /// residence (strict semantics).
+    ///
+    /// Features today are the covered edge indices; for an order-sensitive
+    /// strategy like `.pathTrie` this is deliberately coarser than its
+    /// acceptance criterion — that's the flood-control point.
+    public static let featureOwnership = PoolAdmission(makeJudge: {
+        var ledger = FeatureOwnershipLedger()
+        return { coverage in
+            let verdict = ledger.judge(features: coverage.indices, size: coverage.count)
+            return Verdict(admit: verdict.admit, evict: verdict.evict)
+        }
+    })
 }
