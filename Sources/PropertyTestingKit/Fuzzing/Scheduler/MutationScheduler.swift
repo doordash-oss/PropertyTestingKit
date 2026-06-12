@@ -43,18 +43,25 @@ public struct MutationScheduler: Sendable {
     ///     one fresh generation and redraws.
     ///   - focusOnInsert: Newly admitted entries immediately become the
     ///     focus (the classic burst-on-accept exploit behavior).
+    ///   - capacity: Residence bound (`nil` = unbounded). Admitting past it
+    ///     evicts the lowest-weight resident (ties: oldest). The bound
+    ///     decouples how finely the admission vocabulary distinguishes
+    ///     inputs from how many of them may stay — without it, a fine
+    ///     vocabulary silently raises the population ceiling.
     public static func weightedPool(
         admission: PoolAdmission = .everyDiscovery,
         policies: @escaping @Sendable () -> [any PoolPlugin] = { [] },
         burstLength: Int = 16,
-        focusOnInsert: Bool = true
+        focusOnInsert: Bool = true,
+        capacity: Int? = nil
     ) -> MutationScheduler {
         MutationScheduler(makeCore: {
             WeightedPoolCore(
                 admission: admission,
                 policies: policies(),
                 burstLength: burstLength,
-                focusOnInsert: focusOnInsert
+                focusOnInsert: focusOnInsert,
+                capacity: capacity
             )
         })
     }

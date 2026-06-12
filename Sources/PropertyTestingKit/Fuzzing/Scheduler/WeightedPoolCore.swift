@@ -41,6 +41,10 @@ final class WeightedPoolCore {
     private let policies: [any PoolPlugin]
     private let burstLength: Int
     private let focusOnInsert: Bool
+    /// Residence bound (`nil` = unbounded): admitting past it evicts the
+    /// lowest-weight resident (ties: oldest). Decouples how finely the
+    /// vocabulary distinguishes inputs from how many of them may stay.
+    private let capacity: Int?
 
     /// Draw weight per entry ID (index == ID; grows append-only).
     private var weights: [Double] = []
@@ -60,12 +64,14 @@ final class WeightedPoolCore {
         admission: PoolAdmission,
         policies: [any PoolPlugin],
         burstLength: Int,
-        focusOnInsert: Bool
+        focusOnInsert: Bool,
+        capacity: Int? = nil
     ) {
         self.judge = admission.makeJudge()
         self.policies = policies
         self.burstLength = max(1, burstLength)
         self.focusOnInsert = focusOnInsert
+        self.capacity = capacity.map { max(1, $0) }
     }
 
     /// Report one executed iteration. Returns the new entry's ID when the
@@ -79,6 +85,17 @@ final class WeightedPoolCore {
         let verdict = judge(features, coverage.count)
         guard verdict.admit else { return nil }
 
+        // The admission's own displacements (REDUCE losers) go through the
+        // same removal path as child evictions, so every policy hears them.
+        // They run BEFORE the capacity check — bankruptcies may free the
+        // room, sparing an innocent resident.
+        apply(verdict.evict.map { .remove(id: $0) })
+        if let capacity {
+            while live.count >= capacity, let victim = capacityVictim() {
+                apply([.remove(id: victim)])
+            }
+        }
+
         let id = weights.count
         weights.append(1.0)
         livePos[id] = live.count
@@ -87,9 +104,6 @@ final class WeightedPoolCore {
             focus = id
             burstRemaining = burstLength
         }
-        // The admission's own displacements (REDUCE losers) go through the
-        // same removal path as child evictions, so every policy hears them.
-        apply(verdict.evict.map { .remove(id: $0) })
         notifyAndApply(.inserted(id: id, coverage: coverage, features: features))
         return id
     }
@@ -142,6 +156,12 @@ final class WeightedPoolCore {
                     focus = nil
                     burstRemaining = 0
                 }
+                // Deliberately NO ledger release: a capacity-evicted owner
+                // keeps its claims as a ghost. Releasing them re-opens the
+                // vocabulary and the pool degenerates into a revolving door
+                // of re-claimers (measured on fsub: admission 48% -> 91% of
+                // accepts, pure FIFO churn). Ghost ownership is the flood
+                // control: a represented feature stays represented.
                 // Re-broadcast so every policy stays consistent with
                 // membership it didn't change itself. Terminates: each ID can
                 // be removed at most once (the guard above).
@@ -152,6 +172,20 @@ final class WeightedPoolCore {
                     weights[id] = max(0, weight)
                 }
             }
+        }
+    }
+
+    /// The resident a capacity overflow removes: lowest weight, ties to the
+    /// NEWEST. Evicting old residents makes the bounded pool a sliding
+    /// window over the mutation random walk — on fsub that walk drifts
+    /// toward ever-bigger terms, so the window holds monsters (probed:
+    /// FIFO eviction left executed-term size at 2.4x the edge baseline).
+    /// Keeping elders anchors the pool on the early, small, distinctive
+    /// inputs; newcomers visit, burst, and yield their slot unless a weight
+    /// advisor values them. With an advisor, eviction defers to it.
+    private func capacityVictim() -> Int? {
+        live.min { lhs, rhs in
+            (weights[lhs], -lhs) < (weights[rhs], -rhs)
         }
     }
 

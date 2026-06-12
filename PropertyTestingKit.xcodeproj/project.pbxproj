@@ -201,6 +201,7 @@
 		C029DB863E81D5730107E9F9 /* EmptyStringMutator.swift in Sources */ = {isa = PBXBuildFile; fileRef = A346A5CDA2BF60B37F20B1D2 /* EmptyStringMutator.swift */; };
 		C0E5C0ED4094D06754BC00C3 /* EnergyMutationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7338026EE0E559A10E5ECC55 /* EnergyMutationTests.swift */; };
 		C1960FC757B9F4FF703FBC4E /* SanCovHooks.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 662FDA7546F253A8CAE418AB /* SanCovHooks.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		C233258461FDA5AEAA66A5BD /* PoolCapacityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F0FBDC1A9D5494CB98ECCCE /* PoolCapacityTests.swift */; };
 		C2C82D49D24E64D72F020B58 /* PropertyTestingKit.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 2595E9AD80DBFC77F241A7E7 /* PropertyTestingKit.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		C352BBDC8B2905DE42CD9BDA /* TestHelpers.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5694654408A37C1D96C8CCA5 /* TestHelpers.swift */; };
 		C3CCD2C9B56E9E0FC0574642 /* CoverageGapDetector.swift in Sources */ = {isa = PBXBuildFile; fileRef = C5A515E40A855C623BC509BC /* CoverageGapDetector.swift */; };
@@ -602,6 +603,7 @@
 		4CD58350A367890040C1786A /* HitCountBucketsStrategyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HitCountBucketsStrategyTests.swift; sourceTree = "<group>"; };
 		4E987090D06715A5F99BEC1A /* Double+MutatorProviding.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Double+MutatorProviding.swift"; sourceTree = "<group>"; };
 		4E9F5016469E3378725DCE64 /* ArrayPositionAwareMutator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArrayPositionAwareMutator.swift; sourceTree = "<group>"; };
+		4F0FBDC1A9D5494CB98ECCCE /* PoolCapacityTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PoolCapacityTests.swift; sourceTree = "<group>"; };
 		5150147016EC8550F07948A1 /* ArraySequenceInsertionMutator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArraySequenceInsertionMutator.swift; sourceTree = "<group>"; };
 		51F60E9EF9B6498AC00EEBFE /* ck_f_pr.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ck_f_pr.h; sourceTree = "<group>"; };
 		52C1DEE9A4340554236C9F32 /* SparseCoverage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SparseCoverage.swift; sourceTree = "<group>"; };
@@ -1567,6 +1569,7 @@
 				63C99FD379289FA24BBE7A5B /* ParallelEarlyCancelTest.swift */,
 				F5E409E9172BADE44207E55E /* PathTrieStrategyTests.swift */,
 				BA01B2725BCFE68C918C2336 /* PlateauDetectorPluginTests.swift */,
+				4F0FBDC1A9D5494CB98ECCCE /* PoolCapacityTests.swift */,
 				B37ED10677A92DC01DD0B289 /* SaturationPlateauDetectorTests.swift */,
 				543E53F7A2745CDD7F2C03DE /* SaturationPluginTests.swift */,
 				DBCAADBAF4AC53EA70482640 /* SchedulerIntegrationTests.swift */,
@@ -2154,6 +2157,7 @@
 				D5645DFA85C2ABBD0E34ACC2 /* ParallelTimingTest.swift in Sources */,
 				190CC6D79C904001E2EC76BF /* PathTrieStrategyTests.swift in Sources */,
 				AB89E6673C3749E9B3F3A882 /* PlateauDetectorPluginTests.swift in Sources */,
+				C233258461FDA5AEAA66A5BD /* PoolCapacityTests.swift in Sources */,
 				14CE5AF65788D0ED532C423D /* PropertyBasedSelfTests.swift in Sources */,
 				B269AC60201884DB429C947C /* STADSPlateauDetectorTests.swift in Sources */,
 				073726C59F65CF54C9DB2A9D /* STADSPluginTests.swift in Sources */,

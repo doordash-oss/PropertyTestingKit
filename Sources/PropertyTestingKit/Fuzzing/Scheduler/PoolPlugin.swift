@@ -111,6 +111,13 @@ public struct PoolAdmission: Sendable {
 
     /// Builds a fresh per-engine judge over the accepted input's resolved
     /// features and its size metric (covered-edge count).
+    ///
+    /// Admission bookkeeping deliberately outlives pool membership: an
+    /// entry evicted for capacity stays a *ghost owner* of its features.
+    /// Re-witnessing a represented feature earns nothing (releasing ghost
+    /// claims was measured to turn a capacity-bounded pool into a revolving
+    /// door of re-claimers); only genuinely new features, or strictly
+    /// smaller witnesses, win residence.
     let makeJudge: @Sendable () -> (_ features: [UInt64], _ size: Int) -> Verdict
 
     init(makeJudge: @escaping @Sendable () -> ([UInt64], Int) -> Verdict) {
