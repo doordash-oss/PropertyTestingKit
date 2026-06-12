@@ -258,12 +258,16 @@ extension FuzzPlugin {
         // two index-aligned arrays. entryFeatures/entryMutations stay parallel —
         // they're per-entry bookkeeping, not redundant with the input itself.
         var entries: [FuzzPluginAction<repeat each Input>.SelectForMutationAction] = []
-        var entryFeatures: [[UInt32]] = []
-        var entryMutations: [Int] = []
+        // Per-entry observation yield: rare-feature observation counts across
+        // the entry's accepted mutants (its own discovery seeds the counts).
+        var entryYield: [[UInt32: Int]] = []
+        // Per-entry executed-mutation count, attributed via iteration parentID.
+        var entryExecutions: [Int] = []
         var entryRarity: [EntropicRarityTerms] = []
         var globalFeatureFreqs: [UInt32: Int] = [:]
         var totalRareFeatures = 0
-        var totalMutations = 0
+        var totalExecutions = 0
+        var rarityStale = false
 
         @Dependency(\.fastRNG) var fastRNG: FastRNG
         let seedRNG: FastRNG = fastRNG
@@ -273,29 +277,39 @@ extension FuzzPlugin {
             handleSync: { event in
                 switch event {
                 case let .iteration(context):
+                    // Attribute this execution to the seed whose mutation
+                    // produced it (engine-reported lineage).
+                    if let parent = context.parentID, entries.indices.contains(parent) {
+                        entryExecutions[parent] += 1
+                        totalExecutions += 1
+                    }
+
                     if let coverage = context.newCoverage {
-                        // Register new entry with its features.
+                        // A discovery is an information event for the parent:
+                        // credit each discovered feature to its yield.
+                        if let parent = context.parentID, entries.indices.contains(parent) {
+                            for feature in coverage.indices {
+                                entryYield[parent][feature, default: 0] += 1
+                            }
+                        }
+
+                        // Register the new entry; its own discovery seeds its yield.
                         for feature in coverage.indices {
                             globalFeatureFreqs[feature, default: 0] += 1
                         }
                         let entry = FuzzPluginAction<repeat each Input>.SelectForMutationAction(
-                            input: context.input, scheduleBytes: context.scheduleBytes)
+                            input: context.input, scheduleBytes: context.scheduleBytes,
+                            originID: entries.count)
                         entries.append(entry)
-                        entryFeatures.append(coverage.indices)
-                        entryMutations.append(0)
+                        entryYield.append(Dictionary(coverage.indices.map { ($0, 1) },
+                                                     uniquingKeysWith: +))
+                        entryExecutions.append(0)
+                        entryRarity.append(EntropicRarityTerms(energy: 0, sumIncidence: 0, coveredRare: 0))
 
-                        // Acceptance is the only event that changes global
-                        // frequencies, so this is where every entry's rarity
-                        // terms refresh — keeping the per-drain hot path free
-                        // of O(features) work.
-                        totalRareFeatures = globalFeatureFreqs.values
-                            .filter { $0 <= rareFeatureThreshold }.count
-                        entryRarity = entryFeatures.map {
-                            entropicRarityTerms(
-                                features: $0,
-                                globalFreqs: globalFeatureFreqs,
-                                rareFeatureThreshold: rareFeatureThreshold)
-                        }
+                        // Acceptance changes global frequencies and yields, so
+                        // rarity caches refresh before the next drain — keeping
+                        // the per-drain hot path free of O(features) work.
+                        rarityStale = true
 
                         // Immediately schedule mutations for the newly-interesting input.
                         return [.selectForMutation(entry)]
@@ -309,23 +323,32 @@ extension FuzzPlugin {
                         var rng = seedRNG
                         let count = entries.count
 
-                        // Hot path: O(1) per entry — rarity terms were cached
-                        // at acceptance time, only abundance varies per drain.
+                        if rarityStale {
+                            totalRareFeatures = globalFeatureFreqs.values
+                                .filter { $0 <= rareFeatureThreshold }.count
+                            entryRarity = entryYield.map {
+                                entropicYieldRarityTerms(
+                                    yield: $0,
+                                    globalFreqs: globalFeatureFreqs,
+                                    rareFeatureThreshold: rareFeatureThreshold)
+                            }
+                            rarityStale = false
+                        }
+
+                        // Hot path: O(1) per entry — rarity terms are cached,
+                        // only the abundance (executions) varies per drain.
                         let weights = (0..<count).map { i in
                             entropicWeightCombining(
                                 cache: entryRarity[i],
-                                mutations: entryMutations[i],
+                                mutations: entryExecutions[i],
                                 totalRareFeatures: totalRareFeatures,
-                                totalMutations: totalMutations,
+                                totalMutations: totalExecutions,
                                 corpusSize: count,
                                 maxMutationFactor: maxMutationFactor
                             )
                         }
 
                         let selectedIdx = weightedRandomIndex(weights: weights, using: &rng)
-                        entryMutations[selectedIdx] += 1
-                        totalMutations += 1
-
                         return [.selectForMutation(entries[selectedIdx])]
                     }
 
@@ -750,6 +773,32 @@ struct EntropicRarityTerms {
     let sumIncidence: Double
     /// How many rare features the entry covers.
     let coveredRare: Int
+}
+
+/// Compute an entry's rarity terms from its OBSERVATION YIELD — how many
+/// times each rare feature has been seen across this seed's accepted mutants
+/// (its own discovery counts as the first observation). This is Entropic's
+/// information-gain form: repeated rare observations contribute
+/// `-count·ln(count)` entropy and `count` incidence, so seeds whose mutants
+/// keep eliciting rare features hold energy, while the abundance term decays
+/// seeds that execute without yielding.
+func entropicYieldRarityTerms(
+    yield: [UInt32: Int],
+    globalFreqs: [UInt32: Int],
+    rareFeatureThreshold: Int
+) -> EntropicRarityTerms {
+    var energy = 0.0
+    var sumIncidence = 0.0
+    var coveredRare = 0
+    for (feature, count) in yield {
+        let globalFreq = globalFreqs[feature] ?? 1
+        guard globalFreq <= rareFeatureThreshold else { continue }
+        let localIncidence = Double(count)
+        energy -= localIncidence * log(localIncidence)
+        sumIncidence += localIncidence
+        coveredRare += 1
+    }
+    return EntropicRarityTerms(energy: energy, sumIncidence: sumIncidence, coveredRare: coveredRare)
 }
 
 /// Compute an entry's rarity terms from the current global frequencies.

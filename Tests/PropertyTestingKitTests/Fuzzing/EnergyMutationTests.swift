@@ -145,13 +145,15 @@ struct EnergyMutationTests {
     // MARK: - Plugin behavior
 
     private func iteration(
-        _ input: Int, fromQueue: Bool, queueCount: Int = 0, coverage: [UInt32]? = nil
+        _ input: Int, fromQueue: Bool, queueCount: Int = 0, coverage: [UInt32]? = nil,
+        parentID: Int? = nil
     ) -> SyncPluginEvent<Int> {
         .iteration(SyncPluginEvent<Int>.IterationContext(
             input: input,
             fromMutationQueue: fromQueue,
             queueCount: queueCount,
-            newCoverage: coverage.map { SparseCoverage(indices: $0) }
+            newCoverage: coverage.map { SparseCoverage(indices: $0) },
+            parentID: parentID
         ))
     }
 
@@ -182,7 +184,75 @@ struct EnergyMutationTests {
         #expect(actions.isEmpty)
     }
 
-    @Test("Drain selects a registered entry, and abundance rotates selection")
+    // MARK: - Discovery-attributed semantics (lineage-based Entropic)
+
+    @Test("Accept burst tags the new entry's index as originID")
+    func acceptBurstCarriesOriginID() {
+        let plugin: FuzzPlugin<Int> = .energyMutation()
+        let first = plugin.handleSync(iteration(1, fromQueue: false, coverage: [10]))
+        guard case let .selectForMutation(s0) = first.first else {
+            Issue.record("expected selectForMutation"); return
+        }
+        #expect(s0.originID == 0, "first entry is index 0")
+        let second = plugin.handleSync(iteration(2, fromQueue: false, coverage: [20]))
+        guard case let .selectForMutation(s1) = second.first else {
+            Issue.record("expected selectForMutation"); return
+        }
+        #expect(s1.originID == 1, "second entry is index 1")
+    }
+
+    @Test("A seed worn down by unproductive mutant executions loses energy")
+    func unproductiveExecutionsDecayParent() {
+        let plugin: FuzzPlugin<Int> = .energyMutation()
+        _ = plugin.handleSync(iteration(1, fromQueue: false, coverage: [10]))   // A = entry 0
+        // 50 mutants of A execute and discover nothing.
+        for _ in 0..<50 {
+            _ = plugin.handleSync(iteration(99, fromQueue: true, queueCount: 1, parentID: 0))
+        }
+        _ = plugin.handleSync(iteration(2, fromQueue: false, coverage: [20]))   // B = entry 1, fresh
+        // Expected weights: worn A ~ 1.1383, fresh B ~ 2.1415 -> P(B) ~ 0.65.
+        var picks: [Int: Int] = [:]
+        for _ in 0..<300 {
+            let actions = plugin.handleSync(iteration(99, fromQueue: false))
+            guard case let .selectForMutation(sel) = actions.first else {
+                Issue.record("drain must schedule"); return
+            }
+            picks[sel.input, default: 0] += 1
+        }
+        #expect(picks[2, default: 0] > picks[1, default: 0],
+                "fresh B must out-draw A after A's 50 fruitless mutant executions")
+    }
+
+    @Test("Yield rarity terms: counted observations, non-rare filtered")
+    func yieldRarityTerms() {
+        let t = entropicYieldRarityTerms(
+            yield: [10: 3], globalFreqs: [10: 3], rareFeatureThreshold: 3)
+        #expect(abs(t.energy - (-3.295836866004329)) < 1e-12)   // -3*ln 3
+        #expect(t.sumIncidence == 3.0)
+        #expect(t.coveredRare == 1)
+
+        let filtered = entropicYieldRarityTerms(
+            yield: [12: 5], globalFreqs: [12: 9], rareFeatureThreshold: 3)
+        #expect(filtered.energy == 0 && filtered.sumIncidence == 0 && filtered.coveredRare == 0)
+    }
+
+    @Test("Repeated rare observations outweigh a single one at equal executions")
+    func repeatedRareObservationsBoost() {
+        let repeated = entropicWeightCombining(
+            cache: entropicYieldRarityTerms(yield: [10: 3], globalFreqs: [10: 3], rareFeatureThreshold: 3),
+            mutations: 10, totalRareFeatures: 2, totalMutations: 20,
+            corpusSize: 2, maxMutationFactor: 20)
+        let single = entropicWeightCombining(
+            cache: entropicYieldRarityTerms(yield: [20: 1], globalFreqs: [20: 1], rareFeatureThreshold: 3),
+            mutations: 10, totalRareFeatures: 2, totalMutations: 20,
+            corpusSize: 2, maxMutationFactor: 20)
+        #expect(abs(repeated - 1.6584910308010297) < 1e-9)
+        #expect(abs(single - 1.4499076873304126) < 1e-9)
+        #expect(repeated > single,
+                "a seed whose mutants keep eliciting a rare feature carries more information")
+    }
+
+    @Test("Weighted-random drain selection reaches every entry")
     func drainSelectsAndRotates() {
         let plugin: FuzzPlugin<Int> = .energyMutation()
         _ = plugin.handleSync(iteration(1, fromQueue: false, coverage: [10]))
@@ -198,6 +268,6 @@ struct EnergyMutationTests {
             selected.insert(sel.input)
         }
         #expect(selected == [1, 2],
-                "weighted-random selection with abundance decay must reach every entry")
+                "weighted-random selection must reach every entry")
     }
 }
