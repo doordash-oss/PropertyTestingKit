@@ -40,12 +40,12 @@ public final class EntropicWeightPolicy: PoolPlugin {
     private let maxMutationFactor: Int
 
     /// Per-entry rare-feature observation counts, index == pool entry ID.
-    private var entryYield: [[UInt32: Int]] = []
+    private var entryYield: [[UInt64: Int]] = []
     /// Per-entry executed-mutant count, attributed via `.pool(parent:)`.
     private var entryExecutions: [Int] = []
     /// Cached rarity terms (refreshed when `rarityStale`).
     private var entryRarity: [EntropicRarityTerms] = []
-    private var globalFeatureFreqs: [UInt32: Int] = [:]
+    private var globalFeatureFreqs: [UInt64: Int] = [:]
     private var totalRareFeatures = 0
     private var totalExecutions = 0
     private var rarityStale = false
@@ -63,23 +63,23 @@ public final class EntropicWeightPolicy: PoolPlugin {
                   entryExecutions.indices.contains(parent) else { return [] }
             entryExecutions[parent] += 1
             totalExecutions += 1
-            if let coverage = outcome.newCoverage {
-                for feature in coverage.indices {
+            if outcome.newCoverage != nil {
+                for feature in outcome.resolvedFeatures {
                     entryYield[parent][feature, default: 0] += 1
                 }
                 rarityStale = true
             }
             return []
 
-        case let .inserted(id, coverage):
+        case let .inserted(id, _, features):
             // IDs are sequential by the owner's contract; the only way to
             // see a gap would be another inserter, which the admission role
             // precludes.
             assert(id == entryYield.count, "pool entry IDs must be sequential")
-            for feature in coverage.indices {
+            for feature in features {
                 globalFeatureFreqs[feature, default: 0] += 1
             }
-            entryYield.append(Dictionary(coverage.indices.map { ($0, 1) },
+            entryYield.append(Dictionary(features.map { ($0, 1) },
                                          uniquingKeysWith: +))
             entryExecutions.append(0)
             entryRarity.append(EntropicRarityTerms(energy: 0, sumIncidence: 0, coveredRare: 0))

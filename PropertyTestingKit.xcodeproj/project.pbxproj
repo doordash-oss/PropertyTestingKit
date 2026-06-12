@@ -19,6 +19,7 @@
 		0825A5AEA146DB0E4EECE682 /* PropertyTestingKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 2595E9AD80DBFC77F241A7E7 /* PropertyTestingKit.framework */; };
 		0825E58A22B055CECCD94269 /* SanCovSourceLocation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E849F3495589275569E76FC /* SanCovSourceLocation.swift */; };
 		08723356674CF23AB08EFC98 /* WorkerPoolPatternTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3C4BEC4C9B5FC9BAEF5F9ECE /* WorkerPoolPatternTests.swift */; };
+		0A0812CF494F9244089B781C /* PathGrams.swift in Sources */ = {isa = PBXBuildFile; fileRef = B030A82E402C8D5202BEFE53 /* PathGrams.swift */; };
 		0A0B966D3B103DDD9ADC457C /* CoverageCountersClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B7DA3E55A8132FE210D8EAF /* CoverageCountersClient.swift */; };
 		0AEA251D3FF9432F04D9FC04 /* CoverageGapDetectorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5A7DD272E538B8E8CFE5C75 /* CoverageGapDetectorTests.swift */; };
 		0AF273C35C44F4B57C9AE477 /* CoverageEngineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9791710C8985E9069A0AAEA9 /* CoverageEngineTests.swift */; };
@@ -164,6 +165,7 @@
 		9DADB5A1F40BF13558A2BD55 /* Synchronized.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF1E91685C6019AA1D8E23F9 /* Synchronized.swift */; };
 		9E5C3463A81E92C8411CBBC4 /* WhitespaceMutator.swift in Sources */ = {isa = PBXBuildFile; fileRef = D836E824C1D4857069D00DA4 /* WhitespaceMutator.swift */; };
 		9E681FD7857BB0E8B54236DD /* Mutator.swift in Sources */ = {isa = PBXBuildFile; fileRef = D51DB081E26BBC926EBD26BD /* Mutator.swift */; };
+		9E9C7B77CE1B7C4A4243536A /* StrategyFeatureTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F5C14F22721E00A7EC03198B /* StrategyFeatureTests.swift */; };
 		9F1D0263653AF466AEF4DBA8 /* SanCovHooks.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 662FDA7546F253A8CAE418AB /* SanCovHooks.framework */; };
 		A11656F32C1DA89DAC5AE4B1 /* EnvironmentClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = F46057CB7F84DA3671178057 /* EnvironmentClient.swift */; };
 		A1B5C9D7B4345854FF5D488A /* PropertyTestingKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 2595E9AD80DBFC77F241A7E7 /* PropertyTestingKit.framework */; };
@@ -700,6 +702,7 @@
 		AD9C5BDAEC03365A14BAA43A /* module.modulemap */ = {isa = PBXFileReference; lastKnownFileType = "sourcecode.module-map"; path = module.modulemap; sourceTree = "<group>"; };
 		AE9C27E6B22875A059280BFC /* ScheduleCoverageTest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScheduleCoverageTest.swift; sourceTree = "<group>"; };
 		AF1E91685C6019AA1D8E23F9 /* Synchronized.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Synchronized.swift; sourceTree = "<group>"; };
+		B030A82E402C8D5202BEFE53 /* PathGrams.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PathGrams.swift; sourceTree = "<group>"; };
 		B37ED10677A92DC01DD0B289 /* SaturationPlateauDetectorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaturationPlateauDetectorTests.swift; sourceTree = "<group>"; };
 		B60A0F1AE1DD32B9E72168DE /* Array+Shrinkable.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Array+Shrinkable.swift"; sourceTree = "<group>"; };
 		B64D06718A05E1272E84861D /* MockDatabase.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockDatabase.swift; sourceTree = "<group>"; };
@@ -767,6 +770,7 @@
 		F46057CB7F84DA3671178057 /* EnvironmentClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EnvironmentClient.swift; sourceTree = "<group>"; };
 		F4BDE3BB5DB51115A5922433 /* EmailMutator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmailMutator.swift; sourceTree = "<group>"; };
 		F58C560D0D81EBCA41AC8282 /* TestCaseShrinkerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TestCaseShrinkerTests.swift; sourceTree = "<group>"; };
+		F5C14F22721E00A7EC03198B /* StrategyFeatureTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StrategyFeatureTests.swift; sourceTree = "<group>"; };
 		F5E409E9172BADE44207E55E /* PathTrieStrategyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PathTrieStrategyTests.swift; sourceTree = "<group>"; };
 		F5FAD6386630E58099EFA884 /* ck_pr.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ck_pr.h; sourceTree = "<group>"; };
 		F6A80CC19DCB4C4527B0777F /* ParallelTimingTest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ParallelTimingTest.swift; sourceTree = "<group>"; };
@@ -1460,6 +1464,7 @@
 			isa = PBXGroup;
 			children = (
 				24A467224B8821AF297298A6 /* EdgeHooks.swift */,
+				B030A82E402C8D5202BEFE53 /* PathGrams.swift */,
 				0949B41FDB1F7399BF85852B /* PathTrie.swift */,
 			);
 			name = EdgeHooks;
@@ -1572,6 +1577,7 @@
 				9475EBCF152B8D2EEACB5111 /* STADSPluginTests.swift */,
 				F9A2D6D2D787FF8BD1869F6F /* StopOnFirstFailurePluginTests.swift */,
 				E37B0F71C6AF3FAD60F074F7 /* StopWhenQueueEmptyPluginTests.swift */,
+				F5C14F22721E00A7EC03198B /* StrategyFeatureTests.swift */,
 				F58C560D0D81EBCA41AC8282 /* TestCaseShrinkerTests.swift */,
 				B6528B38B2BEED018604E6FC /* TrieEdgeHookTests.swift */,
 				AB742600C6E1AC2CE85EC9C4 /* WeightedPoolCoreTests.swift */,
@@ -2081,6 +2087,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				246F4DE4D1646F70F78D238C /* EdgeHooks.swift in Sources */,
+				0A0812CF494F9244089B781C /* PathGrams.swift in Sources */,
 				F052FC5AD62C0559D4631284 /* PathTrie.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -2160,6 +2167,7 @@
 				958ADDE946E9CD95EC9CB590 /* StopOnFirstFailurePluginTests.swift in Sources */,
 				61CE51368B8A8DB9F85766E9 /* StopWhenQueueEmptyPluginTests.swift in Sources */,
 				14760285E0FEBD7371B05919 /* StragglerCoverageInheritanceTests.swift in Sources */,
+				9E9C7B77CE1B7C4A4243536A /* StrategyFeatureTests.swift in Sources */,
 				9DADB5A1F40BF13558A2BD55 /* Synchronized.swift in Sources */,
 				721B918F0C92F521E1CD4FC3 /* TestCaseShrinkerTests.swift in Sources */,
 				C352BBDC8B2905DE42CD9BDA /* TestHelpers.swift in Sources */,

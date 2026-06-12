@@ -32,10 +32,26 @@ public struct PoolIterationOutcome: Sendable {
     public let source: PoolIterationSource
     /// Non-nil exactly when the coverage strategy accepted the input.
     public let newCoverage: SparseCoverage?
+    /// The strategy-defined culling vocabulary of the accepted run
+    /// (`.pathTrie`: path k-grams; `.hitCountBuckets`: (edge, bucket)
+    /// pairs). `nil` when the strategy publishes none — consumers fall back
+    /// to the covered edge indices via `resolvedFeatures`.
+    public let features: [UInt64]?
 
-    public init(source: PoolIterationSource, newCoverage: SparseCoverage?) {
+    public init(
+        source: PoolIterationSource,
+        newCoverage: SparseCoverage?,
+        features: [UInt64]? = nil
+    ) {
         self.source = source
         self.newCoverage = newCoverage
+        self.features = features
+    }
+
+    /// The one vocabulary every pool component accounts in: the strategy's
+    /// features when it defines them, the covered edge indices otherwise.
+    public var resolvedFeatures: [UInt64] {
+        features ?? newCoverage?.indices.map(UInt64.init) ?? []
     }
 }
 
@@ -47,8 +63,9 @@ public struct PoolIterationOutcome: Sendable {
 public enum PoolEvent {
     /// An input executed. Use `outcome.source` for lineage attribution.
     case iteration(PoolIterationOutcome)
-    /// An entry was admitted to the pool.
-    case inserted(id: Int, coverage: SparseCoverage)
+    /// An entry was admitted to the pool. `features` is the entry's resolved
+    /// culling vocabulary (strategy-defined, or widened edge indices).
+    case inserted(id: Int, coverage: SparseCoverage, features: [UInt64])
     /// An entry left the pool (its ID is never reused).
     case removed(id: Int)
     /// The owner is about to draw a new focus entry. The moment for lazy
@@ -92,17 +109,18 @@ public struct PoolAdmission: Sendable {
         let evict: [Int]
     }
 
-    /// Builds a fresh per-engine judge over the accepted input's coverage.
-    let makeJudge: @Sendable () -> (SparseCoverage) -> Verdict
+    /// Builds a fresh per-engine judge over the accepted input's resolved
+    /// features and its size metric (covered-edge count).
+    let makeJudge: @Sendable () -> (_ features: [UInt64], _ size: Int) -> Verdict
 
-    init(makeJudge: @escaping @Sendable () -> (SparseCoverage) -> Verdict) {
+    init(makeJudge: @escaping @Sendable () -> ([UInt64], Int) -> Verdict) {
         self.makeJudge = makeJudge
     }
 
     /// Every strategy-accepted input joins the pool, nothing ever leaves.
     /// The behavior of the classic corpus-mutation loop.
     public static let everyDiscovery = PoolAdmission(
-        makeJudge: { { _ in Verdict(admit: true, evict: []) } })
+        makeJudge: { { _, _ in Verdict(admit: true, evict: []) } })
 
     /// libFuzzer's corpus model: an input joins the pool only by *owning*
     /// coverage features — claiming unowned ones, or stealing from a larger
@@ -112,13 +130,14 @@ public struct PoolAdmission: Sendable {
     /// strategy says "interesting"; rejected accepts get no burst and no
     /// residence (strict semantics).
     ///
-    /// Features today are the covered edge indices; for an order-sensitive
-    /// strategy like `.pathTrie` this is deliberately coarser than its
-    /// acceptance criterion — that's the flood-control point.
+    /// Ownership is accounted in the strategy's own vocabulary when it
+    /// publishes one (`.pathTrie`: path k-grams; `.hitCountBuckets`:
+    /// (edge, bucket) pairs), and the covered edge indices otherwise — so
+    /// the pool retains exactly the diversity the strategy accepts for.
     public static let featureOwnership = PoolAdmission(makeJudge: {
         var ledger = FeatureOwnershipLedger()
-        return { coverage in
-            let verdict = ledger.judge(features: coverage.indices, size: coverage.count)
+        return { features, size in
+            let verdict = ledger.judge(features: features, size: size)
             return Verdict(admit: verdict.admit, evict: verdict.evict)
         }
     })

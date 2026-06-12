@@ -49,6 +49,10 @@ public final class PathTrie: @unchecked Sendable {
     /// Set when the current path created a node nothing had visited before —
     /// such a path is unique regardless of terminal marks.
     private var isNovel = false
+    /// The current iteration's ordered edge sequence — the trie holds the
+    /// SET of seen paths, this holds the one being walked (needed to emit
+    /// k-gram features; the trie alone can't be walked upward).
+    private var path: [UInt32] = []
 
     public init() {
         current = root
@@ -68,6 +72,24 @@ public final class PathTrie: @unchecked Sendable {
     public func markTerminalIfUnique() -> Bool {
         lock.lock()
         defer { lock.unlock() }
+        return judgeAndMark()
+    }
+
+    /// Judge-and-mark, additionally collecting the path's sliding k-gram
+    /// features (`PathGrams`) when the path is unique — `nil` otherwise.
+    ///
+    /// Collection lives in the same critical section as the judgement for the
+    /// same reason judge-and-mark do: a straggler `advance` between them
+    /// would append to the path and hash grams the judgement never saw.
+    public func markTerminalIfUnique(collectingGrams gramLength: Int) -> [UInt64]? {
+        lock.lock()
+        defer { lock.unlock() }
+        guard judgeAndMark() else { return nil }
+        return PathGrams.features(of: path, gramLength: gramLength)
+    }
+
+    /// Callers must hold `lock`.
+    private func judgeAndMark() -> Bool {
         guard isNovel || !current.isTerminal else { return false }
         current.isTerminal = true
         return true
@@ -79,6 +101,7 @@ public final class PathTrie: @unchecked Sendable {
     public func advance(_ edgeIndex: UInt32) {
         lock.lock()
         defer { lock.unlock() }
+        path.append(edgeIndex)
         if let child = current.children[edgeIndex] {
             current = child
         } else {
@@ -95,5 +118,6 @@ public final class PathTrie: @unchecked Sendable {
         defer { lock.unlock() }
         current = root
         isNovel = false
+        path.removeAll(keepingCapacity: true)
     }
 }

@@ -106,13 +106,13 @@ struct WeightedPoolCoreTests {
     @Test("Children hear inserted events and their remove actions kill the burst")
     func childRemoveOnInsert() {
         let child = ScriptedPolicy { event in
-            if case let .inserted(id, _) = event { return [.remove(id: id)] }
+            if case let .inserted(id, _, _) = event { return [.remove(id: id)] }
             return []
         }
         let core = makeCore(policies: [child], burstLength: 4)
 
         #expect(accept(core, edges: [1, 2]) == 0)
-        #expect(child.events.contains { if case .inserted(0, _) = $0 { return true }; return false })
+        #expect(child.events.contains { if case .inserted(0, _, _) = $0 { return true }; return false })
         // The child evicted the only entry (and the focus with it): no burst.
         #expect(core.next() == .generate)
     }
@@ -120,7 +120,7 @@ struct WeightedPoolCoreTests {
     @Test("Children hear removed notifications for other policies' evictions")
     func childHearsRemovals() {
         let remover = ScriptedPolicy { event in
-            if case .inserted(1, _) = event { return [.remove(id: 0)] }
+            if case .inserted(1, _, _) = event { return [.remove(id: 0)] }
             return []
         }
         let listener = ScriptedPolicy()
@@ -134,7 +134,7 @@ struct WeightedPoolCoreTests {
     @Test("Zero-weighted entries are never drawn")
     func zeroWeightNeverDrawn() {
         let child = ScriptedPolicy { event in
-            if case .inserted(0, _) = event { return [.setWeight(id: 0, 0.0)] }
+            if case .inserted(0, _, _) = event { return [.setWeight(id: 0, 0.0)] }
             return []
         }
         // burstLength 1 + no focus-on-insert: every cycle is draw → mutate → fresh,

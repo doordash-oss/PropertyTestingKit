@@ -279,13 +279,14 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
                     // the run's coverage when the input was interesting (the sparse
                     // snapshot it already took for the decision — no re-snapshot
                     // here), nil otherwise.
-                    let iterationCoverage = coverageEvaluator.evaluate(
+                    let acceptance = coverageEvaluator.evaluate(
                         input,
                         currentScheduleBytes,
                         coverageContext,
                         coverageCountersClient,
                         corpus
                     )
+                    let iterationCoverage = acceptance?.sparse
 
                     // Tell the scheduler what happened. On admission it hands
                     // back the new entry's ID; the typed input is stored here
@@ -294,7 +295,11 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
                         poolParentID.map { .pool(parent: $0) }
                         ?? (fromMutationQueue ? .queue : .generated)
                     if schedulerCore.observe(
-                        PoolIterationOutcome(source: poolSource, newCoverage: iterationCoverage)
+                        PoolIterationOutcome(
+                            source: poolSource,
+                            newCoverage: iterationCoverage,
+                            features: acceptance?.features ?? nil
+                        )
                     ) != nil {
                         poolEntries.append(input)
                     }

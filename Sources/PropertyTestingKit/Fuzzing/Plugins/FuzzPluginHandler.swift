@@ -614,8 +614,8 @@ struct EntropicRarityTerms {
 /// keep eliciting rare features hold energy, while the abundance term decays
 /// seeds that execute without yielding.
 func entropicYieldRarityTerms(
-    yield: [UInt32: Int],
-    globalFreqs: [UInt32: Int],
+    yield: [UInt64: Int],
+    globalFreqs: [UInt64: Int],
     rareFeatureThreshold: Int
 ) -> EntropicRarityTerms {
     var energy = 0.0
@@ -635,8 +635,8 @@ func entropicYieldRarityTerms(
 /// Compute an entry's rarity terms from the current global frequencies.
 /// Called at acceptance time (frequencies only change then), not per drain.
 func entropicRarityTerms(
-    features: [UInt32],
-    globalFreqs: [UInt32: Int],
+    features: [UInt64],
+    globalFreqs: [UInt64: Int],
     rareFeatureThreshold: Int
 ) -> EntropicRarityTerms {
     var energy = 0.0
@@ -694,9 +694,9 @@ func entropicWeightCombining(
 /// the plugin's hot path uses the split form, and the equivalence test holds
 /// the two together.
 func entropicWeight(
-    features: [UInt32],
+    features: [UInt64],
     mutations: Int,
-    globalFreqs: [UInt32: Int],
+    globalFreqs: [UInt64: Int],
     totalRareFeatures: Int,
     totalMutations: Int,
     corpusSize: Int,

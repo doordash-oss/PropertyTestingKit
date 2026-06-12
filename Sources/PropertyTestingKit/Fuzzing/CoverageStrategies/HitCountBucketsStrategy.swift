@@ -63,6 +63,10 @@ private func makeHitCountBucketsEngine() -> CoverageEngine {
         var hitCounts: [UInt32: UInt32] = [:]
         /// Engine-lifetime per-edge bitmask of observed buckets.
         var seenBuckets: [UInt32: UInt8] = [:]
+        /// The last accepted run's (edge, bucket) features — the strategy's
+        /// culling vocabulary, stashed at decide time because the counts it
+        /// derives from are cleared before decide returns.
+        var lastFeatures: [UInt64] = []
     }
     let state = SyncBox<BucketState>(BucketState())
 
@@ -72,18 +76,26 @@ private func makeHitCountBucketsEngine() -> CoverageEngine {
         },
         onReset: {
             state.update { $0.hitCounts.removeAll(keepingCapacity: true) }
-        }
+        },
+        features: { state.value.lastFeatures }
     ) { _ in
         state.update { state in
             defer { state.hitCounts.removeAll(keepingCapacity: true) }
             var foundNewBucket = false
+            // Every (edge, bucket) the run witnessed — not just the new ones;
+            // ownership accounting decides novelty, the vocabulary just
+            // describes the run.
+            var features: [UInt64] = []
+            features.reserveCapacity(state.hitCounts.count)
             for (edge, count) in state.hitCounts {
                 let bucket = bucketBit(forHitCount: count)
+                features.append(UInt64(edge) << 8 | UInt64(bucket))
                 if state.seenBuckets[edge, default: 0] & bucket == 0 {
                     state.seenBuckets[edge, default: 0] |= bucket
                     foundNewBucket = true
                 }
             }
+            if foundNewBucket { state.lastFeatures = features }
             return foundNewBucket
         }
     }

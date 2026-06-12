@@ -160,13 +160,13 @@ struct CoverageEngineTests {
         let strategy = CoverageStrategy { _ in true }
         let evaluator: CoverageEvaluator<Int> = strategy.makeEvaluator()
 
-        let sparse = evaluator.evaluate(7, [9, 9], context, coverageClient, corpus)
+        let acceptance = evaluator.evaluate(7, [9, 9], context, coverageClient, corpus)
 
-        #expect(sparse != nil, "An always-true decision is interesting")
+        #expect(acceptance != nil, "An always-true decision is interesting")
         #expect(corpus.count == 1, "The engine records the interesting input")
         #expect(corpus.entries.first?.scheduleBytes == [9, 9],
                 "Schedule bytes ride with the entry as a storage concern")
-        #expect(corpus.entries.first?.sparseCoverage == sparse,
+        #expect(corpus.entries.first?.sparseCoverage == acceptance?.sparse,
                 "The entry carries the run's judged coverage")
     }
 
@@ -242,11 +242,11 @@ struct CoverageEngineTests {
 
         let strategy = CoverageStrategy { coverage in !coverage.indices.isEmpty }
         let evaluator: CoverageEvaluator<Int> = strategy.makeEvaluator()
-        let sparse = evaluator.evaluate(1, nil, context, client, corpus)
+        let acceptance = evaluator.evaluate(1, nil, context, client, corpus)
 
         #expect(snapshots.value == 1,
                 "the decision's snapshot is reused for the corpus add")
-        #expect(corpus.entries.first?.sparseCoverage == sparse,
+        #expect(corpus.entries.first?.sparseCoverage == acceptance?.sparse,
                 "the entry carries the judged coverage")
     }
 

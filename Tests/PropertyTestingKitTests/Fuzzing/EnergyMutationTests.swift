@@ -116,9 +116,9 @@ struct EnergyMutationTests {
         var rng = FastRNG()
         for _ in 0..<500 {
             let featureCount = Int.random(in: 0...6, using: &rng)
-            let features = (0..<featureCount).map { _ in UInt32.random(in: 0...9, using: &rng) }
-            var freqs: [UInt32: Int] = [:]
-            for f in 0...9 { freqs[UInt32(f)] = Int.random(in: 1...6, using: &rng) }
+            let features = (0..<featureCount).map { _ in UInt64.random(in: 0...9, using: &rng) }
+            var freqs: [UInt64: Int] = [:]
+            for f in 0...9 { freqs[UInt64(f)] = Int.random(in: 1...6, using: &rng) }
             let totalRare = freqs.values.filter { $0 <= 3 }.count
             let mutations = Int.random(in: 0...100, using: &rng)
             let totalMutations = Int.random(in: 0...200, using: &rng)

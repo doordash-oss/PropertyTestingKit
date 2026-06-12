@@ -21,7 +21,18 @@ import EdgeHooks
 extension CoverageStrategy {
     /// Path trie strategy: ordered-path tracking (A→B→C differs from A→C→B). The default.
     public static var pathTrie: CoverageStrategy {
-        CoverageStrategy(makeEngine: { makePathTrieEngine() })
+        pathTrie(gramLength: 2)
+    }
+
+    /// Path trie strategy with an explicit culling-vocabulary gram length.
+    ///
+    /// The ACCEPTANCE criterion is unchanged (path uniqueness); `gramLength`
+    /// only sets the granularity of the features the mutation pool culls on —
+    /// sliding windows of `gramLength` consecutive path edges. Small k keeps
+    /// the vocabulary small and culling aggressive; large k approaches
+    /// one-feature-per-path, where nothing ever contests ownership.
+    public static func pathTrie(gramLength: Int) -> CoverageStrategy {
+        CoverageStrategy(makeEngine: { makePathTrieEngine(gramLength: gramLength) })
     }
 }
 
@@ -33,22 +44,36 @@ extension CoverageStrategy {
 /// chooses loop immunity (`makeTrieHooks` gates advancement to an edge's first
 /// hit per iteration) so loop counts don't lengthen paths. Each parallel
 /// engine builds its own trie, so cursors never interleave.
-private func makePathTrieEngine() -> CoverageEngine {
+///
+/// Its culling vocabulary is the accepted path's sliding k-grams: the path is
+/// the acceptance criterion, so path FRAGMENTS — not the unordered edge set —
+/// are what ownership should be accounted over.
+private func makePathTrieEngine(gramLength: Int) -> CoverageEngine {
     let trie = PathTrie()
     let hooks = makeTrieHooks(trie)
+    // Grams are collected inside decide's critical section (the trie resets
+    // before decide returns); the stash carries them to the engine's
+    // `features` call.
+    let lastGrams = SyncBox<[UInt64]>([])
 
     return CoverageEngine(
         onEdge: hooks.onEdge,
-        onReset: hooks.onReset
+        onReset: hooks.onReset,
+        features: { lastGrams.value }
     ) { _ in
         defer {
             trie.reset()
         }
 
-        // One critical section for judge-and-mark: a straggler advance
-        // between a separate check and mark would move the cursor and put
-        // the terminal mark on the wrong node.
-        return trie.markTerminalIfUnique()
+        // One critical section for judge-and-mark-and-collect: a straggler
+        // advance between a separate check and mark would move the cursor,
+        // putting the terminal mark on the wrong node and hashing grams the
+        // judgement never saw.
+        guard let grams = trie.markTerminalIfUnique(collectingGrams: gramLength) else {
+            return false
+        }
+        lastGrams.value = grams
+        return true
     }
 }
 
