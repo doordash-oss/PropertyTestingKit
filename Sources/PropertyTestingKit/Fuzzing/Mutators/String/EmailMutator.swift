@@ -27,7 +27,7 @@ private let _emailSeeds: [String] = [
     "user@[127.0.0.1]",
 ]
 
-private func _emailMutate(_ value: String) -> [String] {
+private func _emailMutate(_ value: String, _ rng: inout FastRNG) -> String {
     var results: [String] = []
     results.append(value.replacingOccurrences(of: "@", with: "@@"))
     results.append(value.replacingOccurrences(of: ".", with: ".."))
@@ -37,7 +37,8 @@ private func _emailMutate(_ value: String) -> [String] {
         results.append(String(value[..<atIndex]))
         results.append(String(value[value.index(after: atIndex)...]))
     }
-    return results
+    guard !results.isEmpty else { return value }
+    return results[Int.random(in: 0..<results.count, using: &rng)]
 }
 
 private func _emailGenerate(_ rng: inout FastRNG) -> String {

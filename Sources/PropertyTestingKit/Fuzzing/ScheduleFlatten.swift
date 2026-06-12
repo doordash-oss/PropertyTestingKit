@@ -28,7 +28,7 @@ import Foundation
 func makeScheduleByteMutator(using seedRng: inout FastRNG) -> Mutator<[UInt8]> {
     Mutator<[UInt8]>(
         seeds: [ScheduleByteMutator.generate(using: &seedRng)],
-        mutate: { ScheduleByteMutator.mutate($0) },
+        mutate: { bytes, rng in ScheduleByteMutator.mutate(bytes, using: &rng) },
         generate: { rng in ScheduleByteMutator.generate(using: &rng) }
     )
 }

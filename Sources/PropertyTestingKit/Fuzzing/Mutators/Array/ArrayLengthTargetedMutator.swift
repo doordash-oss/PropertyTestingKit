@@ -28,7 +28,7 @@ public func arrayLengthTargetedMutator<Element: MutatorProviding & Sendable>() -
 
     return Mutator<[Element]>(
         seeds: seeds,
-        mutate: { value in
+        mutate: { value, rng in
             var results: [[Element]] = []
             let targetLengths = [4, 8, 10, 16, 32]
 
@@ -51,7 +51,8 @@ public func arrayLengthTargetedMutator<Element: MutatorProviding & Sendable>() -
                 results.append(Array(value.prefix(targetLength)))
             }
 
-            return results
+            guard !results.isEmpty else { return value }
+            return results[Int.random(in: 0..<results.count, using: &rng)]
         },
         generate: { rng in
             // Generate arrays at target lengths
