@@ -20,8 +20,15 @@ import EdgeHooks
 
 extension CoverageStrategy {
     /// Path trie strategy: ordered-path tracking (A→B→C differs from A→C→B). The default.
+    ///
+    /// Publishes no culling vocabulary: the pool culls on covered edges.
+    /// Measured (fsub+stlc, 10 trials/task): k-gram vocabularies never beat
+    /// edge culling — the finer vocabulary raises the pool's population
+    /// ceiling and the resulting term-size drift costs more than the extra
+    /// retained diversity earns. `pathTrie(gramLength:)` stays as the
+    /// opt-in.
     public static var pathTrie: CoverageStrategy {
-        pathTrie(gramLength: 2)
+        pathTrie(gramLength: nil)
     }
 
     /// Path trie strategy with an explicit culling-vocabulary gram length.
@@ -31,8 +38,11 @@ extension CoverageStrategy {
     /// sliding windows of `gramLength` consecutive path edges. Small k keeps
     /// the vocabulary small and culling aggressive; large k approaches
     /// one-feature-per-path, where nothing ever contests ownership. `nil`
-    /// publishes no vocabulary at all: the pool falls back to the covered
-    /// edge indices (the coarsest, most flood-controlling setting).
+    /// (the `.pathTrie` default) publishes no vocabulary at all: the pool
+    /// falls back to the covered edge indices (the coarsest, most
+    /// flood-controlling setting — and the only one measured to win).
+    /// Consider pairing a gram length with `capacity:` on the scheduler:
+    /// vocabulary size is otherwise the pool's population ceiling.
     public static func pathTrie(gramLength: Int?) -> CoverageStrategy {
         CoverageStrategy(makeEngine: { makePathTrieEngine(gramLength: gramLength) })
     }

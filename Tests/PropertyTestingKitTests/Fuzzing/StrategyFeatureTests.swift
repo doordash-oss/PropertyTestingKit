@@ -103,9 +103,9 @@ struct StrategyFeatureTests {
         )
     }
 
-    @Test("The pathTrie engine publishes k-gram features for the accepted run")
+    @Test("Opting in to a gram length publishes k-gram features")
     func pathTrieEngineEmitsGrams() {
-        let engine = CoverageStrategy.pathTrie.makeEngine()
+        let engine = CoverageStrategy.pathTrie(gramLength: 2).makeEngine()
         engine.onEdge?(1, true)
         engine.onEdge?(2, true)
         engine.onEdge?(1, false)  // loop re-execution: not part of the path
@@ -133,8 +133,13 @@ struct StrategyFeatureTests {
         #expect(CoverageStrategy.signatureMatch.makeEngine().features == nil)
     }
 
-    @Test("A nil gram length opts pathTrie out of publishing a vocabulary")
-    func pathTrieNilGramLengthHasNoVocabulary() {
+    @Test("pathTrie publishes no vocabulary by default (edge culling)")
+    func pathTrieDefaultHasNoVocabulary() {
+        // Measured (fsub+stlc, 10 trials/task): gram vocabularies never beat
+        // edge culling — fsub kgram+cap64 90.0%/2 never-solved vs edges
+        // 91.7%/0; stlc kgram 84.5% vs edges 84.0%. Grams stay opt-in.
+        #expect(CoverageStrategy.pathTrie.makeEngine().features == nil)
+
         let engine = CoverageStrategy.pathTrie(gramLength: nil).makeEngine()
         #expect(engine.features == nil)
 
@@ -146,20 +151,19 @@ struct StrategyFeatureTests {
         #expect(!engine.decide(stubView()))
     }
 
-    @Test("The hitCountBuckets engine publishes (edge, bucket) features")
-    func hitCountBucketsEngineEmitsEdgeBucketPairs() {
+    @Test("hitCountBuckets publishes no vocabulary (its features were its acceptance criterion)")
+    func hitCountBucketsHasNoVocabulary() {
+        // The tautology rule: hcb accepts iff some (edge, bucket) is new, so
+        // an (edge, bucket) vocabulary makes every accept own a fresh
+        // feature and silently disables culling (measured: fsub hcb under
+        // pair features regressed to its unculled solve rate, 71.3% vs
+        // 86.1% edge-culled). Edge fallback IS the working configuration.
         let engine = CoverageStrategy.hitCountBuckets.makeEngine()
-        engine.onEdge?(5, true)               // edge 5 × 1 → bucket bit 1<<0
-        for hit in 0..<4 {                    // edge 9 × 4 → bucket bit 1<<3
-            engine.onEdge?(9, hit == 0)
-        }
+        #expect(engine.features == nil)
 
+        // Acceptance is unaffected: new buckets still judge interesting.
+        engine.onEdge?(5, true)
         #expect(engine.decide(stubView()))
-        let features = engine.features?() ?? []
-        #expect(Set(features) == Set([
-            UInt64(5) << 8 | 0b0000_0001,
-            UInt64(9) << 8 | 0b0000_1000,
-        ]))
     }
 
     // MARK: - Pool plumbing
