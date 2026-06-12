@@ -728,7 +728,7 @@ private func fileIDFromPath(_ path: String) -> String {
 /// Returns `pow(2, energy)` — always positive, so entries with higher energy
 /// get proportionally more mutations. Returns 1.0 (uniform) when no rare
 /// features have been recorded yet.
-private func entropicWeight(
+func entropicWeight(
     features: [UInt32],
     mutations: Int,
     globalFreqs: [UInt32: Int],
@@ -774,7 +774,7 @@ private func entropicWeight(
 }
 
 /// Weighted-random index selection. Falls back to uniform random if all weights are zero.
-private func weightedRandomIndex(weights: [Double], using rng: inout some RandomNumberGenerator) -> Int {
+func weightedRandomIndex(weights: [Double], using rng: inout some RandomNumberGenerator) -> Int {
     let total = weights.reduce(0.0, +)
     guard total > 0 else {
         return Int.random(in: 0..<weights.count, using: &rng)
