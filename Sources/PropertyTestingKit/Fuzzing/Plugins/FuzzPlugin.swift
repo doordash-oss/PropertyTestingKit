@@ -46,11 +46,16 @@ public enum SyncPluginEvent<each T: Sendable>: Sendable {
         /// nothing new. A non-nil value *is* the "discovered new coverage" signal.
         public let newCoverage: SparseCoverage?
         /// The `originID` of the `selectForMutation` action this input was
-        /// mutated from, or `nil` for generated inputs and seeds. Opaque to
-        /// the engine — it round-trips whatever the emitting plugin chose, so
-        /// schedulers can attribute executions and discoveries to the seed
-        /// that spawned them.
+        /// mutated from, or `nil` for generated inputs, seeds, and
+        /// pool-scheduled mutants. Opaque to the engine — it round-trips
+        /// whatever the emitting plugin chose, so bus plugins can attribute
+        /// executions and discoveries to the seed that spawned them.
         public let parentID: Int?
+        /// The mutation pool entry this input was mutated from, or `nil` for
+        /// everything not directed by the engine's scheduler. A separate
+        /// namespace from `parentID` on purpose: pool entry IDs belong to the
+        /// scheduler, `originID`s belong to the emitting bus plugin.
+        public let poolParentID: Int?
 
         public init(
             input: consuming (repeat each T),
@@ -58,7 +63,8 @@ public enum SyncPluginEvent<each T: Sendable>: Sendable {
             fromMutationQueue: Bool = false,
             queueCount: Int = 0,
             newCoverage: SparseCoverage? = nil,
-            parentID: Int? = nil
+            parentID: Int? = nil,
+            poolParentID: Int? = nil
         ) {
             self.input = input
             self.scheduleBytes = scheduleBytes
@@ -66,6 +72,7 @@ public enum SyncPluginEvent<each T: Sendable>: Sendable {
             self.queueCount = queueCount
             self.newCoverage = newCoverage
             self.parentID = parentID
+            self.poolParentID = poolParentID
         }
     }
 }

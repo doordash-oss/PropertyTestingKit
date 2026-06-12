@@ -12,10 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//  Characterization tests for the energy-based mutation scheduler
-//  (`FuzzPlugin.energyMutation`): the entropic weight math pinned against
-//  hand-computed vectors, the over-fuzzing guard, and the plugin's
-//  accept-burst / drain-selection behavior.
+//  Characterization tests for the Entropic energy scoring math: weights
+//  pinned against hand-computed vectors, the over-fuzzing guard, and the
+//  yield-rarity (lineage-attributed) terms. The pool scheduler's entropic
+//  weight advisor consumes exactly this math.
 //
 
 import Testing
@@ -142,86 +142,12 @@ struct EnergyMutationTests {
         }
     }
 
-    // MARK: - Plugin behavior
-
-    private func iteration(
-        _ input: Int, fromQueue: Bool, queueCount: Int = 0, coverage: [UInt32]? = nil,
-        parentID: Int? = nil
-    ) -> SyncPluginEvent<Int> {
-        .iteration(SyncPluginEvent<Int>.IterationContext(
-            input: input,
-            fromMutationQueue: fromQueue,
-            queueCount: queueCount,
-            newCoverage: coverage.map { SparseCoverage(indices: $0) },
-            parentID: parentID
-        ))
-    }
-
-    @Test("New coverage triggers an immediate mutation burst of that input")
-    func acceptBurst() {
-        let plugin: FuzzPlugin<Int> = .energyMutation()
-        let actions = plugin.handleSync(iteration(42, fromQueue: false, coverage: [1, 2]))
-        #expect(actions.count == 1)
-        guard case let .selectForMutation(sel) = actions.first else {
-            Issue.record("expected selectForMutation, got \(actions)")
-            return
-        }
-        #expect(sel.input == 42)
-    }
-
-    @Test("Drain with an empty corpus schedules nothing")
-    func drainWithoutEntries() {
-        let plugin: FuzzPlugin<Int> = .energyMutation()
-        let actions = plugin.handleSync(iteration(1, fromQueue: false))
-        #expect(actions.isEmpty)
-    }
-
-    @Test("Queue-sourced iterations without new coverage schedule nothing")
-    func midQueueNoAction() {
-        let plugin: FuzzPlugin<Int> = .energyMutation()
-        _ = plugin.handleSync(iteration(42, fromQueue: false, coverage: [1]))
-        let actions = plugin.handleSync(iteration(43, fromQueue: true, queueCount: 5))
-        #expect(actions.isEmpty)
-    }
-
-    // MARK: - Discovery-attributed semantics (lineage-based Entropic)
-
-    @Test("Accept burst tags the new entry's index as originID")
-    func acceptBurstCarriesOriginID() {
-        let plugin: FuzzPlugin<Int> = .energyMutation()
-        let first = plugin.handleSync(iteration(1, fromQueue: false, coverage: [10]))
-        guard case let .selectForMutation(s0) = first.first else {
-            Issue.record("expected selectForMutation"); return
-        }
-        #expect(s0.originID == 0, "first entry is index 0")
-        let second = plugin.handleSync(iteration(2, fromQueue: false, coverage: [20]))
-        guard case let .selectForMutation(s1) = second.first else {
-            Issue.record("expected selectForMutation"); return
-        }
-        #expect(s1.originID == 1, "second entry is index 1")
-    }
-
-    @Test("A seed worn down by unproductive mutant executions loses energy")
-    func unproductiveExecutionsDecayParent() {
-        let plugin: FuzzPlugin<Int> = .energyMutation()
-        _ = plugin.handleSync(iteration(1, fromQueue: false, coverage: [10]))   // A = entry 0
-        // 50 mutants of A execute and discover nothing.
-        for _ in 0..<50 {
-            _ = plugin.handleSync(iteration(99, fromQueue: true, queueCount: 1, parentID: 0))
-        }
-        _ = plugin.handleSync(iteration(2, fromQueue: false, coverage: [20]))   // B = entry 1, fresh
-        // Expected weights: worn A ~ 1.1383, fresh B ~ 2.1415 -> P(B) ~ 0.65.
-        var picks: [Int: Int] = [:]
-        for _ in 0..<300 {
-            let actions = plugin.handleSync(iteration(99, fromQueue: false))
-            guard case let .selectForMutation(sel) = actions.first else {
-                Issue.record("drain must schedule"); return
-            }
-            picks[sel.input, default: 0] += 1
-        }
-        #expect(picks[2, default: 0] > picks[1, default: 0],
-                "fresh B must out-draw A after A's 50 fruitless mutant executions")
-    }
+    // MARK: - Yield rarity (lineage-attributed Entropic)
+    //
+    // The `energyMutation` bus plugin these formulas once drove is gone —
+    // mutation scheduling is the pool scheduler's job, and its entropic
+    // weight advisor (a PoolPlugin) will consume the same math. Behavioral
+    // semantics (parent decay, weighted rotation) get re-pinned there.
 
     @Test("Yield rarity terms: counted observations, non-rare filtered")
     func yieldRarityTerms() {
@@ -250,24 +176,5 @@ struct EnergyMutationTests {
         #expect(abs(single - 1.4499076873304126) < 1e-9)
         #expect(repeated > single,
                 "a seed whose mutants keep eliciting a rare feature carries more information")
-    }
-
-    @Test("Weighted-random drain selection reaches every entry")
-    func drainSelectsAndRotates() {
-        let plugin: FuzzPlugin<Int> = .energyMutation()
-        _ = plugin.handleSync(iteration(1, fromQueue: false, coverage: [10]))
-        _ = plugin.handleSync(iteration(2, fromQueue: false, coverage: [20]))
-
-        var selected = Set<Int>()
-        for _ in 0..<300 {
-            let actions = plugin.handleSync(iteration(99, fromQueue: false))
-            guard case let .selectForMutation(sel) = actions.first else {
-                Issue.record("drain with entries must schedule a mutation")
-                return
-            }
-            selected.insert(sel.input)
-        }
-        #expect(selected == [1, 2],
-                "weighted-random selection must reach every entry")
     }
 }

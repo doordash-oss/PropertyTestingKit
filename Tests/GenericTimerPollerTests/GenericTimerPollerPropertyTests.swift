@@ -704,7 +704,7 @@ struct GenericTimerPollerPropertyTests {
                 duration: .seconds(60),
                 persistence: .ephemeral,
                 scheduleFuzzing: true,
-                plugins: { [.corpusMutation(), .stadsDetector()] }
+                plugins: { [.stadsDetector()] }
             ) { (input: PollerFuzzInput) in
                 let poller = GenericTimerPoller(defaultInterval: .microseconds(1))
 

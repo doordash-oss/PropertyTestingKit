@@ -64,6 +64,13 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
     /// The coverage evaluator that determines interestingness.
     private let coverageEvaluator: CoverageEvaluator<repeat each Input>
 
+    /// This engine's mutation pool owner: consulted for what to run when the
+    /// residual queue is empty, told about every iteration's outcome.
+    private let schedulerCore: WeightedPoolCore
+    /// Typed inputs for pool entries, index == pool entry ID. Append-only —
+    /// eviction is the scheduler's concern (live set), not storage's.
+    private var poolEntries: [(repeat each Input)] = []
+
     // Simple loop state (replaces WorkerPool)
     private var pendingInputs: SimpleRingBuffer<(repeat each Input)>
     /// Lineage tags in lockstep with `pendingInputs`: the `originID` of the
@@ -82,6 +89,7 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
         inputSize: Int,
         corpus: Corpus<repeat each Input>,
         coverageEvaluator: CoverageEvaluator<repeat each Input>,
+        schedulerCore: WeightedPoolCore,
         processSyncPlugins: @escaping SyncPluginProcessorFn,
         processAsyncPlugins: @escaping AsyncPluginProcessorFn,
         config: FuzzEngineConfig,
@@ -97,6 +105,7 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
         self.mutators = mutators
         self.inputSize = inputSize
         self.coverageEvaluator = coverageEvaluator
+        self.schedulerCore = schedulerCore
         self.processSyncPlugins = processSyncPlugins
         self.processAsyncPlugins = processAsyncPlugins
         self.config = config
@@ -193,16 +202,20 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
                         }
                     }
 
-                    // Get input: from pending queue or generate random.
+                    // Get input: the residual queue (seeds, queueInputs, bus
+                    // bursts) has priority; otherwise the scheduler directs —
+                    // mutate a pool entry or generate fresh.
                     // Schedule bytes (when scheduling) are element 0 of the input
                     // pack, generated/mutated by the prepended schedule mutator like
                     // any other element, and read back via `scheduleBytesExtractor`.
                     let input: (repeat each Input)
                     let fromMutationQueue: Bool
                     let parentID: Int?
+                    let poolParentID: Int?
                     if !pendingInputs.isEmpty {
                         input = pendingInputs.removeFirstUnchecked()
                         parentID = pendingParents.removeFirstUnchecked()
+                        poolParentID = nil
                         fromMutationQueue = true
                         if seedsRunCount < seeds.count {
                             seedsRunCount += 1
@@ -210,11 +223,21 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
                             mutantsRunCount += 1
                         }
                     } else {
-                        // Generate directly - no closure indirection
-                        input = (repeat (each mutators).generate(&rng))
-                        generatedCount += 1
-                        fromMutationQueue = false
-                        parentID = nil
+                        switch schedulerCore.next() {
+                        case .generate:
+                            // Generate directly - no closure indirection
+                            input = (repeat (each mutators).generate(&rng))
+                            generatedCount += 1
+                            fromMutationQueue = false
+                            parentID = nil
+                            poolParentID = nil
+                        case .mutate(let id):
+                            input = generateMutation(poolEntries[id])
+                            mutantsRunCount += 1
+                            fromMutationQueue = true
+                            parentID = nil
+                            poolParentID = id
+                        }
                     }
                     let currentScheduleBytes: [UInt8]? = scheduleBytesExtractor(input)
 
@@ -264,6 +287,18 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
                         corpus
                     )
 
+                    // Tell the scheduler what happened. On admission it hands
+                    // back the new entry's ID; the typed input is stored here
+                    // at that index (IDs are sequential, so they stay aligned).
+                    let poolSource: PoolIterationSource =
+                        poolParentID.map { .pool(parent: $0) }
+                        ?? (fromMutationQueue ? .queue : .generated)
+                    if schedulerCore.observe(
+                        PoolIterationOutcome(source: poolSource, newCoverage: iterationCoverage)
+                    ) != nil {
+                        poolEntries.append(input)
+                    }
+
                     // Process iteration event before failure event
                     var events = [
                         PluginEvent.sync(
@@ -274,7 +309,8 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
                                     fromMutationQueue: fromMutationQueue,
                                     queueCount: queueCount,
                                     newCoverage: iterationCoverage,
-                                    parentID: parentID
+                                    parentID: parentID,
+                                    poolParentID: poolParentID
                                 )
                             ))
                     ]
