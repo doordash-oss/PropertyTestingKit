@@ -20,12 +20,14 @@ private let _httpStatusCodeSeeds: [Int] = [
     502, 503, 504, 0, -1, 999, 1000,
 ]
 
-private func _httpStatusCodeMutate(_ value: Int) -> [Int] {
+private func _httpStatusCodeMutate(_ value: Int, _ rng: inout FastRNG) -> Int {
     var results: [Int] = []
     results.append(value + 100)
     results.append(value - 100)
     results.append(value % 600)
-    return results.filter { $0 >= 0 }
+    results = results.filter { $0 >= 0 }
+    guard !results.isEmpty else { return value }
+    return results[Int.random(in: 0..<results.count, using: &rng)]
 }
 
 private func _httpStatusCodeGenerate(_ rng: inout FastRNG) -> Int {

@@ -70,6 +70,10 @@ final class FuzzEngine<each Input: Codable & Sendable>: @unchecked Sendable {
     /// engine gets its own per-engine state (e.g. a distinct trie/index).
     private let coverageStrategy: CoverageStrategy
 
+    /// The mutation scheduler. Its pool core is built fresh in `run()` so each
+    /// parallel engine gets its own pool, policies, and draw state.
+    private let scheduler: MutationScheduler
+
     /// Initialize with mutators.
     ///
     /// - Parameters:
@@ -96,12 +100,14 @@ final class FuzzEngine<each Input: Codable & Sendable>: @unchecked Sendable {
         mutators: repeat Mutator<each Input>,
         config: FuzzEngineConfig,
         coverageStrategy: CoverageStrategy,
+        scheduler: MutationScheduler,
         scheduleBytesExtractor: @escaping @Sendable ((repeat each Input)) -> [UInt8]?
     ) {
         self.config = config
         self.mutators = (repeat each mutators)
         self.inputSize = Self.inputCount(for: repeat (each Input).self)
         self.coverageStrategy = coverageStrategy
+        self.scheduler = scheduler
         self.scheduleBytesExtractor = scheduleBytesExtractor
     }
 
@@ -110,12 +116,14 @@ final class FuzzEngine<each Input: Codable & Sendable>: @unchecked Sendable {
     convenience init(
         mutators: repeat Mutator<each Input>,
         config: FuzzEngineConfig = FuzzEngineConfig(),
-        coverageStrategy: CoverageStrategy = .pathTrie
+        coverageStrategy: CoverageStrategy = .pathTrie,
+        scheduler: MutationScheduler = .weightedPool()
     ) {
         self.init(
             mutators: repeat each mutators,
             config: config,
             coverageStrategy: coverageStrategy,
+            scheduler: scheduler,
             scheduleBytesExtractor: { _ in nil }
         )
     }
@@ -196,6 +204,7 @@ final class FuzzEngine<each Input: Codable & Sendable>: @unchecked Sendable {
             inputSize: inputSize,
             corpus: corpus,
             coverageEvaluator: coverageEvaluator,
+            schedulerCore: scheduler.makeCore(),
             processSyncPlugins: processSyncPlugins,
             processAsyncPlugins: processAsyncPlugins,
             config: config,

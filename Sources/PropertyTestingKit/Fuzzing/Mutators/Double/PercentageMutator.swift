@@ -16,13 +16,14 @@ import Dependencies
 
 private let _percentageSeeds: [Double] = [0.0, 0.5, 1.0, -0.1, 1.1, 0.01, 0.99, 0.001, 0.999]
 
-private func _percentageMutate(_ value: Double) -> [Double] {
+private func _percentageMutate(_ value: Double, _ rng: inout FastRNG) -> Double {
     var results: [Double] = []
     results.append(min(1.0, value + 0.1))
     results.append(max(0.0, value - 0.1))
     results.append(1.0 - value)
     results.append(value * 0.5)
-    return results
+    guard !results.isEmpty else { return value }
+    return results[Int.random(in: 0..<results.count, using: &rng)]
 }
 
 private func _percentageGenerate(_ rng: inout FastRNG) -> Double {

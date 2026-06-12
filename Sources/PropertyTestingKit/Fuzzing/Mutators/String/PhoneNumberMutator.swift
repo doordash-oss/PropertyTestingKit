@@ -26,7 +26,7 @@ private let _phoneNumberSeeds: [String] = [
     "+0000000000000",
 ]
 
-private func _phoneNumberMutate(_ value: String) -> [String] {
+private func _phoneNumberMutate(_ value: String, _ rng: inout FastRNG) -> String {
     var results: [String] = []
     // Add/remove formatting
     results.append(value.filter(\.isNumber))
@@ -38,7 +38,8 @@ private func _phoneNumberMutate(_ value: String) -> [String] {
         results.append(String(value.dropLast()))
     }
     results.append(value + value)
-    return results
+    guard !results.isEmpty else { return value }
+    return results[Int.random(in: 0..<results.count, using: &rng)]
 }
 
 private func _phoneNumberGenerate(_ rng: inout FastRNG) -> String {
