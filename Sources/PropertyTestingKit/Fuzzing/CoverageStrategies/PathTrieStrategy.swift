@@ -30,8 +30,10 @@ extension CoverageStrategy {
     /// only sets the granularity of the features the mutation pool culls on —
     /// sliding windows of `gramLength` consecutive path edges. Small k keeps
     /// the vocabulary small and culling aggressive; large k approaches
-    /// one-feature-per-path, where nothing ever contests ownership.
-    public static func pathTrie(gramLength: Int) -> CoverageStrategy {
+    /// one-feature-per-path, where nothing ever contests ownership. `nil`
+    /// publishes no vocabulary at all: the pool falls back to the covered
+    /// edge indices (the coarsest, most flood-controlling setting).
+    public static func pathTrie(gramLength: Int?) -> CoverageStrategy {
         CoverageStrategy(makeEngine: { makePathTrieEngine(gramLength: gramLength) })
     }
 }
@@ -48,9 +50,22 @@ extension CoverageStrategy {
 /// Its culling vocabulary is the accepted path's sliding k-grams: the path is
 /// the acceptance criterion, so path FRAGMENTS — not the unordered edge set —
 /// are what ownership should be accounted over.
-private func makePathTrieEngine(gramLength: Int) -> CoverageEngine {
+private func makePathTrieEngine(gramLength: Int?) -> CoverageEngine {
     let trie = PathTrie()
     let hooks = makeTrieHooks(trie)
+    guard let gramLength else {
+        // No vocabulary: judge on path uniqueness, let the pool cull on
+        // covered edges.
+        return CoverageEngine(
+            onEdge: hooks.onEdge,
+            onReset: hooks.onReset
+        ) { _ in
+            defer {
+                trie.reset()
+            }
+            return trie.markTerminalIfUnique()
+        }
+    }
     // Grams are collected inside decide's critical section (the trie resets
     // before decide returns); the stash carries them to the engine's
     // `features` call.

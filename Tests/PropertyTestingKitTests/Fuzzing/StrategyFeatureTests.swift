@@ -133,6 +133,19 @@ struct StrategyFeatureTests {
         #expect(CoverageStrategy.signatureMatch.makeEngine().features == nil)
     }
 
+    @Test("A nil gram length opts pathTrie out of publishing a vocabulary")
+    func pathTrieNilGramLengthHasNoVocabulary() {
+        let engine = CoverageStrategy.pathTrie(gramLength: nil).makeEngine()
+        #expect(engine.features == nil)
+
+        // The acceptance criterion is unaffected: still path uniqueness.
+        engine.onEdge?(1, true)
+        #expect(engine.decide(stubView()))
+        engine.onReset?()
+        engine.onEdge?(1, true)
+        #expect(!engine.decide(stubView()))
+    }
+
     @Test("The hitCountBuckets engine publishes (edge, bucket) features")
     func hitCountBucketsEngineEmitsEdgeBucketPairs() {
         let engine = CoverageStrategy.hitCountBuckets.makeEngine()
