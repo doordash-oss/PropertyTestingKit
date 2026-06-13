@@ -40,6 +40,14 @@ extension CoverageStrategy {
     /// value-profile vocabulary would equal this strategy's own acceptance
     /// criterion, and a culling vocabulary equal to acceptance is a tautology
     /// that silently disables culling (see `.hitCountBuckets`).
+    ///
+    /// - Warning: measured to UNDER-perform `.newEdge` on the de Bruijn
+    ///   `shift_var_leq` mutant (stlc): accepting every new `(site, distance)`
+    ///   pair floods the corpus and dilutes mutation energy, dropping the solve
+    ///   rate (4/8 vs newEdge's 8/8 at a 20s cap) even though it is a strict
+    ///   superset of newEdge's acceptance. The comparison operands are better
+    ///   spent on input-to-state MUTATION than on acceptance. Kept as the
+    ///   measured baseline for that future work; not recommended as a default.
     public static var comparisonCoverage: CoverageStrategy {
         CoverageStrategy(makeEngine: { makeComparisonCoverageEngine() })
     }
