@@ -37,7 +37,7 @@ enum PoolDirective: Equatable {
 /// Confinement: one instance per engine, driven on the engine's task. No
 /// internal synchronization.
 final class WeightedPoolCore {
-    private let judge: (_ features: [UInt64], _ size: Int) -> PoolAdmission.Verdict
+    private let judge: (_ outcome: PoolIterationOutcome) -> PoolAdmission.Verdict
     private let policies: [any PoolPlugin]
     private let burstLength: Int
     private let focusOnInsert: Bool
@@ -87,7 +87,7 @@ final class WeightedPoolCore {
 
         guard let coverage = outcome.newCoverage else { return nil }
         let features = outcome.resolvedFeatures
-        let verdict = judge(features, outcome.inputSize ?? coverage.count)
+        let verdict = judge(outcome)
         guard verdict.admit else { return nil }
 
         // The admission's own displacements (REDUCE losers) go through the

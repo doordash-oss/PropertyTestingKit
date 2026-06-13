@@ -68,17 +68,26 @@ public struct CoverageEngine: Sendable {
     /// means the pool falls back to the covered edge indices.
     let features: (@Sendable () -> [UInt64])?
 
+    /// The per-comparison-site distances of the LAST accepted decision: site
+    /// `pc` → the lowest `|arg1 - arg2|` the run drove it to. The vocabulary
+    /// `PoolAdmission.boundaryDistanceOwnership` culls over. Called only after
+    /// `decide` returns `true`, inside the same gated window as `features`.
+    /// `nil` (the default) means the run publishes no boundary distances.
+    let boundaryDistances: (@Sendable () -> [UInt64: UInt64])?
+
     public init(
         onEdge: (@Sendable (UInt32, Bool) -> Void)? = nil,
         onCompare: (@Sendable (UInt, UInt64, UInt64, UInt32) -> Void)? = nil,
         onReset: (@Sendable () -> Void)? = nil,
         features: (@Sendable () -> [UInt64])? = nil,
+        boundaryDistances: (@Sendable () -> [UInt64: UInt64])? = nil,
         _ decide: @escaping CoverageDecision
     ) {
         self.onEdge = onEdge
         self.onCompare = onCompare
         self.onReset = onReset
         self.features = features
+        self.boundaryDistances = boundaryDistances
         self.decide = decide
     }
 }

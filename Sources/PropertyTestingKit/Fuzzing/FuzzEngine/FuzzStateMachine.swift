@@ -330,7 +330,8 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
                             features: acceptance?.features ?? nil,
                             // Measured only on accepts — acceptance is rare,
                             // size closures may traverse the whole input.
-                            inputSize: acceptance != nil ? measuredSize(of: input) : nil
+                            inputSize: acceptance != nil ? measuredSize(of: input) : nil,
+                            boundaryDistances: acceptance?.boundaryDistances ?? nil
                         )
                     ) != nil {
                         poolEntries.append(input)

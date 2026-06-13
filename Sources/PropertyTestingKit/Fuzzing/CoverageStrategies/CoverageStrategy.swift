@@ -154,6 +154,8 @@ extension CoverageStrategy {
             // The vocabulary is collected inside the same gated window as the
             // decision — its closure reads the same engine state.
             let features: [UInt64]? = interesting ? engine.features.map { $0() } : nil
+            let boundaryDistances: [UInt64: UInt64]? =
+                interesting ? engine.boundaryDistances.map { $0() } : nil
             if gated { sancov_observer_exit() }
             guard interesting else {
                 return nil
@@ -167,7 +169,8 @@ extension CoverageStrategy {
                 return nil
             }
             corpus.mergeCoverageAndAdd(input: input, scheduleBytes: scheduleBytes, sparse: sparse)
-            return CoverageAcceptance(sparse: sparse, features: features)
+            return CoverageAcceptance(
+                sparse: sparse, features: features, boundaryDistances: boundaryDistances)
         })
     }
 }
@@ -189,6 +192,19 @@ struct CoverageAcceptance {
     /// strategy has no vocabulary of its own (the pool falls back to the
     /// covered edge indices).
     let features: [UInt64]?
+    /// The run's per-comparison-site distances (`pc` → lowest `|arg1 - arg2|`),
+    /// `nil` when the strategy publishes none.
+    let boundaryDistances: [UInt64: UInt64]?
+
+    init(
+        sparse: SparseCoverage,
+        features: [UInt64]?,
+        boundaryDistances: [UInt64: UInt64]? = nil
+    ) {
+        self.sparse = sparse
+        self.features = features
+        self.boundaryDistances = boundaryDistances
+    }
 }
 
 /// A closure that decides if an input is interesting and records it.
