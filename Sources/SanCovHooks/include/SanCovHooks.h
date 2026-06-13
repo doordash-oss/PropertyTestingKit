@@ -115,6 +115,18 @@ typedef struct {
     /// with recorder_data when the context is finally freed, or immediately
     /// when the recorder is replaced/cleared via sancov_context_set_recorder.
     uintptr_t recorder_release_bits;
+    /// Optional per-context COMPARISON recorder (the trace-cmp half), with its
+    /// own data + reset/release hooks. Fully independent of the edge recorder
+    /// above: the comparisonCoverage strategy attaches BOTH (edge union + value
+    /// profile). Stored as pointer bits like edge_recorder_bits; 0 → none
+    /// attached (sancov_dispatch_cmp is then a no-op). Set via
+    /// sancov_context_set_cmp_recorder; read per comparison by
+    /// sancov_dispatch_cmp after routing resolves this context. Same
+    /// release/acquire ordering and co-ownership contract as the edge slot.
+    uintptr_t cmp_recorder_bits;
+    void* cmp_recorder_data;
+    uintptr_t cmp_recorder_reset_bits;
+    uintptr_t cmp_recorder_release_bits;
 } SanCovMeasurementContext;
 
 /// Begin a measurement context for coverage isolation.
@@ -172,6 +184,15 @@ void* sancov_context_get_recorder_for_testing(SanCovMeasurementContext* context)
 static inline void* sancov_context_get_recorder_data(SanCovMeasurementContext* context) {
     if (context == NULL) return NULL;
     return __atomic_load_n(&context->recorder_data, __ATOMIC_ACQUIRE);
+}
+
+/// Read the context's opaque CMP recorder data (acquire). Used by Swift
+/// comparison-observer recorders once per comparison to reach their box; NULL
+/// when nothing is attached. static inline for the hot path (single acquire
+/// load), mirroring sancov_context_get_recorder_data.
+static inline void* sancov_context_get_cmp_recorder_data(SanCovMeasurementContext* context) {
+    if (context == NULL) return NULL;
+    return __atomic_load_n(&context->cmp_recorder_data, __ATOMIC_ACQUIRE);
 }
 
 /// The coverage-inheritance handle for a measurement context: a 64-bit value
@@ -277,6 +298,49 @@ void sancov_observer_exit(void);
 /// Called by __sanitizer_cov_trace_pc_guard for every recorded edge; public so
 /// tests can drive the real dispatch path with synthetic guards.
 void sancov_dispatch_edge(uint32_t* guard);
+
+// MARK: - Comparison Recorders (trace-cmp / value profile)
+//
+// The trace-cmp half of the substrate. SanitizerCoverage's
+// __sanitizer_cov_trace_cmp{1,2,4,8} / const_cmp / switch hooks deliver the
+// OPERANDS of each instrumented comparison (plus the comparison's PC). That
+// gives a gradient — e.g. popcount(arg1 ^ arg2) shrinking as an input nears a
+// boundary `i < c` — that pure edge coverage is blind to (every near-miss
+// traces the same edge). A comparison recorder is the cmp analog of an edge
+// recorder: it lives on the measurement context, and sancov_dispatch_cmp
+// routes each comparison to it. Independent of the edge recorder slot.
+
+/// A comparison recorder. Receives the comparison site's PC, both operands
+/// (zero-extended to 64 bits), the operand width in bytes (1/2/4/8), and the
+/// already-resolved measurement context (so recorders never re-run routing).
+typedef void (*SanCovCmpRecorder)(uintptr_t pc, uint64_t arg1, uint64_t arg2,
+                                  uint32_t size_bytes, SanCovMeasurementContext* context);
+
+/// Set (or with NULL clear) the context's COMPARISON recorder, its opaque
+/// state, and the state's lifecycle hooks. Same ownership/ordering contract as
+/// sancov_context_set_recorder (the edge slot), applied to the independent cmp
+/// slot: data/hooks stored before the fn (release ordering); `release` (when
+/// non-NULL) transfers ownership of `data` to the context and is called exactly
+/// once — at the context's last reference drop, on replacement, or immediately
+/// on a clear-with-payload; `reset` (when non-NULL) is called by
+/// sancov_reset_coverage with `data`.
+void sancov_context_set_cmp_recorder(
+    SanCovMeasurementContext* context,
+    SanCovCmpRecorder recorder,
+    void* data,
+    SanCovRecorderDataFn reset,
+    SanCovRecorderDataFn release);
+
+/// TESTING ONLY: read the context's cmp recorder as raw pointer bits (NULL when
+/// none attached).
+void* sancov_context_get_cmp_recorder_for_testing(SanCovMeasurementContext* context);
+
+/// Resolve routing for the current task/thread and run the context's cmp
+/// recorder with the given comparison operands. No-op when no cmp recorder is
+/// attached or no measurement is active. Called by the __sanitizer_cov_trace_cmp*
+/// hooks for every instrumented comparison; public so tests can drive the real
+/// dispatch path with synthetic operands.
+void sancov_dispatch_cmp(uintptr_t pc, uint64_t arg1, uint64_t arg2, uint32_t size_bytes);
 
 // MARK: - Schedule-Aware Coverage
 //

@@ -624,6 +624,7 @@ static void ctx_retain(SanCovMeasurementContext* ctx) {
 // Defined below with the recorder API; ONE release path so a future fix to
 // the data-release semantics cannot land in one copy and miss the other.
 static void release_recorder_data(SanCovMeasurementContext* context);
+static void release_cmp_recorder_data(SanCovMeasurementContext* context);
 
 // Release a measurement context (decrement refcount, free if zero)
 static void ctx_release(SanCovMeasurementContext* ctx) {
@@ -635,6 +636,7 @@ static void ctx_release(SanCovMeasurementContext* ctx) {
             // with the last reference gone no thread can still dispatch into
             // this context, so releasing the data here can race nothing.
             release_recorder_data(ctx);
+            release_cmp_recorder_data(ctx);
             cleanup_task_map(ctx);
             free(ctx->covered_indices);
             free(ctx);
@@ -706,6 +708,10 @@ static void init_recorder_fields(SanCovMeasurementContext* ctx) {
     ctx->recorder_data = NULL;
     ctx->recorder_reset_bits = 0;
     ctx->recorder_release_bits = 0;
+    ctx->cmp_recorder_bits = 0;
+    ctx->cmp_recorder_data = NULL;
+    ctx->cmp_recorder_reset_bits = 0;
+    ctx->cmp_recorder_release_bits = 0;
 }
 
 SanCovMeasurementContext* sancov_begin_measurement(void) {
@@ -796,6 +802,14 @@ void sancov_reset_coverage(SanCovMeasurementContext* ctx) {
         reset(__atomic_load_n(&ctx->recorder_data, __ATOMIC_ACQUIRE));
     }
 
+    // Same per-iteration reset for the independent cmp recorder (e.g. clear the
+    // value-profile feature set so each iteration starts from a clean slate).
+    SanCovRecorderDataFn cmp_reset =
+        (SanCovRecorderDataFn)__atomic_load_n(&ctx->cmp_recorder_reset_bits, __ATOMIC_ACQUIRE);
+    if (cmp_reset) {
+        cmp_reset(__atomic_load_n(&ctx->cmp_recorder_data, __ATOMIC_ACQUIRE));
+    }
+
 }
 
 // Release the context's current recorder data through its release hook (if
@@ -811,6 +825,17 @@ static void release_recorder_data(SanCovMeasurementContext* context) {
     SanCovRecorderDataFn release =
         (SanCovRecorderDataFn)__atomic_exchange_n(&context->recorder_release_bits, 0, __ATOMIC_ACQ_REL);
     void* data = __atomic_exchange_n(&context->recorder_data, NULL, __ATOMIC_ACQ_REL);
+    if (release && data) {
+        release(data);
+    }
+}
+
+// The cmp-recorder twin of release_recorder_data — same exchange-not-load
+// reasoning (a race degrades to a leak, never a double release).
+static void release_cmp_recorder_data(SanCovMeasurementContext* context) {
+    SanCovRecorderDataFn release =
+        (SanCovRecorderDataFn)__atomic_exchange_n(&context->cmp_recorder_release_bits, 0, __ATOMIC_ACQ_REL);
+    void* data = __atomic_exchange_n(&context->cmp_recorder_data, NULL, __ATOMIC_ACQ_REL);
     if (release && data) {
         release(data);
     }
@@ -845,12 +870,42 @@ void sancov_context_set_recorder(
     }
 }
 
+// The cmp-recorder twin of sancov_context_set_recorder — same ordering and
+// ownership contract, applied to the independent cmp slot.
+void sancov_context_set_cmp_recorder(
+    SanCovMeasurementContext* context,
+    SanCovCmpRecorder recorder,
+    void* data,
+    SanCovRecorderDataFn reset,
+    SanCovRecorderDataFn release) {
+    if (context == NULL) return;
+
+    __atomic_store_n(&context->cmp_recorder_bits, 0, __ATOMIC_RELEASE);
+    __atomic_store_n(&context->cmp_recorder_reset_bits, 0, __ATOMIC_RELEASE);
+    release_cmp_recorder_data(context);
+
+    if (recorder) {
+        __atomic_store_n(&context->cmp_recorder_release_bits, (uintptr_t)release, __ATOMIC_RELEASE);
+        __atomic_store_n(&context->cmp_recorder_data, data, __ATOMIC_RELEASE);
+        __atomic_store_n(&context->cmp_recorder_reset_bits, (uintptr_t)reset, __ATOMIC_RELEASE);
+        __atomic_store_n(&context->cmp_recorder_bits, (uintptr_t)recorder, __ATOMIC_RELEASE);
+    } else if (release && data) {
+        // Clear-with-payload: ownership still transferred, release once.
+        release(data);
+    }
+}
+
 // sancov_context_get_recorder_data lives in the header as static inline (hot path).
 
 // TESTING ONLY seams (see SanCovHooks.h).
 void* sancov_context_get_recorder_for_testing(SanCovMeasurementContext* context) {
     if (context == NULL) return NULL;
     return (void*)__atomic_load_n(&context->edge_recorder_bits, __ATOMIC_ACQUIRE);
+}
+
+void* sancov_context_get_cmp_recorder_for_testing(SanCovMeasurementContext* context) {
+    if (context == NULL) return NULL;
+    return (void*)__atomic_load_n(&context->cmp_recorder_bits, __ATOMIC_ACQUIRE);
 }
 
 void sancov_release_for_testing(SanCovMeasurementContext* context) {
@@ -875,6 +930,9 @@ void sancov_end_measurement(SanCovMeasurementContext* ctx) {
     // data alive" contract merely documented.
     __atomic_store_n(&ctx->edge_recorder_bits, 0, __ATOMIC_RELEASE);
     __atomic_store_n(&ctx->recorder_reset_bits, 0, __ATOMIC_RELEASE);
+    // Sever the cmp recorder on the same terms (data survives for stragglers).
+    __atomic_store_n(&ctx->cmp_recorder_bits, 0, __ATOMIC_RELEASE);
+    __atomic_store_n(&ctx->cmp_recorder_reset_bits, 0, __ATOMIC_RELEASE);
 
     // Drop the inheritance registration first so concurrent routing decisions
     // stop matching this context by value pointer before we tear it down.
@@ -1456,6 +1514,75 @@ void __sanitizer_cov_trace_pc_guard(uint32_t *guard) {
     }
 
     sancov_dispatch_edge(guard);
+}
+
+// MARK: - Comparison Dispatch (trace-cmp / value profile)
+
+// Per-comparison dispatch: resolve routing once (same current-context lookup as
+// sancov_dispatch_edge — get_current_coverage_map populates the TLS context as
+// a side effect), then run the context's cmp recorder if one is attached. No
+// edge map is touched; cmp recording is a parallel channel. No-op when no cmp
+// recorder is attached or no measurement is active.
+void sancov_dispatch_cmp(uintptr_t pc, uint64_t arg1, uint64_t arg2, uint32_t size_bytes) {
+    // Resolve the calling thread's current measurement context. We don't need
+    // the returned map, but the call refreshes tls_cached_measurement_context.
+    (void)get_current_coverage_map();
+    SanCovMeasurementContext* ctx = tls_cached_measurement_context;
+    if (!ctx) return;
+    SanCovCmpRecorder r = (SanCovCmpRecorder)__atomic_load_n(&ctx->cmp_recorder_bits, __ATOMIC_ACQUIRE);
+    if (r) {
+        r(pc, arg1, arg2, size_bytes, ctx);
+    }
+}
+
+// SanitizerCoverage comparison hooks. The compiler emits a call to one of these
+// before each instrumented integer comparison / switch, passing the operands.
+// We capture the call site via __builtin_return_address(0) as the comparison's
+// PC (stable per comparison site) and forward to sancov_dispatch_cmp. const_cmp
+// variants (one operand a compile-time constant) route identically — the
+// recorder decides whether to treat constants specially.
+//
+// These run on EVERY comparison in instrumented code (including Swift runtime
+// internals: refcounts, bounds checks, address compares), so the recorder MUST
+// key by PC to isolate the comparisons it cares about from runtime chatter.
+void __sanitizer_cov_trace_cmp1(uint8_t arg1, uint8_t arg2) {
+    sancov_dispatch_cmp((uintptr_t)__builtin_return_address(0), arg1, arg2, 1);
+}
+void __sanitizer_cov_trace_cmp2(uint16_t arg1, uint16_t arg2) {
+    sancov_dispatch_cmp((uintptr_t)__builtin_return_address(0), arg1, arg2, 2);
+}
+void __sanitizer_cov_trace_cmp4(uint32_t arg1, uint32_t arg2) {
+    sancov_dispatch_cmp((uintptr_t)__builtin_return_address(0), arg1, arg2, 4);
+}
+void __sanitizer_cov_trace_cmp8(uint64_t arg1, uint64_t arg2) {
+    sancov_dispatch_cmp((uintptr_t)__builtin_return_address(0), arg1, arg2, 8);
+}
+void __sanitizer_cov_trace_const_cmp1(uint8_t arg1, uint8_t arg2) {
+    sancov_dispatch_cmp((uintptr_t)__builtin_return_address(0), arg1, arg2, 1);
+}
+void __sanitizer_cov_trace_const_cmp2(uint16_t arg1, uint16_t arg2) {
+    sancov_dispatch_cmp((uintptr_t)__builtin_return_address(0), arg1, arg2, 2);
+}
+void __sanitizer_cov_trace_const_cmp4(uint32_t arg1, uint32_t arg2) {
+    sancov_dispatch_cmp((uintptr_t)__builtin_return_address(0), arg1, arg2, 4);
+}
+void __sanitizer_cov_trace_const_cmp8(uint64_t arg1, uint64_t arg2) {
+    sancov_dispatch_cmp((uintptr_t)__builtin_return_address(0), arg1, arg2, 8);
+}
+
+// switch: cases[0] = number of case constants, cases[1] = value bit width,
+// cases[2..] = the case constants (ascending). Emit one comparison per case
+// (val vs constant) so the value profile sees how close val came to each arm —
+// the switch analog of the cmp gradient.
+void __sanitizer_cov_trace_switch(uint64_t val, uint64_t *cases) {
+    if (cases == NULL) return;
+    uint64_t n = cases[0];
+    uint32_t size_bytes = (uint32_t)(cases[1] / 8);
+    if (size_bytes == 0) size_bytes = 8;
+    uintptr_t pc = (uintptr_t)__builtin_return_address(0);
+    for (uint64_t i = 0; i < n; i++) {
+        sancov_dispatch_cmp(pc, val, cases[2 + i], size_bytes);
+    }
 }
 
 // MARK: - PC Storage for Source Mapping
