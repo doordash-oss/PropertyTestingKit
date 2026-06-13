@@ -36,8 +36,19 @@ public struct CoverageEngine: Sendable {
     /// on first hits (loop immunity, like `.pathTrie`) get it for free.
     let onEdge: (@Sendable (_ edge: UInt32, _ isFirstHit: Bool) -> Void)?
 
+    /// Called for every instrumented comparison that routes to this engine's
+    /// measurement context: the comparison site's PC, both operands, and the
+    /// operand width in bytes. This is the trace-cmp / value-profile channel —
+    /// it gives a gradient (e.g. `popcount(arg1 ^ arg2)` as an input nears a
+    /// boundary) that edge coverage is blind to. Independent of `onEdge`; a
+    /// strategy may use both. Because Swift instruments its own runtime
+    /// comparisons, a strategy MUST key on `pc`. `nil` (the default) leaves the
+    /// cmp channel dormant (no per-comparison overhead).
+    let onCompare: (@Sendable (_ pc: UInt, _ arg1: UInt64, _ arg2: UInt64, _ size: UInt32) -> Void)?
+
     /// Called when the engine's coverage resets between iterations, so
-    /// per-iteration state starts each run clean.
+    /// per-iteration state starts each run clean. Routed to the engine's edge
+    /// observer when one is attached, otherwise to its comparison observer.
     let onReset: (@Sendable () -> Void)?
 
     /// The judgement half: decides per iteration whether the run's coverage
@@ -59,11 +70,13 @@ public struct CoverageEngine: Sendable {
 
     public init(
         onEdge: (@Sendable (UInt32, Bool) -> Void)? = nil,
+        onCompare: (@Sendable (UInt, UInt64, UInt64, UInt32) -> Void)? = nil,
         onReset: (@Sendable () -> Void)? = nil,
         features: (@Sendable () -> [UInt64])? = nil,
         _ decide: @escaping CoverageDecision
     ) {
         self.onEdge = onEdge
+        self.onCompare = onCompare
         self.onReset = onReset
         self.features = features
         self.decide = decide

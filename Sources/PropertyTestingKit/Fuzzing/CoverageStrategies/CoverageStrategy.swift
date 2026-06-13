@@ -111,13 +111,29 @@ extension CoverageStrategy {
     func makeEvaluator<each Input: Codable & Sendable>() -> CoverageEvaluator<repeat each Input> {
         let engine = makeEngine()
         // No hooks → nothing to attach: a cleared recorder field already
-        // means "default recording".
-        let setup: CoverageStrategySetup? = (engine.onEdge != nil || engine.onReset != nil)
+        // means "default recording". An edge observer carries onReset when one
+        // is attached; otherwise a lone comparison observer carries it (a bare
+        // onReset with no measurement hook still rides an edge observer, the
+        // historical behavior).
+        let attachEdge = engine.onEdge != nil || (engine.onReset != nil && engine.onCompare == nil)
+        let attachCompare = engine.onCompare != nil
+        let setup: CoverageStrategySetup? = (attachEdge || attachCompare)
             ? { context in
-                SanCovCounters.attachObserver(
-                    EdgeObserver(onEdge: engine.onEdge ?? { _, _ in }, onReset: engine.onReset),
-                    to: context
-                )
+                if attachEdge {
+                    SanCovCounters.attachObserver(
+                        EdgeObserver(onEdge: engine.onEdge ?? { _, _ in }, onReset: engine.onReset),
+                        to: context
+                    )
+                }
+                if let onCompare = engine.onCompare {
+                    // The edge observer already owns onReset when one was
+                    // attached; route it to the comparison observer only when
+                    // it is the sole observer.
+                    SanCovCounters.attachComparisonObserver(
+                        ComparisonObserver(onCompare: onCompare, onReset: attachEdge ? nil : engine.onReset),
+                        to: context
+                    )
+                }
             }
             : nil
         return CoverageEvaluator(setup: setup, evaluate: { input, scheduleBytes, context, coverageClient, corpus in
