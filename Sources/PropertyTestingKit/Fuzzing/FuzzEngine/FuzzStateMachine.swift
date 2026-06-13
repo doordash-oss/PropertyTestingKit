@@ -178,6 +178,31 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
             // advance the trie during the very first iteration.
             coverageEvaluator.setup?(coverageContext)
 
+            // Input-to-state (I2S): feed the operands of each instrumented
+            // comparison (trace-cmp) into a per-engine dictionary the numeric
+            // mutators sample from, so mutation can jump straight to a value a
+            // comparison cared about (magic constants, boundary cutoffs). Opt-in
+            // via PTK_INPUT_TO_STATE — it adds a per-comparison observer and only
+            // helps targets built with `-sanitize-coverage=…,trace-cmp`. Attach
+            // only when the coverage strategy left the cmp slot free (i.e. not
+            // `.comparisonCoverage`, which uses it itself).
+            // Enabled by the task-local (bound around the fuzz call) or the
+            // PTK_INPUT_TO_STATE env var (launch-time opt-in). getenv reads the
+            // live environ, not ProcessInfo's snapshot.
+            let inputToStateEnabled =
+                ComparisonDictionary.inputToStateEnabled || getenv("PTK_INPUT_TO_STATE") != nil
+            let comparisonDictionary = ComparisonDictionary()
+            if inputToStateEnabled,
+               sancov_context_get_cmp_recorder_data(coverageContext.rawContext) == nil {
+                SanCovCounters.attachComparisonObserver(
+                    ComparisonObserver(onCompare: { _, arg1, arg2, _ in
+                        comparisonDictionary.record(arg1)
+                        comparisonDictionary.record(arg2)
+                    }),
+                    to: coverageContext
+                )
+            }
+
             // Check time limit every N iterations to avoid per-iteration Date.init() overhead.
             // With ~10M iterations/sec and default interval of 1000, this means ~10K checks/sec.
             // The interval is configurable via FuzzEngineConfig for tests that need precise control.
@@ -189,6 +214,10 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
             // the test body are attributed to this engine's measurement context.
             // Set once outside the per-iteration hot path — the context is hoisted.
             let coverageContextBits = coverageContext.inheritanceHandle
+            // Bind the I2S dictionary for the whole loop in the engine's task so
+            // every mutate call sees it (task-local follows thread hops). nil
+            // when disabled — the numeric mutators' I2S branch then stays inert.
+            await ComparisonDictionary.$current.withValue(inputToStateEnabled ? comparisonDictionary : nil) {
             await CoverageInheritance.$context.withValue(coverageContextBits) {
                 CoverageInheritance.captureKeyIfNeeded(contextBits: coverageContextBits)
 
@@ -347,6 +376,7 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
 
                     iterationCount += 1
                 }
+            }
             }
         }
 

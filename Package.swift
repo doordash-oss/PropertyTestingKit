@@ -110,9 +110,12 @@ let package = Package(
             ],
             exclude: ["Corpus", "Fuzzing/Corpus"],
             swiftSettings: [
+                // `trace-cmp` additionally instruments comparisons so the
+                // input-to-state integration tests exercise the real cmp hooks
+                // (FuzzInputToStateTests fuzzes a magic-value SUT in-target).
                 .unsafeFlags([
                     "-sanitize=undefined",
-                    "-sanitize-coverage=edge,pc-table"
+                    "-sanitize-coverage=edge,pc-table,trace-cmp"
                 ])
             ]
         ),

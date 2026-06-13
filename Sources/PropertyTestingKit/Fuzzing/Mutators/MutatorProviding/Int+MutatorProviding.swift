@@ -53,7 +53,29 @@ private let _intSeeds: [Int] = [
     -1_000_000,
 ]
 
+/// Input-to-state candidate: when a comparison dictionary is installed on the
+/// current task (the engine's I2S channel), half the time jump straight to a
+/// recorded comparison operand — or a ±1 neighbour, since `<`/`<=` boundary
+/// bugs differ from the operand by one. Returns nil when I2S is inactive (no
+/// dictionary, empty dictionary, or the coin lands on normal mutation), so the
+/// caller falls through to its ordinary strategy. This is the auto-dictionary /
+/// RedQueen mechanism for the framework's integer inputs.
+private func _intInputToState(_ rng: inout FastRNG) -> Int? {
+    guard let dict = ComparisonDictionary.current else { return nil }
+    // Leave half the draws to ordinary mutation so I2S guides without starving
+    // the rest of the search (the over-bias failure mode of value profile).
+    guard rng.next() & 1 == 0 else { return nil }
+    guard let operand = dict.randomValue(using: &rng) else { return nil }
+    let base = Int(truncatingIfNeeded: operand)
+    switch rng.next() & 3 {
+    case 0: return base &+ 1
+    case 1: return base &- 1
+    default: return base
+    }
+}
+
 private func _intMutate(_ value: Int, _ rng: inout FastRNG) -> Int {
+    if let i2s = _intInputToState(&rng) { return i2s }
     // Enumerate the candidate neighborhood, then pick ONE: the mutator's job
     // is variety per call, not effort (issue #41).
     // Pre-allocate: up to 7 basic + 8 divisibility = 15 mutations
@@ -89,6 +111,7 @@ private func _intMutate(_ value: Int, _ rng: inout FastRNG) -> Int {
 }
 
 private func _intGenerate(_ rng: inout FastRNG) -> Int {
+    if let i2s = _intInputToState(&rng) { return i2s }
     // Mix of strategies for interesting random generation
     let strategy = Int.random(in: 0..<10, using: &rng)
     switch strategy {
