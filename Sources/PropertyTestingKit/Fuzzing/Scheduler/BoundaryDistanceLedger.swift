@@ -37,6 +37,8 @@ struct BoundaryDistanceLedger {
     struct Verdict {
         let admit: Bool
         let evict: [Int]
+        /// How many features (edges + boundaries) this input newly OWNED.
+        let claimed: Int
     }
 
     /// Edge feature → owning entry ID.
@@ -75,7 +77,7 @@ struct BoundaryDistanceLedger {
         }
 
         guard !claimedEdges.isEmpty || !claimedBoundaries.isEmpty else {
-            return Verdict(admit: false, evict: [])
+            return Verdict(admit: false, evict: [], claimed: 0)
         }
 
         let id = entrySize.count
@@ -98,6 +100,7 @@ struct BoundaryDistanceLedger {
             boundaryOwners[pc] = id
             boundaryDistance[pc] = distance
         }
-        return Verdict(admit: true, evict: evicted)
+        return Verdict(admit: true, evict: evicted,
+                       claimed: claimedEdges.count + claimedBoundaries.count)
     }
 }

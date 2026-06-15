@@ -241,6 +241,10 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
                     let fromMutationQueue: Bool
                     let parentID: Int?
                     let poolParentID: Int?
+                    // Executed mutation depth for this iteration (1 unless the
+                    // scheduler drew a pool entry with a depth override). Read by
+                    // the SchedulerProbe; otherwise inert.
+                    var probedDepth = 1
                     if !pendingInputs.isEmpty {
                         input = pendingInputs.removeFirstUnchecked()
                         parentID = pendingParents.removeFirstUnchecked()
@@ -261,11 +265,13 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
                             parentID = nil
                             poolParentID = nil
                         case .mutate(let id):
-                            input = generateMutation(poolEntries[id])
+                            let depth = schedulerCore.mutationDepth(for: id)
+                            input = generateMutation(poolEntries[id], depth: depth)
                             mutantsRunCount += 1
                             fromMutationQueue = true
                             parentID = nil
                             poolParentID = id
+                            probedDepth = depth
                         }
                     }
                     let currentScheduleBytes: [UInt8]? = scheduleBytesExtractor(input)
@@ -323,7 +329,7 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
                     let poolSource: PoolIterationSource =
                         poolParentID.map { .pool(parent: $0) }
                         ?? (fromMutationQueue ? .queue : .generated)
-                    if schedulerCore.observe(
+                    let admittedID = schedulerCore.observe(
                         PoolIterationOutcome(
                             source: poolSource,
                             newCoverage: iterationCoverage,
@@ -333,9 +339,11 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
                             inputSize: acceptance != nil ? measuredSize(of: input) : nil,
                             boundaryDistances: acceptance?.boundaryDistances ?? nil
                         )
-                    ) != nil {
+                    )
+                    if admittedID != nil {
                         poolEntries.append(input)
                     }
+                    SchedulerProbe.observe?(poolSource, probedDepth, admittedID != nil)
 
                     // Process iteration event before failure event
                     var events = [
@@ -520,10 +528,10 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
 
     /// Generate ONE mutant: a single mutation step at one randomly chosen
     /// position of the input pack.
-    private func generateMutation(_ input: (repeat each Input)) -> (repeat each Input) {
+    private func generateMutation(_ input: (repeat each Input), depth: Int = 1) -> (repeat each Input) {
         var rng = FastRNG()
-        let position = inputSize == 1 ? 0 : Int.random(in: 0..<inputSize, using: &rng)
-        return mutateOnePosition(input, position: position, rng: &rng, mutators: repeat each mutators)
+        return chainMutate(input, depth: depth, inputSize: inputSize,
+                           rng: &rng, mutators: repeat each mutators)
     }
 }
 
@@ -533,6 +541,24 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
 /// counter) when the pool scheduler lands; until then this preserves a
 /// burst-on-accept shape comparable to the old exhaustive-neighborhood burst.
 let mutationBurstLength = 16
+
+/// Chain the single-position mutator `depth` times (depth-d = mutate∘…∘mutate),
+/// each step picking its own random position. `depth` clamps to ≥ 1, so a chain
+/// is never a no-op pass-through. Depth 1 reproduces the old single-step mutant.
+func chainMutate<each Input>(
+    _ input: (repeat each Input),
+    depth: Int,
+    inputSize: Int,
+    rng: inout FastRNG,
+    mutators: repeat Mutator<each Input>
+) -> (repeat each Input) {
+    var current = input
+    for _ in 0..<max(1, depth) {
+        let position = inputSize == 1 ? 0 : Int.random(in: 0..<inputSize, using: &rng)
+        current = mutateOnePosition(current, position: position, rng: &rng, mutators: repeat each mutators)
+    }
+    return current
+}
 
 /// Mutate exactly `position` of the input pack with one mutator call, holding
 /// every other position fixed.

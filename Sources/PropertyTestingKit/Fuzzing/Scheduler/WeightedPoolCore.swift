@@ -48,6 +48,9 @@ final class WeightedPoolCore {
 
     /// Draw weight per entry ID (index == ID; grows append-only).
     private var weights: [Double] = []
+    /// Per-entry mutation depth override (entry ID → chain length). Absent
+    /// entries mutate at depth 1; set by a policy via `.setMutationDepth`.
+    private var entryDepth: [Int: Int] = [:]
     /// Real (mutator-measured) input size per entry ID at admission, `nil`
     /// when unmeasured (index == ID, grows append-only). Deliberately NOT
     /// the covered-edge fallback: more covered edges mark a *better* entry,
@@ -110,7 +113,10 @@ final class WeightedPoolCore {
             focus = id
             burstRemaining = burstLength
         }
-        notifyAndApply(.inserted(id: id, coverage: coverage, features: features))
+        let parent: Int?
+        if case let .pool(p) = outcome.source { parent = p } else { parent = nil }
+        notifyAndApply(.inserted(id: id, coverage: coverage, features: features,
+                                 parent: parent, claimed: verdict.claimed))
         return id
     }
 
@@ -149,6 +155,13 @@ final class WeightedPoolCore {
         apply(actions)
     }
 
+    /// How many times the engine should chain the mutator for a `.mutate(id)`
+    /// directive on this entry. Defaults to 1 (single-step) until a policy
+    /// raises it via `.setMutationDepth`.
+    func mutationDepth(for id: Int) -> Int {
+        entryDepth[id] ?? 1
+    }
+
     private func apply(_ actions: [PoolAction]) {
         for action in actions {
             switch action {
@@ -162,6 +175,7 @@ final class WeightedPoolCore {
                     focus = nil
                     burstRemaining = 0
                 }
+                entryDepth[id] = nil
                 // Deliberately NO ledger release: a capacity-evicted owner
                 // keeps its claims as a ghost. Releasing them re-opens the
                 // vocabulary and the pool degenerates into a revolving door
@@ -177,6 +191,9 @@ final class WeightedPoolCore {
                 if id < weights.count {
                     weights[id] = max(0, weight)
                 }
+
+            case let .setMutationDepth(id, depth):
+                entryDepth[id] = max(1, depth)
             }
         }
     }

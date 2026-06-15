@@ -79,7 +79,11 @@ public enum PoolEvent {
     case iteration(PoolIterationOutcome)
     /// An entry was admitted to the pool. `features` is the entry's resolved
     /// culling vocabulary (strategy-defined, or widened edge indices).
-    case inserted(id: Int, coverage: SparseCoverage, features: [UInt64])
+    /// `parent` is the pool entry this input was mutated from (`nil` if it was
+    /// freshly generated or came off the queue), and `claimed` is how many
+    /// features it newly OWNED — together these let a draw-weight policy credit
+    /// the right parent by how much its mutant found.
+    case inserted(id: Int, coverage: SparseCoverage, features: [UInt64], parent: Int?, claimed: Int)
     /// An entry left the pool (its ID is never reused).
     case removed(id: Int)
     /// The owner is about to draw a new focus entry. The moment for lazy
@@ -99,6 +103,11 @@ public enum PoolAction {
     /// Set an entry's draw weight. Negative values clamp to zero; an
     /// all-zero pool falls back to uniform draws.
     case setWeight(id: Int, Double)
+    /// Set how many times the mutator is chained when this entry is mutated
+    /// (depth-d = mutate∘mutate∘… d times). Clamped to ≥ 1; defaults to 1
+    /// (single-step) for entries no policy has set. Lets a policy escalate
+    /// depth on a seed whose shallow neighborhood has been mined out.
+    case setMutationDepth(id: Int, depth: Int)
 }
 
 /// A composable policy attached to the mutation pool.
@@ -121,6 +130,8 @@ public struct PoolAdmission: Sendable {
         let admit: Bool
         /// Existing entries this admission displaces from the pool.
         let evict: [Int]
+        /// How many features this input newly owned (the draw-weight signal).
+        let claimed: Int
     }
 
     /// Builds a fresh per-engine judge over one accepted iteration: its
@@ -148,7 +159,9 @@ public struct PoolAdmission: Sendable {
     /// Every strategy-accepted input joins the pool, nothing ever leaves.
     /// The behavior of the classic corpus-mutation loop.
     public static let everyDiscovery = PoolAdmission(
-        makeJudge: { { _ in Verdict(admit: true, evict: []) } })
+        makeJudge: { { outcome in
+            Verdict(admit: true, evict: [], claimed: outcome.resolvedFeatures.count)
+        } })
 
     /// libFuzzer's corpus model: an input joins the pool only by *owning*
     /// coverage features — claiming unowned ones, or stealing from a larger
@@ -168,7 +181,7 @@ public struct PoolAdmission: Sendable {
         return { outcome in
             let verdict = ledger.judge(
                 features: outcome.resolvedFeatures, size: size(of: outcome))
-            return Verdict(admit: verdict.admit, evict: verdict.evict)
+            return Verdict(admit: verdict.admit, evict: verdict.evict, claimed: verdict.claimed)
         }
     })
 
@@ -192,7 +205,7 @@ public struct PoolAdmission: Sendable {
                 features: outcome.resolvedFeatures,
                 size: size(of: outcome),
                 distances: outcome.boundaryDistances ?? [:])
-            return Verdict(admit: verdict.admit, evict: verdict.evict)
+            return Verdict(admit: verdict.admit, evict: verdict.evict, claimed: verdict.claimed)
         }
     })
 }

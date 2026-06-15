@@ -34,6 +34,8 @@ struct FeatureOwnershipLedger {
         let admit: Bool
         /// Entries that lost their last owned feature to this claim.
         let evict: [Int]
+        /// How many features this input newly OWNED (0 when not admitted).
+        let claimed: Int
     }
 
     /// Feature → owning entry ID.
@@ -54,7 +56,7 @@ struct FeatureOwnershipLedger {
             }
         }
         guard !claimed.isEmpty else {
-            return Verdict(admit: false, evict: [])
+            return Verdict(admit: false, evict: [], claimed: 0)
         }
 
         let id = entrySize.count
@@ -71,6 +73,6 @@ struct FeatureOwnershipLedger {
             }
             featureOwners[feature] = id
         }
-        return Verdict(admit: true, evict: evicted)
+        return Verdict(admit: true, evict: evicted, claimed: claimed.count)
     }
 }

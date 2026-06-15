@@ -78,7 +78,7 @@ struct PoolCapacityTests {
     @Test("The lowest-weight resident is the capacity victim")
     func lowestWeightEvicted() {
         let weigher = ScriptedPolicy { event in
-            if case .inserted(1, _, _) = event {
+            if case .inserted(1, _, _, _, _) = event {
                 return [.setWeight(id: 0, 5.0), .setWeight(id: 1, 0.1)]
             }
             return []

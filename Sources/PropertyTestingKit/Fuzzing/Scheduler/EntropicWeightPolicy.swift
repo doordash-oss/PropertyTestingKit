@@ -71,7 +71,7 @@ public final class EntropicWeightPolicy: PoolPlugin {
             }
             return []
 
-        case let .inserted(id, _, features):
+        case let .inserted(id, _, features, _, _):
             // IDs are sequential by the owner's contract; the only way to
             // see a gap would be another inserter, which the admission role
             // precludes.
