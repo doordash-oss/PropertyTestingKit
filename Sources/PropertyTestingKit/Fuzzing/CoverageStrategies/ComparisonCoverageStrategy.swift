@@ -77,7 +77,7 @@ private func makeComparisonCoverageEngine() -> CoverageEngine {
         /// Engine-lifetime features seen across all accepted-or-not iterations.
         var seenFeatures: Set<UInt64> = []
         /// Engine-lifetime edges, for the edge-coverage union.
-        var seenEdges: Set<UInt32> = []
+        var seenEdges = EdgeUnionBitmap()
     }
     let state = SyncBox<ProfileState>(ProfileState())
 
@@ -104,7 +104,7 @@ private func makeComparisonCoverageEngine() -> CoverageEngine {
             // the one the evaluator reuses for storage, so reading it is free
             // for accepted inputs (and the cost of the union for rejected ones).
             if let sparse = coverage.materialized() {
-                for edge in sparse.indices where st.seenEdges.insert(edge).inserted {
+                for edge in sparse.indices where st.seenEdges.insert(edge) {
                     interesting = true
                 }
             }

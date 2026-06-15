@@ -79,7 +79,7 @@ private func makeBoundaryEngine(emitSigns: Bool, window: UInt64, maxSites: Int) 
         /// acceptance oracle.
         var bestDistance: [UInt64: UInt64] = [:]
         /// Engine-lifetime edges, for the edge-coverage union.
-        var seenEdges: Set<UInt32> = []
+        var seenEdges = EdgeUnionBitmap()
         /// Engine-lifetime sign combinations seen — the acceptance oracle for
         /// the sign dimension (only populated when `emitSigns`).
         var seenSigns: Set<UInt64> = []
@@ -143,7 +143,7 @@ private func makeBoundaryEngine(emitSigns: Bool, window: UInt64, maxSites: Int) 
 
             // Edge-coverage union: never weaker than .newEdge.
             if let sparse {
-                for edge in sparse.indices where st.seenEdges.insert(edge).inserted {
+                for edge in sparse.indices where st.seenEdges.insert(edge) {
                     interesting = true
                 }
             }
