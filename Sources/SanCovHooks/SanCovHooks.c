@@ -1793,19 +1793,22 @@ static void cmp_drop_init(void) {
 // edge map is touched; cmp recording is a parallel channel. No-op when no cmp
 // recorder is attached or no measurement is active.
 void sancov_dispatch_cmp(uintptr_t pc, uint64_t arg1, uint64_t arg2, uint32_t size_bytes) {
-    // Fetch this thread's TLS block ONCE (single tlv_get_addr); every field
-    // touch below — and inside get_current_coverage_map — is then a struct
-    // offset. This is the hot-path payoff of the coalesced SanCovTLS (Finding 41c).
+    // Drop synthesized/stdlib comparison sites FIRST — before the TLS fetch
+    // (default on; opt out with PTK_CMP_DROP_SYNTHESIZED=0). The drop check needs
+    // only `pc` (an argument) and the global table (a plain atomic load), NOT the
+    // thread-local block, so dropped comparisons never pay the tlv_get_addr that
+    // dominates the profile (~21% — Finding 41i). It runs no instrumented
+    // comparisons of its own (SanCovHooks/libc are not trace-cmp instrumented),
+    // so it is safe ahead of the re-entry guard: a dropped site never reaches the
+    // recorder, and kept sites still hit the guard below.
+    CmpDropTable* drop = atomic_load_explicit(&g_cmp_drop_table, memory_order_acquire);
+    if (__builtin_expect(drop != NULL, 1) && cmp_drop_should_skip(drop, pc)) return;
+    // Fetch this thread's TLS block ONCE (single tlv_get_addr) for the kept sites.
     SanCovTLS* ts = sancov_tls();
     // Re-entry guard (see SanCovTLS.in_cmp_recorder): a comparison fired by the
     // recorder itself (or by a reset hook we are invoking) must NOT re-dispatch,
     // or the recorder recurses into itself and overflows the stack.
     if (ts->in_cmp_recorder) return;
-    // Drop synthesized/stdlib comparison sites (default on; opt out with
-    // PTK_CMP_DROP_SYNTHESIZED=0). Skips before the census and routing so dropped
-    // sites cost nothing beyond the cached verdict lookup.
-    CmpDropTable* drop = atomic_load_explicit(&g_cmp_drop_table, memory_order_acquire);
-    if (__builtin_expect(drop != NULL, 1) && cmp_drop_should_skip(drop, pc)) return;
     // Diagnostic census (env-gated; one predicted-not-taken load when disabled).
     // Placed after the re-entry guard so it counts only genuine SUT comparisons,
     // not the recorder's own internal ones.
