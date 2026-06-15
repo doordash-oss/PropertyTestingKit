@@ -245,6 +245,15 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
                     // scheduler drew a pool entry with a depth override). Read by
                     // the SchedulerProbe; otherwise inert.
                     var probedDepth = 1
+                    // Suppress coverage dispatch while producing the input: the
+                    // generator/mutator runs instrumented SUT code (e.g. a
+                    // type-directed generator calling getTyp), but that is not the
+                    // property under test and is reset away below — dispatching and
+                    // recording it wasted ~25% of the process (Finding 41p). This
+                    // block is straight-line synchronous (no await → no thread hop),
+                    // and the guard is cleared before resetCoverage so the test is
+                    // always measured. Per-thread, so it can't affect other engines.
+                    sancov_set_dispatch_suppressed(true)
                     if !pendingInputs.isEmpty {
                         input = pendingInputs.removeFirstUnchecked()
                         parentID = pendingParents.removeFirstUnchecked()
@@ -280,6 +289,10 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
                     // `queueCount == 0` to detect that the queue has drained — e.g. to
                     // stop a regression replay before any fresh input is generated.
                     let queueCount = pendingInputs.count
+
+                    // Done producing the input — re-enable dispatch so the test
+                    // below is measured (must precede resetCoverage + the test).
+                    sancov_set_dispatch_suppressed(false)
 
                     // Reset coverage for this iteration
                     coverageCountersClient.resetCoverage(coverageContext)

@@ -335,6 +335,20 @@ void sancov_context_set_cmp_recorder(
 /// none attached).
 void* sancov_context_get_cmp_recorder_for_testing(SanCovMeasurementContext* context);
 
+/// Generation guard: when set true on a thread, sancov_dispatch_edge and
+/// sancov_dispatch_cmp early-return on that thread (after the drop filter / TLS
+/// fetch). The fuzz loop sets it around input generation/mutation — which runs
+/// instrumented SUT code (e.g. a type-directed generator calling getTyp) whose
+/// coverage is NOT the property under test and is reset away before the test —
+/// so dispatching+recording it is pure waste. Per-thread, so concurrent engines
+/// (one mutating, one testing) never suppress each other. Cheap: the flag lives
+/// in the TLS block the dispatch already fetches. Must be cleared before the
+/// property runs or its coverage is lost.
+void sancov_set_dispatch_suppressed(bool suppressed);
+
+/// Read the current thread's generation-guard flag (testing/diagnostic).
+bool sancov_dispatch_is_suppressed(void);
+
 /// Resolve routing for the current task/thread and run the context's cmp
 /// recorder with the given comparison operands. No-op when no cmp recorder is
 /// attached or no measurement is active. Called by the __sanitizer_cov_trace_cmp*

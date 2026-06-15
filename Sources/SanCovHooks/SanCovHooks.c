@@ -101,6 +101,14 @@ typedef struct SanCovTLS {
     // Re-entry guard: set while inside an edge observer callback so edges fired
     // BY the callback never re-enter it (non-reentrant-lock deadlock).
     bool in_edge_observer;
+    // Generation guard: set by the fuzz loop around input generation/mutation,
+    // which executes instrumented SUT code (e.g. a type-directed generator
+    // calling getTyp) whose edges/comparisons are NOT the property under test —
+    // they are reset away before the test runs, so dispatching+recording them is
+    // pure waste (~25% of the process; scheduler-lab Finding 41p). When set, the
+    // dispatch hooks early-return on this thread. Per-thread so concurrent engines
+    // (one mutating, one testing) don't suppress each other.
+    bool suppressed;
 } SanCovTLS;
 
 static _Thread_local SanCovTLS g_tls = {0};
@@ -1543,6 +1551,9 @@ void sancov_dispatch_edge(uint32_t *guard) {
         if (ge < g_guard_count) ever[ge] = 1;  // idempotent; see note above
     }
     SanCovTLS* ts = sancov_tls();  // one tlv_get_addr for the whole dispatch
+    // Generation guard: skip routing+recording for edges fired by input
+    // generation/mutation (not the property under test). See SanCovTLS.suppressed.
+    if (ts->suppressed) return;
     uint8_t* map = get_current_coverage_map(ts);
     SanCovMeasurementContext* ctx = ts->cached_measurement_context;
     if (ctx) {
@@ -1792,6 +1803,18 @@ static void cmp_drop_init(void) {
 // a side effect), then run the context's cmp recorder if one is attached. No
 // edge map is touched; cmp recording is a parallel channel. No-op when no cmp
 // recorder is attached or no measurement is active.
+// Generation guard control (see SanCovTLS.suppressed). Set true around input
+// generation/mutation so this thread's instrumented SUT calls aren't dispatched
+// or recorded; set false before the property runs. Per-thread; cheap (the bool
+// lives in the already-fetched TLS struct).
+void sancov_set_dispatch_suppressed(bool suppressed) {
+    sancov_tls()->suppressed = suppressed;
+}
+
+bool sancov_dispatch_is_suppressed(void) {
+    return sancov_tls()->suppressed;
+}
+
 void sancov_dispatch_cmp(uintptr_t pc, uint64_t arg1, uint64_t arg2, uint32_t size_bytes) {
     // Drop synthesized/stdlib comparison sites FIRST — before the TLS fetch
     // (default on; opt out with PTK_CMP_DROP_SYNTHESIZED=0). The drop check needs
@@ -1809,6 +1832,11 @@ void sancov_dispatch_cmp(uintptr_t pc, uint64_t arg1, uint64_t arg2, uint32_t si
     // recorder itself (or by a reset hook we are invoking) must NOT re-dispatch,
     // or the recorder recurses into itself and overflows the stack.
     if (ts->in_cmp_recorder) return;
+    // Generation guard: skip census + routing + recording for comparisons fired
+    // by input generation/mutation (not the property under test). Kept comparisons
+    // (SUT funcs like getTyp the mutator calls to validate mutants) reach here;
+    // dropped ones already returned at the drop check above. See SanCovTLS.suppressed.
+    if (ts->suppressed) return;
     // Diagnostic census (env-gated; one predicted-not-taken load when disabled).
     // Placed after the re-entry guard so it counts only genuine SUT comparisons,
     // not the recorder's own internal ones.
