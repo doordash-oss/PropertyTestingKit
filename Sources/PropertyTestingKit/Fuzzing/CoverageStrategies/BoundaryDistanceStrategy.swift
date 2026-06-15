@@ -72,9 +72,11 @@ private func makeBoundaryEngine(emitSigns: Bool, window: UInt64, maxSites: Int) 
     // comparisons their own code fires are never dispatched back into onCompare.
     struct DistanceState {
         /// This iteration's closest approach per comparison site — the lowest
-        /// distance and the SIGN at that closest approach (cleared on reset and
-        /// after each decision).
-        var currentRun: [UInt64: (distance: UInt64, sign: UInt64)] = [:]
+        /// distance, plus the SIGN MASK of every side `{<, ==, >}` the site
+        /// landed on while *within `window`* (so a loop that straddles the
+        /// boundary records every near side it visited, not just the one at its
+        /// tightest hit). Cleared on reset and after each decision.
+        var currentRun: [UInt64: (distance: UInt64, signMask: UInt8)] = [:]
         /// Engine-lifetime lowest distance ever seen per site — the monotone
         /// acceptance oracle.
         var bestDistance: [UInt64: UInt64] = [:]
@@ -84,7 +86,7 @@ private func makeBoundaryEngine(emitSigns: Bool, window: UInt64, maxSites: Int) 
         /// the sign dimension (only populated when `emitSigns`).
         var seenSigns: Set<UInt64> = []
         /// The last accepted run's per-site closest approach, handed to the pool.
-        var lastAccepted: [UInt64: (distance: UInt64, sign: UInt64)] = [:]
+        var lastAccepted: [UInt64: (distance: UInt64, signMask: UInt8)] = [:]
         /// The last accepted run's sign-combination features, handed to the pool
         /// (computed once in `decide`, returned by the `boundarySigns` closure).
         var lastSignFeatures: [UInt64] = []
@@ -96,12 +98,18 @@ private func makeBoundaryEngine(emitSigns: Bool, window: UInt64, maxSites: Int) 
     let onCompare: @Sendable (UInt, UInt64, UInt64, UInt32) -> Void = { pc, arg1, arg2, _ in
         let site = UInt64(truncatingIfNeeded: pc)
         let distance = absoluteDifference(arg1, arg2)
-        let sign = boundarySign(arg1, arg2)
+        // Only near hits (within `window`) are "fragile" enough to flip with one
+        // mutation, so only they join the side mask. The mask bit is the side
+        // this hit landed on; OR accumulates across every hit of the site this
+        // run. (For `.boundaryDistance`, emitSigns is false → no sign work.)
+        let nearBit: UInt8 = (emitSigns && distance <= window) ? UInt8(1 << boundarySign(arg1, arg2)) : 0
         state.update { st in
-            if let cur = st.currentRun[site] {
-                if distance < cur.distance { st.currentRun[site] = (distance, sign) }
+            if var cur = st.currentRun[site] {
+                if distance < cur.distance { cur.distance = distance }
+                cur.signMask |= nearBit
+                st.currentRun[site] = cur
             } else {
-                st.currentRun[site] = (distance, sign)
+                st.currentRun[site] = (distance, nearBit)
             }
         }
     }
@@ -152,8 +160,8 @@ private func makeBoundaryEngine(emitSigns: Bool, window: UInt64, maxSites: Int) 
             var signs: [UInt64] = []
             if emitSigns {
                 signs = boundarySignFeatures(
-                    perSite: st.currentRun.mapValues { (sign: $0.sign, distance: $0.distance) },
-                    window: window, maxSites: maxSites)
+                    perSite: st.currentRun.mapValues { (signMask: $0.signMask, distance: $0.distance) },
+                    maxSites: maxSites)
                 for s in signs where st.seenSigns.insert(s).inserted { interesting = true }
             }
 

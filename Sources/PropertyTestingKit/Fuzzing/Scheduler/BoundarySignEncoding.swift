@@ -70,32 +70,56 @@ func encodeBoundarySign2(
     return mix((lo &* 0x0000_0100_0000_01B3) ^ hi ^ signTag2)
 }
 
-/// Build the run's sign-combination vocabulary from each near-boundary site's
-/// `(sign, distance)` at its closest approach. A site participates only when its
-/// minimum distance this run is `<= window` — the gradient pulls sites into this
-/// window, and only there is the sign "fragile" enough that one mutation flips
-/// it. To bound the pairwise blow-up, at most `maxSites` sites (the closest) are
-/// crossed. Emits every singleton plus every pair among the participants.
+/// The set of three-valued sides a site touched, as bit positions of a mask:
+/// bit 0 → `<`, bit 1 → `==`, bit 2 → `>` (so `1 << boundarySign(...)`).
+private func sides(of mask: UInt8) -> [UInt64] {
+    var out: [UInt64] = []
+    if mask & 0b001 != 0 { out.append(0) }
+    if mask & 0b010 != 0 { out.append(1) }
+    if mask & 0b100 != 0 { out.append(2) }
+    return out
+}
+
+/// Build the run's sign-combination vocabulary from each site's near-boundary
+/// SIGN MASK — the set of sides `{<, ==, >}` it landed on while within the
+/// window (the caller, `onCompare`, applies the window per hit, so a far-away
+/// loop iteration never joins the mask). A site participates iff its mask is
+/// non-empty; that is equivalent to "its closest approach this run was within
+/// the window," but carrying the full set means a loop that straddles the
+/// boundary contributes EVERY near side it visited, not just the one at its
+/// tightest hit. To bound the blow-up, at most `maxSites` sites (the closest)
+/// are crossed.
+///
+/// Emits, per participant, one singleton per side in its mask; and per pair of
+/// participants, the CROSS-PRODUCT of their sides — every joint side-config this
+/// input is primed to reach. This over-approximates co-occurrence (two sites'
+/// sides may have held at different loop iterations), which is intentional: the
+/// pool wants to retain a seed that has already driven each site near its flip,
+/// because it is a short mutation away from the simultaneous conjunction.
 func boundarySignFeatures(
-    perSite: [UInt64: (sign: UInt64, distance: UInt64)],
-    window: UInt64,
+    perSite: [UInt64: (signMask: UInt8, distance: UInt64)],
     maxSites: Int
 ) -> [UInt64] {
     // Closest-first, so the cap keeps the most-fragile sites.
     let near = perSite
-        .filter { $0.value.distance <= window }
+        .filter { $0.value.signMask != 0 }
         .sorted { $0.value.distance < $1.value.distance }
         .prefix(maxSites)
     guard !near.isEmpty else { return [] }
 
     var features: [UInt64] = []
-    features.reserveCapacity(near.count * (near.count + 1) / 2)
     for (i, a) in near.enumerated() {
-        features.append(encodeBoundarySign1(site: a.key, sign: a.value.sign))
+        let aSides = sides(of: a.value.signMask)
+        for sa in aSides {
+            features.append(encodeBoundarySign1(site: a.key, sign: sa))
+        }
         for b in near[near.index(near.startIndex, offsetBy: i + 1)...] {
-            features.append(encodeBoundarySign2(
-                siteA: a.key, signA: a.value.sign,
-                siteB: b.key, signB: b.value.sign))
+            for sa in aSides {
+                for sb in sides(of: b.value.signMask) {
+                    features.append(encodeBoundarySign2(
+                        siteA: a.key, signA: sa, siteB: b.key, signB: sb))
+                }
+            }
         }
     }
     return features

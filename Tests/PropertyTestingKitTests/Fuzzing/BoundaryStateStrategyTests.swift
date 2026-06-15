@@ -80,6 +80,36 @@ struct BoundaryStateStrategyTests {
                                                  siteB: UInt64(0xBB), signB: 0)))
     }
 
+    @Test("a site hit multiple times in one run records every near side it visited")
+    func loopAccumulatesNearSides() {
+        let h = makeHarness()
+        defer { h.teardown() }
+        // Site 0xAA fires TWICE this run (a loop straddle): (5,5)=d0/== and
+        // (4,5)=d1/< — both within window 1. The mask must hold BOTH sides, not
+        // just the one at the closest approach.
+        let acc = h.fire((0xAA, 5, 5), (0xAA, 4, 5), [40])
+        let signs = Set(acc?.boundarySigns ?? [])
+        #expect(signs.contains(encodeBoundarySign1(site: UInt64(0xAA), sign: 1)),
+                "the == side it touched")
+        #expect(signs.contains(encodeBoundarySign1(site: UInt64(0xAA), sign: 0)),
+                "the < side it ALSO touched in the loop")
+    }
+
+    @Test("a far hit's side is not recorded even when the site is near at its closest")
+    func farSideExcluded() {
+        let h = makeHarness()
+        defer { h.teardown() }
+        // Site 0xAA: closest approach (5,5)=d0/== is within window 1, but it also
+        // fired (50,5)=d45/> far from the boundary. The far > must NOT join the
+        // mask — only near hits are fragile enough to count.
+        let acc = h.fire((0xAA, 5, 5), (0xAA, 50, 5), [40])
+        let signs = Set(acc?.boundarySigns ?? [])
+        #expect(signs.contains(encodeBoundarySign1(site: UInt64(0xAA), sign: 1)),
+                "the near == side")
+        #expect(!signs.contains(encodeBoundarySign1(site: UInt64(0xAA), sign: 2)),
+                "the far > side does not contribute")
+    }
+
     @Test("boundaryState attaches a comparison observer (like boundaryDistance)")
     func attachesCmpObserver() {
         let context = SanCovCounters.beginMeasurement()

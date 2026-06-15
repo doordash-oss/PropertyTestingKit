@@ -66,14 +66,15 @@ struct BoundarySignTests {
                 != encodeBoundarySign2(siteA: 100, signA: 1, siteB: 100, signB: 1))
     }
 
-    @Test("only near-boundary sites participate, and pairs cross them")
-    func windowAndPairs() {
-        // pc100 @0 and pc200 @1 are within window 1; pc300 @9 is not.
+    @Test("participants are sites with a non-empty near-sign mask; pairs cross them")
+    func participantsAndPairs() {
+        // pc100 touched ==, pc200 touched <, both near (non-empty mask); pc300
+        // was only ever far (empty mask) and does not participate.
         let feats = boundarySignFeatures(
-            perSite: [100: (sign: 1, distance: 0),
-                      200: (sign: 0, distance: 1),
-                      300: (sign: 2, distance: 9)],
-            window: 1, maxSites: 16)
+            perSite: [100: (signMask: 0b010, distance: 0),   // {==}
+                      200: (signMask: 0b001, distance: 1),   // {<}
+                      300: (signMask: 0,     distance: 9)],  // far only
+            maxSites: 16)
         // 2 participants → 2 singletons + 1 pair = 3 features; pc300 excluded.
         #expect(feats.count == 3)
         #expect(Set(feats).contains(encodeBoundarySign1(site: 100, sign: 1)))
@@ -82,21 +83,50 @@ struct BoundarySignTests {
         #expect(!Set(feats).contains(encodeBoundarySign1(site: 300, sign: 2)))
     }
 
-    @Test("no near-boundary sites → no features")
-    func emptyWhenAllFar() {
+    @Test("no participating sites → no features")
+    func emptyWhenNoneNear() {
         let feats = boundarySignFeatures(
-            perSite: [100: (sign: 0, distance: 5), 200: (sign: 2, distance: 8)],
-            window: 1, maxSites: 16)
+            perSite: [100: (signMask: 0, distance: 5), 200: (signMask: 0, distance: 8)],
+            maxSites: 16)
         #expect(feats.isEmpty)
+    }
+
+    @Test("a site that touched multiple near sides emits an atom per side")
+    func multiSideSingletons() {
+        // A loop straddle: one site landed both < and == near the boundary.
+        let feats = boundarySignFeatures(
+            perSite: [100: (signMask: 0b011, distance: 0)],  // {<, ==}
+            maxSites: 16)
+        let set = Set(feats)
+        #expect(set.contains(encodeBoundarySign1(site: 100, sign: 0)))
+        #expect(set.contains(encodeBoundarySign1(site: 100, sign: 1)))
+        #expect(feats.count == 2, "single site → two singletons, no pair")
+    }
+
+    @Test("a pair crosses every side combination of the two sites")
+    func multiSidePairs() {
+        let feats = boundarySignFeatures(
+            perSite: [100: (signMask: 0b011, distance: 0),   // {<, ==}
+                      200: (signMask: 0b100, distance: 1)],  // {>}
+            maxSites: 16)
+        let set = Set(feats)
+        // 3 singletons: A<, A==, B>
+        #expect(set.contains(encodeBoundarySign1(site: 100, sign: 0)))
+        #expect(set.contains(encodeBoundarySign1(site: 100, sign: 1)))
+        #expect(set.contains(encodeBoundarySign1(site: 200, sign: 2)))
+        // 2 pairs: (A<, B>) and (A==, B>)
+        #expect(set.contains(encodeBoundarySign2(siteA: 100, signA: 0, siteB: 200, signB: 2)))
+        #expect(set.contains(encodeBoundarySign2(siteA: 100, signA: 1, siteB: 200, signB: 2)))
+        #expect(feats.count == 5)
     }
 
     @Test("maxSites caps the participant set to the closest sites")
     func capsToClosest() {
-        // 4 sites all within window; cap at 2 → 2 singletons + 1 pair = 3.
+        // 4 participating sites; cap at 2 (the closest) → 2 singletons + 1 pair = 3.
         let feats = boundarySignFeatures(
-            perSite: [1: (sign: 0, distance: 0), 2: (sign: 1, distance: 0),
-                      3: (sign: 2, distance: 1), 4: (sign: 0, distance: 1)],
-            window: 5, maxSites: 2)
+            perSite: [1: (signMask: 0b001, distance: 0), 2: (signMask: 0b010, distance: 0),
+                      3: (signMask: 0b100, distance: 1), 4: (signMask: 0b001, distance: 1)],
+            maxSites: 2)
         #expect(feats.count == 3)
     }
 }
