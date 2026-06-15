@@ -29,6 +29,8 @@
 //  pool retains, so it can hold and cross partial witnesses toward the joint one.
 //
 
+import Foundation
+
 /// Three-valued position of a comparison's operands: `<` → 0, `==` → 1, `>` → 2.
 /// Unsigned compare (matches `absoluteDifference` in the distance half); the
 /// integer-boundary bugs this targets compare small non-negative magnitudes.
@@ -107,6 +109,10 @@ func boundarySignFeatures(
         .prefix(maxSites)
     guard !near.isEmpty else { return [] }
 
+    if signBlowupEnabled {
+        recordSignBlowup(sizes: near.map { sides(of: $0.value.signMask).count })
+    }
+
     var features: [UInt64] = []
     for (i, a) in near.enumerated() {
         let aSides = sides(of: a.value.signMask)
@@ -123,4 +129,69 @@ func boundarySignFeatures(
         }
     }
     return features
+}
+
+// MARK: - Diagnostic: pairwise-vs-full-product vocabulary blowup (PTK_SIGN_BLOWUP)
+
+/// Per-run measurement of how large the sign vocabulary would be under the
+/// current pairwise (k≤2) scheme vs. the full combinatorial product across all
+/// near-boundary sites. Aggregated process-globally over a real run so the
+/// blowup can be read empirically rather than from the 3^n worst-case bound.
+/// Only runs with at least one participating site are counted (the others
+/// contribute nothing to either scheme).
+public struct SignVocabBlowup: Sendable {
+    public var runs = 0
+    /// near-site participant count `n` → number of runs with that count.
+    public var participantHistogram: [Int: Int] = [:]
+    /// per-site side-count (1, 2, or 3) → number of site-observations.
+    public var sideSizeHistogram: [Int: Int] = [:]
+    /// Σ features actually emitted today: singletons + pairwise cross-products.
+    public var sumCurrent = 0
+    /// Σ of the full *subset* product `Π(1+sᵢ) − 1` — every non-empty partial
+    /// side-assignment over the participants (all k from 1…n).
+    public var sumFullSubset: Double = 0
+    /// Σ of the full *width* product `Π sᵢ` — only the complete n-wide tuples.
+    public var sumFullWidth: Double = 0
+    public var maxParticipants = 0
+    public var maxCurrent = 0
+    public var maxFullSubset: Double = 0
+    public var maxFullWidth: Double = 0
+}
+
+private let signBlowupEnabled: Bool =
+    ProcessInfo.processInfo.environment["PTK_SIGN_BLOWUP"] != nil
+private let signBlowupStats = SyncBox<SignVocabBlowup>(SignVocabBlowup())
+
+/// Snapshot of the accumulated blowup stats (for a diagnostic harness to print).
+public func ptkSignVocabBlowupSnapshot() -> SignVocabBlowup { signBlowupStats.value }
+/// Reset the accumulator (call before a measured run).
+public func ptkResetSignVocabBlowup() { signBlowupStats.update { $0 = SignVocabBlowup() } }
+
+private func recordSignBlowup(sizes: [Int]) {
+    let n = sizes.count
+    guard n > 0 else { return }
+    var current = 0
+    for s in sizes { current += s }                     // singletons
+    for i in 0..<n {
+        for j in (i + 1)..<n { current += sizes[i] * sizes[j] }   // pairwise
+    }
+    var fullSubset = 1.0
+    var fullWidth = 1.0
+    for s in sizes {
+        fullSubset *= Double(1 + s)
+        fullWidth *= Double(s)
+    }
+    fullSubset -= 1.0
+    signBlowupStats.update { st in
+        st.runs += 1
+        st.participantHistogram[n, default: 0] += 1
+        for s in sizes { st.sideSizeHistogram[s, default: 0] += 1 }
+        st.sumCurrent += current
+        st.sumFullSubset += fullSubset
+        st.sumFullWidth += fullWidth
+        st.maxParticipants = max(st.maxParticipants, n)
+        st.maxCurrent = max(st.maxCurrent, current)
+        st.maxFullSubset = max(st.maxFullSubset, fullSubset)
+        st.maxFullWidth = max(st.maxFullWidth, fullWidth)
+    }
 }
