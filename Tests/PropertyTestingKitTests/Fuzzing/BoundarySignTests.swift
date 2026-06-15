@@ -129,4 +129,47 @@ struct BoundarySignTests {
             maxSites: 2)
         #expect(feats.count == 3)
     }
+
+    // MARK: - Allocation-light array-based core (the hot decide path)
+
+    @Test("array-based core matches the dict reference and clears the reused buffer")
+    func arrayCoreParityAndReuse() {
+        typealias Site = BoundarySiteAccumulator.Site
+        let sites: [Site] = [
+            Site(pc: 100, distance: 0, signMask: 0b011),  // {<, ==}
+            Site(pc: 200, distance: 1, signMask: 0b100),  // {>}
+            Site(pc: 300, distance: 9, signMask: 0),      // far only — excluded
+        ]
+        var out: [UInt64] = []
+        var scratch: [Site] = []
+        boundarySignFeatures(sites: sites, maxSites: 16, into: &out, scratch: &scratch)
+
+        // Same vocabulary as the dict-keyed reference for the same inputs.
+        let ref = boundarySignFeatures(
+            perSite: [100: (signMask: 0b011, distance: 0),
+                      200: (signMask: 0b100, distance: 1),
+                      300: (signMask: 0, distance: 9)],
+            maxSites: 16)
+        #expect(Set(out) == Set(ref))
+        #expect(out.count == ref.count)
+
+        // Reusing the buffer clears prior contents (no stale features leak).
+        boundarySignFeatures(sites: [], maxSites: 16, into: &out, scratch: &scratch)
+        #expect(out.isEmpty)
+    }
+
+    @Test("array-based core caps to the closest sites like the dict reference")
+    func arrayCoreCaps() {
+        typealias Site = BoundarySiteAccumulator.Site
+        let sites: [Site] = [
+            Site(pc: 1, distance: 0, signMask: 0b001),
+            Site(pc: 2, distance: 0, signMask: 0b010),
+            Site(pc: 3, distance: 1, signMask: 0b100),
+            Site(pc: 4, distance: 1, signMask: 0b001),
+        ]
+        var out: [UInt64] = []
+        var scratch: [Site] = []
+        boundarySignFeatures(sites: sites, maxSites: 2, into: &out, scratch: &scratch)
+        #expect(out.count == 3)  // 2 closest → 2 singletons + 1 pair
+    }
 }

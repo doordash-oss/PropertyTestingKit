@@ -88,6 +88,10 @@ private func makeBoundaryEngine(emitSigns: Bool, window: UInt64, maxSites: Int) 
         /// The last accepted run's sign-combination features, handed to the pool
         /// (computed once in `decide`, returned by the `boundarySigns` closure).
         var lastSignFeatures: [UInt64] = []
+        /// Reused near-site selection buffer for `boundarySignFeatures` — kept in
+        /// state so the per-iteration feature build allocates nothing on its
+        /// participant-selection/sort path (Finding 41k).
+        var signScratch: [BoundarySiteAccumulator.Site] = []
     }
     let state = SyncBox<DistanceState>(DistanceState())
 
@@ -158,10 +162,12 @@ private func makeBoundaryEngine(emitSigns: Bool, window: UInt64, maxSites: Int) 
             // partial witness into the pool.
             var signs: [UInt64] = []
             if emitSigns {
-                var perSite: [UInt64: (signMask: UInt8, distance: UInt64)] = [:]
-                perSite.reserveCapacity(sites.count)
-                for s in sites { perSite[s.pc] = (s.signMask, s.distance) }
-                signs = boundarySignFeatures(perSite: perSite, maxSites: maxSites)
+                // Read the per-site sign mask + distance straight from `sites`
+                // (no perSite dictionary), into a fresh `signs` array (it is
+                // published to the pool below) with a reused selection scratch.
+                boundarySignFeatures(
+                    sites: sites, maxSites: maxSites,
+                    into: &signs, scratch: &st.signScratch)
                 for s in signs where st.seenSigns.insert(s).inserted { interesting = true }
             }
 

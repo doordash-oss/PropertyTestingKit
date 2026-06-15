@@ -72,14 +72,16 @@ func encodeBoundarySign2(
     return mix((lo &* 0x0000_0100_0000_01B3) ^ hi ^ signTag2)
 }
 
-/// The set of three-valued sides a site touched, as bit positions of a mask:
-/// bit 0 → `<`, bit 1 → `==`, bit 2 → `>` (so `1 << boundarySign(...)`).
-private func sides(of mask: UInt8) -> [UInt64] {
-    var out: [UInt64] = []
-    if mask & 0b001 != 0 { out.append(0) }
-    if mask & 0b010 != 0 { out.append(1) }
-    if mask & 0b100 != 0 { out.append(2) }
-    return out
+/// Walk the ≤3 set bits of a sign mask (bit 0 → `<`, bit 1 → `==`, bit 2 → `>`,
+/// i.e. `1 << boundarySign(...)`) WITHOUT allocating an array. `@inline(__always)`
+/// with a non-escaping body so the closure stays on the stack — this is the hot
+/// decide path (Finding 41k: the old `sides(of:) -> [UInt64]` allocated per site
+/// in nested loops every iteration).
+@inline(__always)
+private func forEachSide(of mask: UInt8, _ body: (UInt64) -> Void) {
+    if mask & 0b001 != 0 { body(0) }
+    if mask & 0b010 != 0 { body(1) }
+    if mask & 0b100 != 0 { body(2) }
 }
 
 /// Build the run's sign-combination vocabulary from each site's near-boundary
@@ -99,35 +101,61 @@ private func sides(of mask: UInt8) -> [UInt64] {
 /// pool wants to retain a seed that has already driven each site near its flip,
 /// because it is a short mutation away from the simultaneous conjunction.
 func boundarySignFeatures(
-    perSite: [UInt64: (signMask: UInt8, distance: UInt64)],
-    maxSites: Int
-) -> [UInt64] {
+    sites: [BoundarySiteAccumulator.Site],
+    maxSites: Int,
+    into features: inout [UInt64],
+    scratch: inout [BoundarySiteAccumulator.Site]
+) {
+    // Both buffers are reused across decide iterations — clear, keep capacity.
+    features.removeAll(keepingCapacity: true)
+    scratch.removeAll(keepingCapacity: true)
+    // Participants = sites with a non-empty near-sign mask. Read straight from
+    // the `sites` array — no perSite dictionary round-trip (Finding 41k).
+    for s in sites where s.signMask != 0 { scratch.append(s) }
+    guard !scratch.isEmpty else { return }
     // Closest-first, so the cap keeps the most-fragile sites.
-    let near = perSite
-        .filter { $0.value.signMask != 0 }
-        .sorted { $0.value.distance < $1.value.distance }
-        .prefix(maxSites)
-    guard !near.isEmpty else { return [] }
+    scratch.sort { $0.distance < $1.distance }
+    let n = min(scratch.count, maxSites)
 
     if signBlowupEnabled {
-        recordSignBlowup(sizes: near.map { sides(of: $0.value.signMask).count })
+        var sizes: [Int] = []
+        sizes.reserveCapacity(n)
+        for i in 0..<n { sizes.append(scratch[i].signMask.nonzeroBitCount) }
+        recordSignBlowup(sizes: sizes)
     }
 
-    var features: [UInt64] = []
-    for (i, a) in near.enumerated() {
-        let aSides = sides(of: a.value.signMask)
-        for sa in aSides {
-            features.append(encodeBoundarySign1(site: a.key, sign: sa))
+    for i in 0..<n {
+        let a = scratch[i]
+        forEachSide(of: a.signMask) { sa in
+            features.append(encodeBoundarySign1(site: a.pc, sign: sa))
         }
-        for b in near[near.index(near.startIndex, offsetBy: i + 1)...] {
-            for sa in aSides {
-                for sb in sides(of: b.value.signMask) {
+        for j in (i + 1)..<n {
+            let b = scratch[j]
+            forEachSide(of: a.signMask) { sa in
+                forEachSide(of: b.signMask) { sb in
                     features.append(encodeBoundarySign2(
-                        siteA: a.key, signA: sa, siteB: b.key, signB: sb))
+                        siteA: a.pc, signA: sa, siteB: b.pc, signB: sb))
                 }
             }
         }
     }
+}
+
+/// Dict-keyed convenience for tests and non-hot callers: allocates fresh buffers
+/// and returns the feature list. The hot per-iteration decide path calls the
+/// inout-buffer core above directly to avoid re-allocating every iteration.
+func boundarySignFeatures(
+    perSite: [UInt64: (signMask: UInt8, distance: UInt64)],
+    maxSites: Int
+) -> [UInt64] {
+    var sites: [BoundarySiteAccumulator.Site] = []
+    sites.reserveCapacity(perSite.count)
+    for (pc, v) in perSite {
+        sites.append(BoundarySiteAccumulator.Site(pc: pc, distance: v.distance, signMask: v.signMask))
+    }
+    var features: [UInt64] = []
+    var scratch: [BoundarySiteAccumulator.Site] = []
+    boundarySignFeatures(sites: sites, maxSites: maxSites, into: &features, scratch: &scratch)
     return features
 }
 
