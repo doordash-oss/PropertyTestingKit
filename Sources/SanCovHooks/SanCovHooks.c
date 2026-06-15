@@ -1772,8 +1772,12 @@ static bool cmp_drop_should_skip(CmpDropTable* t, uintptr_t pc) {
 
 __attribute__((constructor))
 static void cmp_drop_init(void) {
+    // Default ON: synthesized/stdlib comparison sites carry no SUT signal and
+    // taxing them only slows the trace-cmp strategies (measured +1.57× throughput
+    // when dropped). Opt OUT with PTK_CMP_DROP_SYNTHESIZED=0 — e.g. when a bug can
+    // manifest as a value at a stdlib bounds-check comparison.
     const char* v = getenv("PTK_CMP_DROP_SYNTHESIZED");
-    if (v == NULL || v[0] == '\0' || v[0] == '0') return;
+    if (v != NULL && (v[0] == '0' || v[0] == '\0')) return;
     CmpDropTable* t = (CmpDropTable*)xmalloc(sizeof(CmpDropTable));
     t->capacity = 16384;  // power of two; ≫ any workload's distinct cmp-site count
     t->slots = (CmpDropEntry*)calloc(t->capacity, sizeof(CmpDropEntry));
@@ -1797,11 +1801,11 @@ void sancov_dispatch_cmp(uintptr_t pc, uint64_t arg1, uint64_t arg2, uint32_t si
     // recorder itself (or by a reset hook we are invoking) must NOT re-dispatch,
     // or the recorder recurses into itself and overflows the stack.
     if (ts->in_cmp_recorder) return;
-    // Drop synthesized/stdlib comparison sites (env-gated PTK_CMP_DROP_SYNTHESIZED;
-    // one predicted-not-taken acquire load when disabled). Skips before the census
-    // and routing so dropped sites cost nothing beyond the cached verdict lookup.
+    // Drop synthesized/stdlib comparison sites (default on; opt out with
+    // PTK_CMP_DROP_SYNTHESIZED=0). Skips before the census and routing so dropped
+    // sites cost nothing beyond the cached verdict lookup.
     CmpDropTable* drop = atomic_load_explicit(&g_cmp_drop_table, memory_order_acquire);
-    if (__builtin_expect(drop != NULL, 0) && cmp_drop_should_skip(drop, pc)) return;
+    if (__builtin_expect(drop != NULL, 1) && cmp_drop_should_skip(drop, pc)) return;
     // Diagnostic census (env-gated; one predicted-not-taken load when disabled).
     // Placed after the re-entry guard so it counts only genuine SUT comparisons,
     // not the recorder's own internal ones.

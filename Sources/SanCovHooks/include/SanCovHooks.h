@@ -412,10 +412,10 @@ bool sancov_is_compiler_generated(const char* sname);
 // chatter (Swift.Array bounds checks, count getters, buffer copies, synthesized
 // Equatable, value witnesses, outlined ops) carrying no SUT-logic signal. This
 // filter drops those comparison sites so the per-exec cost concentrates on the
-// SUT comparisons that actually witness the bug. Opt-in via the
-// PTK_CMP_DROP_SYNTHESIZED env var (default off → zero hot-path cost beyond one
-// predicted-not-taken load, like the census). Verdicts are cached per
-// comparison-site PC (dladdr + classify on first fire, O(1) thereafter).
+// SUT comparisons that actually witness the bug. Enabled by DEFAULT (measured
+// +1.57× trace-cmp throughput); opt out with PTK_CMP_DROP_SYNTHESIZED=0 when a
+// bug can manifest as a value at a stdlib bounds-check comparison. Verdicts are
+// cached per comparison-site PC (dladdr + classify on first fire, O(1) after).
 
 /// Classify a comparison site's enclosing-function mangled symbol (dladdr's
 /// dli_sname) as droppable synthesized/stdlib chatter. Returns true for stdlib
