@@ -1590,6 +1590,111 @@ void __sanitizer_cov_trace_pc_guard(uint32_t *guard) {
     sancov_dispatch_edge(guard);
 }
 
+// MARK: - Comparison Census (diagnostic, env-gated: PTK_CMP_CENSUS=<path>)
+//
+// Answers "is comparison VOLUME concentrated in a few sites, and do the hot
+// sites approach the boundary?" — i.e. is there a filterable population, or is
+// the volume the relevant SUT-logic comparisons themselves (scheduler-lab
+// Finding 41f follow-up). Records per comparison-site PC: fire count and the
+// minimum |arg1-arg2| ever seen. Symbol resolution (dladdr) is deferred to the
+// atexit dump, so the per-comparison cost is one CAS-claim + two relaxed RMWs on
+// a fixed open-addressing table — and ZERO when disabled (one predicted-not-taken
+// atomic load of g_cmp_census, same pattern as g_ever_covered). Enabled once at
+// load via the constructor below; never touches production unless the env is set.
+typedef struct {
+    _Atomic uint64_t pc;        // 0 = empty slot
+    _Atomic uint64_t count;     // fire volume
+    _Atomic uint64_t min_dist;  // min |arg1-arg2|, starts UINT64_MAX
+} CmpCensusEntry;
+
+typedef struct {
+    CmpCensusEntry* slots;
+    size_t capacity;            // power of two
+    const char* path;
+} CmpCensus;
+
+static CmpCensus* _Atomic g_cmp_census = NULL;
+
+static inline uint64_t cmp_census_hash(uint64_t x) {
+    x += 0x9E3779B97F4A7C15ULL;
+    x = (x ^ (x >> 30)) * 0xBF58476D1CE4E5B9ULL;
+    x = (x ^ (x >> 27)) * 0x94D049BB133111EBULL;
+    return x ^ (x >> 31);
+}
+
+static void cmp_census_record(uint64_t pc, uint64_t arg1, uint64_t arg2) {
+    CmpCensus* c = atomic_load_explicit(&g_cmp_census, memory_order_acquire);
+    if (__builtin_expect(c == NULL, 1)) return;
+    uint64_t dist = arg1 > arg2 ? arg1 - arg2 : arg2 - arg1;
+    size_t m = c->capacity - 1;
+    size_t i = (size_t)(cmp_census_hash(pc) & (uint64_t)m);
+    for (size_t probes = 0; probes <= m; probes++) {
+        CmpCensusEntry* e = &c->slots[i];
+        uint64_t k = atomic_load_explicit(&e->pc, memory_order_relaxed);
+        if (k == 0) {
+            uint64_t expected = 0;
+            if (!atomic_compare_exchange_strong_explicit(
+                    &e->pc, &expected, pc, memory_order_acq_rel, memory_order_relaxed)
+                && expected != pc) {
+                i = (i + 1) & m;  // lost claim to a different pc; keep probing
+                continue;
+            }
+            // won the claim, or another thread claimed it for THIS pc — fall through
+            k = pc;
+        }
+        if (k == pc) {
+            atomic_fetch_add_explicit(&e->count, 1, memory_order_relaxed);
+            uint64_t cur = atomic_load_explicit(&e->min_dist, memory_order_relaxed);
+            while (dist < cur) {
+                if (atomic_compare_exchange_weak_explicit(
+                        &e->min_dist, &cur, dist, memory_order_relaxed, memory_order_relaxed))
+                    break;
+            }
+            return;
+        }
+        i = (i + 1) & m;
+    }
+    // table full: drop (census is best-effort)
+}
+
+static void cmp_census_dump(void) {
+    CmpCensus* c = atomic_load_explicit(&g_cmp_census, memory_order_acquire);
+    if (c == NULL) return;
+    FILE* f = fopen(c->path, "w");
+    if (f == NULL) return;
+    fprintf(f, "# count\tmin_dist\tpc\tsymbol\n");
+    for (size_t i = 0; i < c->capacity; i++) {
+        uint64_t pc = atomic_load_explicit(&c->slots[i].pc, memory_order_relaxed);
+        if (pc == 0) continue;
+        uint64_t count = atomic_load_explicit(&c->slots[i].count, memory_order_relaxed);
+        uint64_t md = atomic_load_explicit(&c->slots[i].min_dist, memory_order_relaxed);
+        const char* sym = "?";
+        Dl_info info;
+        if (dladdr((void*)(uintptr_t)pc, &info) && info.dli_sname) sym = info.dli_sname;
+        fprintf(f, "%llu\t%llu\t0x%llx\t%s\n",
+                (unsigned long long)count,
+                (unsigned long long)(md == UINT64_MAX ? 0 : md),
+                (unsigned long long)pc, sym);
+    }
+    fclose(f);
+}
+
+__attribute__((constructor))
+static void cmp_census_init(void) {
+    const char* path = getenv("PTK_CMP_CENSUS");
+    if (path == NULL || path[0] == '\0') return;
+    CmpCensus* c = (CmpCensus*)xmalloc(sizeof(CmpCensus));
+    c->capacity = 16384;  // power of two; ≫ any workload's distinct cmp-site count
+    c->slots = (CmpCensusEntry*)calloc(c->capacity, sizeof(CmpCensusEntry));
+    if (c->slots == NULL) { free(c); return; }
+    for (size_t i = 0; i < c->capacity; i++) {
+        atomic_init(&c->slots[i].min_dist, UINT64_MAX);
+    }
+    c->path = path;
+    atomic_store_explicit(&g_cmp_census, c, memory_order_release);
+    atexit(cmp_census_dump);
+}
+
 // MARK: - Comparison Dispatch (trace-cmp / value profile)
 
 // Per-comparison dispatch: resolve routing once (same current-context lookup as
@@ -1606,6 +1711,10 @@ void sancov_dispatch_cmp(uintptr_t pc, uint64_t arg1, uint64_t arg2, uint32_t si
     // recorder itself (or by a reset hook we are invoking) must NOT re-dispatch,
     // or the recorder recurses into itself and overflows the stack.
     if (ts->in_cmp_recorder) return;
+    // Diagnostic census (env-gated; one predicted-not-taken load when disabled).
+    // Placed after the re-entry guard so it counts only genuine SUT comparisons,
+    // not the recorder's own internal ones.
+    cmp_census_record(pc, arg1, arg2);
     // Resolve the calling thread's current measurement context. We don't need
     // the returned map, but the call refreshes cached_measurement_context.
     (void)get_current_coverage_map(ts);
