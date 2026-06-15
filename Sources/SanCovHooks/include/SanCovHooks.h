@@ -431,6 +431,29 @@ typedef struct {
 /// Read the current routing-path counters into `out`. Safe to call concurrently.
 void sancov_read_route_counters(SanCovRouteCounters* out);
 
+// MARK: - Process-global "ever-covered" edge bitmap (diagnostic)
+//
+// An accumulator that records EVERY allowed edge fire, independent of the
+// per-task measurement context (which the fuzz loop resets each iteration) and
+// the corpus (which only banks admitted inputs). It answers "what is the true
+// union of edges executed across an entire run?". Disabled by default (zero
+// hot-path cost beyond one predicted-not-taken load); enable once for a
+// diagnostic run, reset between runs, then read the count/indices.
+
+/// Allocate the bitmap and start recording. Idempotent; safe under races.
+void sancov_enable_global_ever_covered(void);
+
+/// Clear all recorded bits (keeps recording enabled). For use between runs in a
+/// single-threaded diagnostic harness.
+void sancov_reset_global_ever_covered(void);
+
+/// Number of distinct edges ever fired since the last reset (0 if disabled).
+size_t sancov_global_ever_covered_count(void);
+
+/// Allocate and return the sorted indices of every edge ever fired since the
+/// last reset; sets `*out_count`. Caller must free() the result. NULL if none.
+uint32_t* sancov_snapshot_global_ever_covered(size_t* out_count);
+
 #ifdef __cplusplus
 }
 #endif

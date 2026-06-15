@@ -772,6 +772,17 @@ SanCovMeasurementContext* sancov_create_dummy_context(void) {
     return ctx;
 }
 
+// Set while the calling thread is inside a cmp recorder (or a reset hook we
+// invoke). A cmp recorder's OWN body — and any reset hook — contains
+// instrumented comparisons whenever it is compiled into a trace-cmp module;
+// each such comparison fires __sanitizer_cov_trace_cmp* -> sancov_dispatch_cmp,
+// which would re-enter the recorder and recurse without bound (observed as a
+// 500-deep stack overflow / SIGBUS in CmpRecorderTests, whose recorders live in
+// the trace-cmp-instrumented test target). This is the cmp twin of
+// tls_in_edge_observer (defined later): while set, sancov_dispatch_cmp is a
+// no-op so a recorder can never re-dispatch into itself.
+static _Thread_local bool tls_in_cmp_recorder = false;
+
 /// Reset coverage for a measurement context (cheap memset, O(1) for covered_count).
 /// Used between iterations in the fuzz loop to avoid hash table insert/remove overhead.
 void sancov_reset_coverage(SanCovMeasurementContext* ctx) {
@@ -804,10 +815,15 @@ void sancov_reset_coverage(SanCovMeasurementContext* ctx) {
 
     // Same per-iteration reset for the independent cmp recorder (e.g. clear the
     // value-profile feature set so each iteration starts from a clean slate).
+    // Guard with tls_in_cmp_recorder: a trace-cmp-instrumented reset hook fires
+    // comparisons of its own, which must not re-dispatch into the (still
+    // attached) cmp recorder and recurse.
     SanCovRecorderDataFn cmp_reset =
         (SanCovRecorderDataFn)__atomic_load_n(&ctx->cmp_recorder_reset_bits, __ATOMIC_ACQUIRE);
     if (cmp_reset) {
+        tls_in_cmp_recorder = true;
         cmp_reset(__atomic_load_n(&ctx->cmp_recorder_data, __ATOMIC_ACQUIRE));
+        tls_in_cmp_recorder = false;
     }
 
 }
@@ -1468,7 +1484,21 @@ void sancov_rebuild_covered_indices_from_map(SanCovMeasurementContext* ctx) {
 // with the __atomic builtins (a fn-ptr _Atomic is rejected; cast on load —
 // fn-ptr ↔ uintptr_t round-trips losslessly on every supported target, the
 // same assumption dlsym relies on).
+// Process-global "ever-covered" edge bitmap (diagnostic). See the API block
+// near the bottom of this file. Default NULL ⇒ recording disabled ⇒ the hot
+// path below pays one predicted-not-taken atomic load. Once enabled, every
+// allowed edge fire sets a byte to 1; nothing in the fuzz loop ever clears it
+// (only sancov_reset_global_ever_covered). Writes are idempotent stores of the
+// constant 1 — concurrent engines writing the same value to the same byte is a
+// benign race (the only transition is 0→1, no torn value for a single byte).
+static _Atomic(uint8_t*) g_ever_covered = NULL;
+
 void sancov_dispatch_edge(uint32_t *guard) {
+    uint8_t* ever = atomic_load_explicit(&g_ever_covered, memory_order_acquire);
+    if (__builtin_expect(ever != NULL, 0)) {
+        uint32_t ge = *guard;
+        if (ge < g_guard_count) ever[ge] = 1;  // idempotent; see note above
+    }
     uint8_t* map = get_current_coverage_map();
     SanCovMeasurementContext* ctx = tls_cached_measurement_context;
     if (ctx) {
@@ -1524,6 +1554,10 @@ void __sanitizer_cov_trace_pc_guard(uint32_t *guard) {
 // edge map is touched; cmp recording is a parallel channel. No-op when no cmp
 // recorder is attached or no measurement is active.
 void sancov_dispatch_cmp(uintptr_t pc, uint64_t arg1, uint64_t arg2, uint32_t size_bytes) {
+    // Re-entry guard (see tls_in_cmp_recorder): a comparison fired by the
+    // recorder itself (or by a reset hook we are invoking) must NOT re-dispatch,
+    // or the recorder recurses into itself and overflows the stack.
+    if (tls_in_cmp_recorder) return;
     // Resolve the calling thread's current measurement context. We don't need
     // the returned map, but the call refreshes tls_cached_measurement_context.
     (void)get_current_coverage_map();
@@ -1531,7 +1565,9 @@ void sancov_dispatch_cmp(uintptr_t pc, uint64_t arg1, uint64_t arg2, uint32_t si
     if (!ctx) return;
     SanCovCmpRecorder r = (SanCovCmpRecorder)__atomic_load_n(&ctx->cmp_recorder_bits, __ATOMIC_ACQUIRE);
     if (r) {
+        tls_in_cmp_recorder = true;
         r(pc, arg1, arg2, size_bytes, ctx);
+        tls_in_cmp_recorder = false;
     }
 }
 
@@ -1608,6 +1644,66 @@ bool sancov_counters_available(void) {
 
 size_t sancov_get_counter_count(void) {
     return g_guard_count;
+}
+
+// MARK: - Process-global "ever-covered" edge bitmap (diagnostic)
+//
+// (Storage `g_ever_covered` and the hot-path write live with
+// sancov_dispatch_edge above.) This accumulator is the answer to "did a fuzz
+// run reach full SUT coverage?" without the confounds that make the per-task
+// context and the corpus unsuitable: the context is reset every iteration and
+// the corpus only banks ADMITTED inputs, so neither holds the true union of
+// edges executed across a whole run. The global bitmap does — it is set on
+// every allowed edge fire and only cleared by sancov_reset_global_ever_covered.
+//
+// All four entry points are intended for a single-threaded diagnostic harness
+// between runs; the per-edge write is the only thing that runs under the
+// parallel fuzz loop.
+
+void sancov_enable_global_ever_covered(void) {
+    if (g_guard_count == 0) return;
+    if (atomic_load_explicit(&g_ever_covered, memory_order_acquire) != NULL) return;
+    uint8_t* buf = (uint8_t*)calloc(g_guard_count, 1);
+    if (!buf) return;
+    uint8_t* expected = NULL;
+    // CAS so a racing second enable doesn't leak a buffer; first writer wins.
+    if (!atomic_compare_exchange_strong_explicit(&g_ever_covered, &expected, buf,
+            memory_order_acq_rel, memory_order_acquire)) {
+        free(buf);
+    }
+}
+
+void sancov_reset_global_ever_covered(void) {
+    uint8_t* buf = atomic_load_explicit(&g_ever_covered, memory_order_acquire);
+    if (buf && g_guard_count > 0) memset(buf, 0, g_guard_count);
+}
+
+size_t sancov_global_ever_covered_count(void) {
+    uint8_t* buf = atomic_load_explicit(&g_ever_covered, memory_order_acquire);
+    if (!buf) return 0;
+    size_t n = 0;
+    for (size_t i = 0; i < g_guard_count; i++) {
+        if (buf[i]) n++;
+    }
+    return n;
+}
+
+uint32_t* sancov_snapshot_global_ever_covered(size_t* out_count) {
+    if (out_count) *out_count = 0;
+    uint8_t* buf = atomic_load_explicit(&g_ever_covered, memory_order_acquire);
+    if (!buf || g_guard_count == 0) return NULL;
+    size_t n = 0;
+    for (size_t i = 0; i < g_guard_count; i++) {
+        if (buf[i]) n++;
+    }
+    if (n == 0) return NULL;
+    uint32_t* out = (uint32_t*)xmalloc(n * sizeof(uint32_t));
+    size_t k = 0;
+    for (size_t i = 0; i < g_guard_count && k < n; i++) {
+        if (buf[i]) out[k++] = (uint32_t)i;
+    }
+    if (out_count) *out_count = k;
+    return out;
 }
 
 // MARK: - PC-to-Source Mapping Implementation

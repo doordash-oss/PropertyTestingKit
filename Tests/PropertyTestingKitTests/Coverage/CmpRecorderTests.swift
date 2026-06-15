@@ -133,14 +133,20 @@ struct CmpRecorderTests {
 
             sancov_dispatch_cmp(0xBEEF, 4, 5, 8)
 
-            #expect(data.pointee.count == 1, "the recorder fires once per dispatched comparison")
-            #expect(data.pointee.lastPC == 0xBEEF)
-            #expect(data.pointee.lastArg1 == 4)
-            #expect(data.pointee.lastArg2 == 5)
-            #expect(data.pointee.lastSize == 8)
-
-            // Detach before the data pointer goes out of scope.
+            // Snapshot then DETACH before asserting. The test target is built
+            // with `trace-cmp`, so the `#expect` integer comparisons below are
+            // themselves instrumented: while the recorder is attached each one
+            // dispatches into it and overwrites the captured operands. Capturing
+            // the single dispatch's result and detaching first keeps the
+            // assertions measuring exactly that one dispatch.
+            let captured = data.pointee
             sancov_context_set_cmp_recorder(context.rawContext, nil, nil, nil, nil)
+
+            #expect(captured.count == 1, "the recorder fires once per dispatched comparison")
+            #expect(captured.lastPC == 0xBEEF)
+            #expect(captured.lastArg1 == 4)
+            #expect(captured.lastArg2 == 5)
+            #expect(captured.lastSize == 8)
         }
     }
 

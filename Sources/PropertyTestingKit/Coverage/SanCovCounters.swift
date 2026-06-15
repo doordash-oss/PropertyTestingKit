@@ -131,6 +131,40 @@ enum SanCovCounters {
     static var filteredEdgeCount: Int {
         sancov_get_filtered_count()
     }
+
+    // MARK: - Global ever-covered bitmap (diagnostic)
+    //
+    // A process-global accumulator that records every allowed edge fire,
+    // independent of any measurement context, the engine's per-iteration reset,
+    // and corpus banking. Use it to answer "did a whole run reach full SUT
+    // coverage?" — a question the per-context snapshot (reset each iteration)
+    // and the corpus union (admitted inputs only) cannot answer. Disabled by
+    // default; enable once, reset between runs, read the count/indices.
+
+    /// Enable global ever-covered recording (idempotent).
+    static func enableGlobalEverCovered() {
+        sancov_enable_global_ever_covered()
+    }
+
+    /// Clear the global ever-covered bitmap (keeps recording enabled).
+    static func resetGlobalEverCovered() {
+        sancov_reset_global_ever_covered()
+    }
+
+    /// Number of distinct edges fired since the last reset (0 if disabled).
+    static var globalEverCoveredCount: Int {
+        sancov_global_ever_covered_count()
+    }
+
+    /// Sorted indices of every edge fired since the last reset.
+    static func snapshotGlobalEverCovered() -> [UInt32] {
+        var count = 0
+        guard let ptr = sancov_snapshot_global_ever_covered(&count), count > 0 else {
+            return []
+        }
+        defer { free(ptr) }
+        return Array(UnsafeBufferPointer(start: ptr, count: count))
+    }
 }
 
 // MARK: - Source Location Mapping
