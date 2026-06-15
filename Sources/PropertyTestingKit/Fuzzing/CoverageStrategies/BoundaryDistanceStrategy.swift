@@ -67,16 +67,14 @@ private func absoluteDifference(_ a: UInt64, _ b: UInt64) -> UInt64 {
 }
 
 private func makeBoundaryEngine(emitSigns: Bool, window: UInt64, maxSites: Int) -> CoverageEngine {
-    // One lock for all halves is safe: onCompare, onReset, decide, and the
-    // distances/signs closures all run under the per-thread observer gate, so
-    // comparisons their own code fires are never dispatched back into onCompare.
+    // The per-comparison hot path writes into `accumulator` (a concrete
+    // open-addressing PC -> (minDistance, signMask) map); the engine-lifetime
+    // acceptance oracle lives in `state`, touched only once per iteration in
+    // `decide`/`distances`/`signs`. Splitting them keeps Swift.Dictionary +
+    // generic `SyncBox.update<A>` off the comparison hot path (Finding 41).
+    let accumulator = BoundarySiteAccumulator()
+
     struct DistanceState {
-        /// This iteration's closest approach per comparison site — the lowest
-        /// distance, plus the SIGN MASK of every side `{<, ==, >}` the site
-        /// landed on while *within `window`* (so a loop that straddles the
-        /// boundary records every near side it visited, not just the one at its
-        /// tightest hit). Cleared on reset and after each decision.
-        var currentRun: [UInt64: (distance: UInt64, signMask: UInt8)] = [:]
         /// Engine-lifetime lowest distance ever seen per site — the monotone
         /// acceptance oracle.
         var bestDistance: [UInt64: UInt64] = [:]
@@ -86,7 +84,7 @@ private func makeBoundaryEngine(emitSigns: Bool, window: UInt64, maxSites: Int) 
         /// the sign dimension (only populated when `emitSigns`).
         var seenSigns: Set<UInt64> = []
         /// The last accepted run's per-site closest approach, handed to the pool.
-        var lastAccepted: [UInt64: (distance: UInt64, signMask: UInt8)] = [:]
+        var lastAccepted: [BoundarySiteAccumulator.Site] = []
         /// The last accepted run's sign-combination features, handed to the pool
         /// (computed once in `decide`, returned by the `boundarySigns` closure).
         var lastSignFeatures: [UInt64] = []
@@ -103,21 +101,18 @@ private func makeBoundaryEngine(emitSigns: Bool, window: UInt64, maxSites: Int) 
         // this hit landed on; OR accumulates across every hit of the site this
         // run. (For `.boundaryDistance`, emitSigns is false → no sign work.)
         let nearBit: UInt8 = (emitSigns && distance <= window) ? UInt8(1 << boundarySign(arg1, arg2)) : 0
-        state.update { st in
-            if var cur = st.currentRun[site] {
-                if distance < cur.distance { cur.distance = distance }
-                cur.signMask |= nearBit
-                st.currentRun[site] = cur
-            } else {
-                st.currentRun[site] = (distance, nearBit)
-            }
-        }
+        accumulator.record(pc: site, distance: distance, nearBit: nearBit)
     }
     let onReset: @Sendable () -> Void = {
-        state.update { $0.currentRun.removeAll(keepingCapacity: true) }
+        accumulator.reset()
     }
     let distancesClosure: @Sendable () -> [UInt64: UInt64] = {
-        state.update { $0.lastAccepted.mapValues { approach in approach.distance } }
+        state.update { st in
+            var d: [UInt64: UInt64] = [:]
+            d.reserveCapacity(st.lastAccepted.count)
+            for s in st.lastAccepted { d[s.pc] = s.distance }
+            return d
+        }
     }
     let signsClosure: (@Sendable () -> [UInt64])? =
         emitSigns ? ({ @Sendable in state.update { $0.lastSignFeatures } }) : nil
@@ -134,8 +129,12 @@ private func makeBoundaryEngine(emitSigns: Bool, window: UInt64, maxSites: Int) 
         // edge union (and storage) read, so our bookkeeping can't pollute it —
         // the same first-read discipline `.newEdge` follows.
         let sparse = coverage.materialized()
+        // Drain the per-comparison accumulator once (off the hot path), then
+        // reset it for the next run. snapshot/reset fire no comparisons of their
+        // own (this module is uninstrumented), so they cannot pollute `sparse`.
+        let sites = accumulator.snapshot()
+        accumulator.reset()
         return state.update { st in
-            defer { st.currentRun.removeAll(keepingCapacity: true) }
             var interesting = false
 
             // Edge-coverage union: never weaker than .newEdge.
@@ -146,9 +145,9 @@ private func makeBoundaryEngine(emitSigns: Bool, window: UInt64, maxSites: Int) 
             }
 
             // Monotone distance novelty: any site driven strictly closer.
-            for (site, approach) in st.currentRun {
-                if approach.distance < (st.bestDistance[site] ?? .max) {
-                    st.bestDistance[site] = approach.distance
+            for s in sites {
+                if s.distance < (st.bestDistance[s.pc] ?? .max) {
+                    st.bestDistance[s.pc] = s.distance
                     interesting = true
                 }
             }
@@ -159,16 +158,17 @@ private func makeBoundaryEngine(emitSigns: Bool, window: UInt64, maxSites: Int) 
             // partial witness into the pool.
             var signs: [UInt64] = []
             if emitSigns {
-                signs = boundarySignFeatures(
-                    perSite: st.currentRun.mapValues { (signMask: $0.signMask, distance: $0.distance) },
-                    maxSites: maxSites)
+                var perSite: [UInt64: (signMask: UInt8, distance: UInt64)] = [:]
+                perSite.reserveCapacity(sites.count)
+                for s in sites { perSite[s.pc] = (s.signMask, s.distance) }
+                signs = boundarySignFeatures(perSite: perSite, maxSites: maxSites)
                 for s in signs where st.seenSigns.insert(s).inserted { interesting = true }
             }
 
             // Publish this run's per-site closest approach + sign features
             // regardless of WHY it was accepted, so an edge-novel input can
             // still claim boundaries and sign states.
-            st.lastAccepted = st.currentRun
+            st.lastAccepted = sites
             st.lastSignFeatures = signs
             return interesting
         }
