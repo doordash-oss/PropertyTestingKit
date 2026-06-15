@@ -66,11 +66,50 @@ static uint32_t *g_guards_start = NULL;
 static uint32_t *g_guards_end = NULL;
 static size_t g_guard_count = 0;
 
-// Thread-local target context for schedule-aware coverage.
-// Set per-thread so parallel sessions don't corrupt each other.
-// Defined here (before first use in get_current_coverage_map) and
-// set/cleared in sancov_set_target_context below.
-static _Thread_local SanCovMeasurementContext* g_target_context = NULL;
+// MARK: - Coalesced thread-local state (one TLS block per thread)
+//
+// PERFORMANCE: every distinct `_Thread_local` variable accessed in a dylib
+// lowers to a `tlv_get_addr` *function call* on macOS. The per-comparison hot
+// path (sancov_dispatch_cmp → get_current_coverage_map) touched ~6 separate
+// thread-locals, so it paid ~6 tlv_get_addr calls per instrumented comparison —
+// profiled at ~30% of the cmp-dispatch subtree (Finding 41c). Coalescing them
+// into ONE struct lets the hot path fetch the block address ONCE (a single
+// tlv_get_addr) and read/write every field as a struct offset. The address is
+// resolved at each hot entry point and threaded down through `ts` so no callee
+// re-fetches it.
+//
+// Field-by-field provenance (was N separate `_Thread_local` globals):
+typedef struct SanCovTLS {
+    // Schedule-aware target context (ScheduleControl). When non-NULL ALL edges
+    // route here regardless of task/thread. Set in sancov_set_target_context.
+    SanCovMeasurementContext* target_context;
+    // Non-async fallback coverage map (lazily calloc'd by ensure_tls_coverage_map).
+    uint8_t* coverage_map;
+    // Pseudo-task id for synchronous code outside any async context.
+    void* sync_pseudo_task;
+    // Hot-path cache: last resolved (task → map) pair and the liveness epoch it
+    // was resolved under. See get_current_coverage_map's fast path.
+    void* cached_task;
+    uint8_t* cached_task_map;
+    SanCovMeasurementContext* cached_measurement_context;  // refcounted (see set_tls_measurement_context)
+    uint8_t* cached_coverage_map;
+    uint64_t cached_generation;
+    // Re-entry guard: set while inside a cmp recorder / reset hook so a
+    // comparison fired by the recorder cannot re-dispatch and recurse
+    // (CmpRecorderTests stack-overflow; the cmp twin of in_edge_observer).
+    bool in_cmp_recorder;
+    // Re-entry guard: set while inside an edge observer callback so edges fired
+    // BY the callback never re-enter it (non-reentrant-lock deadlock).
+    bool in_edge_observer;
+} SanCovTLS;
+
+static _Thread_local SanCovTLS g_tls = {0};
+
+// One tlv_get_addr; callees take the returned pointer as `ts` and never re-fetch.
+// always_inline so the hot dispatch paths fold the TLS fetch in-line (no call
+// frame, and the compiler keeps the resolved base in a register).
+__attribute__((always_inline))
+static inline SanCovTLS* sancov_tls(void) { return &g_tls; }
 
 // Key pointer for coverage inheritance task local. When set, child tasks
 // inherit their parent's measurement context via Swift task locals. Atomic
@@ -304,30 +343,25 @@ static SanCovMeasurementContext* retain_inherited_if_valid(uint64_t handle);
 
 // Defined further below (after the refcount helpers); forward-declared so the
 // testing seams above can reset the calling thread's cached measurement context.
-static void set_tls_measurement_context(SanCovMeasurementContext* new_ctx);
+static void set_tls_measurement_context(SanCovTLS* ts, SanCovMeasurementContext* new_ctx);
 
-// Thread-local fallback for non-async contexts
-static _Thread_local uint8_t *tls_coverage_map = NULL;
+// (Thread-local fallback map now lives in SanCovTLS.coverage_map.)
 
 // Measurement registry: task_id -> measurement_context
 static ck_ht_t g_measurement_ht;
 static pthread_once_t g_measurement_ht_once = PTHREAD_ONCE_INIT;
 static pthread_rwlock_t g_measurement_ht_lock = PTHREAD_RWLOCK_INITIALIZER;
 
-// Thread-local pseudo-task ID for synchronous code outside async contexts
-static _Thread_local void* tls_sync_pseudo_task = NULL;
+// (Pseudo-task id now lives in SanCovTLS.sync_pseudo_task.)
 
 // Global generation counter - incremented when any measurement context ends.
 // Used to invalidate stale TLS caches across all threads.
 static _Atomic uint64_t g_measurement_generation = 0;
 
-// Thread-local cache for coverage map lookup (avoids rwlock acquisition in hot path)
-// The cache is invalidated when task changes or measurement context ends
-static _Thread_local void* tls_cached_task = NULL;
-static _Thread_local uint8_t* tls_cached_task_map = NULL;
-static _Thread_local SanCovMeasurementContext* tls_cached_measurement_context = NULL;
-static _Thread_local uint8_t* tls_cached_coverage_map = NULL;
-static _Thread_local uint64_t tls_cached_generation = 0;
+// (Hot-path cache fields — cached_task / cached_task_map /
+// cached_measurement_context / cached_coverage_map / cached_generation — now
+// live in SanCovTLS. The cache is invalidated when task changes or a
+// measurement context ends.)
 
 // Silent diagnostic counters tracking which path resolved get_current_coverage_map.
 // Enabled per-test by tests that want to verify routing behavior. No fprintf,
@@ -355,23 +389,23 @@ static _Atomic uint64_t g_route_tlsfb_real_task_no_head = 0;
 static _Atomic uint64_t g_route_tlsfb_real_task_no_match = 0;
 
 // Get or create a pseudo-task ID for synchronous code
-static void* get_sync_pseudo_task(void) {
-    if (tls_sync_pseudo_task == NULL) {
+static void* get_sync_pseudo_task(SanCovTLS* ts) {
+    if (ts->sync_pseudo_task == NULL) {
         // Use a unique heap address as pseudo-task ID
-        tls_sync_pseudo_task = xmalloc(1);
+        ts->sync_pseudo_task = xmalloc(1);
     }
-    return tls_sync_pseudo_task;
+    return ts->sync_pseudo_task;
 }
 
 // Get the current task (Swift task or sync pseudo-task)
-static void* get_current_task_for_measurement(void) {
+static void* get_current_task_for_measurement(SanCovTLS* ts) {
     if (swift_task_getCurrent != NULL) {
         void* task = swift_task_getCurrent();
         if (task != NULL) {
             return task;
         }
-    }       
-    return get_sync_pseudo_task();
+    }
+    return get_sync_pseudo_task(ts);
 }
 
 // MARK: - ck_ht-based Lock-Free Hash Table Operations
@@ -521,7 +555,7 @@ static void remove_measurement_context_for_task(void* task_id) {
 // same task that began the measurement (matches end_measurement's contract).
 void sancov_unregister_inheritance_for_testing(SanCovMeasurementContext* context) {
     unregister_active_inheritance_context(context);
-    remove_measurement_context_for_task(get_current_task_for_measurement());
+    remove_measurement_context_for_task(get_current_task_for_measurement(sancov_tls()));
 }
 
 // TESTING ONLY (see header): drop just the current task's measurement-registry
@@ -530,16 +564,17 @@ void sancov_unregister_inheritance_for_testing(SanCovMeasurementContext* context
 // otherwise the owning thread's cached map pointer would keep routing the
 // owning task's edges into the context after the registry entry is gone.
 void sancov_remove_task_measurement_for_testing(void) {
-    remove_measurement_context_for_task(get_current_task_for_measurement());
+    SanCovTLS* ts = sancov_tls();
+    remove_measurement_context_for_task(get_current_task_for_measurement(ts));
     // Clear this thread's hot-path cache so a stale cached map pointer can't keep
     // routing the owning task's edges into the (now-deregistered) context. The
     // epoch bump covers inheritance-active readers; clearing the TLS cache also
     // covers the !inheritance_active fast-path short-circuit (which ignores the
     // epoch). Mirrors the cache teardown in sancov_end_measurement.
-    set_tls_measurement_context(NULL);
-    tls_cached_task = NULL;
-    tls_cached_task_map = NULL;
-    tls_cached_coverage_map = NULL;
+    set_tls_measurement_context(ts, NULL);
+    ts->cached_task = NULL;
+    ts->cached_task_map = NULL;
+    ts->cached_coverage_map = NULL;
     atomic_fetch_add_explicit(&g_active_ctx_epoch, 1, memory_order_release);
 }
 
@@ -645,11 +680,11 @@ static void ctx_release(SanCovMeasurementContext* ctx) {
 }
 
 // Helper to update TLS cached measurement context with proper refcounting
-static void set_tls_measurement_context(SanCovMeasurementContext* new_ctx) {
-    SanCovMeasurementContext* old_ctx = tls_cached_measurement_context;
+static void set_tls_measurement_context(SanCovTLS* ts, SanCovMeasurementContext* new_ctx) {
+    SanCovMeasurementContext* old_ctx = ts->cached_measurement_context;
     if (old_ctx != new_ctx) {
         ctx_retain(new_ctx);  // Retain new (NULL is safe)
-        tls_cached_measurement_context = new_ctx;
+        ts->cached_measurement_context = new_ctx;
         ctx_release(old_ctx); // Release old (NULL is safe)
     }
 }
@@ -732,7 +767,8 @@ SanCovMeasurementContext* sancov_begin_measurement(void) {
     atomic_init(&ctx->refcount, 1);  // Start with refcount of 1 (owner reference)
 
     // Associate this measurement context with the current task
-    void* task = get_current_task_for_measurement();
+    SanCovTLS* ts = sancov_tls();
+    void* task = get_current_task_for_measurement(ts);
     if (!set_measurement_context_for_task(task, ctx)) {
         fprintf(stderr, "FATAL: failed to register measurement context for task %p\n", task);
         abort();
@@ -745,10 +781,10 @@ SanCovMeasurementContext* sancov_begin_measurement(void) {
             ctx->coverage_map = map;
 
             // Populate TLS caches for the current thread (may help if no hop occurs)
-            set_tls_measurement_context(ctx);
-            tls_cached_coverage_map = map;
-            tls_cached_task = task;
-            tls_cached_task_map = map;
+            set_tls_measurement_context(ts, ctx);
+            ts->cached_coverage_map = map;
+            ts->cached_task = task;
+            ts->cached_task_map = map;
         }
     }
 
@@ -772,21 +808,21 @@ SanCovMeasurementContext* sancov_create_dummy_context(void) {
     return ctx;
 }
 
-// Set while the calling thread is inside a cmp recorder (or a reset hook we
-// invoke). A cmp recorder's OWN body — and any reset hook — contains
-// instrumented comparisons whenever it is compiled into a trace-cmp module;
-// each such comparison fires __sanitizer_cov_trace_cmp* -> sancov_dispatch_cmp,
-// which would re-enter the recorder and recurse without bound (observed as a
-// 500-deep stack overflow / SIGBUS in CmpRecorderTests, whose recorders live in
-// the trace-cmp-instrumented test target). This is the cmp twin of
-// tls_in_edge_observer (defined later): while set, sancov_dispatch_cmp is a
-// no-op so a recorder can never re-dispatch into itself.
-static _Thread_local bool tls_in_cmp_recorder = false;
+// (The in-cmp-recorder re-entry guard now lives in SanCovTLS.in_cmp_recorder.)
+// A cmp recorder's OWN body — and any reset hook — contains instrumented
+// comparisons whenever it is compiled into a trace-cmp module; each such
+// comparison fires __sanitizer_cov_trace_cmp* -> sancov_dispatch_cmp, which
+// would re-enter the recorder and recurse without bound (observed as a 500-deep
+// stack overflow / SIGBUS in CmpRecorderTests, whose recorders live in the
+// trace-cmp-instrumented test target). This is the cmp twin of
+// in_edge_observer: while set, sancov_dispatch_cmp is a no-op so a recorder can
+// never re-dispatch into itself.
 
 /// Reset coverage for a measurement context (cheap memset, O(1) for covered_count).
 /// Used between iterations in the fuzz loop to avoid hash table insert/remove overhead.
 void sancov_reset_coverage(SanCovMeasurementContext* ctx) {
     if (ctx == NULL) return;
+    SanCovTLS* ts = sancov_tls();
 
     if (ctx->coverage_map != NULL && g_guard_count > 0) {
         memset(ctx->coverage_map, 0, g_guard_count);
@@ -796,8 +832,8 @@ void sancov_reset_coverage(SanCovMeasurementContext* ctx) {
 
     // Clear the calling thread's TLS-cached coverage map pointer so the next
     // edge that fires on this thread re-routes through get_current_coverage_map.
-    tls_cached_coverage_map = NULL;
-    // We deliberately do NOT memset whatever bitmap `tls_cached_task_map` points
+    ts->cached_coverage_map = NULL;
+    // We deliberately do NOT memset whatever bitmap `cached_task_map` points
     // at. Under parallel test execution that pointer can target another active
     // test's coverage_map (a worker thread previously executed a child task
     // whose routing populated the cache, then was reassigned to this iteration
@@ -815,15 +851,15 @@ void sancov_reset_coverage(SanCovMeasurementContext* ctx) {
 
     // Same per-iteration reset for the independent cmp recorder (e.g. clear the
     // value-profile feature set so each iteration starts from a clean slate).
-    // Guard with tls_in_cmp_recorder: a trace-cmp-instrumented reset hook fires
+    // Guard with in_cmp_recorder: a trace-cmp-instrumented reset hook fires
     // comparisons of its own, which must not re-dispatch into the (still
     // attached) cmp recorder and recurse.
     SanCovRecorderDataFn cmp_reset =
         (SanCovRecorderDataFn)__atomic_load_n(&ctx->cmp_recorder_reset_bits, __ATOMIC_ACQUIRE);
     if (cmp_reset) {
-        tls_in_cmp_recorder = true;
+        ts->in_cmp_recorder = true;
         cmp_reset(__atomic_load_n(&ctx->cmp_recorder_data, __ATOMIC_ACQUIRE));
-        tls_in_cmp_recorder = false;
+        ts->in_cmp_recorder = false;
     }
 
 }
@@ -955,18 +991,19 @@ void sancov_end_measurement(SanCovMeasurementContext* ctx) {
     unregister_active_inheritance_context(ctx);
 
     // Remove the measurement context from the current task
-    void* task = get_current_task_for_measurement();
+    SanCovTLS* ts = sancov_tls();
+    void* task = get_current_task_for_measurement(ts);
     remove_measurement_context_for_task(task);
 
     // Invalidate this thread's TLS cache if it matches
     // Note: Other threads may still hold TLS references - that's OK because
     // the refcount will keep the context alive until they release it.
-    if (tls_cached_measurement_context == ctx) {
-        set_tls_measurement_context(NULL);  // Releases our TLS reference
-        tls_cached_coverage_map = NULL;
+    if (ts->cached_measurement_context == ctx) {
+        set_tls_measurement_context(ts, NULL);  // Releases our TLS reference
+        ts->cached_coverage_map = NULL;
     }
-    tls_cached_task = NULL;
-    tls_cached_task_map = NULL;
+    ts->cached_task = NULL;
+    ts->cached_task_map = NULL;
 
     // Release the owner reference (context allocated with refcount=1)
     // The context will be freed when all TLS references are also released
@@ -1099,9 +1136,9 @@ uint32_t* sancov_snapshot_covered_indices_with_context(SanCovMeasurementContext*
 }
 
 // Ensure thread-local fallback map is allocated
-static void ensure_tls_coverage_map(void) {
-    if (tls_coverage_map == NULL && g_guard_count > 0) {
-        tls_coverage_map = (uint8_t*)calloc(g_guard_count, 1);
+static void ensure_tls_coverage_map(SanCovTLS* ts) {
+    if (ts->coverage_map == NULL && g_guard_count > 0) {
+        ts->coverage_map = (uint8_t*)calloc(g_guard_count, 1);
     }
 }
 
@@ -1126,22 +1163,26 @@ static void ensure_tls_coverage_map(void) {
 #define SANCOV_DISABLE_TLS_CACHE 0
 #endif
 
-static uint8_t* get_current_coverage_map(void) {
+// Resolves routing using the caller's already-fetched TLS block (`ts`), so the
+// per-edge / per-comparison hot path pays a single tlv_get_addr at its entry and
+// every field touch here is a struct offset. Behaviour is identical to the old
+// per-variable form; only the storage was coalesced (Finding 41c).
+static uint8_t* get_current_coverage_map(SanCovTLS* ts) {
     // HIGHEST PRIORITY: schedule-aware target context.
     // When schedule fuzzing is active, ALL edge hits go to the engine's context
     // regardless of which task/thread they fire on.
-    if (g_target_context != NULL) {
+    if (ts->target_context != NULL) {
         atomic_fetch_add_explicit(&g_route_target_ctx, 1, memory_order_relaxed);
-        // Route all edges to the target context. Set tls_cached_measurement_context
+        // Route all edges to the target context. Set cached_measurement_context
         // so the attached recorder/observer and covered_indices are maintained
         // (observer state guards its own concurrent access from pool threads).
-        set_tls_measurement_context(g_target_context);
-        tls_cached_coverage_map = g_target_context->coverage_map;
-        return g_target_context->coverage_map;
+        set_tls_measurement_context(ts, ts->target_context);
+        ts->cached_coverage_map = ts->target_context->coverage_map;
+        return ts->target_context->coverage_map;
     }
 
     // Get the current task (Swift task or sync pseudo-task)
-    void* task = get_current_task_for_measurement();
+    void* task = get_current_task_for_measurement(ts);
     bool inheritance_active = (g_coverage_inheritance_key != NULL);
 
     // Snapshot the liveness epoch up front. The cached resolution below is only
@@ -1157,12 +1198,12 @@ static uint8_t* get_current_coverage_map(void) {
     // unchanged. An unchanged epoch means no measurement began or ended since we
     // resolved this task, so (a) the cached context is still the correct routing
     // target and (b) it is still alive (held by this thread's
-    // tls_cached_measurement_context reference) — so returning its map needs no
+    // cached_measurement_context reference) — so returning its map needs no
     // re-validation and no reference dance. Any begin/end bumps the epoch and
     // forces the full, lock-protected re-resolve below (which closes TOCTOU/ABA).
-    if (task == tls_cached_task && tls_cached_task_map != NULL) {
-        if (!inheritance_active || resolve_epoch == tls_cached_generation) {
-            return tls_cached_task_map;
+    if (task == ts->cached_task && ts->cached_task_map != NULL) {
+        if (!inheritance_active || resolve_epoch == ts->cached_generation) {
+            return ts->cached_task_map;
         }
         // Epoch changed → a begin/end occurred; re-resolve.
         atomic_fetch_add_explicit(&g_route_tls_cache_inheritance_active, 1, memory_order_relaxed);
@@ -1226,11 +1267,11 @@ static uint8_t* get_current_coverage_map(void) {
                 atomic_fetch_add_explicit(&g_route_inherited_manualwalk, 1, memory_order_relaxed);
             }
             uint8_t* map = inherited->coverage_map;
-            tls_cached_task = task;
-            tls_cached_task_map = map;
-            tls_cached_generation = resolve_epoch;
-            set_tls_measurement_context(inherited);  // takes its own reference
-            ctx_release(inherited);                   // drop our temporary reference
+            ts->cached_task = task;
+            ts->cached_task_map = map;
+            ts->cached_generation = resolve_epoch;
+            set_tls_measurement_context(ts, inherited);  // takes its own reference
+            ctx_release(inherited);                       // drop our temporary reference
             return map;
         }
         // Live but no coverage_map yet: drop the temporary reference and fall
@@ -1245,22 +1286,22 @@ static uint8_t* get_current_coverage_map(void) {
         atomic_fetch_add_explicit(&g_route_per_task_registry, 1, memory_order_relaxed);
 #if !SANCOV_DISABLE_TLS_CACHE
         // Check measurement context cache
-        if (measurement_ctx == tls_cached_measurement_context && tls_cached_coverage_map != NULL) {
+        if (measurement_ctx == ts->cached_measurement_context && ts->cached_coverage_map != NULL) {
             // Update task cache to point to measurement map
-            tls_cached_task = task;
-            tls_cached_task_map = tls_cached_coverage_map;
-            tls_cached_generation = resolve_epoch;
-            return tls_cached_coverage_map;
+            ts->cached_task = task;
+            ts->cached_task_map = ts->cached_coverage_map;
+            ts->cached_generation = resolve_epoch;
+            return ts->cached_coverage_map;
         }
 #endif
         // Slow path: lookup or create, then cache
         uint8_t* map = find_or_create_task_map(measurement_ctx);
         if (map != NULL) {
-            set_tls_measurement_context(measurement_ctx);  // Properly retain/release
-            tls_cached_coverage_map = map;
-            tls_cached_task = task;
-            tls_cached_task_map = map;
-            tls_cached_generation = resolve_epoch;
+            set_tls_measurement_context(ts, measurement_ctx);  // Properly retain/release
+            ts->cached_coverage_map = map;
+            ts->cached_task = task;
+            ts->cached_task_map = map;
+            ts->cached_generation = resolve_epoch;
             return map;
         }
     }
@@ -1292,14 +1333,14 @@ static uint8_t* get_current_coverage_map(void) {
     } else {
         atomic_fetch_add_explicit(&g_route_tls_fallback_no_inheritance, 1, memory_order_relaxed);
     }
-    ensure_tls_coverage_map();
-    tls_cached_task = task;
-    tls_cached_task_map = tls_coverage_map;
-    tls_cached_generation = resolve_epoch;
+    ensure_tls_coverage_map(ts);
+    ts->cached_task = task;
+    ts->cached_task_map = ts->coverage_map;
+    ts->cached_generation = resolve_epoch;
     // Clear stale measurement context so dispatched edges don't append
     // edges from this task into another test's measurement context.
-    set_tls_measurement_context(NULL);
-    return tls_coverage_map;
+    set_tls_measurement_context(ts, NULL);
+    return ts->coverage_map;
 }
 
 // Diagnostic: read routing path counters. Tests can use this to verify that
@@ -1388,34 +1429,36 @@ SanCovEdgeRecording sancov_record_edge_first_hit(uint32_t* guard, uint8_t* map, 
     return record_first_hit(*guard, map, ctx) ? SANCOV_EDGE_FIRST_HIT : SANCOV_EDGE_REPEAT;
 }
 
-// Set while the calling thread is inside an observer callback, so edges fired
-// BY the callback never re-enter it (see header: re-entry deadlocks any
-// non-reentrant lock the callback holds).
-static _Thread_local bool tls_in_edge_observer = false;
+// (The in-edge-observer re-entry guard now lives in SanCovTLS.in_edge_observer:
+// set while the calling thread is inside an observer callback, so edges fired BY
+// the callback never re-enter it — re-entry deadlocks any non-reentrant lock the
+// callback holds.)
 
 bool sancov_observer_enter(void) {
-    if (tls_in_edge_observer) return false;
-    tls_in_edge_observer = true;
+    SanCovTLS* ts = sancov_tls();
+    if (ts->in_edge_observer) return false;
+    ts->in_edge_observer = true;
     return true;
 }
 
 void sancov_observer_exit(void) {
-    tls_in_edge_observer = false;
+    sancov_tls()->in_edge_observer = false;
 }
 
 // MARK: - Schedule-Aware Target Context
 
 void sancov_set_target_context(SanCovMeasurementContext* context) {
-    g_target_context = context;
-    // The target interlude rebinds tls_cached_measurement_context to the
-    // target while leaving the per-task fast path's (task, map) pairing
-    // intact. A post-interlude dispatch would then take the fast path and
-    // pair the task's own map with the target's still-cached context —
-    // silently appending covered indices (and firing the recorder/observer)
-    // on the wrong engine. Dropping the task cache forces the next dispatch
-    // through the full resolve, which re-pairs map and context together.
-    tls_cached_task = NULL;
-    tls_cached_task_map = NULL;
+    SanCovTLS* ts = sancov_tls();
+    ts->target_context = context;
+    // The target interlude rebinds cached_measurement_context to the target
+    // while leaving the per-task fast path's (task, map) pairing intact. A
+    // post-interlude dispatch would then take the fast path and pair the task's
+    // own map with the target's still-cached context — silently appending
+    // covered indices (and firing the recorder/observer) on the wrong engine.
+    // Dropping the task cache forces the next dispatch through the full resolve,
+    // which re-pairs map and context together.
+    ts->cached_task = NULL;
+    ts->cached_task_map = NULL;
 }
 
 // MARK: - Coverage Inheritance (Task-Local Propagation)
@@ -1499,8 +1542,9 @@ void sancov_dispatch_edge(uint32_t *guard) {
         uint32_t ge = *guard;
         if (ge < g_guard_count) ever[ge] = 1;  // idempotent; see note above
     }
-    uint8_t* map = get_current_coverage_map();
-    SanCovMeasurementContext* ctx = tls_cached_measurement_context;
+    SanCovTLS* ts = sancov_tls();  // one tlv_get_addr for the whole dispatch
+    uint8_t* map = get_current_coverage_map(ts);
+    SanCovMeasurementContext* ctx = ts->cached_measurement_context;
     if (ctx) {
         SanCovEdgeRecorder r = (SanCovEdgeRecorder)__atomic_load_n(&ctx->edge_recorder_bits, __ATOMIC_ACQUIRE);
         if (r) {
@@ -1554,20 +1598,24 @@ void __sanitizer_cov_trace_pc_guard(uint32_t *guard) {
 // edge map is touched; cmp recording is a parallel channel. No-op when no cmp
 // recorder is attached or no measurement is active.
 void sancov_dispatch_cmp(uintptr_t pc, uint64_t arg1, uint64_t arg2, uint32_t size_bytes) {
-    // Re-entry guard (see tls_in_cmp_recorder): a comparison fired by the
+    // Fetch this thread's TLS block ONCE (single tlv_get_addr); every field
+    // touch below — and inside get_current_coverage_map — is then a struct
+    // offset. This is the hot-path payoff of the coalesced SanCovTLS (Finding 41c).
+    SanCovTLS* ts = sancov_tls();
+    // Re-entry guard (see SanCovTLS.in_cmp_recorder): a comparison fired by the
     // recorder itself (or by a reset hook we are invoking) must NOT re-dispatch,
     // or the recorder recurses into itself and overflows the stack.
-    if (tls_in_cmp_recorder) return;
+    if (ts->in_cmp_recorder) return;
     // Resolve the calling thread's current measurement context. We don't need
-    // the returned map, but the call refreshes tls_cached_measurement_context.
-    (void)get_current_coverage_map();
-    SanCovMeasurementContext* ctx = tls_cached_measurement_context;
+    // the returned map, but the call refreshes cached_measurement_context.
+    (void)get_current_coverage_map(ts);
+    SanCovMeasurementContext* ctx = ts->cached_measurement_context;
     if (!ctx) return;
     SanCovCmpRecorder r = (SanCovCmpRecorder)__atomic_load_n(&ctx->cmp_recorder_bits, __ATOMIC_ACQUIRE);
     if (r) {
-        tls_in_cmp_recorder = true;
+        ts->in_cmp_recorder = true;
         r(pc, arg1, arg2, size_bytes, ctx);
-        tls_in_cmp_recorder = false;
+        ts->in_cmp_recorder = false;
     }
 }
 

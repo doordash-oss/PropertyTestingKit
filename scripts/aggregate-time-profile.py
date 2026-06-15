@@ -12,9 +12,16 @@ Pipeline:
 
 Each <row> is one sample carrying a <weight> (ns) and a <backtrace> whose frames
 are listed innermost-first. Self time is attributed to the leaf (first) frame;
-total time to every distinct symbol appearing in the stack. Frames are defined
-once (id+name) and back-referenced by ref=, so we resolve a global id->name map
-while streaming (handles the 10s-of-MB export without loading it all).
+total time to every distinct symbol appearing in the stack.
+
+Instruments dedups THREE levels by ref=, and ALL must be resolved or attribution
+silently vanishes: <frame> (id+name, then ref), <weight> (id+ns, then ref), AND
+<backtrace> (id + child frames, then ref). The backtrace dedup is the big one —
+a hot loop samples the SAME stack millions of times, so the vast majority of rows
+are `<backtrace ref="N"/>` with no inline frames. Miss it and those rows count
+toward grand_total but attribute to nothing → a phantom "unsymbolicated" majority.
+We resolve all three id->value maps while streaming (handles the 10s-of-MB export
+without loading it all).
 """
 import sys
 import argparse
@@ -31,18 +38,34 @@ def main():
     ap.add_argument("--under", default=None,
                     help="only count samples whose stack contains a frame matching this "
                          "substring (isolates one subtree's internal self-time breakdown)")
+    ap.add_argument("--stacks", type=int, default=0,
+                    help="instead of per-symbol, report the N heaviest full call stacks "
+                         "(samples keyed by their entire leaf→root backtrace)")
+    ap.add_argument("--depth", type=int, default=12,
+                    help="frames of each stack to print in --stacks mode (leaf first)")
+    ap.add_argument("--fromroot", action="store_true",
+                    help="in --stacks mode, key/print from the OUTERMOST (root-side) frames "
+                         "instead of the leaf — shows the top-level branches of the call tree")
     args = ap.parse_args()
 
     frame_name = {}            # frame id -> symbol name
     weight_by_id = {}          # weight id -> ns (Instruments dedups repeats by ref=)
+    backtrace_frames = {}      # backtrace id -> ordered [leaf..root] symbols
     self_ns = defaultdict(int)  # leaf symbol -> ns
     total_ns = defaultdict(int)  # symbol -> ns (counted once per sample)
     grand_total = 0
 
+    stack_ns = defaultdict(int)   # full-path key -> ns
+    stack_path = {}               # full-path key -> ordered [leaf..root] symbols
+
     cur_weight = 0
-    leaf = None
-    stack_syms = None
     in_row = False
+    # The frame list for the backtrace currently being parsed. Frames append here
+    # (leaf→root, as emitted); resolved to stack_order at </backtrace>.
+    cur_bt_order = None
+    in_backtrace = False
+    # The resolved stack for the current row (set at </backtrace>).
+    stack_order = None
 
     # Stream: clear elements as we go to bound memory.
     for event, el in ET.iterparse(args.xml, events=("start", "end")):
@@ -51,8 +74,10 @@ def main():
             if tag == "row":
                 in_row = True
                 cur_weight = 0
-                leaf = None
-                stack_syms = set()
+                stack_order = []
+            elif tag == "backtrace":
+                in_backtrace = True
+                cur_bt_order = []
             continue
         # end events
         if tag == "weight":
@@ -76,11 +101,27 @@ def main():
                 sym = frame_name.get(ref)
             else:
                 sym = name
-            if in_row and sym is not None:
-                if leaf is None:
-                    leaf = sym
-                stack_syms.add(sym)
+            if in_backtrace and sym is not None:
+                cur_bt_order.append(sym)
+        elif tag == "backtrace":
+            # Resolve the row's stack: a backtrace is either DEFINED (id + inline
+            # frames) or a back-REFERENCE (ref=) to one defined earlier. The hot
+            # loop makes the vast majority refs, so this is where most weight is.
+            bid = el.get("id")
+            ref = el.get("ref")
+            if bid is not None:
+                backtrace_frames[bid] = cur_bt_order
+                stack_order = cur_bt_order
+            elif ref is not None:
+                stack_order = backtrace_frames.get(ref, [])
+            else:
+                stack_order = cur_bt_order
+            in_backtrace = False
+            cur_bt_order = None
         elif tag == "row":
+            stack_order = stack_order or []
+            stack_syms = set(stack_order)
+            leaf = stack_order[0] if stack_order else None
             include = True
             if args.under is not None:
                 under = args.under.lower()
@@ -90,6 +131,21 @@ def main():
                     self_ns[leaf] += cur_weight
                 for s in (stack_syms or ()):
                     total_ns[s] += cur_weight
+                if args.stacks and stack_order:
+                    if args.fromroot:
+                        # Outermost frames (root-side): the top-level branches of
+                        # the call tree. stack_order is leaf→root, so the root is
+                        # the tail; print root→leaf.
+                        truncated = list(reversed(stack_order))[: args.depth]
+                    else:
+                        # Leaf-side frames only: the deep task/runtime prefix
+                        # varies per sample and would fragment otherwise-identical
+                        # hot paths. `--depth` frames define the tree.
+                        truncated = stack_order[: args.depth]
+                    key = "\x01".join(truncated)
+                    stack_ns[key] += cur_weight
+                    if key not in stack_path:
+                        stack_path[key] = truncated
                 grand_total += cur_weight
             in_row = False
             el.clear()
@@ -97,6 +153,17 @@ def main():
     if grand_total == 0:
         print("No samples found. Did the xpath/export succeed?", file=sys.stderr)
         sys.exit(1)
+
+    if args.stacks:
+        rows = sorted(stack_ns.items(), key=lambda kv: kv[1], reverse=True)[: args.stacks]
+        print(f"Total CPU sampled: {grand_total/1e6:.1f} ms across {len(stack_ns)} distinct stacks\n")
+        for rank, (key, ns) in enumerate(rows, 1):
+            path = stack_path[key]
+            print(f"#{rank}  {100*ns/grand_total:6.2f}%  {ns/1e6:8.1f} ms  (leaf→ {len(path)} frames)")
+            for sym in path:
+                print(f"        {sym}")
+            print()
+        return
 
     key = total_ns if args.total else self_ns
     label = "TOTAL" if args.total else "SELF"
