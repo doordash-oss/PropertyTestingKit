@@ -48,18 +48,26 @@ public struct PoolIterationOutcome: Sendable {
     /// site wins). `nil` when the strategy publishes none.
     public let boundaryDistances: [UInt64: UInt64]?
 
+    /// The accepted run's joint boundary-sign combinations (k-wise sign states
+    /// over near-boundary sites). The vocabulary
+    /// `PoolAdmission.boundaryStateOwnership` owns over by discovery. `nil` when
+    /// the strategy publishes none.
+    public let boundarySigns: [UInt64]?
+
     public init(
         source: PoolIterationSource,
         newCoverage: SparseCoverage?,
         features: [UInt64]? = nil,
         inputSize: Int? = nil,
-        boundaryDistances: [UInt64: UInt64]? = nil
+        boundaryDistances: [UInt64: UInt64]? = nil,
+        boundarySigns: [UInt64]? = nil
     ) {
         self.source = source
         self.newCoverage = newCoverage
         self.features = features
         self.inputSize = inputSize
         self.boundaryDistances = boundaryDistances
+        self.boundarySigns = boundarySigns
     }
 
     /// The one vocabulary every pool component accounts in: the strategy's
@@ -205,6 +213,30 @@ public struct PoolAdmission: Sendable {
                 features: outcome.resolvedFeatures,
                 size: size(of: outcome),
                 distances: outcome.boundaryDistances ?? [:])
+            return Verdict(admit: verdict.admit, evict: verdict.evict, claimed: verdict.claimed)
+        }
+    })
+
+    /// Experimental: boundary-distance ownership PLUS a joint boundary-STATE
+    /// dimension. Keeps both halves of `boundaryDistanceOwnership` — edge REDUCE
+    /// and per-site closest-distance (the gradient that drives the search toward
+    /// each comparison's flip point) — and adds discovery ownership over the
+    /// run's k-wise SIGN combinations (`outcome.boundarySigns`). Where distance
+    /// concentrates inputs at a boundary where the sign is fragile, the sign
+    /// combinations capture and retain the distinct side-configurations there —
+    /// so the pool can hold partial witnesses and cross them toward the joint
+    /// state a conjunction bug needs (the `==`-row state edge coverage collapses,
+    /// per Findings 35/37). Requires a strategy that publishes both
+    /// `boundaryDistances` and `boundarySigns` (`.boundaryState`) and a target
+    /// built with `-sanitize-coverage=…,trace-cmp`.
+    public static let boundaryStateOwnership = PoolAdmission(makeJudge: {
+        var ledger = BoundaryDistanceLedger()
+        return { outcome in
+            let verdict = ledger.judge(
+                features: outcome.resolvedFeatures,
+                size: size(of: outcome),
+                distances: outcome.boundaryDistances ?? [:],
+                signFeatures: outcome.boundarySigns ?? [])
             return Verdict(admit: verdict.admit, evict: verdict.evict, claimed: verdict.claimed)
         }
     })

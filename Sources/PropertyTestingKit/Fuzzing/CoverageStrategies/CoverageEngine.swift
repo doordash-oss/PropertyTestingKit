@@ -75,12 +75,21 @@ public struct CoverageEngine: Sendable {
     /// `nil` (the default) means the run publishes no boundary distances.
     let boundaryDistances: (@Sendable () -> [UInt64: UInt64])?
 
+    /// The joint boundary-SIGN vocabulary of the LAST accepted decision: the
+    /// k-wise combinations of three-valued comparison signs over the run's
+    /// near-boundary sites (see `boundarySignFeatures`). The vocabulary
+    /// `PoolAdmission.boundaryStateOwnership` owns over by discovery. Called only
+    /// after `decide` returns `true`, inside the same gated window. `nil` (the
+    /// default) means the run publishes no sign combinations.
+    let boundarySigns: (@Sendable () -> [UInt64])?
+
     public init(
         onEdge: (@Sendable (UInt32, Bool) -> Void)? = nil,
         onCompare: (@Sendable (UInt, UInt64, UInt64, UInt32) -> Void)? = nil,
         onReset: (@Sendable () -> Void)? = nil,
         features: (@Sendable () -> [UInt64])? = nil,
         boundaryDistances: (@Sendable () -> [UInt64: UInt64])? = nil,
+        boundarySigns: (@Sendable () -> [UInt64])? = nil,
         _ decide: @escaping CoverageDecision
     ) {
         self.onEdge = onEdge
@@ -88,6 +97,7 @@ public struct CoverageEngine: Sendable {
         self.onReset = onReset
         self.features = features
         self.boundaryDistances = boundaryDistances
+        self.boundarySigns = boundarySigns
         self.decide = decide
     }
 }

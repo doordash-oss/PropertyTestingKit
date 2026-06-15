@@ -37,8 +37,28 @@ extension CoverageStrategy {
     /// without it the comparison channel stays silent and this degrades to
     /// plain edge novelty.
     public static var boundaryDistance: CoverageStrategy {
-        CoverageStrategy(makeEngine: { makeBoundaryDistanceEngine() })
+        CoverageStrategy(makeEngine: { makeBoundaryEngine(emitSigns: false, window: 0, maxSites: 0) })
     }
+
+    /// Comparison-distance (as `.boundaryDistance`) PLUS a joint boundary-STATE
+    /// vocabulary: alongside the per-site distance gradient, it publishes the
+    /// k-wise three-valued SIGN combinations over the run's near-boundary sites
+    /// (sites whose closest approach this run was within `window`). Pairs with
+    /// `PoolAdmission.boundaryStateOwnership`, which retains, by discovery, each
+    /// novel joint side-configuration — so the pool holds partial witnesses and
+    /// crosses them toward the conjunction a bug needs (the `==`-row state edge
+    /// coverage collapses; see Findings 35/37). Distance approaches the
+    /// boundary; sign retains the distinct states once there.
+    ///
+    /// `window` selects which sites are "fragile" enough to play the sign game
+    /// (default 1: on-boundary and one step off — tight, for integer/index
+    /// boundaries). `maxSites` caps the pairwise blow-up to the closest sites.
+    public static func boundaryState(window: UInt64 = 1, maxSites: Int = 16) -> CoverageStrategy {
+        CoverageStrategy(makeEngine: { makeBoundaryEngine(emitSigns: true, window: window, maxSites: maxSites) })
+    }
+
+    /// `.boundaryState` with default window/cap.
+    public static var boundaryState: CoverageStrategy { boundaryState() }
 }
 
 /// Overflow-safe absolute difference of two comparison operands.
@@ -46,40 +66,59 @@ private func absoluteDifference(_ a: UInt64, _ b: UInt64) -> UInt64 {
     a > b ? a &- b : b &- a
 }
 
-private func makeBoundaryDistanceEngine() -> CoverageEngine {
+private func makeBoundaryEngine(emitSigns: Bool, window: UInt64, maxSites: Int) -> CoverageEngine {
     // One lock for all halves is safe: onCompare, onReset, decide, and the
-    // distances closure all run under the per-thread observer gate, so
+    // distances/signs closures all run under the per-thread observer gate, so
     // comparisons their own code fires are never dispatched back into onCompare.
     struct DistanceState {
-        /// This iteration's lowest distance per comparison site (cleared on
-        /// reset and after each decision).
-        var currentRun: [UInt64: UInt64] = [:]
+        /// This iteration's closest approach per comparison site — the lowest
+        /// distance and the SIGN at that closest approach (cleared on reset and
+        /// after each decision).
+        var currentRun: [UInt64: (distance: UInt64, sign: UInt64)] = [:]
         /// Engine-lifetime lowest distance ever seen per site — the monotone
         /// acceptance oracle.
         var bestDistance: [UInt64: UInt64] = [:]
         /// Engine-lifetime edges, for the edge-coverage union.
         var seenEdges: Set<UInt32> = []
-        /// The last accepted run's per-site minimum, handed to the pool.
-        var lastAccepted: [UInt64: UInt64] = [:]
+        /// Engine-lifetime sign combinations seen — the acceptance oracle for
+        /// the sign dimension (only populated when `emitSigns`).
+        var seenSigns: Set<UInt64> = []
+        /// The last accepted run's per-site closest approach, handed to the pool.
+        var lastAccepted: [UInt64: (distance: UInt64, sign: UInt64)] = [:]
+        /// The last accepted run's sign-combination features, handed to the pool
+        /// (computed once in `decide`, returned by the `boundarySigns` closure).
+        var lastSignFeatures: [UInt64] = []
     }
     let state = SyncBox<DistanceState>(DistanceState())
 
-    return CoverageEngine(
-        onCompare: { pc, arg1, arg2, _ in
-            let site = UInt64(truncatingIfNeeded: pc)
-            let distance = absoluteDifference(arg1, arg2)
-            state.update { st in
-                if let seen = st.currentRun[site] {
-                    if distance < seen { st.currentRun[site] = distance }
-                } else {
-                    st.currentRun[site] = distance
-                }
+    // Hoisted with explicit types: the optional-closure ternary inline in the
+    // initializer overwhelmed the type-checker ("failed to produce diagnostic").
+    let onCompare: @Sendable (UInt, UInt64, UInt64, UInt32) -> Void = { pc, arg1, arg2, _ in
+        let site = UInt64(truncatingIfNeeded: pc)
+        let distance = absoluteDifference(arg1, arg2)
+        let sign = boundarySign(arg1, arg2)
+        state.update { st in
+            if let cur = st.currentRun[site] {
+                if distance < cur.distance { st.currentRun[site] = (distance, sign) }
+            } else {
+                st.currentRun[site] = (distance, sign)
             }
-        },
-        onReset: {
-            state.update { $0.currentRun.removeAll(keepingCapacity: true) }
-        },
-        boundaryDistances: { state.update { $0.lastAccepted } }
+        }
+    }
+    let onReset: @Sendable () -> Void = {
+        state.update { $0.currentRun.removeAll(keepingCapacity: true) }
+    }
+    let distancesClosure: @Sendable () -> [UInt64: UInt64] = {
+        state.update { $0.lastAccepted.mapValues { approach in approach.distance } }
+    }
+    let signsClosure: (@Sendable () -> [UInt64])? =
+        emitSigns ? ({ @Sendable in state.update { $0.lastSignFeatures } }) : nil
+
+    return CoverageEngine(
+        onCompare: onCompare,
+        onReset: onReset,
+        boundaryDistances: distancesClosure,
+        boundarySigns: signsClosure
     ) { coverage in
         // Snapshot the run's edges BEFORE any bookkeeping below: this closure
         // runs in (gated) instrumented code, so its own dict work fires edges
@@ -99,16 +138,30 @@ private func makeBoundaryDistanceEngine() -> CoverageEngine {
             }
 
             // Monotone distance novelty: any site driven strictly closer.
-            for (site, distance) in st.currentRun {
-                if distance < (st.bestDistance[site] ?? .max) {
-                    st.bestDistance[site] = distance
+            for (site, approach) in st.currentRun {
+                if approach.distance < (st.bestDistance[site] ?? .max) {
+                    st.bestDistance[site] = approach.distance
                     interesting = true
                 }
             }
 
-            // Publish this run's per-site minimum regardless of WHY it was
-            // accepted, so an edge-novel input can still claim boundaries.
+            // Joint sign novelty: any never-before-seen near-boundary side
+            // configuration. Without this the sign vocabulary would only ever
+            // ride edge/distance-novel runs and could never, on its own, pull a
+            // partial witness into the pool.
+            var signs: [UInt64] = []
+            if emitSigns {
+                signs = boundarySignFeatures(
+                    perSite: st.currentRun.mapValues { (sign: $0.sign, distance: $0.distance) },
+                    window: window, maxSites: maxSites)
+                for s in signs where st.seenSigns.insert(s).inserted { interesting = true }
+            }
+
+            // Publish this run's per-site closest approach + sign features
+            // regardless of WHY it was accepted, so an edge-novel input can
+            // still claim boundaries and sign states.
             st.lastAccepted = st.currentRun
+            st.lastSignFeatures = signs
             return interesting
         }
     }
