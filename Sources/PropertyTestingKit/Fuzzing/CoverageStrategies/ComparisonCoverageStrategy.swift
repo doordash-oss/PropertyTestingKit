@@ -75,7 +75,8 @@ private func makeComparisonCoverageEngine() -> CoverageEngine {
         /// This iteration's value-profile features (cleared on reset/decide).
         var currentRun: Set<UInt64> = []
         /// Engine-lifetime features seen across all accepted-or-not iterations.
-        var seenFeatures: Set<UInt64> = []
+        /// Keys are pre-mixed comparisonFeature hashes → no-SipHash set (41n).
+        var seenFeatures = FeatureHashSet()
         /// Engine-lifetime edges, for the edge-coverage union.
         var seenEdges = EdgeUnionBitmap()
     }
@@ -96,7 +97,7 @@ private func makeComparisonCoverageEngine() -> CoverageEngine {
             var interesting = false
 
             // Value-profile novelty: any comparison feature new to this engine.
-            for feature in st.currentRun where st.seenFeatures.insert(feature).inserted {
+            for feature in st.currentRun where st.seenFeatures.insert(feature) {
                 interesting = true
             }
 

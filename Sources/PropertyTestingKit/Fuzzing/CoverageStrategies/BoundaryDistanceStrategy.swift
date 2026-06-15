@@ -81,8 +81,9 @@ private func makeBoundaryEngine(emitSigns: Bool, window: UInt64, maxSites: Int) 
         /// Engine-lifetime edges, for the edge-coverage union.
         var seenEdges = EdgeUnionBitmap()
         /// Engine-lifetime sign combinations seen — the acceptance oracle for
-        /// the sign dimension (only populated when `emitSigns`).
-        var seenSigns: Set<UInt64> = []
+        /// the sign dimension (only populated when `emitSigns`). Keys are
+        /// pre-mixed feature hashes, so a no-SipHash FeatureHashSet (Finding 41n).
+        var seenSigns = FeatureHashSet()
         /// The last accepted run's per-site closest approach, handed to the pool.
         var lastAccepted: [BoundarySiteAccumulator.Site] = []
         /// The last accepted run's sign-combination features, handed to the pool
@@ -168,7 +169,7 @@ private func makeBoundaryEngine(emitSigns: Bool, window: UInt64, maxSites: Int) 
                 boundarySignFeatures(
                     sites: sites, maxSites: maxSites,
                     into: &signs, scratch: &st.signScratch)
-                for s in signs where st.seenSigns.insert(s).inserted { interesting = true }
+                for s in signs where st.seenSigns.insert(s) { interesting = true }
             }
 
             // Publish this run's per-site closest approach + sign features
