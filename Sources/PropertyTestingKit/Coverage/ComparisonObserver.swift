@@ -69,8 +69,17 @@ let comparisonObserverRecorder: SanCovCmpRecorder = { pc, arg1, arg2, size, cont
     guard let data = sancov_context_get_cmp_recorder_data(context) else { return }
     guard sancov_observer_enter() else { return }
     defer { sancov_observer_exit() }
-    Unmanaged<ComparisonObserver>.fromOpaque(data).takeUnretainedValue()
-        .onCompare(pc, arg1, arg2, size)
+    // `_withUnsafeGuaranteedRef`, not `takeUnretainedValue`: the context CO-OWNS
+    // the observer (retained at attach, released only when the context's last
+    // reference drops), so while this recorder runs — holding `context` — the
+    // observer is provably alive. takeUnretainedValue returns a managed +0
+    // reference that the compiler still brackets with a retain/release pair PER
+    // COMPARISON (profiled ARC churn, Finding 41d). The guaranteed-ref form tells
+    // the optimiser the object can't die for the closure's duration, eliding
+    // that pair entirely.
+    Unmanaged<ComparisonObserver>.fromOpaque(data)._withUnsafeGuaranteedRef {
+        $0.onCompare(pc, arg1, arg2, size)
+    }
 }
 
 /// Reset hook: forwards `sancov_reset_coverage` to the observer. Shares the
@@ -79,7 +88,11 @@ private let comparisonObserverReset: @convention(c) (UnsafeMutableRawPointer?) -
     guard let data else { return }
     guard sancov_observer_enter() else { return }
     defer { sancov_observer_exit() }
-    Unmanaged<ComparisonObserver>.fromOpaque(data).takeUnretainedValue().onReset?()
+    // Guaranteed-ref for the same reason as the recorder: the context co-owns
+    // the observer and is alive across this call.
+    Unmanaged<ComparisonObserver>.fromOpaque(data)._withUnsafeGuaranteedRef {
+        $0.onReset?()
+    }
 }
 
 /// Release hook: balances the attach-time retain when the context drops its
