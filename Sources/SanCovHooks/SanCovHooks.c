@@ -1695,6 +1695,92 @@ static void cmp_census_init(void) {
     atexit(cmp_census_dump);
 }
 
+// MARK: - Comparison Drop Filter (env-gated: PTK_CMP_DROP_SYNTHESIZED)
+//
+// Per comparison-site PC verdict cache: on a PC's first fire, dladdr resolves
+// its enclosing function and sancov_cmp_should_drop classifies the mangled name;
+// the verdict (KEEP/DROP) is cached so every later fire is an O(1) table lookup.
+// Lock-free open-addressing, same structure/sizing as the census. Default
+// disabled (g_cmp_drop_table NULL → one predicted-not-taken acquire load per
+// comparison, then the normal dispatch).
+typedef struct {
+    _Atomic uint64_t pc;       // 0 = empty slot
+    _Atomic uint8_t verdict;   // 0 = unknown, 1 = keep, 2 = drop
+} CmpDropEntry;
+
+typedef struct {
+    CmpDropEntry* slots;
+    size_t capacity;           // power of two
+} CmpDropTable;
+
+static CmpDropTable* _Atomic g_cmp_drop_table = NULL;
+
+uint64_t sancov_cmp_dropped_count(void) {
+    // Number of DISTINCT comparison sites being dropped (verdict == drop). An
+    // on-demand slot scan — no per-comparison counting, so the hot path stays
+    // pure (two relaxed loads + early return). Per-site volume is the census's
+    // job; this just confirms the filter classified some sites as droppable.
+    CmpDropTable* t = atomic_load_explicit(&g_cmp_drop_table, memory_order_acquire);
+    if (t == NULL) return 0;
+    uint64_t sites = 0;
+    for (size_t i = 0; i < t->capacity; i++) {
+        if (atomic_load_explicit(&t->slots[i].verdict, memory_order_relaxed) == 2) {
+            sites++;
+        }
+    }
+    return sites;
+}
+
+// Returns true if the comparison at `pc` should be skipped. Resolves+caches the
+// verdict on first fire. Caller guarantees the filter is enabled (table != NULL).
+// The settled-entry hot path is two relaxed loads + a compare — no atomic RMW,
+// so dropping costs essentially nothing beyond the routing it avoids.
+static bool cmp_drop_should_skip(CmpDropTable* t, uintptr_t pc) {
+    size_t m = t->capacity - 1;
+    size_t i = (size_t)(cmp_census_hash((uint64_t)pc) & (uint64_t)m);
+    for (size_t probes = 0; probes <= m; probes++) {
+        CmpDropEntry* e = &t->slots[i];
+        uint64_t k = atomic_load_explicit(&e->pc, memory_order_relaxed);
+        if (k == 0) {
+            uint64_t expected = 0;
+            if (!atomic_compare_exchange_strong_explicit(
+                    &e->pc, &expected, (uint64_t)pc,
+                    memory_order_acq_rel, memory_order_relaxed)
+                && expected != (uint64_t)pc) {
+                i = (i + 1) & m;  // lost claim to a different pc; keep probing
+                continue;
+            }
+            k = (uint64_t)pc;  // won the claim, or it was already ours
+        }
+        if (k == (uint64_t)pc) {
+            uint8_t v = atomic_load_explicit(&e->verdict, memory_order_acquire);
+            if (v == 0) {
+                // First fire for this PC: classify and cache. Idempotent under
+                // races (every thread computes the same verdict for one PC).
+                Dl_info info;
+                bool drop = (dladdr((void*)pc, &info) && info.dli_sname)
+                            ? sancov_cmp_should_drop(info.dli_sname) : false;
+                v = drop ? 2 : 1;
+                atomic_store_explicit(&e->verdict, v, memory_order_release);
+            }
+            return v == 2;
+        }
+        i = (i + 1) & m;
+    }
+    return false;  // table full: keep (filter is best-effort)
+}
+
+__attribute__((constructor))
+static void cmp_drop_init(void) {
+    const char* v = getenv("PTK_CMP_DROP_SYNTHESIZED");
+    if (v == NULL || v[0] == '\0' || v[0] == '0') return;
+    CmpDropTable* t = (CmpDropTable*)xmalloc(sizeof(CmpDropTable));
+    t->capacity = 16384;  // power of two; ≫ any workload's distinct cmp-site count
+    t->slots = (CmpDropEntry*)calloc(t->capacity, sizeof(CmpDropEntry));
+    if (t->slots == NULL) { free(t); return; }
+    atomic_store_explicit(&g_cmp_drop_table, t, memory_order_release);
+}
+
 // MARK: - Comparison Dispatch (trace-cmp / value profile)
 
 // Per-comparison dispatch: resolve routing once (same current-context lookup as
@@ -1711,6 +1797,11 @@ void sancov_dispatch_cmp(uintptr_t pc, uint64_t arg1, uint64_t arg2, uint32_t si
     // recorder itself (or by a reset hook we are invoking) must NOT re-dispatch,
     // or the recorder recurses into itself and overflows the stack.
     if (ts->in_cmp_recorder) return;
+    // Drop synthesized/stdlib comparison sites (env-gated PTK_CMP_DROP_SYNTHESIZED;
+    // one predicted-not-taken acquire load when disabled). Skips before the census
+    // and routing so dropped sites cost nothing beyond the cached verdict lookup.
+    CmpDropTable* drop = atomic_load_explicit(&g_cmp_drop_table, memory_order_acquire);
+    if (__builtin_expect(drop != NULL, 0) && cmp_drop_should_skip(drop, pc)) return;
     // Diagnostic census (env-gated; one predicted-not-taken load when disabled).
     // Placed after the re-entry guard so it counts only genuine SUT comparisons,
     // not the recorder's own internal ones.
@@ -2129,6 +2220,48 @@ bool sancov_is_compiler_generated(const char* sname) {
         if (len >= 4) {
             const char* last4 = sname + len - 4;
             if (last4[0] == 'f' && last4[1] == 'A' && last4[3] == '_') return true;
+        }
+    }
+
+    return false;
+}
+
+bool sancov_cmp_should_drop(const char* sname) {
+    if (!sname) return false;
+
+    // Everything the edge filter already treats as compiler-generated:
+    // outlined ops (WO*), lazy witness/metadata accessors, thunks, addressors.
+    // Catches e.g. "...ExprOSgWOe" (outlined consume of STLC.Expr?).
+    if (sancov_is_compiler_generated(sname)) return true;
+
+    // Synthesized Equatable conformance (e.g. STLC.Typo.__derived_enum_equals).
+    if (strstr(sname, "__derived_enum_equals") != NULL) return true;
+
+    // Standard-library methods. After the Swift symbol prefix ($s / _$s), a
+    // digit begins a user-module length prefix (the instrumented SUT, e.g.
+    // "4STLC..."); 's' begins the explicit Swift module and 'S' begins a
+    // standard-library substitution (Sa=Array, SS=String, SD=Dictionary, ...).
+    // So an entity whose first char is 's' or 'S' is a stdlib type's method —
+    // bounds checks, count getters, buffer copies — which carry no SUT signal.
+    const char* p = sname;
+    if (p[0] == '_') p++;
+    if (p[0] == '$' && (p[1] == 's' || p[1] == 'S')) {
+        p += 2;
+        if (*p == 's' || *p == 'S') return true;
+    }
+
+    // Value witnesses on a user nominal type: <O|V|C> + 'w' + two lowercase op
+    // chars at the very end (e.g. "...ExprOwst" = storeEnumTagSinglePayload).
+    // Low volume but synthesized; the trailing form does not collide with the
+    // SUT-logic fixtures (none end in w<xx>).
+    size_t len = strlen(sname);
+    if (len >= 4) {
+        const char* e = sname + len;
+        if (e[-3] == 'w' &&
+            e[-2] >= 'a' && e[-2] <= 'z' &&
+            e[-1] >= 'a' && e[-1] <= 'z' &&
+            (e[-4] == 'O' || e[-4] == 'V' || e[-4] == 'C')) {
+            return true;
         }
     }
 

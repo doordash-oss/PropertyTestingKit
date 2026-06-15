@@ -404,6 +404,35 @@ size_t sancov_get_filtered_count(void);
 /// Exposed for testing the filter logic.
 bool sancov_is_compiler_generated(const char* sname);
 
+// MARK: - Comparison Drop Filter (PTK_CMP_DROP_SYNTHESIZED)
+//
+// The trace-cmp value-aware strategies (boundaryState / boundaryDistance) pay a
+// per-comparison dispatch tax on EVERY instrumented comparison — but the census
+// (scheduler-lab Finding 41g) showed most of that volume is synthesized/stdlib
+// chatter (Swift.Array bounds checks, count getters, buffer copies, synthesized
+// Equatable, value witnesses, outlined ops) carrying no SUT-logic signal. This
+// filter drops those comparison sites so the per-exec cost concentrates on the
+// SUT comparisons that actually witness the bug. Opt-in via the
+// PTK_CMP_DROP_SYNTHESIZED env var (default off → zero hot-path cost beyond one
+// predicted-not-taken load, like the census). Verdicts are cached per
+// comparison-site PC (dladdr + classify on first fire, O(1) thereafter).
+
+/// Classify a comparison site's enclosing-function mangled symbol (dladdr's
+/// dli_sname) as droppable synthesized/stdlib chatter. Returns true for stdlib
+/// methods (Swift module / standard-substitution types like Array — bounds
+/// checks, count getters, buffer copies), synthesized Equatable
+/// (__derived_enum_equals), value witnesses, and everything
+/// sancov_is_compiler_generated already flags (outlined ops, metadata/thunk
+/// accessors). Returns false for user-module SUT logic and for NULL (unknown
+/// symbols are kept). Exposed for testing.
+bool sancov_cmp_should_drop(const char* sname);
+
+/// Number of DISTINCT comparison sites the PTK_CMP_DROP_SYNTHESIZED filter has
+/// classified as droppable (0 when the filter is disabled). Confirms the filter
+/// engaged; per-site volume is reported by the census. Kept off the hot path —
+/// an on-demand slot scan, no per-comparison counting.
+uint64_t sancov_cmp_dropped_count(void);
+
 /// Diagnostic: per-routing-path counters maintained inside get_current_coverage_map.
 /// Pure atomic loads — safe to call from anywhere; concurrent reads are consistent
 /// even if increments are interleaved.
