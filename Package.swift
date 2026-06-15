@@ -245,7 +245,10 @@ package.targets += [
             .unsafeFlags([
                 "-O",
                 "-sanitize=undefined",
-                "-sanitize-coverage=edge,pc-table"
+                // trace-cmp so the benchmark closure's integer comparisons
+                // dispatch through sancov_dispatch_cmp → the boundary observer,
+                // exercising the per-comparison hot path under profiling.
+                "-sanitize-coverage=edge,pc-table,trace-cmp"
             ])
         ],
         linkerSettings: [
