@@ -1885,17 +1885,22 @@ void sancov_dispatch_cmp(uintptr_t pc, uint64_t arg1, uint64_t arg2, uint32_t si
     // comparisons of its own (SanCovHooks/libc are not trace-cmp instrumented),
     // so it is safe ahead of the re-entry guard: a dropped site never reaches the
     // recorder, and kept sites still hit the guard below.
-    CmpDropTable* drop = atomic_load_explicit(&g_cmp_drop_table, memory_order_acquire);
-    if (__builtin_expect(drop != NULL, 1) && cmp_drop_should_skip(drop, pc)) return;
-    // No consumer anywhere → skip the TLS fetch entirely. Edge-only strategies
-    // (newEdge / hitCountBuckets / pathTrie / signatureMatch) attach no cmp
-    // recorder, so every kept comparison would otherwise pay sancov_tls() +
-    // get_current_coverage_map() for nothing (~33M/6s — Finding 42). Both reads
-    // are plain global loads (no TLS). The census exemption keeps PTK_CMP_CENSUS
-    // working when it is enabled without a recorder. In a MIXED run (some engine
-    // has a recorder) the count is >0, so this never suppresses a real consumer.
+    // No consumer anywhere → skip EVERYTHING (drop filter + TLS fetch). Edge-only
+    // strategies (newEdge / hitCountBuckets / pathTrie / signatureMatch) attach no
+    // cmp recorder, so every kept comparison would otherwise pay the drop-filter
+    // hash-probe (~6% — Finding 43) and sancov_tls() + get_current_coverage_map()
+    // (~33M/6s — Finding 42) for nothing. Checked FIRST: both are plain global
+    // loads (no TLS, no hash), so the gate is the cheapest possible early-out. The
+    // census exemption keeps PTK_CMP_CENSUS working when enabled without a
+    // recorder. A MIXED run (some engine has a recorder) keeps the count >0, so a
+    // real consumer is never suppressed.
     if (atomic_load_explicit(&g_cmp_recorder_count, memory_order_acquire) == 0 &&
         atomic_load_explicit(&g_cmp_census, memory_order_acquire) == NULL) return;
+    // Drop synthesized/stdlib comparison sites before the TLS fetch (default on;
+    // opt out with PTK_CMP_DROP_SYNTHESIZED=0). Needs only `pc` + the global table,
+    // not the thread-local block, so dropped comparisons never pay tlv_get_addr.
+    CmpDropTable* drop = atomic_load_explicit(&g_cmp_drop_table, memory_order_acquire);
+    if (__builtin_expect(drop != NULL, 1) && cmp_drop_should_skip(drop, pc)) return;
     // Fetch this thread's TLS block ONCE (single tlv_get_addr) for the kept sites.
     SanCovTLS* ts = sancov_tls();
     // Re-entry guard (see SanCovTLS.in_cmp_recorder): a comparison fired by the
