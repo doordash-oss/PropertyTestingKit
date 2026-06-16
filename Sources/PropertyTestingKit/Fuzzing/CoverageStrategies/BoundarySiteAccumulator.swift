@@ -22,19 +22,21 @@
 //  Finding 41d then found the os_unfair_lock — kept because task-inherited
 //  child tasks route cmp hooks from several threads into the SAME accumulator —
 //  had itself become the #1 cost (~26% of the cmp channel): the lock/unlock pair
-//  is an out-of-line libsystem CALL per comparison. This version removes the lock
-//  entirely by making `record` LOCK-FREE: the table is FIXED-capacity (never
-//  reallocs — the realloc-under-readers race was the only reason a lock was
-//  required), and each slot is updated with per-slot atomics (claim via CAS,
-//  distance via a compare-then-CAS min, sign via atomic OR). The common case —
-//  re-hitting an already-claimed site whose distance does not improve — is two
-//  relaxed atomic loads and a compare, no read-modify-write and no call.
+//  is an out-of-line libsystem CALL per comparison. The lock came out by making
+//  `record` LOCK-FREE over a FIXED-capacity table (the realloc-under-readers
+//  race was the only reason a lock was required), updated with per-slot atomics.
+//
+//  Findings 45/46/47 then removed the sign dimension entirely: the A/B showed
+//  the boundary sign vocabulary bought zero bug-finding over the distance
+//  gradient, so the accumulator now stores ONLY the per-site minimum distance —
+//  one atomic word per bucket, no packing, no sign, no near-window. The
+//  steady-state cost is a single relaxed load and a compare.
 //
 
 import Atomics
 
-/// Open-addressing PC → (minDistance, signMask) map specialised for the
-/// per-comparison hot path.
+/// Open-addressing PC → minDistance map specialised for the per-comparison hot
+/// path.
 ///
 /// LOCK-FREE and concurrency-safe. Coverage contexts are keyed by Swift task and
 /// INHERITED by child tasks (`g_coverage_inheritance_key` in SanCovHooks.c), so a
@@ -49,26 +51,43 @@ import Atomics
 /// `@unchecked Sendable` because the raw atomic-storage pointers are not
 /// automatically `Sendable`.
 final class BoundarySiteAccumulator: @unchecked Sendable {
-    /// One occupied slot's snapshot, handed to `decide` once per iteration.
+    /// One occupied slot's snapshot, handed to `decide` once per iteration:
+    /// a comparison site and the smallest `|arg1 - arg2|` the run drove it to.
     struct Site {
         var pc: UInt64
         var distance: UInt64
-        var signMask: UInt8
     }
 
-    // Parallel flat buffers of ATOMIC storage (Structure-of-Arrays). `keys[i]==0`
-    // marks an empty slot — a comparison-site PC is `__builtin_return_address`,
-    // never 0, so 0 is a safe empty sentinel. `dist[i]` starts at `.max` so the
-    // compare-then-CAS min works uniformly for the claiming writer and every
-    // later updater (no claim/min race). Capacity is a power of two so the hash
-    // maps with a mask, not a modulo, and is FIXED for the accumulator's life.
-    private let keys: UnsafeMutablePointer<UInt64.AtomicRepresentation>
-    private let dist: UnsafeMutablePointer<UInt64.AtomicRepresentation>
-    private let sign: UnsafeMutablePointer<UInt8.AtomicRepresentation>
-    // Occupied slot indices, in claim order, so `snapshot`/`reset` are
+    // ONE interleaved buffer of ATOMIC storage (Array-of-Structs): `2 * capacity`
+    // words, where bucket `i`'s KEY is at word `2*i` and its minimum-distance
+    // VALUE is at `2*i + 1`. The two words of a bucket are adjacent (a 16-byte
+    // span), so a steady-state hit reads the key and — on a match — its value
+    // from the SAME cache line: one miss per comparison, not the two
+    // separate-array misses the old Structure-of-Arrays layout cost (`bucket` is
+    // hash-derived, so each access is an effectively random table index). A KEY
+    // of 0 marks an empty bucket — a comparison-site PC is
+    // `__builtin_return_address`, never 0. The VALUE word starts at `.max` (no
+    // distance recorded yet) so the compare-then-CAS min works uniformly for the
+    // claiming writer and every later updater (no claim/min race). Capacity is a
+    // power of two so the hash maps with a mask, not a modulo, and is FIXED for
+    // the accumulator's life.
+    private let cells: UnsafeMutablePointer<AtomicRep<UInt64>>
+    // Occupied bucket indices, in claim order, so `snapshot`/`reset` are
     // O(occupied) instead of O(capacity). Written only by the thread that wins a
-    // slot's key-claim CAS; `-1` marks an entry not yet published.
-    private let occ: UnsafeMutablePointer<Int.AtomicRepresentation>
+    // bucket's key-claim CAS; `-1` marks an entry not yet published.
+    private let occ: UnsafeMutablePointer<AtomicRep<Int>>
+
+    /// Atomic handle for bucket `i`'s KEY word (`cells[2*i]`).
+    @inline(__always)
+    private func keyWord(_ i: Int) -> UnsafeAtomic<UInt64> {
+        UnsafeAtomic<UInt64>(at: cells + (i &<< 1))
+    }
+    /// Atomic handle for bucket `i`'s packed VALUE word (`cells[2*i + 1]`),
+    /// adjacent to its key so the two share a cache line.
+    @inline(__always)
+    private func valueWord(_ i: Int) -> UnsafeAtomic<UInt64> {
+        UnsafeAtomic<UInt64>(at: cells + ((i &<< 1) &+ 1))
+    }
     private let occCount = UnsafeAtomic<Int>.create(0)
     // Set once if the table ever fills and a record is dropped (best-effort
     // signal; surfaced for diagnostics/tests). Real workloads have far fewer
@@ -82,20 +101,22 @@ final class BoundarySiteAccumulator: @unchecked Sendable {
         while cap < initialCapacity { cap <<= 1 }
         capacity = cap
         mask = cap - 1
-        keys = .allocate(capacity: cap)
-        dist = .allocate(capacity: cap)
-        sign = .allocate(capacity: cap)
+        cells = .allocate(capacity: cap * 2)
         occ = .allocate(capacity: cap)
-        keys.initialize(repeating: UInt64.AtomicRepresentation(0), count: cap)
-        dist.initialize(repeating: UInt64.AtomicRepresentation(UInt64.max), count: cap)
-        sign.initialize(repeating: UInt8.AtomicRepresentation(0), count: cap)
-        occ.initialize(repeating: Int.AtomicRepresentation(-1), count: cap)
+        // Interleave: even words = keys (empty sentinel 0), odd words = packed
+        // values (min sentinel .max). Bulk-initialize to 0, then raise the value
+        // words to the sentinel.
+        cells.initialize(repeating: AtomicRep<UInt64>(0), count: cap * 2)
+        var j = 0
+        while j < cap {
+            cells[j * 2 + 1] = AtomicRep<UInt64>(UInt64.max)
+            j &+= 1
+        }
+        occ.initialize(repeating: AtomicRep<Int>(-1), count: cap)
     }
 
     deinit {
-        keys.deinitialize(count: capacity); keys.deallocate()
-        dist.deinitialize(count: capacity); dist.deallocate()
-        sign.deinitialize(count: capacity); sign.deallocate()
+        cells.deinitialize(count: capacity * 2); cells.deallocate()
         occ.deinitialize(count: capacity); occ.deallocate()
         occCount.destroy()
         overflowed.destroy()
@@ -114,60 +135,85 @@ final class BoundarySiteAccumulator: @unchecked Sendable {
         return z ^ (z >> 31)
     }
 
-    /// Lower `dist[i]` to `distance` if smaller, and OR `nearBit` into `sign[i]`.
-    /// The min is a relaxed load + early-out, then a weak-CAS loop only when the
-    /// distance actually improves (rare after a site's first few hits) — so the
-    /// steady-state cost is a single relaxed load and a compare.
+    /// Lower bucket `i`'s value to `distance` if it is a closer approach. The min
+    /// is a relaxed load + early-out, then a weak-CAS loop only when the distance
+    /// actually improves (rare after a site's first few hits) — so the
+    /// steady-state cost is a single relaxed load and a compare, no
+    /// read-modify-write and no call.
     @inline(__always)
-    private func updateSlot(_ i: Int, distance: UInt64, nearBit: UInt8) {
-        let d = UnsafeAtomic<UInt64>(at: dist + i)
-        var cur = d.load(ordering: .relaxed)
+    private func updateSlot(_ i: Int, distance: UInt64) {
+        let value = valueWord(i)
+        var cur = value.load(ordering: .relaxed)
         while distance < cur {
-            let (done, original) = d.weakCompareExchange(
+            let (done, original) = value.weakCompareExchange(
                 expected: cur, desired: distance, ordering: .relaxed)
             if done { break }
             cur = original
         }
-        if nearBit != 0 {
-            UnsafeAtomic<UInt8>(at: sign + i).loadThenBitwiseOr(with: nearBit, ordering: .relaxed)
-        }
     }
 
-    /// Record one comparison: keep the minimum distance for `pc` and OR in the
-    /// near-boundary side bit (`nearBit` is 0 when the hit was outside the
-    /// window, contributing nothing to the mask). Lock-free; safe to call
+    /// Record one comparison: keep, for `pc`, the minimum `distance`
+    /// (`|arg1 - arg2|`) any hit drove it to this run. Lock-free; safe to call
     /// concurrently from inherited child tasks.
-    func record(pc: UInt64, distance: UInt64, nearBit: UInt8) {
-        var i = Int(Self.hash(pc) & UInt64(mask))
-        var probes = 0
-        while probes <= mask {
-            let kAtom = UnsafeAtomic<UInt64>(at: keys + i)
-            let k = kAtom.load(ordering: .relaxed)
-            if k == pc {
-                updateSlot(i, distance: distance, nearBit: nearBit)
+    ///
+    /// `@inline(__always)` because the module builds non-WMO (one `.o` per
+    /// source file), so without it this stays an out-of-line cross-file call
+    /// from `onCompare` — a tail-branch plus a prologue/epilogue on the
+    /// per-comparison hot path. It has a single hot caller (the boundary
+    /// engine's `onCompare` closure), so folding it in costs no code size. The
+    /// probe-loop helpers (`keyWord`/`valueWord`/`hash`/`updateSlot`) are
+    /// already inlined into this body; this carries the whole thing into the
+    /// closure.
+    @inline(__always)
+    func record(pc: UInt64, distance: UInt64) {
+        // Open-addressing linear probe: start at this PC's home bucket and walk
+        // forward (wrapping with `mask`) until we find the PC, claim an empty
+        // slot for it, or exhaust the table. The bound runs at most `mask + 1`
+        // times = one full pass over the table. `mask` is hoisted to a local so
+        // the loop condition doesn't reload the stored property each iteration
+        // (the atomic accesses below are optimizer barriers that would otherwise
+        // force a reread of `self`).
+        let mask = self.mask
+        var bucket = Int(Self.hash(pc) & UInt64(mask))
+        var probeCount = 0
+        while probeCount <= mask {
+            let keyCell = keyWord(bucket)
+            let occupant = keyCell.load(ordering: .relaxed)
+
+            // This bucket already belongs to our PC (the steady-state case):
+            // fold this hit into its running minimum and we're done.
+            if occupant == pc {
+                updateSlot(bucket, distance: distance)
                 return
             }
-            if k == 0 {
-                let (won, _) = kAtom.compareExchange(
+
+            // Empty bucket: try to claim it for our PC with a single CAS.
+            if occupant == 0 {
+                let (claimedByUs, _) = keyCell.compareExchange(
                     expected: 0, desired: pc, ordering: .acquiringAndReleasing)
-                if won {
-                    updateSlot(i, distance: distance, nearBit: nearBit)
-                    // Publish this slot's index for O(occupied) snapshot/reset.
-                    let slot = occCount.loadThenWrappingIncrement(ordering: .relaxed)
-                    if slot < capacity {
-                        UnsafeAtomic<Int>(at: occ + slot).store(i, ordering: .relaxed)
+                if claimedByUs {
+                    updateSlot(bucket, distance: distance)
+                    // Append this bucket to the occupied-index list so snapshot
+                    // and reset are O(occupied) instead of O(capacity).
+                    let occupiedIndex = occCount.loadThenWrappingIncrement(ordering: .relaxed)
+                    if occupiedIndex < capacity {
+                        UnsafeAtomic<Int>(at: occ + occupiedIndex).store(bucket, ordering: .relaxed)
                     }
                     return
                 }
-                // Lost the claim: another thread took this slot. If it took it
-                // for OUR pc, update in place; otherwise keep probing.
-                if kAtom.load(ordering: .relaxed) == pc {
-                    updateSlot(i, distance: distance, nearBit: nearBit)
+                // We lost the claim race to a concurrent (inherited-child-task)
+                // writer. If that writer claimed this bucket for OUR PC too,
+                // update it in place; otherwise it took it for some other PC, so
+                // keep probing past it.
+                if keyCell.load(ordering: .relaxed) == pc {
+                    updateSlot(bucket, distance: distance)
                     return
                 }
             }
-            i = (i &+ 1) & mask
-            probes &+= 1
+
+            // Bucket taken by a different PC — advance to the next one.
+            bucket = (bucket &+ 1) & mask
+            probeCount &+= 1
         }
         // Table full — drop this record (best-effort signal). Never happens for
         // real workloads (distinct cmp sites ≪ capacity).
@@ -183,12 +229,10 @@ final class BoundarySiteAccumulator: @unchecked Sendable {
         while j < n {
             let i = UnsafeAtomic<Int>(at: occ + j).load(ordering: .relaxed)
             if i >= 0 && i < capacity {
-                let k = UnsafeAtomic<UInt64>(at: keys + i).load(ordering: .relaxed)
+                let k = keyWord(i).load(ordering: .relaxed)
                 if k != 0 {
-                    out.append(Site(
-                        pc: k,
-                        distance: UnsafeAtomic<UInt64>(at: dist + i).load(ordering: .relaxed),
-                        signMask: UnsafeAtomic<UInt8>(at: sign + i).load(ordering: .relaxed)))
+                    let distance = valueWord(i).load(ordering: .relaxed)
+                    out.append(Site(pc: k, distance: distance))
                 }
             }
             j &+= 1
@@ -204,9 +248,8 @@ final class BoundarySiteAccumulator: @unchecked Sendable {
         while j < n {
             let i = UnsafeAtomic<Int>(at: occ + j).load(ordering: .relaxed)
             if i >= 0 && i < capacity {
-                UnsafeAtomic<UInt64>(at: keys + i).store(0, ordering: .relaxed)
-                UnsafeAtomic<UInt64>(at: dist + i).store(UInt64.max, ordering: .relaxed)
-                UnsafeAtomic<UInt8>(at: sign + i).store(0, ordering: .relaxed)
+                keyWord(i).store(0, ordering: .relaxed)
+                valueWord(i).store(UInt64.max, ordering: .relaxed)
                 UnsafeAtomic<Int>(at: occ + j).store(-1, ordering: .relaxed)
             }
             j &+= 1

@@ -56,15 +56,14 @@ func comparisonDenseWork(_ input: Int) {
 
 /// PROFILE_STRATEGY selects the coverage strategy under profiling so the same
 /// comparison-dense workload can be compared across arms (differential
-/// attribution): "boundarystate" (default — the cmp hot path), "boundarydist",
+/// attribution): "boundarydist" (default — the cmp hot path),
 /// "newedge"/"pathtrie" (no cmp observer → the dispatch baseline).
 let profileStrategy: CoverageStrategy = {
     switch ProcessInfo.processInfo.environment["PROFILE_STRATEGY"] {
-    case "boundarydist": return .boundaryDistance
     case "newedge": return .newEdge
     case "pathtrie": return .pathTrie
-    case "boundarystate", nil: return .boundaryState
-    default: return .boundaryState
+    case "boundarydist", nil: return .boundaryDistance
+    default: return .boundaryDistance
     }
 }()
 

@@ -75,51 +75,12 @@ struct BoundaryDistanceLedgerTests {
         #expect(!verdict.admit)
     }
 
-    @Test("A novel sign combination is claimed by discovery and admits the entry")
-    func novelSignClaimed() {
+    @Test("Both dimensions are additive in one verdict")
+    func bothDimensionsAdditive() {
         var ledger = BoundaryDistanceLedger()
-        let v = ledger.judge(features: [], size: 1, distances: [:], signFeatures: [42])
+        let v = ledger.judge(features: [1], size: 3, distances: [100: 8])
         #expect(v.admit)
-        #expect(v.claimed == 1)
-    }
-
-    @Test("A re-seen sign combination earns nothing (discovery, never stolen)")
-    func reSeenSignRejected() {
-        var ledger = BoundaryDistanceLedger()
-        _ = ledger.judge(features: [], size: 1, distances: [:], signFeatures: [42])   // entry 0 owns 42
-        // Same combination, nothing else: not a claim.
-        #expect(!ledger.judge(features: [], size: 1, distances: [:], signFeatures: [42]).admit)
-        // A genuinely new combination IS a claim.
-        #expect(ledger.judge(features: [], size: 1, distances: [:], signFeatures: [43]).admit)
-    }
-
-    @Test("A sign owner is never evicted by a later sign claim")
-    func signOwnerNotStolen() {
-        let listenerLedger = BoundaryDistanceLedger()
-        var ledger = listenerLedger
-        _ = ledger.judge(features: [], size: 1, distances: [:], signFeatures: [42])   // entry 0
-        // Entry 1 claims a different combination; entry 0 keeps 42 (no eviction).
-        let v = ledger.judge(features: [], size: 1, distances: [:], signFeatures: [43])
-        #expect(v.admit)
-        #expect(v.evict.isEmpty)
-    }
-
-    @Test("All three dimensions are additive in one verdict")
-    func threeDimensionsAdditive() {
-        var ledger = BoundaryDistanceLedger()
-        let v = ledger.judge(features: [1], size: 3, distances: [100: 8], signFeatures: [42, 43])
-        #expect(v.admit)
-        #expect(v.claimed == 4, "1 edge + 1 boundary + 2 signs")
-    }
-
-    @Test("Distances absent: a run admitted on sign alone keeps the existing distance owner")
-    func signOnlyDoesNotDisturbDistance() {
-        var ledger = BoundaryDistanceLedger()
-        _ = ledger.judge(features: [], size: 1, distances: [100: 4], signFeatures: [])   // entry 0 owns pc100
-        // Entry 1 brings only a novel sign; pc100 stays with entry 0.
-        let v = ledger.judge(features: [], size: 1, distances: [100: 9], signFeatures: [99])
-        #expect(v.admit)
-        #expect(v.evict.isEmpty)
+        #expect(v.claimed == 2, "1 edge + 1 boundary")
     }
 
     @Test("Admitted entries take sequential IDs across eviction")

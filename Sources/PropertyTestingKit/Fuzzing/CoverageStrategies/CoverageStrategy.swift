@@ -156,8 +156,6 @@ extension CoverageStrategy {
             let features: [UInt64]? = interesting ? engine.features.map { $0() } : nil
             let boundaryDistances: [UInt64: UInt64]? =
                 interesting ? engine.boundaryDistances.map { $0() } : nil
-            let boundarySigns: [UInt64]? =
-                interesting ? engine.boundarySigns.map { $0() } : nil
             if gated { sancov_observer_exit() }
             guard interesting else {
                 return nil
@@ -173,7 +171,7 @@ extension CoverageStrategy {
             corpus.mergeCoverageAndAdd(input: input, scheduleBytes: scheduleBytes, sparse: sparse)
             return CoverageAcceptance(
                 sparse: sparse, features: features,
-                boundaryDistances: boundaryDistances, boundarySigns: boundarySigns)
+                boundaryDistances: boundaryDistances)
         })
     }
 }
@@ -198,19 +196,15 @@ struct CoverageAcceptance {
     /// The run's per-comparison-site distances (`pc` → lowest `|arg1 - arg2|`),
     /// `nil` when the strategy publishes none.
     let boundaryDistances: [UInt64: UInt64]?
-    /// The run's joint boundary-sign combinations, `nil` when none published.
-    let boundarySigns: [UInt64]?
 
     init(
         sparse: SparseCoverage,
         features: [UInt64]?,
-        boundaryDistances: [UInt64: UInt64]? = nil,
-        boundarySigns: [UInt64]? = nil
+        boundaryDistances: [UInt64: UInt64]? = nil
     ) {
         self.sparse = sparse
         self.features = features
         self.boundaryDistances = boundaryDistances
-        self.boundarySigns = boundarySigns
     }
 }
 

@@ -13,10 +13,9 @@
 // limitations under the License.
 
 //  An open-addressing UInt64 membership set keyed on the value directly — NO
-//  Swift Hasher (SipHash). The value-aware novelty oracles (boundaryState's
-//  seenSigns, comparisonCoverage's seenFeatures) store feature keys that are
-//  ALREADY splitmix64-mixed hashes (see BoundarySignEncoding.encodeBoundarySign*
-//  / comparisonFeature). Running them through Set<UInt64> re-hashed already-
+//  Swift Hasher (SipHash). The value-aware novelty oracle (comparisonCoverage's
+//  seenFeatures) stores feature keys that are ALREADY splitmix64-mixed hashes
+//  (see comparisonFeature). Running them through Set<UInt64> re-hashed already-
 //  uniform bits with SipHash on the hottest per-iteration path — ~2.5% of the
 //  process purely in Hasher (scheduler-lab Finding 41n). Indexing on the value's
 //  own (already-mixed) low bits removes that entirely; the same trick

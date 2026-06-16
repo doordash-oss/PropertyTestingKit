@@ -76,16 +76,25 @@ struct BoundaryDistanceStrategyTests {
                 "|0-9|=9 is farther than the seen 0 — earns nothing")
     }
 
-    @Test("Published distance is the absolute difference, overflow-safe")
+    @Test("Published distance is the absolute numeric difference, overflow-safe")
     func publishesAbsoluteDifference() {
         let h = makeHarness()
         defer { h.teardown() }
 
-        // A full-width difference must not trap, and the published value is the
-        // absolute numeric difference (not Hamming distance).
-        let acc = h.fire(0xDD, 0, .max, [40, 41], 1)
-        #expect(acc?.boundaryDistances?[UInt64(0xDD)] == UInt64.max,
-                "|0 - UInt64.max| computed without overflow")
+        // The absolute NUMERIC difference (not Hamming): |0 - 2^40| = 2^40.
+        // Hamming distance here is 1, so a 2^40 result proves it is the numeric
+        // gradient.
+        let inRange = h.fire(0xDC, 0, 1 << 40, [40, 41], 1)
+        #expect(inRange?.boundaryDistances?[UInt64(0xDC)] == (1 << 40))
+
+        // A near-full-width difference must not trap (the `b &- a` path) and is
+        // stored exactly — the value word holds the whole 64-bit distance, no
+        // packing, no saturation. (A distance of exactly UInt64.max coincides
+        // with the "no hit yet" sentinel, so it can never read as strictly
+        // closer; a sub-maximal value exercises the full-width storage.)
+        let extreme = h.fire(0xDD, 1, .max, [40, 41], 1)
+        #expect(extreme?.boundaryDistances?[UInt64(0xDD)] == UInt64.max - 1,
+                "|1 - UInt64.max| computed and stored without overflow")
     }
 
     @Test("A new edge is interesting via the union even with no closer distance")

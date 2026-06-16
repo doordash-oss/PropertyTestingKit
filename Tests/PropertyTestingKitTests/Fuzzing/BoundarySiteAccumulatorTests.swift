@@ -13,11 +13,13 @@
 // limitations under the License.
 
 //  Unit tests for BoundarySiteAccumulator: the concrete open-addressing
-//  PC -> (minDistance, signMask) map that replaces the per-comparison
-//  Swift.Dictionary on the boundary cmp hot path. It must reduce by minimum
-//  distance, OR sign masks, hold many distinct sites within its fixed capacity,
-//  aggregate correctly under concurrent (inherited-child-task) records without
-//  corruption — it is LOCK-FREE — and reset.
+//  PC -> minDistance map that replaces the per-comparison Swift.Dictionary on
+//  the boundary cmp hot path. A single atomic word per site holds the minimum
+//  |arg1 - arg2| the run drove it to (Findings 45/46/47 removed the sign
+//  dimension — it bought no bug-finding). It must reduce by minimum distance,
+//  hold many distinct sites within its fixed capacity, aggregate correctly under
+//  concurrent (inherited-child-task) records without corruption — it is
+//  LOCK-FREE — and reset.
 
 import Testing
 @testable import PropertyTestingKit
@@ -25,40 +27,46 @@ import Testing
 @Suite("BoundarySiteAccumulator")
 struct BoundarySiteAccumulatorTests {
 
-    /// Snapshot as a [pc: (distance, mask)] dict for order-independent assertions.
-    private func asDict(_ acc: BoundarySiteAccumulator) -> [UInt64: (distance: UInt64, mask: UInt8)] {
-        var out: [UInt64: (distance: UInt64, mask: UInt8)] = [:]
-        for s in acc.snapshot() { out[s.pc] = (s.distance, s.signMask) }
+    /// Snapshot as a [pc: distance] dict for order-independent assertions.
+    private func asDict(_ acc: BoundarySiteAccumulator) -> [UInt64: UInt64] {
+        var out: [UInt64: UInt64] = [:]
+        for s in acc.snapshot() { out[s.pc] = s.distance }
         return out
     }
 
     @Test("keeps the minimum distance across repeated hits of one site")
     func minDistance() {
         let acc = BoundarySiteAccumulator()
-        acc.record(pc: 100, distance: 5, nearBit: 0)
-        acc.record(pc: 100, distance: 2, nearBit: 0)
-        acc.record(pc: 100, distance: 9, nearBit: 0)
-        #expect(asDict(acc)[100]?.distance == 2)
+        acc.record(pc: 100, distance: 5)
+        acc.record(pc: 100, distance: 2)  // closest
+        acc.record(pc: 100, distance: 9)  // farther, ignored
+        #expect(asDict(acc)[100] == 2)
     }
 
-    @Test("ORs every sign bit a site contributes")
-    func orsSignMask() {
+    @Test("a strictly closer later hit lowers the recorded distance")
+    func closerHitLowers() {
         let acc = BoundarySiteAccumulator()
-        acc.record(pc: 100, distance: 1, nearBit: 0b001)
-        acc.record(pc: 100, distance: 0, nearBit: 0b010)
-        #expect(asDict(acc)[100]?.mask == 0b011)
-        #expect(asDict(acc)[100]?.distance == 0)
+        acc.record(pc: 7, distance: 3)
+        acc.record(pc: 7, distance: 0)  // distance 0 = the global min
+        #expect(asDict(acc)[7] == 0)
     }
 
     @Test("distinct sites are all retained")
     func distinctSites() {
         let acc = BoundarySiteAccumulator()
-        acc.record(pc: 10, distance: 1, nearBit: 1)
-        acc.record(pc: 20, distance: 2, nearBit: 2)
-        acc.record(pc: 30, distance: 3, nearBit: 4)
+        acc.record(pc: 10, distance: 1)
+        acc.record(pc: 20, distance: 2)
+        acc.record(pc: 30, distance: 3)
         let d = asDict(acc)
         #expect(d.count == 3)
-        #expect(d[10]?.mask == 1 && d[20]?.mask == 2 && d[30]?.mask == 4)
+        #expect(d[10] == 1 && d[20] == 2 && d[30] == 3)
+    }
+
+    @Test("a full-width distance is stored without overflow or saturation")
+    func fullWidthDistance() {
+        let acc = BoundarySiteAccumulator()
+        acc.record(pc: 42, distance: UInt64.max)
+        #expect(asDict(acc)[42] == UInt64.max)
     }
 
     @Test("retains many distinct sites within the fixed capacity")
@@ -68,16 +76,13 @@ struct BoundarySiteAccumulatorTests {
         // version started with, but within the fixed capacity. Each hit twice,
         // smaller distance the second time.
         let n: UInt64 = 5000
-        for pc in 1...n { acc.record(pc: pc &* 2654435761, distance: 50, nearBit: 0) }
-        for pc in 1...n { acc.record(pc: pc &* 2654435761, distance: 7, nearBit: 0b100) }
+        for pc in 1...n { acc.record(pc: pc &* 2654435761, distance: 50) }
+        for pc in 1...n { acc.record(pc: pc &* 2654435761, distance: 7) }
         let d = asDict(acc)
         #expect(d.count == Int(n))
         #expect(!acc.didOverflow)
-        // Spot-check a few: min distance kept, mask OR'd.
         for pc in [UInt64(1), 2500, n] {
-            let key = pc &* 2654435761
-            #expect(d[key]?.distance == 7, "min distance for pc \(key)")
-            #expect(d[key]?.mask == 0b100, "mask for pc \(key)")
+            #expect(d[pc &* 2654435761] == 7, "min distance for pc \(pc &* 2654435761)")
         }
     }
 
@@ -85,15 +90,15 @@ struct BoundarySiteAccumulatorTests {
     func concurrentRecords() async {
         let acc = BoundarySiteAccumulator()
         // 8 tasks hammer 16 shared sites at once — the inherited-child-task case
-        // the accumulator must survive lock-free. Every task contributes near-bit
-        // (1 << t%3) and at least one distance of 0 per site.
+        // the accumulator must survive lock-free. Every task drives each site to
+        // distance 0, so the converged min is unambiguous.
         await withTaskGroup(of: Void.self) { group in
-            for t in 0..<8 {
+            for _ in 0..<8 {
                 group.addTask {
                     for r in 0..<5000 {
                         let pc = UInt64((r % 16) + 1)
                         let distance = UInt64((r / 16) % 50)  // hits 0 for each site
-                        acc.record(pc: pc, distance: distance, nearBit: UInt8(1 << (t % 3)))
+                        acc.record(pc: pc, distance: distance)
                     }
                 }
             }
@@ -102,21 +107,20 @@ struct BoundarySiteAccumulatorTests {
         #expect(d.count == 16, "no claims lost under contention")
         #expect(!acc.didOverflow)
         for pc in UInt64(1)...16 {
-            #expect(d[pc]?.distance == 0, "global min survived the races for pc \(pc)")
-            #expect(d[pc]?.mask == 0b111, "all three near-bits OR'd for pc \(pc)")
+            #expect(d[pc] == 0, "global min survived the races for pc \(pc)")
         }
     }
 
     @Test("reset clears all entries")
     func resetClears() {
         let acc = BoundarySiteAccumulator()
-        acc.record(pc: 1, distance: 1, nearBit: 1)
-        acc.record(pc: 2, distance: 2, nearBit: 2)
+        acc.record(pc: 1, distance: 1)
+        acc.record(pc: 2, distance: 2)
         acc.reset()
         #expect(acc.snapshot().isEmpty)
         // Reusable after reset.
-        acc.record(pc: 3, distance: 3, nearBit: 4)
-        #expect(asDict(acc)[3]?.mask == 4)
+        acc.record(pc: 3, distance: 3)
+        #expect(asDict(acc)[3] == 3)
         #expect(acc.snapshot().count == 1)
     }
 }
