@@ -255,6 +255,7 @@
 		D50589D8527B6FEB6970623C /* AdaptiveDepthChainTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 228A4808A96301C32C0855E2 /* AdaptiveDepthChainTests.swift */; };
 		D5304C43DD6EFBF89321404D /* PropertyTestingKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 2595E9AD80DBFC77F241A7E7 /* PropertyTestingKit.framework */; };
 		D5645DFA85C2ABBD0E34ACC2 /* ParallelTimingTest.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6A80CC19DCB4C4527B0777F /* ParallelTimingTest.swift */; };
+		D56F1486FD92906F0DC97ADB /* SanCovCmpRecorderGateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F7B9F89824089B30381887B6 /* SanCovCmpRecorderGateTests.swift */; };
 		D9062F141056F0F28EB71027 /* BoundaryDistanceStrategy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 33DF5C7CAC0D8E89CF4B43CB /* BoundaryDistanceStrategy.swift */; };
 		DA06181B96501EDCC678BC3C /* SanCovHooks.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 662FDA7546F253A8CAE418AB /* SanCovHooks.framework */; };
 		DA43DF2C782818DADB74D492 /* PCResolutionTest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2BACD85D7C5B37A9C6BE9ED5 /* PCResolutionTest.swift */; };
@@ -856,6 +857,7 @@
 		F5FAD6386630E58099EFA884 /* ck_pr.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ck_pr.h; sourceTree = "<group>"; };
 		F6A80CC19DCB4C4527B0777F /* ParallelTimingTest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ParallelTimingTest.swift; sourceTree = "<group>"; };
 		F7B5F39FFCE93451B38B3FBA /* PropertyBasedSelfTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PropertyBasedSelfTests.swift; sourceTree = "<group>"; };
+		F7B9F89824089B30381887B6 /* SanCovCmpRecorderGateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SanCovCmpRecorderGateTests.swift; sourceTree = "<group>"; };
 		F7D0C7D1183C89E7346C1405 /* ScheduleHooks.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ScheduleHooks.h; sourceTree = "<group>"; };
 		F853A816879F7A6E163BE7B4 /* StringBoundaryMutator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StringBoundaryMutator.swift; sourceTree = "<group>"; };
 		F8AD67782E1C097D160C9DFD /* SchedulerProbe.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SchedulerProbe.swift; sourceTree = "<group>"; };
@@ -1608,6 +1610,7 @@
 			children = (
 				2BACD85D7C5B37A9C6BE9ED5 /* PCResolutionTest.swift */,
 				6736105C1B56C732CDB565BD /* SanCovCmpDropTests.swift */,
+				F7B9F89824089B30381887B6 /* SanCovCmpRecorderGateTests.swift */,
 				FF80A96A17AD018D2CDD24A2 /* SanCovEdgeFilterTests.swift */,
 				34658F2420967EA35E38058D /* SanCovIsolationTests.swift */,
 				5793C170004170EB1BC50580 /* SanCovResetTests.swift */,
@@ -2191,6 +2194,7 @@
 			files = (
 				DA43DF2C782818DADB74D492 /* PCResolutionTest.swift in Sources */,
 				6C23707855F5BC9E25788D35 /* SanCovCmpDropTests.swift in Sources */,
+				D56F1486FD92906F0DC97ADB /* SanCovCmpRecorderGateTests.swift in Sources */,
 				E7399441F6F7D6EEB785E4CA /* SanCovEdgeFilterTests.swift in Sources */,
 				6C92AFA4A8A89008D14C5645 /* SanCovIsolationTests.swift in Sources */,
 				18AD5DD480F2B7FF17911BD8 /* SanCovResetTests.swift in Sources */,

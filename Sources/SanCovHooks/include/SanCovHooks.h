@@ -335,6 +335,12 @@ void sancov_context_set_cmp_recorder(
 /// none attached).
 void* sancov_context_get_cmp_recorder_for_testing(SanCovMeasurementContext* context);
 
+/// TESTING ONLY: the process-global count of measurement contexts that currently
+/// have a comparison recorder attached. sancov_dispatch_cmp early-returns (before
+/// the per-thread TLS fetch) when this is 0 — so edge-only strategies don't pay
+/// the cmp-routing cost for comparisons no one consumes.
+int sancov_cmp_recorder_count_for_testing(void);
+
 /// Generation guard: when set true on a thread, sancov_dispatch_edge and
 /// sancov_dispatch_cmp early-return on that thread (after the drop filter / TLS
 /// fetch). The fuzz loop sets it around input generation/mutation — which runs

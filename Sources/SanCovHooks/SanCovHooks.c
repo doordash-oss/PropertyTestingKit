@@ -396,6 +396,40 @@ static _Atomic uint64_t g_route_tlsfb_sync_pseudo_task = 0;
 static _Atomic uint64_t g_route_tlsfb_real_task_no_head = 0;
 static _Atomic uint64_t g_route_tlsfb_real_task_no_match = 0;
 
+// Dispatch counters (env-gated PTK_DISPATCH_COUNT): count the edge vs cmp
+// dispatches that actually pay the per-thread TLS fetch (post-filter, post-
+// suppress) so we can see which channel dominates tlv_get_addr. Relaxed atomics
+// — only the RATIO matters, so the cross-core contention they add to the
+// counting run is irrelevant. `cmp_recorded` counts the kept cmp dispatches that
+// reached an attached recorder; (cmp - cmp_recorded) is TLS paid with no
+// consumer (edge-only strategies still fire the trace-cmp hooks). Dumped to
+// stderr at exit. Off ⇒ one predicted-not-taken load on the hot path.
+static bool g_dispatch_count_on = false;
+static _Atomic uint64_t g_dispatch_edge_count = 0;
+static _Atomic uint64_t g_dispatch_cmp_count = 0;
+static _Atomic uint64_t g_dispatch_cmp_recorded = 0;
+
+// Process-global count of measurement contexts with a cmp recorder attached.
+// sancov_dispatch_cmp early-returns before the TLS fetch when this is 0, so
+// edge-only strategies (no cmp consumer) don't pay cmp-routing for comparisons
+// nobody reads (Finding 42: ~33M unconsumed cmp TLS fetches / 6s). Adjusted only
+// at recorder attach/detach (measurement setup/teardown), never on the hot path.
+static _Atomic int g_cmp_recorder_count = 0;
+
+// Apply a cmp_recorder_bits transition to the global count: 0→nonzero attaches
+// (+1), nonzero→0 detaches (-1), nonzero→nonzero (re-attach) is a no-op.
+static inline void cmp_recorder_count_adjust(uintptr_t old_bits, uintptr_t new_bits) {
+    if (old_bits == 0 && new_bits != 0) {
+        atomic_fetch_add_explicit(&g_cmp_recorder_count, 1, memory_order_acq_rel);
+    } else if (old_bits != 0 && new_bits == 0) {
+        atomic_fetch_sub_explicit(&g_cmp_recorder_count, 1, memory_order_acq_rel);
+    }
+}
+
+int sancov_cmp_recorder_count_for_testing(void) {
+    return atomic_load_explicit(&g_cmp_recorder_count, memory_order_acquire);
+}
+
 // Get or create a pseudo-task ID for synchronous code
 static void* get_sync_pseudo_task(SanCovTLS* ts) {
     if (ts->sync_pseudo_task == NULL) {
@@ -940,7 +974,9 @@ void sancov_context_set_cmp_recorder(
     SanCovRecorderDataFn release) {
     if (context == NULL) return;
 
-    __atomic_store_n(&context->cmp_recorder_bits, 0, __ATOMIC_RELEASE);
+    // Capture the prior recorder so the global cmp-recorder count tracks the
+    // 0↔nonzero transition (gates sancov_dispatch_cmp — see g_cmp_recorder_count).
+    uintptr_t old_cmp = __atomic_exchange_n(&context->cmp_recorder_bits, 0, __ATOMIC_RELEASE);
     __atomic_store_n(&context->cmp_recorder_reset_bits, 0, __ATOMIC_RELEASE);
     release_cmp_recorder_data(context);
 
@@ -953,6 +989,7 @@ void sancov_context_set_cmp_recorder(
         // Clear-with-payload: ownership still transferred, release once.
         release(data);
     }
+    cmp_recorder_count_adjust(old_cmp, recorder ? (uintptr_t)recorder : 0);
 }
 
 // sancov_context_get_recorder_data lives in the header as static inline (hot path).
@@ -991,7 +1028,8 @@ void sancov_end_measurement(SanCovMeasurementContext* ctx) {
     __atomic_store_n(&ctx->edge_recorder_bits, 0, __ATOMIC_RELEASE);
     __atomic_store_n(&ctx->recorder_reset_bits, 0, __ATOMIC_RELEASE);
     // Sever the cmp recorder on the same terms (data survives for stragglers).
-    __atomic_store_n(&ctx->cmp_recorder_bits, 0, __ATOMIC_RELEASE);
+    uintptr_t old_cmp = __atomic_exchange_n(&ctx->cmp_recorder_bits, 0, __ATOMIC_RELEASE);
+    cmp_recorder_count_adjust(old_cmp, 0);
     __atomic_store_n(&ctx->cmp_recorder_reset_bits, 0, __ATOMIC_RELEASE);
 
     // Drop the inheritance registration first so concurrent routing decisions
@@ -1554,6 +1592,8 @@ void sancov_dispatch_edge(uint32_t *guard) {
     // Generation guard: skip routing+recording for edges fired by input
     // generation/mutation (not the property under test). See SanCovTLS.suppressed.
     if (ts->suppressed) return;
+    if (__builtin_expect(g_dispatch_count_on, 0))
+        atomic_fetch_add_explicit(&g_dispatch_edge_count, 1, memory_order_relaxed);
     uint8_t* map = get_current_coverage_map(ts);
     SanCovMeasurementContext* ctx = ts->cached_measurement_context;
     if (ctx) {
@@ -1706,6 +1746,27 @@ static void cmp_census_init(void) {
     atexit(cmp_census_dump);
 }
 
+static void dispatch_count_dump(void) {
+    if (!g_dispatch_count_on) return;
+    unsigned long long e = atomic_load_explicit(&g_dispatch_edge_count, memory_order_relaxed);
+    unsigned long long c = atomic_load_explicit(&g_dispatch_cmp_count, memory_order_relaxed);
+    unsigned long long cr = atomic_load_explicit(&g_dispatch_cmp_recorded, memory_order_relaxed);
+    fprintf(stderr,
+        "=== PTK_DISPATCH_COUNT ===\n"
+        "edge_dispatches  %llu\n"
+        "cmp_dispatches   %llu\n"
+        "cmp_recorded     %llu   (cmp - recorded = %llu paid TLS with no consumer)\n",
+        e, c, cr, (c >= cr ? c - cr : 0));
+}
+
+__attribute__((constructor))
+static void dispatch_count_init(void) {
+    const char* v = getenv("PTK_DISPATCH_COUNT");
+    if (v == NULL || v[0] == '\0' || v[0] == '0') return;
+    g_dispatch_count_on = true;
+    atexit(dispatch_count_dump);
+}
+
 // MARK: - Comparison Drop Filter (env-gated: PTK_CMP_DROP_SYNTHESIZED)
 //
 // Per comparison-site PC verdict cache: on a PC's first fire, dladdr resolves
@@ -1826,6 +1887,15 @@ void sancov_dispatch_cmp(uintptr_t pc, uint64_t arg1, uint64_t arg2, uint32_t si
     // recorder, and kept sites still hit the guard below.
     CmpDropTable* drop = atomic_load_explicit(&g_cmp_drop_table, memory_order_acquire);
     if (__builtin_expect(drop != NULL, 1) && cmp_drop_should_skip(drop, pc)) return;
+    // No consumer anywhere → skip the TLS fetch entirely. Edge-only strategies
+    // (newEdge / hitCountBuckets / pathTrie / signatureMatch) attach no cmp
+    // recorder, so every kept comparison would otherwise pay sancov_tls() +
+    // get_current_coverage_map() for nothing (~33M/6s — Finding 42). Both reads
+    // are plain global loads (no TLS). The census exemption keeps PTK_CMP_CENSUS
+    // working when it is enabled without a recorder. In a MIXED run (some engine
+    // has a recorder) the count is >0, so this never suppresses a real consumer.
+    if (atomic_load_explicit(&g_cmp_recorder_count, memory_order_acquire) == 0 &&
+        atomic_load_explicit(&g_cmp_census, memory_order_acquire) == NULL) return;
     // Fetch this thread's TLS block ONCE (single tlv_get_addr) for the kept sites.
     SanCovTLS* ts = sancov_tls();
     // Re-entry guard (see SanCovTLS.in_cmp_recorder): a comparison fired by the
@@ -1837,6 +1907,8 @@ void sancov_dispatch_cmp(uintptr_t pc, uint64_t arg1, uint64_t arg2, uint32_t si
     // (SUT funcs like getTyp the mutator calls to validate mutants) reach here;
     // dropped ones already returned at the drop check above. See SanCovTLS.suppressed.
     if (ts->suppressed) return;
+    if (__builtin_expect(g_dispatch_count_on, 0))
+        atomic_fetch_add_explicit(&g_dispatch_cmp_count, 1, memory_order_relaxed);
     // Diagnostic census (env-gated; one predicted-not-taken load when disabled).
     // Placed after the re-entry guard so it counts only genuine SUT comparisons,
     // not the recorder's own internal ones.
@@ -1848,6 +1920,8 @@ void sancov_dispatch_cmp(uintptr_t pc, uint64_t arg1, uint64_t arg2, uint32_t si
     if (!ctx) return;
     SanCovCmpRecorder r = (SanCovCmpRecorder)__atomic_load_n(&ctx->cmp_recorder_bits, __ATOMIC_ACQUIRE);
     if (r) {
+        if (__builtin_expect(g_dispatch_count_on, 0))
+            atomic_fetch_add_explicit(&g_dispatch_cmp_recorded, 1, memory_order_relaxed);
         ts->in_cmp_recorder = true;
         r(pc, arg1, arg2, size_bytes, ctx);
         ts->in_cmp_recorder = false;
