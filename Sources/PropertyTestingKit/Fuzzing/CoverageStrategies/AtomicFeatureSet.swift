@@ -36,9 +36,9 @@ final class AtomicFeatureSet: @unchecked Sendable {
     // tracked separately by `zeroSeen` rather than stored in the table (same
     // split FeatureHashSet uses for its literal-0 sentinel). Capacity is a power
     // of two (mask, not modulo) and FIXED for the set's life.
-    private let keys: UnsafeMutablePointer<UInt64.AtomicRepresentation>
+    private let keys: UnsafeMutablePointer<AtomicRep<UInt64>>
     // Claimed slot indices in claim order → O(occupied) snapshot/reset. -1 = unset.
-    private let occ: UnsafeMutablePointer<Int.AtomicRepresentation>
+    private let occ: UnsafeMutablePointer<AtomicRep<Int>>
     private let occCount = UnsafeAtomic<Int>.create(0)
     private let zeroSeen = UnsafeAtomic<Bool>.create(false)
     private let overflowed = UnsafeAtomic<Bool>.create(false)
@@ -52,8 +52,8 @@ final class AtomicFeatureSet: @unchecked Sendable {
         mask = cap - 1
         keys = .allocate(capacity: cap)
         occ = .allocate(capacity: cap)
-        keys.initialize(repeating: UInt64.AtomicRepresentation(0), count: cap)
-        occ.initialize(repeating: Int.AtomicRepresentation(-1), count: cap)
+        keys.initialize(repeating: AtomicRep<UInt64>(0), count: cap)
+        occ.initialize(repeating: AtomicRep<Int>(-1), count: cap)
     }
 
     deinit {

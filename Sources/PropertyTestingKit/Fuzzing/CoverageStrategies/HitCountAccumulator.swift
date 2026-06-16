@@ -45,11 +45,11 @@ final class HitCountAccumulator: @unchecked Sendable {
     // 0 marks an empty slot AND edge 0 (a valid index) is representable. `count`
     // is the per-edge hit tally. Capacity is a power of two (mask, not modulo) and
     // FIXED for the accumulator's life.
-    private let keys: UnsafeMutablePointer<UInt64.AtomicRepresentation>
-    private let count: UnsafeMutablePointer<UInt32.AtomicRepresentation>
+    private let keys: UnsafeMutablePointer<AtomicRep<UInt64>>
+    private let count: UnsafeMutablePointer<AtomicRep<UInt32>>
     // Occupied slot indices in claim order → O(occupied) snapshot/reset. Written
     // only by the thread that wins a slot's key-claim CAS; -1 = not yet published.
-    private let occ: UnsafeMutablePointer<Int.AtomicRepresentation>
+    private let occ: UnsafeMutablePointer<AtomicRep<Int>>
     private let occCount = UnsafeAtomic<Int>.create(0)
     // Set once if the table ever fills and an increment is dropped (best-effort;
     // real workloads have far fewer distinct edges-per-run than capacity).
@@ -65,9 +65,9 @@ final class HitCountAccumulator: @unchecked Sendable {
         keys = .allocate(capacity: cap)
         count = .allocate(capacity: cap)
         occ = .allocate(capacity: cap)
-        keys.initialize(repeating: UInt64.AtomicRepresentation(0), count: cap)
-        count.initialize(repeating: UInt32.AtomicRepresentation(0), count: cap)
-        occ.initialize(repeating: Int.AtomicRepresentation(-1), count: cap)
+        keys.initialize(repeating: AtomicRep<UInt64>(0), count: cap)
+        count.initialize(repeating: AtomicRep<UInt32>(0), count: cap)
+        occ.initialize(repeating: AtomicRep<Int>(-1), count: cap)
     }
 
     deinit {

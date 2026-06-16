@@ -46,7 +46,7 @@ public final class ComparisonDictionary: @unchecked Sendable {
     //
     // `@unchecked Sendable` because the raw atomic-storage pointer is not
     // automatically `Sendable`.
-    private let ring: UnsafeMutablePointer<UInt64.AtomicRepresentation>
+    private let ring: UnsafeMutablePointer<AtomicRep<UInt64>>
     private let cursor = UnsafeAtomic<UInt64>.create(0)
 
     /// - Parameter capacity: how many recent operands to retain (ring size).
@@ -54,7 +54,7 @@ public final class ComparisonDictionary: @unchecked Sendable {
         precondition(capacity > 0, "ComparisonDictionary capacity must be positive")
         self.capacity = capacity
         ring = .allocate(capacity: capacity)
-        ring.initialize(repeating: UInt64.AtomicRepresentation(0), count: capacity)
+        ring.initialize(repeating: AtomicRep<UInt64>(0), count: capacity)
     }
 
     deinit {
