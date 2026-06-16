@@ -17,6 +17,8 @@
 //  `PoolAdmission` and the child `PoolPlugin`s.
 //
 
+import Dependencies
+
 /// What the engine should run next.
 enum PoolDirective: Equatable {
     /// Generate a fresh input from the mutators.
@@ -66,7 +68,12 @@ final class WeightedPoolCore {
     /// One fresh generation is owed after every finished burst.
     private var freshOwed = false
 
-    private var rng = FastRNG()
+    /// Draw RNG, resolved from the `fastRandomNumberGenerator` dependency at
+    /// init. Production gets the thread-local `FastRNG`; tests override
+    /// `\.fastRandomNumberGenerator` with a deterministic generator so
+    /// weighted-draw distributions are reproducible (otherwise pick-count
+    /// assertions flake on near-ties).
+    private let withRandomNumberGenerator: WithRandomNumberGenerator
 
     init(
         admission: PoolAdmission,
@@ -75,11 +82,13 @@ final class WeightedPoolCore {
         focusOnInsert: Bool,
         capacity: Int? = nil
     ) {
+        @Dependency(\.fastRandomNumberGenerator) var fastRandomNumberGenerator
         self.judge = admission.makeJudge()
         self.policies = policies
         self.burstLength = max(1, burstLength)
         self.focusOnInsert = focusOnInsert
         self.capacity = capacity.map { max(1, $0) }
+        self.withRandomNumberGenerator = fastRandomNumberGenerator
     }
 
     /// Report one executed iteration. Returns the new entry's ID when the
@@ -221,10 +230,21 @@ final class WeightedPoolCore {
         var total = 0.0
         for id in live { total += weights[id] }
         guard total > 0 else {
-            // All-zero pool: uniform fallback rather than starvation.
-            return live[Int.random(in: 0..<live.count, using: &rng)]
+            // All-zero pool: uniform fallback rather than starvation. Draw the
+            // index through the RNG wrapper, then index `live` outside the
+            // closure (it is `@Sendable` and must not capture `self`).
+            let count = live.count
+            let pick = withRandomNumberGenerator { rng in
+                Int.random(in: 0..<count, using: &rng)
+            }
+            return live[pick]
         }
-        var target = Double.random(in: 0..<total, using: &rng)
+        // Draw the target point inside the closure (only the local `span` is
+        // captured), then walk the live weights to select outside it.
+        let span = total
+        var target = withRandomNumberGenerator { rng in
+            Double.random(in: 0..<span, using: &rng)
+        }
         for id in live {
             target -= weights[id]
             if target < 0 { return id }

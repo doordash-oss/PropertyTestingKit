@@ -20,6 +20,7 @@
 //
 
 import Testing
+import Dependencies
 @testable import PropertyTestingKit
 
 @Suite("Entropic pool policy")
@@ -27,13 +28,24 @@ struct EntropicPolicyTests {
 
     /// Draw-heavy core: burstLength 1, no focus-on-insert, so every cycle is
     /// draw → mutate → fresh and the weight distribution is observable.
+    ///
+    /// Built with a deterministic `\.fastRandomNumberGenerator` override so the
+    /// weighted-draw sequence is fully reproducible: the pick-count assertions
+    /// below test a genuine weight separation, but with the production
+    /// thread-local RNG they rode on non-deterministic draws and flaked on
+    /// near-ties.
     private func makeCore(
         admission: PoolAdmission = .everyDiscovery,
-        policy: EntropicWeightPolicy = EntropicWeightPolicy()
+        policy: EntropicWeightPolicy = EntropicWeightPolicy(),
+        seed: UInt64 = 0x5EED_1234_ABCD_0001
     ) -> WeightedPoolCore {
-        WeightedPoolCore(
-            admission: admission, policies: [policy],
-            burstLength: 1, focusOnInsert: false)
+        withDependencies {
+            $0.fastRandomNumberGenerator = WithRandomNumberGenerator(DeterministicRNG(seed: seed))
+        } operation: {
+            WeightedPoolCore(
+                admission: admission, policies: [policy],
+                burstLength: 1, focusOnInsert: false)
+        }
     }
 
     private func accept(_ core: WeightedPoolCore, edges: [UInt32], parent: Int? = nil) -> Int? {

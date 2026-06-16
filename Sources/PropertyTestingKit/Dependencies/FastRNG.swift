@@ -96,3 +96,34 @@ extension DependencyValues {
         set { self[FastRNG.self] = newValue }
     }
 }
+
+// MARK: - Mockable RNG (withRandomNumberGenerator pattern, FastRNG default)
+
+/// A `\.withRandomNumberGenerator`-style dependency that defaults to `FastRNG`
+/// instead of the library's `SystemRandomNumberGenerator`. We reuse Point-Free's
+/// `WithRandomNumberGenerator` wrapper (the canonical pattern: a `Sendable`
+/// holder yielding `inout` access to a generator through a closure) but seed its
+/// live value with our thread-local XorShift64 `FastRNG`, so production keeps
+/// that algorithm. Tests override it with a deterministic generator
+/// (`$0.fastRandomNumberGenerator = WithRandomNumberGenerator(DeterministicRNG(...))`)
+/// so weighted-draw distributions are reproducible rather than flaking on
+/// near-ties.
+///
+/// `testValue` is also `FastRNG`-backed (not `unimplemented`) because most
+/// pool tests draw real randomness and only the distribution-sensitive ones
+/// override it.
+private enum FastRandomNumberGeneratorKey: DependencyKey {
+    static let liveValue = WithRandomNumberGenerator(FastRNG())
+    static let testValue = WithRandomNumberGenerator(FastRNG())
+}
+
+extension DependencyValues {
+    /// RNG access for randomized scheduling decisions (e.g. the weighted
+    /// mutation pool's draw), following the `withRandomNumberGenerator` pattern
+    /// but backed by `FastRNG`. Override in tests with a deterministic generator
+    /// for reproducible draw distributions.
+    var fastRandomNumberGenerator: WithRandomNumberGenerator {
+        get { self[FastRandomNumberGeneratorKey.self] }
+        set { self[FastRandomNumberGeneratorKey.self] = newValue }
+    }
+}
