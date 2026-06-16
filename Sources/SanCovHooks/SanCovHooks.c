@@ -22,6 +22,7 @@
 #include <unistd.h>
 #include <sys/stat.h>
 #include <pthread.h>
+#include <mach/mach.h>
 
 // SIMD support for ARM64 NEON
 #if defined(__aarch64__) || defined(__arm64__)
@@ -190,6 +191,24 @@ static void resolve_swift_task_localValueLookup(void) {
         (TaskLocalValueLookupFn)dlsym(RTLD_DEFAULT, "swift_task_localValueGet");
 }
 
+// Fault-safe read: copy `size` bytes from `src` into `dst`, returning false
+// (instead of faulting) if `src` is not mapped. The manual task-local chain walk
+// below dereferences pointers it reads out of task memory, validated only by
+// sancov_is_valid_pointer's COARSE range check. A pointer that is in-range but
+// UNMAPPED — e.g. a task-local chain head that was freed/poisoned while the task
+// was being destroyed — passes that check and then SIGSEGVs on a raw memcpy
+// (task #49: an instrumented SUT value `destroy` fires an edge during FuzzResult
+// teardown, routing walks the dying task's chain). mach_vm style vm_read_overwrite
+// returns KERN_INVALID_ADDRESS for unmapped source instead of faulting, so the
+// walk can bail gracefully. Only used on the rare inheritance fallback path, so
+// the per-read mach trap cost is immaterial.
+static bool safe_read(void* dst, const void* src, size_t size) {
+    vm_size_t out = 0;
+    kern_return_t kr = vm_read_overwrite(mach_task_self(),
+        (vm_address_t)src, (vm_size_t)size, (vm_address_t)dst, &out);
+    return kr == KERN_SUCCESS && out == (vm_size_t)size;
+}
+
 /// Manual walk of the task-local chain. Returns the generation-tagged
 /// inheritance HANDLE stored under the CoverageInheritance.context key (0 if
 /// none). Two paths are checked at each ValueItem: (1) the captured
@@ -199,6 +218,12 @@ static void resolve_swift_task_localValueLookup(void) {
 /// captured key is absent or stale. The caller resolves and validates the
 /// returned handle via retain_inherited_if_valid (liveness + generation check).
 ///
+/// Every read from task-derived memory goes through `safe_read`: this walk can
+/// run on a task whose local storage was freed/poisoned during teardown, and a
+/// poisoned-but-in-range chain pointer would otherwise fault (task #49). A failed
+/// read just ends the walk (returns 0 = "no inherited context"), which is the
+/// correct answer for a task with no live inheritance scope.
+///
 /// Walks ParentTaskMarker links transparently — the marker's `next` field is
 /// set by the runtime at task creation to point into the parent's chain, so
 /// following `next` continues into parent-task locals as expected. STOP
@@ -207,20 +232,21 @@ static uint64_t manual_walk_for_inherited_context(const void* task) {
     if (!task) return 0;
 
     const void* head;
-    memcpy(&head, (const char*)task + SANCOV_TASK_LOCAL_HEAD_OFFSET, sizeof(head));
+    if (!safe_read(&head, (const char*)task + SANCOV_TASK_LOCAL_HEAD_OFFSET, sizeof(head)))
+        return 0;
     if (!head || !sancov_is_valid_pointer(head)) return 0;
 
     const void* current = head;
     for (int depth = 0; depth < 100 && current; depth++) {
         uintptr_t nextAndKind;
-        memcpy(&nextAndKind, current, sizeof(nextAndKind));
+        if (!safe_read(&nextAndKind, current, sizeof(nextAndKind))) return 0;
         unsigned kind = nextAndKind & 0x3;
 
         if (kind == SANCOV_ITEM_KIND_VALUE || kind == SANCOV_ITEM_KIND_VALUE_IN_GROUP) {
             const void* key;
-            memcpy(&key, (const char*)current + 8, sizeof(key));
+            if (!safe_read(&key, (const char*)current + 8, sizeof(key))) return 0;
             uint64_t handle;
-            memcpy(&handle, (const char*)current + 24, sizeof(handle));
+            if (!safe_read(&handle, (const char*)current + 24, sizeof(handle))) return 0;
 
             // Path 1: precise key match (when captureKeyIfNeeded set the key).
             if (g_coverage_inheritance_key != NULL &&
@@ -252,6 +278,14 @@ static uint64_t manual_walk_for_inherited_context(const void* task) {
             ? (const void*)nextPtr : NULL;
     }
     return 0;
+}
+
+// TESTING ONLY (see header): drive the manual task-local chain walk directly so a
+// test can feed it a task whose chain head is an unmapped (freed/poisoned)
+// pointer — the task #49 teardown shape — and assert it returns 0 instead of
+// faulting.
+uint64_t sancov_manual_walk_for_inherited_context_for_testing(const void* task) {
+    return manual_walk_for_inherited_context(task);
 }
 
 // MARK: - Lock-Free Hash Tables using ConcurrencyKit ck_ht
@@ -1271,10 +1305,22 @@ static uint8_t* get_current_coverage_map(SanCovTLS* ts) {
     if (inheritance_active) {
         // The task-local carries a generation-tagged HANDLE, not a raw pointer.
         uint64_t handle = 0;
+        // Whether the runtime's own task-local lookup ran. When it did, its
+        // result is AUTHORITATIVE and SAFE: swift_task_localValueGet is
+        // task-state-aware (it returns cleanly even for a task being destroyed —
+        // observed returning NULL without faulting during the task #49 teardown
+        // crash). The manual chain walk below is a raw pointer-chase that can
+        // fault on such a task, so we only fall back to it when the runtime
+        // lookup did NOT run (key not yet captured, or the runtime symbol is
+        // unavailable on this toolchain). That keeps the dangerous walk off the
+        // common path entirely while preserving the early-capture-window
+        // fallback. (manual_walk is additionally fault-safe; see safe_read.)
+        bool ran_runtime_lookup = false;
         if (g_coverage_inheritance_key != NULL) {
             // Try the runtime's own lookup first (resolved once, race-free).
             pthread_once(&swift_task_localValueLookup_once, resolve_swift_task_localValueLookup);
             if (swift_task_localValueLookup_fn) {
+                ran_runtime_lookup = true;
                 void* result = swift_task_localValueLookup_fn(g_coverage_inheritance_key);
                 if (result) {
                     memcpy(&handle, result, sizeof(handle));
@@ -1284,10 +1330,10 @@ static uint8_t* get_current_coverage_map(SanCovTLS* ts) {
                 }
             }
         }
-        // Fallback: walk the task's own chain manually. Also tried when the
-        // captured key is unset — manual walk's value-match fallback covers
-        // routing solely via the active-context registry.
-        if (handle == 0) {
+        // Fallback: walk the task's own chain manually — ONLY when the runtime
+        // lookup did not run. Its value-match path covers an unset/stale captured
+        // key by routing via the active-context registry.
+        if (handle == 0 && !ran_runtime_lookup) {
             handle = manual_walk_for_inherited_context(task);
         }
         // Resolve the handle to a LIVE, generation-matched context, retained.

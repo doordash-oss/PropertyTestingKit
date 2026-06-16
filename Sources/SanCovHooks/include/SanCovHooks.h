@@ -341,6 +341,12 @@ void* sancov_context_get_cmp_recorder_for_testing(SanCovMeasurementContext* cont
 /// the cmp-routing cost for comparisons no one consumes.
 int sancov_cmp_recorder_count_for_testing(void);
 
+/// TESTING ONLY: drive the manual task-local inheritance chain walk directly.
+/// Lets a test feed a fake task whose chain head is an unmapped (freed/poisoned)
+/// pointer — the task #49 teardown shape — and assert it returns 0 rather than
+/// dereferencing the bad pointer and crashing.
+uint64_t sancov_manual_walk_for_inherited_context_for_testing(const void* task);
+
 /// Generation guard: when set true on a thread, sancov_dispatch_edge and
 /// sancov_dispatch_cmp early-return on that thread (after the drop filter / TLS
 /// fetch). The fuzz loop sets it around input generation/mutation — which runs
@@ -426,7 +432,7 @@ bool sancov_is_compiler_generated(const char* sname);
 
 // MARK: - Comparison Drop Filter (PTK_CMP_DROP_SYNTHESIZED)
 //
-// The trace-cmp value-aware strategies (boundaryState / boundaryDistance) pay a
+// The trace-cmp value-aware strategy (boundaryDistance) pays a
 // per-comparison dispatch tax on EVERY instrumented comparison — but the census
 // (scheduler-lab Finding 41g) showed most of that volume is synthesized/stdlib
 // chatter (Swift.Array bounds checks, count getters, buffer copies, synthesized
