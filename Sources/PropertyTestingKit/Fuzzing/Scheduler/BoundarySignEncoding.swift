@@ -188,7 +188,7 @@ public struct SignVocabBlowup: Sendable {
 
 private let signBlowupEnabled: Bool =
     ProcessInfo.processInfo.environment["PTK_SIGN_BLOWUP"] != nil
-private let signBlowupStats = SyncBox<SignVocabBlowup>(SignVocabBlowup())
+private let signBlowupStats = SyncBox<SignVocabBlowup>(SignVocabBlowup(), label: "boundarySign.diag")
 
 /// Snapshot of the accumulated blowup stats (for a diagnostic harness to print).
 public func ptkSignVocabBlowupSnapshot() -> SignVocabBlowup { signBlowupStats.value }

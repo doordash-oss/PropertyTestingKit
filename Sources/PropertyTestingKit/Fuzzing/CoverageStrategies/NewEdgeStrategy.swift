@@ -26,7 +26,7 @@ extension CoverageStrategy {
 /// engine hasn't seen before. The novelty oracle is the STRATEGY's own
 /// per-engine state — the corpus stores results, it doesn't judge them.
 private func makeNewEdgeEngine() -> CoverageEngine {
-    let seen = SyncBox<EdgeUnionBitmap>(EdgeUnionBitmap())
+    let seen = UncheckedBox<EdgeUnionBitmap>(EdgeUnionBitmap())
 
     return CoverageEngine { sparse in
         seen.update { seenEdges in

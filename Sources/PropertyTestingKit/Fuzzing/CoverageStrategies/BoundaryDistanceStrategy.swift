@@ -94,7 +94,7 @@ private func makeBoundaryEngine(emitSigns: Bool, window: UInt64, maxSites: Int) 
         /// participant-selection/sort path (Finding 41k).
         var signScratch: [BoundarySiteAccumulator.Site] = []
     }
-    let state = SyncBox<DistanceState>(DistanceState())
+    let state = UncheckedBox<DistanceState>(DistanceState())
 
     // Hoisted with explicit types: the optional-closure ternary inline in the
     // initializer overwhelmed the type-checker ("failed to produce diagnostic").

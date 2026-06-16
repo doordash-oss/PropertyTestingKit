@@ -68,49 +68,52 @@ private func comparisonFeature(pc: UInt, hammingDistance: Int) -> UInt64 {
 /// judgement half (interesting iff some feature or some edge is new to this
 /// engine). The novelty oracle is the STRATEGY's own per-engine state.
 private func makeComparisonCoverageEngine() -> CoverageEngine {
-    // One lock for both halves is safe: onCompare, onReset, and decide all run
-    // under the per-thread observer gate, so comparisons their own code fires
-    // are never dispatched back into onCompare.
-    struct ProfileState {
-        /// This iteration's value-profile features (cleared on reset/decide).
-        var currentRun: Set<UInt64> = []
-        /// Engine-lifetime features seen across all accepted-or-not iterations.
+    // Per-COMPARISON half (onCompare/onReset): a lock-free feature set — the
+    // SyncBox here was a per-dispatch NSLock (Finding 42, same shape as
+    // hitCountBuckets). Engine-lifetime half (decide): seenFeatures + seenEdges,
+    // touched ONLY in decide, which the fuzz loop calls serially on one thread per
+    // engine — so a plain holder needs no lock. onCompare never reads them, so
+    // there is no onCompare/decide race; stragglers race only the atomic set.
+    let currentRun = AtomicFeatureSet()
+
+    /// Engine-lifetime novelty oracle. Decide-only; a reference so the @Sendable
+    /// decide closure can mutate it, @unchecked Sendable because decide is
+    /// serialized per engine.
+    final class EngineSeen: @unchecked Sendable {
         /// Keys are pre-mixed comparisonFeature hashes → no-SipHash set (41n).
-        var seenFeatures = FeatureHashSet()
+        var features = FeatureHashSet()
         /// Engine-lifetime edges, for the edge-coverage union.
-        var seenEdges = EdgeUnionBitmap()
+        var edges = EdgeUnionBitmap()
     }
-    let state = SyncBox<ProfileState>(ProfileState())
+    let seen = EngineSeen()
 
     return CoverageEngine(
         onCompare: { pc, arg1, arg2, _ in
             let distance = (arg1 ^ arg2).nonzeroBitCount
             let feature = comparisonFeature(pc: pc, hammingDistance: distance)
-            state.update { $0.currentRun.insert(feature) }
+            currentRun.insert(feature)
         },
         onReset: {
-            state.update { $0.currentRun.removeAll(keepingCapacity: true) }
+            currentRun.reset()
         }
     ) { coverage in
-        state.update { st in
-            defer { st.currentRun.removeAll(keepingCapacity: true) }
-            var interesting = false
+        defer { currentRun.reset() }
+        var interesting = false
 
-            // Value-profile novelty: any comparison feature new to this engine.
-            for feature in st.currentRun where st.seenFeatures.insert(feature) {
+        // Value-profile novelty: any comparison feature new to this engine.
+        for feature in currentRun.snapshot() where seen.features.insert(feature) {
+            interesting = true
+        }
+
+        // Edge-coverage union: never weaker than .newEdge. The snapshot is
+        // the one the evaluator reuses for storage, so reading it is free
+        // for accepted inputs (and the cost of the union for rejected ones).
+        if let sparse = coverage.materialized() {
+            for edge in sparse.indices where seen.edges.insert(edge) {
                 interesting = true
             }
-
-            // Edge-coverage union: never weaker than .newEdge. The snapshot is
-            // the one the evaluator reuses for storage, so reading it is free
-            // for accepted inputs (and the cost of the union for rejected ones).
-            if let sparse = coverage.materialized() {
-                for edge in sparse.indices where st.seenEdges.insert(edge) {
-                    interesting = true
-                }
-            }
-
-            return interesting
         }
+
+        return interesting
     }
 }

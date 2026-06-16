@@ -61,36 +61,39 @@ private func bucketBit(forHitCount count: UInt32) -> UInt8 {
 /// the STRATEGY's own per-engine state — the corpus stores results, it
 /// doesn't judge them.
 private func makeHitCountBucketsEngine() -> CoverageEngine {
-    // One lock for both halves is safe: onEdge, onReset, and decide all run
-    // under the per-thread observer gate, so edges their own code fires are
-    // recorded but never dispatched back into onEdge.
-    struct BucketState {
-        /// This iteration's per-edge hit counts (cleared on reset).
-        var hitCounts: [UInt32: UInt32] = [:]
-        /// Engine-lifetime per-edge bitmask of observed buckets.
-        var seenBuckets: [UInt32: UInt8] = [:]
+    // Per-EDGE half (onEdge/onReset): a lock-free accumulator — the SyncBox here
+    // was taken ~714x per test (Finding 42). Engine-lifetime half (decide):
+    // seenBuckets, touched ONLY in decide, which the fuzz loop calls serially on
+    // one thread per engine — so a plain holder needs no lock. onEdge never reads
+    // or writes seenBuckets, so there is no onEdge/decide race on it; stragglers
+    // race only the accumulator, which is atomic.
+    let hits = HitCountAccumulator()
+
+    /// Engine-lifetime per-edge bitmask of observed buckets. Decide-only; a
+    /// reference so the @Sendable decide closure can mutate it, @unchecked
+    /// Sendable because decide is serialized per engine.
+    final class SeenBuckets: @unchecked Sendable {
+        var map: [UInt32: UInt8] = [:]
     }
-    let state = SyncBox<BucketState>(BucketState())
+    let seen = SeenBuckets()
 
     return CoverageEngine(
         onEdge: { edge, _ in
-            state.update { $0.hitCounts[edge, default: 0] += 1 }
+            hits.record(edge: edge)
         },
         onReset: {
-            state.update { $0.hitCounts.removeAll(keepingCapacity: true) }
+            hits.reset()
         }
     ) { _ in
-        state.update { state in
-            defer { state.hitCounts.removeAll(keepingCapacity: true) }
-            var foundNewBucket = false
-            for (edge, count) in state.hitCounts {
-                let bucket = bucketBit(forHitCount: count)
-                if state.seenBuckets[edge, default: 0] & bucket == 0 {
-                    state.seenBuckets[edge, default: 0] |= bucket
-                    foundNewBucket = true
-                }
+        defer { hits.reset() }
+        var foundNewBucket = false
+        for ec in hits.snapshot() {
+            let bucket = bucketBit(forHitCount: ec.count)
+            if seen.map[ec.edge, default: 0] & bucket == 0 {
+                seen.map[ec.edge, default: 0] |= bucket
+                foundNewBucket = true
             }
-            return foundNewBucket
         }
+        return foundNewBucket
     }
 }

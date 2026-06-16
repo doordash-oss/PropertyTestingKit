@@ -106,7 +106,7 @@ private struct SignatureIndex {
 /// interesting. The inverted index is this engine's state, wrapped in a
 /// `SyncBox` because the decision closure is `@Sendable`.
 private func makeSignatureMatchEngine() -> CoverageEngine {
-    let index = SyncBox(SignatureIndex())
+    let index = UncheckedBox(SignatureIndex())
 
     return CoverageEngine { sparse in
         let isDuplicate = index.update { idx in

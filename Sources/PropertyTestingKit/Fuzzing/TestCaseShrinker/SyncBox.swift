@@ -31,29 +31,53 @@ import Foundation
 final class SyncBox<T>: @unchecked Sendable {
     private var storage: T
     private let lock = NSLock()
+    /// Non-nil only when PTK_LOCK_METRICS is on (or `forceMetrics`). Off by
+    /// default — `acquire()` then takes the plain `lock.lock()` path.
+    private let metrics: LockMetrics?
 
     /// Read or write the wrapped value in a thread-safe manner.
     var value: T {
         get {
-            lock.lock()
+            acquire()
             defer { lock.unlock() }
             return storage
         }
         set {
-            lock.lock()
+            acquire()
             defer { lock.unlock() }
             storage = newValue
         }
     }
 
-    init(_ value: T) {
+    /// - Parameters:
+    ///   - label: identifies this box in the PTK_LOCK_METRICS dump (the
+    ///     call-site, e.g. "hitCountBuckets.state"). Empty = unlabeled.
+    ///   - forceMetrics: enable counting regardless of the env var (tests).
+    init(_ value: T, label: String = "", forceMetrics: Bool = false) {
         self.storage = value
+        self.metrics = label.isEmpty && !forceMetrics
+            ? nil
+            : LockMetrics.register(label, force: forceMetrics)
+    }
+
+    /// Take the lock, counting the acquisition (and whether it was contended)
+    /// when metrics are enabled. Zero overhead when disabled.
+    private func acquire() {
+        if let m = metrics {
+            if !lock.try() {
+                m.contended.wrappingIncrement(ordering: .relaxed)
+                lock.lock()
+            }
+            m.acquisitions.wrappingIncrement(ordering: .relaxed)
+        } else {
+            lock.lock()
+        }
     }
 
     /// Atomically update the value with a transform closure.
     @discardableResult
     func update<Result>(_ transform: (inout T) throws -> Result) rethrows -> Result {
-        lock.lock()
+        acquire()
         defer { lock.unlock() }
         return try transform(&storage)
     }

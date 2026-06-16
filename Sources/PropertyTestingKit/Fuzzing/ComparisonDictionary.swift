@@ -25,7 +25,7 @@
 //  `ComparisonDictionary.current`, and a workload's bespoke mutator may too.
 //
 
-import os
+import Atomics
 
 /// A bounded, thread-safe pool of recently-seen comparison operands.
 ///
@@ -34,50 +34,58 @@ import os
 /// growth. `record` is on the comparison hot path; sampling is on the mutation
 /// path. The active dictionary for the mutators on a given task is published
 /// through the `current` task-local, installed by the engine around its loop.
-public final class ComparisonDictionary: Sendable {
-    private struct Storage {
-        var ring: [UInt64]
-        var cursor: Int = 0
-        var filled: Int = 0
-    }
-
+public final class ComparisonDictionary: @unchecked Sendable {
     private let capacity: Int
-    private let storage: OSAllocatedUnfairLock<Storage>
+    // Fixed ring of recent operands, each slot an atomic UInt64. `cursor` is a
+    // monotonic write counter; a writer fetch-adds it for a unique index and
+    // stores into `slot = cursor % capacity`. LOCK-FREE: this was an
+    // OSAllocatedUnfairLock taken per comparison (Finding 42 — the I2S record
+    // path fires for every instrumented comparison). A sampler reads a random
+    // already-written slot; a read racing a write sees one whole value or the
+    // other (per-slot atomic, no tear), which is fine for a best-effort pool.
+    //
+    // `@unchecked Sendable` because the raw atomic-storage pointer is not
+    // automatically `Sendable`.
+    private let ring: UnsafeMutablePointer<UInt64.AtomicRepresentation>
+    private let cursor = UnsafeAtomic<UInt64>.create(0)
 
     /// - Parameter capacity: how many recent operands to retain (ring size).
     public init(capacity: Int = 1024) {
         precondition(capacity > 0, "ComparisonDictionary capacity must be positive")
         self.capacity = capacity
-        self.storage = OSAllocatedUnfairLock(
-            initialState: Storage(ring: Array(repeating: 0, count: capacity))
-        )
+        ring = .allocate(capacity: capacity)
+        ring.initialize(repeating: UInt64.AtomicRepresentation(0), count: capacity)
     }
 
-    /// Record a comparison operand. Cheap and lock-guarded — called from the
-    /// comparison observer for every instrumented comparison.
+    deinit {
+        ring.deinitialize(count: capacity); ring.deallocate()
+        cursor.destroy()
+    }
+
+    /// Operands recorded so far, capped at `capacity` (the live ring size).
+    private var filled: Int { Int(min(cursor.load(ordering: .relaxed), UInt64(capacity))) }
+
+    /// Record a comparison operand. Lock-free; called from the comparison
+    /// observer for every instrumented comparison.
     public func record(_ value: UInt64) {
-        storage.withLock { s in
-            s.ring[s.cursor] = value
-            s.cursor = (s.cursor + 1) % capacity
-            if s.filled < capacity { s.filled += 1 }
-        }
+        let c = cursor.loadThenWrappingIncrement(ordering: .relaxed)
+        let slot = Int(c % UInt64(capacity))
+        UnsafeAtomic<UInt64>(at: ring + slot).store(value, ordering: .relaxed)
     }
 
     /// Whether nothing has been recorded yet.
     public var isEmpty: Bool {
-        storage.withLock { $0.filled == 0 }
+        cursor.load(ordering: .relaxed) == 0
     }
 
-    /// Sample a uniformly-random recorded operand, or `nil` if empty.
+    /// Sample a uniformly-random recorded operand, or `nil` if empty. For
+    /// `filled < capacity` only slots `0..<filled` have been written (the cursor
+    /// fills them in order), so a draw in that range never reads an empty slot.
     public func randomValue(using rng: inout FastRNG) -> UInt64? {
-        // Draw the entropy before taking the lock — the withLock closure is
-        // Sendable and cannot capture the inout RNG. Reduce modulo `filled`
-        // inside the lock so the bound matches the snapshot under the lock.
-        let draw = rng.next()
-        return storage.withLock { s in
-            guard s.filled > 0 else { return nil }
-            return s.ring[Int(draw % UInt64(s.filled))]
-        }
+        let n = filled
+        guard n > 0 else { return nil }
+        let idx = Int(rng.next() % UInt64(n))
+        return UnsafeAtomic<UInt64>(at: ring + idx).load(ordering: .relaxed)
     }
 
     /// The dictionary the current task's mutators should sample from, or `nil`
