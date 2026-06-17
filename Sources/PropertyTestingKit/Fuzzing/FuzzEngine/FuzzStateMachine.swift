@@ -134,7 +134,7 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
         // each input.
         pendingInputs = SimpleRingBuffer(seeds)
         pendingParents = SimpleRingBuffer(minimumCapacity: max(16, seeds.count))
-        pendingParents.append(contentsOf: [Int?](repeating: nil, count: seeds.count))
+        pendingParents.append(nil, repeated: seeds.count)  // seeds have no lineage parent
 
         // Setup for test execution
         let coverageCountersClient = Self.fetchCoverageCounters()
@@ -201,6 +201,10 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
                     let fromMutationQueue: Bool
                     let parentID: Int?
                     if !pendingInputs.isEmpty {
+                        assert(
+                            pendingParents.count == pendingInputs.count,
+                            "lineage buffers desynced: \(pendingParents.count) parents vs \(pendingInputs.count) inputs"
+                        )
                         input = pendingInputs.removeFirstUnchecked()
                         parentID = pendingParents.removeFirstUnchecked()
                         fromMutationQueue = true
@@ -390,8 +394,9 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
             Issue.record(issueAction.comment, sourceLocation: issueAction.sourceLocation)
 
         case .queueInputs(let queueAction):
-            pendingInputs.append(contentsOf: queueAction.inputs)
-            pendingParents.append(contentsOf: [Int?](repeating: nil, count: queueAction.inputs.count))
+            // Directly-queued inputs are lineage roots, not mutants of any
+            // entry, so they carry no parent (reported as `parentID == nil`).
+            enqueuePending(queueAction.inputs, parent: nil)
 
         case .selectForMutation(let mutationAction):
             // Generate input mutations. When scheduling, element 0 holds the
@@ -401,8 +406,7 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
             // Each mutant carries the action's originID so iteration events can
             // report the lineage back to the emitting plugin.
             let mutants = generateMutations(mutationAction.input)
-            pendingInputs.append(contentsOf: mutants)
-            pendingParents.append(contentsOf: [Int?](repeating: mutationAction.originID, count: mutants.count))
+            enqueuePending(mutants, parent: mutationAction.originID)
 
         case .submitToCorpus(let corpusAction):
             addToCorpus(
@@ -413,6 +417,15 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
                 failureInfo: corpusAction.failureInfo
             )
         }
+    }
+
+    /// Enqueue inputs with their shared lineage parent, keeping
+    /// `pendingInputs` and `pendingParents` in lockstep. This is the single
+    /// place that maintains that invariant; every other site dequeues them
+    /// together in `start()`.
+    private func enqueuePending(_ inputs: [(repeat each Input)], parent: Int?) {
+        pendingInputs.append(contentsOf: inputs)
+        pendingParents.append(parent, repeated: inputs.count)
     }
 
     private func halt(reason: FuzzStats.StopReason, scope: StopScope = .engine) {

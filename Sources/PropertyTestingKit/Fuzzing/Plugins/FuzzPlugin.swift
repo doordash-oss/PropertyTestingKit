@@ -50,6 +50,13 @@ public enum SyncPluginEvent<each T: Sendable>: Sendable {
         /// the engine — it round-trips whatever the emitting plugin chose, so
         /// schedulers can attribute executions and discoveries to the seed
         /// that spawned them.
+        ///
+        /// The tag is **not namespaced by plugin**: the engine cannot tell
+        /// which plugin minted a given `originID`, so lineage is only coherent
+        /// when at most one plugin per engine emits `selectForMutation` with a
+        /// non-nil `originID`. A consumer must treat the value as belonging to
+        /// its own space and validate it (the energy scheduler drops any
+        /// `parentID` outside its entry indices) rather than trusting it blind.
         public let parentID: Int?
 
         public init(
@@ -230,6 +237,9 @@ public enum FuzzPluginAction<each T: Sendable>: Sendable {
         /// Opaque lineage tag: the engine stamps it on every mutant this
         /// action generates and reports it back as `parentID` on the
         /// iterations that execute them. `nil` opts out of attribution.
+        /// The value lives in the emitting plugin's own space and is not
+        /// namespaced across plugins — see `parentID` for the single-emitter
+        /// contract this implies.
         public let originID: Int?
 
         public init(input: consuming (repeat each T), scheduleBytes: [UInt8]? = nil, originID: Int? = nil) {
