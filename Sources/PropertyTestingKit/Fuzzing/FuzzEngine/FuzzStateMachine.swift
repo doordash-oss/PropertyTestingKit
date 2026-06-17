@@ -446,6 +446,12 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
     /// Generate ONE mutant: a single mutation step at one randomly chosen
     /// position of the input pack.
     private func generateMutation(_ input: (repeat each Input)) -> (repeat each Input) {
+        // A 0-arity pack has no position to mutate; return it unchanged rather
+        // than trapping on `Int.random(in: 0..<0)`.
+        guard inputSize > 0 else { return input }
+        // `FastRNG` is a stateless shim over the thread-local generator, so a
+        // fresh instance draws from the same stream as the engine's own `rng`;
+        // the `inout` threading is for a uniform mutator signature, not seeding.
         var rng = FastRNG()
         let position = inputSize == 1 ? 0 : Int.random(in: 0..<inputSize, using: &rng)
         return mutateOnePosition(input, position: position, rng: &rng, mutators: repeat each mutators)

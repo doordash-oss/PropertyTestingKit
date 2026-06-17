@@ -58,7 +58,10 @@ extension Array: MutatorProviding where Element: MutatorProviding {
                 // === Prepend element ===
                 if !elementSeeds.isEmpty {
                     strategies.append { rng in
-                        let element = elementSeeds[Int.random(in: 0..<Swift.min(2, elementSeeds.count), using: &rng)]
+                        // Draw from the full seed range (matches the append path);
+                        // the old `min(2, …)` was a leftover candidate-count cap
+                        // that, post single-value, just made later seeds unprependable.
+                        let element = elementSeeds[Int.random(in: 0..<elementSeeds.count, using: &rng)]
                         return [element] + value
                     }
                 }

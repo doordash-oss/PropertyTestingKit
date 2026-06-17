@@ -96,6 +96,64 @@ struct SingleValueMutatorTests {
         }
     }
 
+    // MARK: - Named mutators never produce identity mutants
+
+    @Test("Port mutator never returns the input for well-known ports")
+    func portMutatorNeverIdentity() {
+        var rng = FastRNG()
+        // `value % 65536` is the identity branch for any port in [0, 65536);
+        // these are exactly the ports the seed list targets.
+        let prone = [0, 80, 443, 8080, 65535]
+        for value in prone {
+            for _ in 0..<500 {
+                #expect(Mutator<Int>.ports.mutate(value, &rng) != value,
+                        "identity mutant produced for port \(value)")
+            }
+        }
+    }
+
+    @Test("HTTP status code mutator never returns the input for standard codes")
+    func httpStatusCodeMutatorNeverIdentity() {
+        var rng = FastRNG()
+        // `value % 600` is the identity branch for any code in [0, 600).
+        let prone = [200, 301, 404, 500, 0]
+        for value in prone {
+            for _ in 0..<500 {
+                #expect(Mutator<Int>.httpStatusCodes.mutate(value, &rng) != value,
+                        "identity mutant produced for status \(value)")
+            }
+        }
+    }
+
+    @Test("Percentage mutator never returns the input for boundary ratios")
+    func percentageMutatorNeverIdentity() {
+        var rng = FastRNG()
+        // 0.0 (`value * 0.5` and `max(0, value - 0.1)` collapse), 0.5
+        // (`1 - value`), and 1.0 (`min(1, value + 0.1)`) each pin one strategy.
+        let prone: [Double] = [0.0, 0.5, 1.0]
+        for value in prone {
+            for _ in 0..<500 {
+                #expect(Mutator<Double>.percentages.mutate(value, &rng) != value,
+                        "identity mutant produced for percentage \(value)")
+            }
+        }
+    }
+
+    @Test("Empty string mutator never returns the input, including empty")
+    func emptyStringMutatorNeverIdentity() {
+        var rng = FastRNG()
+        // A single character pins both `String(first)` and `String(last)` to the
+        // input; the empty string pins the only other strategy (doubling "" is
+        // "") and must escape to a non-empty whitespace seed.
+        let prone = ["", "a", " ", "\t", "ab"]
+        for value in prone {
+            for _ in 0..<500 {
+                #expect(emptyStringMutator.mutate(value, &rng) != value,
+                        "identity mutant produced for \(value.debugDescription)")
+            }
+        }
+    }
+
     // MARK: - Composition
 
     @Test("Composed mutator draws from every component and nothing else")

@@ -17,16 +17,22 @@ import Dependencies
 private let _emptyStringSeeds: [String] = ["", " ", "\t", "\n", "\0"]
 
 private func _emptyStringMutate(_ value: String, _ rng: inout FastRNG) -> String {
-    // Collect the applicable strategies as cheap closures, then run exactly one
-    // (uniform over the applicable set, same as the old build-all-then-pick).
-    var strategies: [() -> String] = [{ value + value }]
-    if !value.isEmpty {
-        strategies.append { "" }
-        if let first = value.first { strategies.append { String(first) } }
-        if let last = value.last { strategies.append { String(last) } }
+    // Build the applicable candidates, then pick uniformly among those that
+    // actually change `value`. For a single-character input both `String(first)`
+    // and `String(last)` equal the input, so filtering keeps the mutant
+    // productive. The empty string pins the doubling strategy too (`"" + ""` is
+    // `""`), so it escapes to a non-empty whitespace seed — an on-theme mutation
+    // for an empty/whitespace mutator rather than a wasted identity.
+    var candidates: [String] = [value + value]
+    if value.isEmpty {
+        candidates.append(contentsOf: _emptyStringSeeds)
+    } else {
+        candidates.append("")
+        if let first = value.first { candidates.append(String(first)) }
+        if let last = value.last { candidates.append(String(last)) }
     }
-    guard let strategy = strategies.randomElement(using: &rng) else { return value }
-    return strategy()
+    guard let pick = candidates.filter({ $0 != value }).randomElement(using: &rng) else { return value }
+    return pick
 }
 
 private func _emptyStringGenerate(_ rng: inout FastRNG) -> String {

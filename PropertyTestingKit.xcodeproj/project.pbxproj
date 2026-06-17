@@ -148,7 +148,6 @@
 		958ADDE946E9CD95EC9CB590 /* StopOnFirstFailurePluginTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F9A2D6D2D787FF8BD1869F6F /* StopOnFirstFailurePluginTests.swift */; };
 		95A92958FD086AD9481BA7F5 /* GenericTimerPoller.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 5AAFECCE3AA98E503089E0B7 /* GenericTimerPoller.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		9617C4044A96AF4D9B014040 /* IdentityMutantRateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EDEC0EE17BFE2A1E440227B /* IdentityMutantRateTests.swift */; };
-		965AC1F59968645673F07841 /* corpus.json in Resources */ = {isa = PBXBuildFile; fileRef = 87C13394409DA48E4BE31930 /* corpus.json */; };
 		995888DFC95845A88625B91A /* FailureInfo.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CF3A4D9068E7899D99B8C01 /* FailureInfo.swift */; };
 		997046243B39595955A73A07 /* CoverageGap.swift in Sources */ = {isa = PBXBuildFile; fileRef = E710A18D4C3A68A36CF37040 /* CoverageGap.swift */; };
 		99BAD167860B31B48CFBB699 /* IssueReporting in Frameworks */ = {isa = PBXBuildFile; productRef = 27C67ABB6F1BBC4F43D83270 /* IssueReporting */; };
@@ -648,7 +647,6 @@
 		82E302CA79A5FD97C9E37328 /* ck_f_pr.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ck_f_pr.h; sourceTree = "<group>"; };
 		846F2F02B0AA5A040C5EB704 /* ArrayDuplicationMutator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArrayDuplicationMutator.swift; sourceTree = "<group>"; };
 		87964E15BDAEE902B7B38D6E /* String+MutatorProviding.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "String+MutatorProviding.swift"; sourceTree = "<group>"; };
-		87C13394409DA48E4BE31930 /* corpus.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = corpus.json; sourceTree = "<group>"; };
 		88F5B7FC44F425E39676B1D3 /* PowerOfTwoMutator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PowerOfTwoMutator.swift; sourceTree = "<group>"; };
 		8955074B94D7B6D470F922F2 /* FuzzStatsAccountingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FuzzStatsAccountingTests.swift; sourceTree = "<group>"; };
 		89B1AFF0FF50A24C9CF91760 /* ActorDeinitSchedulingTest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActorDeinitSchedulingTest.swift; sourceTree = "<group>"; };
@@ -1183,7 +1181,6 @@
 		62299BB35DD80E8D598979F5 /* ProfiledBenchmark */ = {
 			isa = PBXGroup;
 			children = (
-				87C13394409DA48E4BE31930 /* corpus.json */,
 			);
 			path = ProfiledBenchmark;
 			sourceTree = "<group>";
@@ -1967,7 +1964,6 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				965AC1F59968645673F07841 /* corpus.json in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
