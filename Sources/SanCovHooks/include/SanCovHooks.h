@@ -396,69 +396,6 @@ const void* sancov_capture_key_by_value(const void* task, uintptr_t expected_val
 /// strategies using covered_indices see the correct data.
 void sancov_rebuild_covered_indices_from_map(SanCovMeasurementContext* context);
 
-// MARK: - Edge Filter
-//
-// Filters compiler-generated edges (outlined destroyers, lazy witness table
-// accessors, lazy metadata accessors) by setting their guard value to
-// SANCOV_GUARD_SKIP. Because the hot-path check is `*guard < g_guard_count`,
-// guards set to UINT32_MAX will always fail that check — zero overhead.
-
-/// Sentinel value that disables a guard. Any guard set to this value will be
-/// skipped by the edge recording hooks (since UINT32_MAX >= g_guard_count).
-#define SANCOV_GUARD_SKIP UINT32_MAX
-
-/// Scan all guard PCs and disable compiler-generated edges.
-/// Call once before fuzzing begins — both __sanitizer_cov_trace_pc_guard_init
-/// and __sanitizer_cov_pcs_init will have completed by then.
-///
-/// Filtered symbol patterns (matched on raw mangled dli_sname):
-///   - WOh suffix — outlined destroy
-///   - WOc suffix — outlined copy
-///   - WOd suffix — outlined consume
-///   - WOr suffix — outlined release
-///   - Wl  suffix — lazy protocol witness table accessor
-///   - WL  suffix — lazy metadata accessor
-///   - Ma  suffix — type metadata accessor (generic)
-///   - __swift_ prefix — runtime internals
-///   - _swift_  prefix — runtime internals
-void sancov_apply_edge_filter(void);
-
-/// Return the number of edges disabled by sancov_apply_edge_filter().
-size_t sancov_get_filtered_count(void);
-
-/// Check if a symbol name matches compiler-generated patterns.
-/// Exposed for testing the filter logic.
-bool sancov_is_compiler_generated(const char* sname);
-
-// MARK: - Comparison Drop Filter (PTK_CMP_DROP_SYNTHESIZED)
-//
-// The trace-cmp value-aware strategy (boundaryDistance) pays a
-// per-comparison dispatch tax on EVERY instrumented comparison — but the census
-// (scheduler-lab Finding 41g) showed most of that volume is synthesized/stdlib
-// chatter (Swift.Array bounds checks, count getters, buffer copies, synthesized
-// Equatable, value witnesses, outlined ops) carrying no SUT-logic signal. This
-// filter drops those comparison sites so the per-exec cost concentrates on the
-// SUT comparisons that actually witness the bug. Enabled by DEFAULT (measured
-// +1.57× trace-cmp throughput); opt out with PTK_CMP_DROP_SYNTHESIZED=0 when a
-// bug can manifest as a value at a stdlib bounds-check comparison. Verdicts are
-// cached per comparison-site PC (dladdr + classify on first fire, O(1) after).
-
-/// Classify a comparison site's enclosing-function mangled symbol (dladdr's
-/// dli_sname) as droppable synthesized/stdlib chatter. Returns true for stdlib
-/// methods (Swift module / standard-substitution types like Array — bounds
-/// checks, count getters, buffer copies), synthesized Equatable
-/// (__derived_enum_equals), value witnesses, and everything
-/// sancov_is_compiler_generated already flags (outlined ops, metadata/thunk
-/// accessors). Returns false for user-module SUT logic and for NULL (unknown
-/// symbols are kept). Exposed for testing.
-bool sancov_cmp_should_drop(const char* sname);
-
-/// Number of DISTINCT comparison sites the PTK_CMP_DROP_SYNTHESIZED filter has
-/// classified as droppable (0 when the filter is disabled). Confirms the filter
-/// engaged; per-site volume is reported by the census. Kept off the hot path —
-/// an on-demand slot scan, no per-comparison counting.
-uint64_t sancov_cmp_dropped_count(void);
-
 /// Diagnostic: per-routing-path counters maintained inside get_current_coverage_map.
 /// Pure atomic loads — safe to call from anywhere; concurrent reads are consistent
 /// even if increments are interleaved.

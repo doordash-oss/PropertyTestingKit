@@ -155,17 +155,9 @@ final class FuzzEngine<each Input: Codable & Sendable>: @unchecked Sendable {
         processAsyncPlugins: @escaping AsyncPluginProcessorFn,
         test: @escaping @Sendable (InputTuple) async throws -> Void
     ) async -> FuzzResult<repeat each Input> {
-        // Filter compiler-generated edges before any measurement.
-        // This is a one-time scan (~2s for large binaries), so we do it before
-        // capturing startTime so it doesn't eat into the fuzz duration budget.
-        SanCovCounters.applyEdgeFilter()
-        if config.verbose {
-            let filtered = SanCovCounters.filteredEdgeCount
-            if filtered > 0 {
-                print("[Fuzz] Filtered \(filtered) compiler-generated edges")
-            }
-        }
-
+        // Compiler-generated edges are filtered at COMPILE time by the
+        // TagCompilerGenerated LLVM pass plugin (see Package.swift), so there is
+        // no longer a runtime filter pass to run here.
         let startTime = dateClient.now()
 
         // No global edge-hook install: the strategy's recorder (its measurement

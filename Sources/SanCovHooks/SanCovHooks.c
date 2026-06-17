@@ -1652,38 +1652,16 @@ void sancov_dispatch_edge(uint32_t *guard) {
     sancov_recorder_default(guard, map, ctx);
 }
 
-// Forward declarations for lazy edge filter (defined later in file alongside
-// the upfront filter helpers). State pointer and state byte values are
-// declared here so the hot path can reference them.
-#define EDGE_STATE_UNCHECKED 0
-#define EDGE_STATE_ALLOWED   1
-#define EDGE_STATE_SKIP      2
-extern uint8_t* g_edge_state;
-static void check_and_cache_edge_lazy(uint32_t* guard, uint32_t g);
-
 void __sanitizer_cov_trace_pc_guard(uint32_t *guard) {
-    // Fast-path: out-of-range or upfront-cached-SKIP guards (set to
-    // SANCOV_GUARD_SKIP once, under pthread_once, before any edge fires) skip.
-    // `*guard` is never written after that init barrier, so this read is
+    // Out-of-range guards (uninitialized, or from a module sized differently
+    // than g_guard_count) skip. Compiler-generated edges are NOT filtered here
+    // anymore: the TagCompilerGenerated LLVM pass plugin tags those functions
+    // NoSanitizeCoverage at compile time, so SanCov never emits guards for them
+    // (this also keeps async resume/yield edges out, preserving pathTrie
+    // determinism). `*guard` is never written after init, so this read is
     // race-free under parallel fuzzing.
     uint32_t g = *guard;
     if (g >= g_guard_count) return;
-
-    // Lazy filter: classify on first fire of each edge, then cache the verdict
-    // in g_edge_state (atomic). The classification — NOT a `*guard` stamp — is
-    // the single source of truth, so concurrent engines firing the same edge do
-    // not race on the shared guard global (TSan-confirmed fix).
-    if (__builtin_expect(g_edge_state != NULL, 1)) {
-        uint8_t state = __atomic_load_n(&g_edge_state[g], __ATOMIC_ACQUIRE);
-        if (__builtin_expect(state == EDGE_STATE_UNCHECKED, 0)) {
-            check_and_cache_edge_lazy(guard, g);
-            // Re-read the cached verdict: SKIP → suppress.
-            if (__atomic_load_n(&g_edge_state[g], __ATOMIC_ACQUIRE) == EDGE_STATE_SKIP) return;
-        } else if (state == EDGE_STATE_SKIP) {
-            return;
-        }
-    }
-
     sancov_dispatch_edge(guard);
 }
 
@@ -1813,96 +1791,6 @@ static void dispatch_count_init(void) {
     atexit(dispatch_count_dump);
 }
 
-// MARK: - Comparison Drop Filter (env-gated: PTK_CMP_DROP_SYNTHESIZED)
-//
-// Per comparison-site PC verdict cache: on a PC's first fire, dladdr resolves
-// its enclosing function and sancov_cmp_should_drop classifies the mangled name;
-// the verdict (KEEP/DROP) is cached so every later fire is an O(1) table lookup.
-// Lock-free open-addressing, same structure/sizing as the census. Default
-// disabled (g_cmp_drop_table NULL → one predicted-not-taken acquire load per
-// comparison, then the normal dispatch).
-typedef struct {
-    _Atomic uint64_t pc;       // 0 = empty slot
-    _Atomic uint8_t verdict;   // 0 = unknown, 1 = keep, 2 = drop
-} CmpDropEntry;
-
-typedef struct {
-    CmpDropEntry* slots;
-    size_t capacity;           // power of two
-} CmpDropTable;
-
-static CmpDropTable* _Atomic g_cmp_drop_table = NULL;
-
-uint64_t sancov_cmp_dropped_count(void) {
-    // Number of DISTINCT comparison sites being dropped (verdict == drop). An
-    // on-demand slot scan — no per-comparison counting, so the hot path stays
-    // pure (two relaxed loads + early return). Per-site volume is the census's
-    // job; this just confirms the filter classified some sites as droppable.
-    CmpDropTable* t = atomic_load_explicit(&g_cmp_drop_table, memory_order_acquire);
-    if (t == NULL) return 0;
-    uint64_t sites = 0;
-    for (size_t i = 0; i < t->capacity; i++) {
-        if (atomic_load_explicit(&t->slots[i].verdict, memory_order_relaxed) == 2) {
-            sites++;
-        }
-    }
-    return sites;
-}
-
-// Returns true if the comparison at `pc` should be skipped. Resolves+caches the
-// verdict on first fire. Caller guarantees the filter is enabled (table != NULL).
-// The settled-entry hot path is two relaxed loads + a compare — no atomic RMW,
-// so dropping costs essentially nothing beyond the routing it avoids.
-static bool cmp_drop_should_skip(CmpDropTable* t, uintptr_t pc) {
-    size_t m = t->capacity - 1;
-    size_t i = (size_t)(cmp_census_hash((uint64_t)pc) & (uint64_t)m);
-    for (size_t probes = 0; probes <= m; probes++) {
-        CmpDropEntry* e = &t->slots[i];
-        uint64_t k = atomic_load_explicit(&e->pc, memory_order_relaxed);
-        if (k == 0) {
-            uint64_t expected = 0;
-            if (!atomic_compare_exchange_strong_explicit(
-                    &e->pc, &expected, (uint64_t)pc,
-                    memory_order_acq_rel, memory_order_relaxed)
-                && expected != (uint64_t)pc) {
-                i = (i + 1) & m;  // lost claim to a different pc; keep probing
-                continue;
-            }
-            k = (uint64_t)pc;  // won the claim, or it was already ours
-        }
-        if (k == (uint64_t)pc) {
-            uint8_t v = atomic_load_explicit(&e->verdict, memory_order_acquire);
-            if (v == 0) {
-                // First fire for this PC: classify and cache. Idempotent under
-                // races (every thread computes the same verdict for one PC).
-                Dl_info info;
-                bool drop = (dladdr((void*)pc, &info) && info.dli_sname)
-                            ? sancov_cmp_should_drop(info.dli_sname) : false;
-                v = drop ? 2 : 1;
-                atomic_store_explicit(&e->verdict, v, memory_order_release);
-            }
-            return v == 2;
-        }
-        i = (i + 1) & m;
-    }
-    return false;  // table full: keep (filter is best-effort)
-}
-
-__attribute__((constructor))
-static void cmp_drop_init(void) {
-    // Default ON: synthesized/stdlib comparison sites carry no SUT signal and
-    // taxing them only slows the trace-cmp strategies (measured +1.57× throughput
-    // when dropped). Opt OUT with PTK_CMP_DROP_SYNTHESIZED=0 — e.g. when a bug can
-    // manifest as a value at a stdlib bounds-check comparison.
-    const char* v = getenv("PTK_CMP_DROP_SYNTHESIZED");
-    if (v != NULL && (v[0] == '0' || v[0] == '\0')) return;
-    CmpDropTable* t = (CmpDropTable*)xmalloc(sizeof(CmpDropTable));
-    t->capacity = 16384;  // power of two; ≫ any workload's distinct cmp-site count
-    t->slots = (CmpDropEntry*)calloc(t->capacity, sizeof(CmpDropEntry));
-    if (t->slots == NULL) { free(t); return; }
-    atomic_store_explicit(&g_cmp_drop_table, t, memory_order_release);
-}
-
 // MARK: - Comparison Dispatch (trace-cmp / value profile)
 
 // Per-comparison dispatch: resolve routing once (same current-context lookup as
@@ -1923,30 +1811,20 @@ bool sancov_dispatch_is_suppressed(void) {
 }
 
 void sancov_dispatch_cmp(uintptr_t pc, uint64_t arg1, uint64_t arg2, uint32_t size_bytes) {
-    // Drop synthesized/stdlib comparison sites FIRST — before the TLS fetch
-    // (default on; opt out with PTK_CMP_DROP_SYNTHESIZED=0). The drop check needs
-    // only `pc` (an argument) and the global table (a plain atomic load), NOT the
-    // thread-local block, so dropped comparisons never pay the tlv_get_addr that
-    // dominates the profile (~21% — Finding 41i). It runs no instrumented
-    // comparisons of its own (SanCovHooks/libc are not trace-cmp instrumented),
-    // so it is safe ahead of the re-entry guard: a dropped site never reaches the
-    // recorder, and kept sites still hit the guard below.
-    // No consumer anywhere → skip EVERYTHING (drop filter + TLS fetch). Edge-only
+    // No consumer anywhere → skip EVERYTHING (TLS fetch + routing). Edge-only
     // strategies (newEdge / hitCountBuckets / pathTrie / signatureMatch) attach no
-    // cmp recorder, so every kept comparison would otherwise pay the drop-filter
-    // hash-probe (~6% — Finding 43) and sancov_tls() + get_current_coverage_map()
-    // (~33M/6s — Finding 42) for nothing. Checked FIRST: both are plain global
-    // loads (no TLS, no hash), so the gate is the cheapest possible early-out. The
-    // census exemption keeps PTK_CMP_CENSUS working when enabled without a
-    // recorder. A MIXED run (some engine has a recorder) keeps the count >0, so a
-    // real consumer is never suppressed.
+    // cmp recorder, so every comparison would otherwise pay sancov_tls() +
+    // get_current_coverage_map() (~33M/6s — Finding 42) for nothing. Checked FIRST:
+    // both are plain global loads (no TLS), so the gate is the cheapest possible
+    // early-out. The census exemption keeps PTK_CMP_CENSUS working when enabled
+    // without a recorder. A MIXED run (some engine has a recorder) keeps the count
+    // >0, so a real consumer is never suppressed.
+    //
+    // Synthesized/stdlib comparison sites (bounds/overflow/precondition trap
+    // guards) are no longer dropped here: the EmitCmpTrace LLVM pass plugin omits
+    // their trace_cmp callbacks at compile time, so they never reach this dispatch.
     if (atomic_load_explicit(&g_cmp_recorder_count, memory_order_acquire) == 0 &&
         atomic_load_explicit(&g_cmp_census, memory_order_acquire) == NULL) return;
-    // Drop synthesized/stdlib comparison sites before the TLS fetch (default on;
-    // opt out with PTK_CMP_DROP_SYNTHESIZED=0). Needs only `pc` + the global table,
-    // not the thread-local block, so dropped comparisons never pay tlv_get_addr.
-    CmpDropTable* drop = atomic_load_explicit(&g_cmp_drop_table, memory_order_acquire);
-    if (__builtin_expect(drop != NULL, 1) && cmp_drop_should_skip(drop, pc)) return;
     // Fetch this thread's TLS block ONCE (single tlv_get_addr) for the kept sites.
     SanCovTLS* ts = sancov_tls();
     // Re-entry guard (see SanCovTLS.in_cmp_recorder): a comparison fired by the
@@ -2148,297 +2026,4 @@ bool sancov_get_source_location(size_t edge_index, SanCovSourceLocation* locatio
     }
 
     return true;
-}
-
-// MARK: - Edge Filter
-
-static size_t g_filtered_count = 0;
-static bool g_filter_applied = false;
-
-// MARK: - Lazy Edge Filter + Disk Cache
-//
-// Replaces the upfront `dladdr` scan with a per-edge first-fire check, results
-// of which are persisted to disk and re-applied on subsequent process runs of
-// the same binary. After warm-up, both first-fire and subsequent fires of any
-// known edge cost ~1 byte load + 1 branch.
-//
-// Edge state values defined above next to the hot path (forward decls).
-
-uint8_t* g_edge_state = NULL;                   // size = g_guard_count when allocated
-static size_t   g_lazy_filtered_count = 0;
-static size_t   g_lazy_allowed_count = 0;
-static int      g_edge_state_dirty = 0;         // atomic flag: persist on exit
-static pthread_once_t g_filter_init_once = PTHREAD_ONCE_INIT;
-
-#define SANCOV_FILTER_CACHE_MAGIC ((uint64_t)0x5345434f56523031ULL) // "SECOVR01"
-
-static void compute_cache_path(char* out, size_t out_size) {
-    out[0] = '\0';
-    if (!g_guards_start) return;
-    Dl_info info;
-    if (!dladdr((void*)g_guards_start, &info) || !info.dli_fname) return;
-    struct stat st;
-    if (stat(info.dli_fname, &st) != 0) return;
-
-    const char* tmp = getenv("TMPDIR");
-    if (!tmp || tmp[0] == '\0') tmp = "/tmp";
-
-    // Stable per-binary key: inode + mtime. Survives rebuilds via mtime.
-    // Path: $TMPDIR/sancov-filter-<inode>-<mtime>.bin
-    snprintf(out, out_size, "%ssancov-filter-%llu-%lld.bin",
-             tmp, (unsigned long long)st.st_ino,
-             (long long)st.st_mtimespec.tv_sec);
-}
-
-static void load_filter_cache(void) {
-    char path[1024];
-    compute_cache_path(path, sizeof(path));
-    if (path[0] == '\0') return;
-
-    int fd = open(path, O_RDONLY);
-    if (fd < 0) return;
-
-    uint64_t header[2];
-    ssize_t n = read(fd, header, sizeof(header));
-    if (n != (ssize_t)sizeof(header) ||
-        header[0] != SANCOV_FILTER_CACHE_MAGIC ||
-        header[1] != (uint64_t)g_guard_count) {
-        close(fd);
-        return;
-    }
-    n = read(fd, g_edge_state, g_guard_count);
-    close(fd);
-    if (n != (ssize_t)g_guard_count) {
-        // Partial read: best-effort, treat unread bytes as UNCHECKED.
-        memset(g_edge_state + (n > 0 ? n : 0), EDGE_STATE_UNCHECKED,
-               g_guard_count - (n > 0 ? n : 0));
-        return;
-    }
-
-    // Apply cached SKIP markers to guards eagerly so the existing
-    // `*guard < g_guard_count` hot-path gate short-circuits without reading
-    // g_edge_state at all.
-    size_t loaded_skip = 0, loaded_allowed = 0;
-    for (size_t i = 0; i < g_guard_count; i++) {
-        if (g_edge_state[i] == EDGE_STATE_SKIP) {
-            g_guards_start[i] = SANCOV_GUARD_SKIP;
-            loaded_skip++;
-        } else if (g_edge_state[i] == EDGE_STATE_ALLOWED) {
-            loaded_allowed++;
-        }
-    }
-    g_lazy_filtered_count = loaded_skip;
-    g_lazy_allowed_count = loaded_allowed;
-}
-
-static void save_filter_cache(void) {
-    if (!__atomic_load_n(&g_edge_state_dirty, __ATOMIC_ACQUIRE)) return;
-    if (!g_edge_state || g_guard_count == 0) return;
-
-    char path[1024];
-    compute_cache_path(path, sizeof(path));
-    if (path[0] == '\0') return;
-
-    char tmp_path[1100];
-    snprintf(tmp_path, sizeof(tmp_path), "%s.tmp.%d", path, (int)getpid());
-
-    int fd = open(tmp_path, O_WRONLY | O_CREAT | O_TRUNC, 0644);
-    if (fd < 0) return;
-
-    uint64_t header[2] = { SANCOV_FILTER_CACHE_MAGIC, (uint64_t)g_guard_count };
-    if (write(fd, header, sizeof(header)) != (ssize_t)sizeof(header)) {
-        close(fd); unlink(tmp_path); return;
-    }
-    if (write(fd, g_edge_state, g_guard_count) != (ssize_t)g_guard_count) {
-        close(fd); unlink(tmp_path); return;
-    }
-    close(fd);
-    rename(tmp_path, path); // atomic on POSIX
-}
-
-static void filter_init_impl(void) {
-    if (g_guard_count == 0) return;
-    g_edge_state = (uint8_t*)calloc(g_guard_count, 1);
-    if (!g_edge_state) return;
-    load_filter_cache();
-    atexit(save_filter_cache);
-}
-
-static inline void ensure_filter_init(void) {
-    pthread_once(&g_filter_init_once, filter_init_impl);
-}
-
-// Slow path: classify a single edge on its first fire and update state.
-// Called rarely (once per edge, ever). Sets either:
-//   - state[g] = SKIP     (compiler-generated noise; never stamps *guard)
-//   - state[g] = ALLOWED  (real instrumented code)
-// Forward-declared up near the hot path.
-static void check_and_cache_edge_lazy_impl(uint32_t* guard, uint32_t g);
-static void check_and_cache_edge_lazy(uint32_t* guard, uint32_t g) {
-    check_and_cache_edge_lazy_impl(guard, g);
-}
-static void check_and_cache_edge_lazy_impl(uint32_t* guard, uint32_t g) {
-    if (!g_edge_state) return;
-
-    bool is_noise = false;
-    // Need PCs to dladdr. If pcs aren't available (e.g., multi-module without
-    // the pcs_init fix), default to ALLOWED — graceful degradation.
-    if (g_pcs_start && g < g_pcs_count) {
-        uintptr_t pc = g_pcs_start[(size_t)g * 2];
-        if (pc != 0) {
-            Dl_info info;
-            if (dladdr((void*)pc, &info) && info.dli_sname) {
-                is_noise = sancov_is_compiler_generated(info.dli_sname);
-            }
-        }
-    }
-
-    if (is_noise) {
-        // Record the verdict in g_edge_state only. Do NOT stamp `*guard` — that
-        // shared global is read lock-free on the hot path by every concurrent
-        // engine, so writing it here is a data race (TSan-confirmed). The atomic
-        // g_edge_state verdict already suppresses future fires.
-        __atomic_store_n(&g_edge_state[g], (uint8_t)EDGE_STATE_SKIP, __ATOMIC_RELEASE);
-        __atomic_fetch_add(&g_lazy_filtered_count, 1, __ATOMIC_RELAXED);
-    } else {
-        __atomic_store_n(&g_edge_state[g], (uint8_t)EDGE_STATE_ALLOWED, __ATOMIC_RELEASE);
-        __atomic_fetch_add(&g_lazy_allowed_count, 1, __ATOMIC_RELAXED);
-    }
-    __atomic_store_n(&g_edge_state_dirty, 1, __ATOMIC_RELEASE);
-}
-
-/// Check if a mangled symbol name matches a compiler-generated pattern.
-/// Returns true if the symbol should be filtered out.
-bool sancov_is_compiler_generated(const char* sname) {
-    if (!sname) return false;
-
-    // Prefix checks: runtime internals
-    if (strncmp(sname, "__swift_", 8) == 0) return true;
-    if (strncmp(sname, "_swift_", 7) == 0) return true;
-
-    size_t len = strlen(sname);
-    if (len < 3) return false;
-
-    // Suffix checks on mangled Swift names.
-    // Two-character suffixes:
-    const char* last2 = sname + len - 2;
-    if (strcmp(last2, "Wl") == 0) return true;  // lazy protocol witness table accessor
-    if (strcmp(last2, "WL") == 0) return true;  // lazy metadata accessor
-    if (strcmp(last2, "Ma") == 0) return true;  // type metadata accessor (generic)
-
-    // Three-character suffixes (WO + specifier):
-    if (len >= 3) {
-        const char* last3 = sname + len - 3;
-        if (strncmp(last3, "WO", 2) == 0) return true;  // all outlined operations (WOh/c/d/r/b/e/...)
-    }
-
-    // Two-character suffixes for other compiler-generated patterns:
-    if (strcmp(last2, "TA") == 0) return true;  // partial apply forwarder
-    if (strcmp(last2, "TR") == 0) return true;  // reabstraction thunk
-    if (strcmp(last2, "TK") == 0) return true;  // key path getter
-    if (strcmp(last2, "Mr") == 0) return true;  // type metadata completion
-
-    // Async resume/suspend of compiler-generated thunks:
-    // e.g. ...TRTATQ0_ (resume of partial apply of reabstraction thunk)
-    if (strstr(sname, "TATQ") != NULL) return true;
-    if (strstr(sname, "TATY") != NULL) return true;
-    if (strstr(sname, "TRTQ") != NULL) return true;
-    if (strstr(sname, "TRTY") != NULL) return true;
-
-    // Global/static variable addressors: ends with "vau" (unsigned addressor)
-    // These have init-once semantics with different branches for first vs cached access.
-    if (len >= 3) {
-        const char* last3 = sname + len - 3;
-        if (last3[0] == 'v' && last3[1] == 'a' && last3[2] == 'u') return true;
-    }
-
-    // Bare async resume/yield points: ends with TQ<digit(s)>_ or TY<digit(s)>_
-    // e.g. ...FTQ3_, ...FTY4_, ...cfU_TQ0_, ...cfU_TY1_
-    // These continuation edges are scheduling-dependent — even under
-    // ScheduleController.run (deterministic task ordering), the "which resume
-    // point fires first" order can vary because two continuations may be
-    // enqueued in whichever order the dependency-resolution happened to pick.
-    // Filtering them is required for pathTrie-based determinism.
-    if (len >= 4) {
-        const char* p = sname + len - 1;
-        if (*p == '_') {
-            p--;
-            // Skip digits
-            while (p > sname && *p >= '0' && *p <= '9') p--;
-            // Check for TQ or TY
-            if (p >= sname + 1 && *p == 'Q' && *(p-1) == 'T') return true;
-            if (p >= sname + 1 && *p == 'Y' && *(p-1) == 'T') return true;
-        }
-    }
-
-    // Default argument: ends with fA<digit>_ (e.g. fA_, fA0_, fA1_)
-    if (len >= 3) {
-        // Check fA_ (no digit)
-        const char* last3 = sname + len - 3;
-        if (last3[0] == 'f' && last3[1] == 'A' && last3[2] == '_') return true;
-        // Check fA<digit>_ (4-char pattern)
-        if (len >= 4) {
-            const char* last4 = sname + len - 4;
-            if (last4[0] == 'f' && last4[1] == 'A' && last4[3] == '_') return true;
-        }
-    }
-
-    return false;
-}
-
-bool sancov_cmp_should_drop(const char* sname) {
-    if (!sname) return false;
-
-    // Everything the edge filter already treats as compiler-generated:
-    // outlined ops (WO*), lazy witness/metadata accessors, thunks, addressors.
-    // Catches e.g. "...ExprOSgWOe" (outlined consume of STLC.Expr?).
-    if (sancov_is_compiler_generated(sname)) return true;
-
-    // Synthesized Equatable conformance (e.g. STLC.Typo.__derived_enum_equals).
-    if (strstr(sname, "__derived_enum_equals") != NULL) return true;
-
-    // Standard-library methods. After the Swift symbol prefix ($s / _$s), a
-    // digit begins a user-module length prefix (the instrumented SUT, e.g.
-    // "4STLC..."); 's' begins the explicit Swift module and 'S' begins a
-    // standard-library substitution (Sa=Array, SS=String, SD=Dictionary, ...).
-    // So an entity whose first char is 's' or 'S' is a stdlib type's method —
-    // bounds checks, count getters, buffer copies — which carry no SUT signal.
-    const char* p = sname;
-    if (p[0] == '_') p++;
-    if (p[0] == '$' && (p[1] == 's' || p[1] == 'S')) {
-        p += 2;
-        if (*p == 's' || *p == 'S') return true;
-    }
-
-    // Value witnesses on a user nominal type: <O|V|C> + 'w' + two lowercase op
-    // chars at the very end (e.g. "...ExprOwst" = storeEnumTagSinglePayload).
-    // Low volume but synthesized; the trailing form does not collide with the
-    // SUT-logic fixtures (none end in w<xx>).
-    size_t len = strlen(sname);
-    if (len >= 4) {
-        const char* e = sname + len;
-        if (e[-3] == 'w' &&
-            e[-2] >= 'a' && e[-2] <= 'z' &&
-            e[-1] >= 'a' && e[-1] <= 'z' &&
-            (e[-4] == 'O' || e[-4] == 'V' || e[-4] == 'C')) {
-            return true;
-        }
-    }
-
-    return false;
-}
-
-void sancov_apply_edge_filter(void) {
-    // Filtering is now lazy + cached. Allocate the state array, load the
-    // on-disk cache (if present), and apply any cached SKIP markers eagerly.
-    // After this, individual edges are classified at their first fire.
-    ensure_filter_init();
-    g_filter_applied = true;
-}
-
-size_t sancov_get_filtered_count(void) {
-    // Backwards-compatible: report the running tally from the lazy filter,
-    // plus any leftover from old upfront passes (now zero in practice).
-    size_t lazy = __atomic_load_n(&g_lazy_filtered_count, __ATOMIC_RELAXED);
-    return lazy + g_filtered_count;
 }
