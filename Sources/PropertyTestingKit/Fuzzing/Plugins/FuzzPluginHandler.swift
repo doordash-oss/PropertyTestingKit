@@ -254,14 +254,33 @@ extension FuzzPlugin {
         rareFeatureThreshold: Int = 3,
         maxMutationFactor: Int = 20
     ) -> FuzzPlugin<repeat each Input> {
-        // (input, scheduleBytes) as one list of the payload we emit, rather than
-        // two index-aligned arrays. entryFeatures/entryMutations stay parallel —
-        // they're per-entry bookkeeping, not redundant with the input itself.
+        // Per-entry scheduler state, all index-aligned with `entries` (one slot
+        // appended per accepted discovery): observation yield, executed-mutation
+        // count, and the cached rarity terms.
         var entries: [FuzzPluginAction<repeat each Input>.SelectForMutationAction] = []
-        var entryFeatures: [[UInt32]] = []
-        var entryMutations: [Int] = []
+        // Per-entry observation yield: rare-feature observation counts across
+        // the entry's accepted mutants (its own discovery seeds the counts).
+        var entryYield: [[UInt32: Int]] = []
+        // Per-entry executed-mutation count, attributed via iteration parentID.
+        var entryExecutions: [Int] = []
+        var entryRarity: [EntropicRarityTerms] = []
         var globalFeatureFreqs: [UInt32: Int] = [:]
-        var totalMutations = 0
+        var totalRareFeatures = 0
+        // Sum of `entryExecutions` — mutant executions attributed to an entry.
+        // Both this and `corpusSize` (= `entries.count`) are in entry-mutant
+        // units, so the over-fuzz average `totalExecutions / corpusSize` is the
+        // mean mutants-per-entry. Seeds and freshly-generated random inputs have
+        // no parent entry, so they are deliberately excluded from both sides —
+        // counting them would deflate the average and trip the guard early.
+        //
+        // A selection that yields zero mutants (an empty `generateMutations`,
+        // reachable only for an empty input pack or a mutator that returns `[]`)
+        // produces no attributed executions, so the guard never retires that
+        // entry. This is benign: the drain path is gated on `!fromMutationQueue`,
+        // so the engine keeps generating fresh random inputs between drains and
+        // coverage still advances; production mutators always yield >= 1 mutant.
+        var totalExecutions = 0
+        var rarityStale = false
 
         @Dependency(\.fastRNG) var fastRNG: FastRNG
         let seedRNG: FastRNG = fastRNG
@@ -271,16 +290,77 @@ extension FuzzPlugin {
             handleSync: { event in
                 switch event {
                 case let .iteration(context):
+                    // Validate the engine-reported lineage once (an out-of-range
+                    // parentID — e.g. from a foreign plugin's originID — is dropped).
+                    let parentIdx: Int? = context.parentID.flatMap {
+                        entries.indices.contains($0) ? $0 : nil
+                    }
+                    // Attribute this execution to the seed whose mutation produced it.
+                    if let parent = parentIdx {
+                        entryExecutions[parent] += 1
+                        totalExecutions += 1
+                    }
+
                     if let coverage = context.newCoverage {
-                        // Register new entry with its features.
-                        for feature in coverage.indices {
-                            globalFeatureFreqs[feature, default: 0] += 1
+                        // A discovery is an information event for the parent:
+                        // credit each discovered feature to its yield.
+                        if let parent = parentIdx {
+                            for feature in coverage.indices {
+                                entryYield[parent][feature, default: 0] += 1
+                            }
                         }
+
+                        // Update global frequencies, maintaining `totalRareFeatures`
+                        // incrementally (a feature is rare while freq <= threshold).
+                        // A feature LEAVING the rare set (freq crosses threshold→+1)
+                        // changes the rarity of every entry holding it, so it forces
+                        // a full rarity rebuild; all other acceptances touch only the
+                        // parent's and the new entry's rarity.
+                        var rareSetShrank = false
+                        for feature in coverage.indices {
+                            let newFreq = (globalFeatureFreqs[feature] ?? 0) + 1
+                            globalFeatureFreqs[feature] = newFreq
+                            if newFreq == 1 {
+                                totalRareFeatures += 1                  // newly rare
+                            } else if newFreq == rareFeatureThreshold + 1 {
+                                totalRareFeatures -= 1                  // left the rare set
+                                rareSetShrank = true
+                            }
+                        }
+
+                        // Register the new entry; its own discovery seeds its yield.
+                        // `originID` is the index this entry is about to occupy.
+                        // That identity holds only because `entries` is strictly
+                        // append-only here (never culled or reordered): a stamped
+                        // `originID` stays a valid index for the run's lifetime,
+                        // which is what lets the parentID round-trip resolve back
+                        // to the right slot.
+                        let newYield = Dictionary(coverage.indices.map { ($0, 1) },
+                                                  uniquingKeysWith: +)
                         let entry = FuzzPluginAction<repeat each Input>.SelectForMutationAction(
-                            input: context.input, scheduleBytes: context.scheduleBytes)
+                            input: context.input, scheduleBytes: context.scheduleBytes,
+                            originID: entries.count)
+                        assert(entry.originID == entries.count,
+                               "originID must equal the new entry's append index")
                         entries.append(entry)
-                        entryFeatures.append(coverage.indices)
-                        entryMutations.append(0)
+                        entryYield.append(newYield)
+                        entryExecutions.append(0)
+                        entryRarity.append(entropicYieldRarityTerms(
+                            yield: newYield, globalFreqs: globalFeatureFreqs,
+                            rareFeatureThreshold: rareFeatureThreshold))
+
+                        if rareSetShrank {
+                            // Rare event: a feature dropped out of the rare set, so
+                            // every entry's rarity must be recomputed before the next
+                            // drain (the cache depends on each feature's rare flag).
+                            rarityStale = true
+                        } else if let parent = parentIdx {
+                            // Common case: only the parent's yield grew — recompute
+                            // just its rarity, leaving the rest of the cache intact.
+                            entryRarity[parent] = entropicYieldRarityTerms(
+                                yield: entryYield[parent], globalFreqs: globalFeatureFreqs,
+                                rareFeatureThreshold: rareFeatureThreshold)
+                        }
 
                         // Immediately schedule mutations for the newly-interesting input.
                         return [.selectForMutation(entry)]
@@ -289,28 +369,38 @@ extension FuzzPlugin {
                     // When the mutation queue has drained, pick the next entry to
                     // mutate using energy-weighted selection.
                     if !context.fromMutationQueue, !entries.isEmpty {
+                        // `seedRNG` is a stateless shim over the thread-local
+                        // generator, so this copy does NOT freeze randomness.
                         var rng = seedRNG
                         let count = entries.count
-                        let totalRareFeatures = globalFeatureFreqs.values
-                            .filter { $0 <= rareFeatureThreshold }.count
 
+                        if rarityStale {
+                            // Full rebuild only after a feature left the rare set
+                            // (rare). `totalRareFeatures` is maintained by delta at
+                            // acceptance, so no per-drain re-filter of the freq map.
+                            entryRarity = entryYield.map {
+                                entropicYieldRarityTerms(
+                                    yield: $0,
+                                    globalFreqs: globalFeatureFreqs,
+                                    rareFeatureThreshold: rareFeatureThreshold)
+                            }
+                            rarityStale = false
+                        }
+
+                        // Hot path: O(1) per entry — rarity terms are cached,
+                        // only the abundance (executions) varies per drain.
                         let weights = (0..<count).map { i in
-                            entropicWeight(
-                                features: entryFeatures[i],
-                                mutations: entryMutations[i],
-                                globalFreqs: globalFeatureFreqs,
+                            entropicWeightCombining(
+                                cache: entryRarity[i],
+                                mutations: entryExecutions[i],
                                 totalRareFeatures: totalRareFeatures,
-                                totalMutations: totalMutations,
+                                totalMutations: totalExecutions,
                                 corpusSize: count,
-                                rareFeatureThreshold: rareFeatureThreshold,
                                 maxMutationFactor: maxMutationFactor
                             )
                         }
 
                         let selectedIdx = weightedRandomIndex(weights: weights, using: &rng)
-                        entryMutations[selectedIdx] += 1
-                        totalMutations += 1
-
                         return [.selectForMutation(entries[selectedIdx])]
                     }
 
@@ -723,12 +813,120 @@ private func fileIDFromPath(_ path: String) -> String {
 
 // MARK: - Entropic Energy Helpers
 
+/// Per-entry rarity terms of the entropic energy: everything that depends on
+/// the entry's features and the GLOBAL feature frequencies — which change
+/// only when a new entry joins the corpus. Caching these moves the
+/// O(features) work to acceptance time; the drain-time hot path combines
+/// them with the abundance term in O(1) per entry.
+struct EntropicRarityTerms {
+    /// `-Σ (freq+1)·ln(freq+1)` over the entry's rare features.
+    let energy: Double
+    /// `Σ (freq+1)` over the entry's rare features.
+    let sumIncidence: Double
+    /// How many rare features the entry covers.
+    let coveredRare: Int
+}
+
+/// Compute an entry's rarity terms from its OBSERVATION YIELD — how many
+/// times each rare feature has been seen across this seed's accepted mutants
+/// (its own discovery counts as the first observation). This is Entropic's
+/// information-gain form: repeated rare observations contribute
+/// `-count·ln(count)` entropy and `count` incidence, so seeds whose mutants
+/// keep eliciting rare features hold energy, while the abundance term decays
+/// seeds that execute without yielding.
+func entropicYieldRarityTerms(
+    yield: [UInt32: Int],
+    globalFreqs: [UInt32: Int],
+    rareFeatureThreshold: Int
+) -> EntropicRarityTerms {
+    var energy = 0.0
+    var sumIncidence = 0.0
+    var coveredRare = 0
+    for (feature, count) in yield {
+        let globalFreq = globalFreqs[feature] ?? 1
+        guard globalFreq <= rareFeatureThreshold else { continue }
+        let localIncidence = Double(count)
+        energy -= localIncidence * log(localIncidence)
+        sumIncidence += localIncidence
+        coveredRare += 1
+    }
+    return EntropicRarityTerms(energy: energy, sumIncidence: sumIncidence, coveredRare: coveredRare)
+}
+
+/// FREQUENCY-based rarity terms (incidence = `globalFreq + 1`). This is the
+/// legacy reference form, NOT what the plugin ships: the drain hot path uses
+/// `entropicYieldRarityTerms` (observation-count incidence). Retained only as
+/// the spec oracle that the hand-computed `entropicWeight` vectors and the
+/// split/fused equivalence test pin against — it has no production caller.
+func entropicRarityTerms(
+    features: [UInt32],
+    globalFreqs: [UInt32: Int],
+    rareFeatureThreshold: Int
+) -> EntropicRarityTerms {
+    var energy = 0.0
+    var sumIncidence = 0.0
+    var coveredRare = 0
+    for feature in features {
+        let globalFreq = globalFreqs[feature] ?? 1
+        guard globalFreq <= rareFeatureThreshold else { continue }
+        let localIncidence = Double(globalFreq + 1)
+        energy -= localIncidence * log(localIncidence)
+        sumIncidence += localIncidence
+        coveredRare += 1
+    }
+    return EntropicRarityTerms(energy: energy, sumIncidence: sumIncidence, coveredRare: coveredRare)
+}
+
+/// Combine cached rarity terms with the per-drain abundance term. O(1). This
+/// is the SHIPPED per-drain step: the plugin feeds it `entropicYieldRarityTerms`
+/// (yield-based) caches. The over-fuzz guard + abundance + normalization here
+/// match `entropicWeight`'s tail exactly (pinned by the equivalence test); only
+/// the rarity cache feeding it differs (yield- vs frequency-based incidence).
+/// The shipped composition is pinned directly by `repeatedRareObservationsBoost`
+/// and `shippedYieldWeightIsCharacterized`.
+func entropicWeightCombining(
+    cache: EntropicRarityTerms,
+    mutations: Int,
+    totalRareFeatures: Int,
+    totalMutations: Int,
+    corpusSize: Int,
+    maxMutationFactor: Int
+) -> Double {
+    if corpusSize > 0, totalMutations > 0 {
+        let avgMutations = totalMutations / corpusSize
+        // `maxMutationFactor` is a public parameter; clamp to >= 1 so a caller
+        // passing 0 cannot integer-divide-by-zero on this hot path.
+        if avgMutations > 0, mutations / max(1, maxMutationFactor) > avgMutations {
+            return 0.0
+        }
+    }
+
+    var energy = cache.energy
+    var sumIncidence = cache.sumIncidence
+
+    let uncoveredRare = max(0, totalRareFeatures - cache.coveredRare)
+    sumIncidence += Double(uncoveredRare)
+
+    let abundanceIncidence = Double(mutations + 1)
+    energy -= abundanceIncidence * log(abundanceIncidence)
+    sumIncidence += abundanceIncidence
+
+    guard sumIncidence > 0 else { return 1.0 }
+    return pow(2.0, energy / sumIncidence + log(sumIncidence))
+}
+
 /// Compute the Entropic energy weight for a corpus entry.
 ///
 /// Returns `pow(2, energy)` — always positive, so entries with higher energy
 /// get proportionally more mutations. Returns 1.0 (uniform) when no rare
 /// features have been recorded yet.
-private func entropicWeight(
+///
+/// FREQUENCY-based reference (fused form of `entropicRarityTerms` +
+/// `entropicWeightCombining`). The plugin does NOT call this — its drain uses
+/// the yield-based split form (`entropicYieldRarityTerms` + the same combine).
+/// This exists as the spec oracle for the hand-computed weight vectors and the
+/// split/fused equivalence test; no production caller.
+func entropicWeight(
     features: [UInt32],
     mutations: Int,
     globalFreqs: [UInt32: Int],
@@ -741,7 +939,9 @@ private func entropicWeight(
     // Over-fuzzing guard: zero out entries mutated far beyond the average.
     if corpusSize > 0, totalMutations > 0 {
         let avgMutations = totalMutations / corpusSize
-        if avgMutations > 0, mutations / maxMutationFactor > avgMutations {
+        // `maxMutationFactor` is a public parameter; clamp to >= 1 so a caller
+        // passing 0 cannot integer-divide-by-zero on this hot path.
+        if avgMutations > 0, mutations / max(1, maxMutationFactor) > avgMutations {
             return 0.0
         }
     }
@@ -774,7 +974,11 @@ private func entropicWeight(
 }
 
 /// Weighted-random index selection. Falls back to uniform random if all weights are zero.
-private func weightedRandomIndex(weights: [Double], using rng: inout some RandomNumberGenerator) -> Int {
+func weightedRandomIndex(weights: [Double], using rng: inout some RandomNumberGenerator) -> Int {
+    // No entries to choose from: -1 signals "no selection" rather than trapping
+    // on `Int.random(in: 0..<0)`. Callers (the drain) guard `!entries.isEmpty`,
+    // so this is defensive against the now-internal-visibility misuse.
+    guard !weights.isEmpty else { return -1 }
     let total = weights.reduce(0.0, +)
     guard total > 0 else {
         return Int.random(in: 0..<weights.count, using: &rng)

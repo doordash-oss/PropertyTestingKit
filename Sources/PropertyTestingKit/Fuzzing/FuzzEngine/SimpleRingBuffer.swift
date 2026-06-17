@@ -116,6 +116,23 @@ struct SimpleRingBuffer<Element>: ~Copyable {
         _count += elementCount
     }
 
+    /// Append `count` copies of `element`. Avoids materializing a throwaway
+    /// `[Element](repeating:count:)` just to feed `append(contentsOf:)`.
+    @inlinable
+    mutating func append(_ element: Element, repeated count: Int) {
+        guard count > 0 else { return }
+        let needed = _count + count
+        if needed > _capacity {
+            growTo(minimumCapacity: needed)
+        }
+        guard let base = storage.baseAddress else { return }
+        for _ in 0..<count {
+            base.advanced(by: tail).initialize(to: element)
+            tail = (tail + 1) & (_capacity - 1)
+        }
+        _count += count
+    }
+
     /// Remove and return the first element, or nil if empty.
     @inlinable
     mutating func removeFirst() -> Element? {
