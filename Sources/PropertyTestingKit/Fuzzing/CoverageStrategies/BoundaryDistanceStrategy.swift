@@ -39,6 +39,18 @@ extension CoverageStrategy {
     public static var boundaryDistance: CoverageStrategy {
         CoverageStrategy(makeEngine: { makeBoundaryEngine() })
     }
+
+    /// The comparison channel ALONE, without the edge-coverage union: an input
+    /// is interesting iff it drives some comparison site strictly closer than
+    /// seen. This is the mix-and-match building block — compose it with any edge
+    /// strategy to add the boundary-distance signal without double-counting
+    /// edges, e.g. `.pathTrie.combined(with: .boundaryDistanceOnly)`. (Plain
+    /// `.boundaryDistance` is exactly `.newEdge` unioned with this.) Publishes
+    /// the run's per-site minimum distance; requires a target built with
+    /// `-sanitize-coverage=…,trace-cmp` (else the cmp channel stays silent).
+    public static var boundaryDistanceOnly: CoverageStrategy {
+        CoverageStrategy(makeEngine: { makeBoundaryOnlyEngine() })
+    }
 }
 
 /// Overflow-safe absolute difference of two comparison operands.
@@ -52,6 +64,52 @@ extension CoverageStrategy {
 private func absoluteDifference(_ a: UInt64, _ b: UInt64) -> UInt64 {
     let d = a &- b
     return a < b ? 0 &- d : d
+}
+
+/// The comparison-distance channel without the edge-coverage union (see
+/// `.boundaryDistanceOnly`). Identical to `makeBoundaryEngine` minus the
+/// `seenEdges` union in `decide`: novelty comes solely from a strictly closer
+/// per-site distance. Still publishes the run's per-site distances every
+/// iteration so a composed edge-novel input can also claim its boundaries.
+private func makeBoundaryOnlyEngine() -> CoverageEngine {
+    let accumulator = BoundarySiteAccumulator()
+
+    struct DistanceState {
+        var bestDistance: [UInt64: UInt64] = [:]
+        var lastAccepted: [BoundarySiteAccumulator.Site] = []
+    }
+    let state = UncheckedBox<DistanceState>(DistanceState())
+
+    let onCompare: @Sendable (UInt, UInt64, UInt64, UInt32) -> Void = { pc, arg1, arg2, _ in
+        accumulator.record(pc: UInt64(truncatingIfNeeded: pc), distance: absoluteDifference(arg1, arg2))
+    }
+    let onReset: @Sendable () -> Void = { accumulator.reset() }
+    let distancesClosure: @Sendable () -> [UInt64: UInt64] = {
+        state.update { st in
+            var d: [UInt64: UInt64] = [:]
+            d.reserveCapacity(st.lastAccepted.count)
+            for s in st.lastAccepted { d[s.pc] = s.distance }
+            return d
+        }
+    }
+
+    return CoverageEngine(
+        onCompare: onCompare,
+        onReset: onReset,
+        boundaryDistances: distancesClosure
+    ) { _ in
+        let sites = accumulator.snapshot()
+        accumulator.reset()
+        return state.update { st in
+            var interesting = false
+            for s in sites where s.distance < (st.bestDistance[s.pc] ?? .max) {
+                st.bestDistance[s.pc] = s.distance
+                interesting = true
+            }
+            st.lastAccepted = sites
+            return interesting
+        }
+    }
 }
 
 private func makeBoundaryEngine() -> CoverageEngine {
