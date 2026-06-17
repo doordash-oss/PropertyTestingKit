@@ -278,6 +278,12 @@ void sancov_observer_exit(void);
 /// tests can drive the real dispatch path with synthetic guards.
 void sancov_dispatch_edge(uint32_t* guard);
 
+/// TESTING ONLY: drive the manual task-local inheritance chain walk directly.
+/// Lets a test feed a fake task whose chain head is an unmapped (freed/poisoned)
+/// pointer — the task #49 teardown shape — and assert it returns 0 rather than
+/// dereferencing the bad pointer and crashing.
+uint64_t sancov_manual_walk_for_inherited_context_for_testing(const void* task);
+
 // MARK: - Schedule-Aware Coverage
 //
 // When schedule fuzzing is active, test code runs in a different Swift task

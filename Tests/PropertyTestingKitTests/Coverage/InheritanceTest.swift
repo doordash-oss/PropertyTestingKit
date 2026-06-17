@@ -1,5 +1,6 @@
 import Testing
 import Foundation
+import Darwin
 import SanCovHooks
 @testable import PropertyTestingKit
 
@@ -151,6 +152,34 @@ struct InheritanceTest {
 
         #expect(normalSet.isSubset(of: rebuiltSet),
                 "Rebuilt indices must contain all normally-tracked indices. Missing: \(normalSet.subtracting(rebuiltSet))")
+    }
+
+    // MARK: - Teardown UAF guard (task #49)
+
+    /// Regression for the task #49 SIGSEGV: an instrumented SUT value `destroy`
+    /// firing an edge during FuzzResult teardown routed through the manual
+    /// task-local chain walk on a task whose chain head had been freed/poisoned.
+    /// The poisoned head (`0x12000000019a`-style) is in `sancov_is_valid_pointer`'s
+    /// coarse range but UNMAPPED, so the raw read faulted. The walk must now read
+    /// fault-safely and return 0 (no inherited context) instead of crashing.
+    @Test("manual inheritance walk survives a freed/poisoned task-local chain head")
+    func manualWalkSurvivesPoisonedChainHead() {
+        // A page we map then unmap: a valid-RANGE but definitely UNMAPPED address,
+        // exactly the poisoned-head shape that crashed during teardown.
+        let page = mmap(nil, 4096, PROT_READ | PROT_WRITE, MAP_ANON | MAP_PRIVATE, -1, 0)
+        try! #require(page != MAP_FAILED, "mmap failed")
+        munmap(page, 4096)
+        let poisoned = UInt(bitPattern: page)
+
+        // Fake task: a buffer whose task-local head slot (offset 136) points at
+        // the now-unmapped page. The walk reads head, then dereferences it.
+        let task = UnsafeMutableRawPointer.allocate(byteCount: 256, alignment: 16)
+        defer { task.deallocate() }
+        task.advanced(by: 136).storeBytes(of: poisoned, as: UInt.self)
+
+        // Must return 0 WITHOUT faulting (pre-fix: SIGSEGV on the chain read).
+        let handle = sancov_manual_walk_for_inherited_context_for_testing(task)
+        #expect(handle == 0)
     }
 
     // MARK: - Parallel engine isolation
