@@ -346,7 +346,7 @@ struct ContextRecorderTests {
 
         // The PRODUCTION .pathTrie engine: setup attaches its trie observer,
         // evaluate judges (and marks) the run's path in one critical section.
-        let evaluator: CoverageEvaluator<Int> = CoverageStrategy.pathTrie.makeEvaluator()
+        let evaluator: CoverageEvaluator = CoverageStrategy.pathTrie.makeEvaluator()
         evaluator.setup?(context)
 
         // Both passes must execute IDENTICAL instrumented code between the
@@ -362,7 +362,7 @@ struct ContextRecorderTests {
             sancov_dispatch_edge(&g1)
             sancov_dispatch_edge(&g1)   // repeat hit: the TRIE strategy gates it out
             sancov_dispatch_edge(&g2)
-            return evaluator.evaluate(input, nil, context, coverageClient, corpus) != nil
+            return evaluator.evaluate(context, coverageClient) != nil
         }
 
         let firstPassUnique = firePass(1)
@@ -390,7 +390,7 @@ struct ContextRecorderTests {
         let coverageClient = CoverageCountersClient.liveValue
         let corpus = Corpus<Int>()
 
-        let evaluator: CoverageEvaluator<Int> = CoverageStrategy.pathTrie.makeEvaluator()
+        let evaluator: CoverageEvaluator = CoverageStrategy.pathTrie.makeEvaluator()
         evaluator.setup?(context)
 
         // One parameterized local function keeps the passes' instrumented
@@ -404,7 +404,7 @@ struct ContextRecorderTests {
             for _ in 0..<repeats {
                 sancov_dispatch_edge(&g51)
             }
-            return evaluator.evaluate(input, nil, context, coverageClient, corpus) != nil
+            return evaluator.evaluate(context, coverageClient) != nil
         }
 
         let firstPassUnique = firePass(repeats: 2, input: 1)
@@ -420,7 +420,7 @@ struct ContextRecorderTests {
         let context = SanCovCounters.beginMeasurement()
         defer { SanCovCounters.endMeasurement(context) }
 
-        let evaluator: CoverageEvaluator<Int> = CoverageStrategy.pathTrie.makeEvaluator()
+        let evaluator: CoverageEvaluator = CoverageStrategy.pathTrie.makeEvaluator()
         evaluator.setup?(context)
 
         #expect(sancov_context_get_recorder_for_testing(context.rawContext) == recorderBits(edgeObserverRecorder))
@@ -438,7 +438,7 @@ struct ContextRecorderTests {
             onEdge: { edge, _ in hits.update { $0.append(edge) } }
         ) { _ in false }
 
-        let evaluator: CoverageEvaluator<Int> = strategy.makeEvaluator()
+        let evaluator: CoverageEvaluator = strategy.makeEvaluator()
         evaluator.setup?(context)
 
         var g13: UInt32 = 13
@@ -454,7 +454,7 @@ struct ContextRecorderTests {
         let context = SanCovCounters.beginMeasurement()
         defer { SanCovCounters.endMeasurement(context) }
 
-        let evaluator: CoverageEvaluator<Int> = CoverageStrategy.signatureMatch.makeEvaluator()
+        let evaluator: CoverageEvaluator = CoverageStrategy.signatureMatch.makeEvaluator()
         evaluator.setup?(context)
 
         #expect(sancov_context_get_recorder_for_testing(context.rawContext) == nil)

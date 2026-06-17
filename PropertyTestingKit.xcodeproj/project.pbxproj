@@ -201,6 +201,9 @@
 		C352BBDC8B2905DE42CD9BDA /* TestHelpers.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5694654408A37C1D96C8CCA5 /* TestHelpers.swift */; };
 		C3CCD2C9B56E9E0FC0574642 /* CoverageGapDetector.swift in Sources */ = {isa = PBXBuildFile; fileRef = C5A515E40A855C623BC509BC /* CoverageGapDetector.swift */; };
 		C541AB209EF11F49F3ABD83F /* PoolPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8880B06469BC19A431248CDE /* PoolPlugin.swift */; };
+		AA0100000000000000000BB1 /* InstrumentationProbe.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0100000000000000000FF1 /* InstrumentationProbe.swift */; };
+		AA0200000000000000000BB2 /* SchedulerCore.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0200000000000000000FF2 /* SchedulerCore.swift */; };
+		AA0300000000000000000BB3 /* CoverageProbe.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0300000000000000000FF3 /* CoverageProbe.swift */; };
 		C6BD19DBD991F706DF3597D2 /* Dependencies in Frameworks */ = {isa = PBXBuildFile; productRef = A493D2B71CD03B3B9D34DA14 /* Dependencies */; };
 		C6E708A0F04FED6D2E5A5DF0 /* HTTPStatusCodeMutator.swift in Sources */ = {isa = PBXBuildFile; fileRef = C9952DEBABC45B57A9A83D8B /* HTTPStatusCodeMutator.swift */; };
 		C767CFCE0529D3F2A03C1C12 /* SanCovHooks.c in Sources */ = {isa = PBXBuildFile; fileRef = CB119BBD24F520783D33BA6F /* SanCovHooks.c */; };
@@ -252,6 +255,7 @@
 		F997A4DDB225D63D65B476AA /* Corpus.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA3C0B16540F4626B5B88CD7 /* Corpus.swift */; };
 		F9E2D4EA13931A5F9FFC4736 /* CorpusCoordinatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB81D025D3C307D01FD829DB /* CorpusCoordinatorTests.swift */; };
 		FADFA1D18BC390100662C0DF /* WeightedPoolCoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB742600C6E1AC2CE85EC9C4 /* WeightedPoolCoreTests.swift */; };
+		AA0400000000000000000BB4 /* InstrumentationSeamTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0400000000000000000FF4 /* InstrumentationSeamTests.swift */; };
 		FD441F5D3E24D693D0A26B7B /* EmailMutator.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4BDE3BB5DB51115A5922433 /* EmailMutator.swift */; };
 		FD94950386D6A9EEEBBB7756 /* GenericTimerPoller.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 5AAFECCE3AA98E503089E0B7 /* GenericTimerPoller.framework */; };
 /* End PBXBuildFile section */
@@ -623,6 +627,7 @@
 		63C99FD379289FA24BBE7A5B /* ParallelEarlyCancelTest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ParallelEarlyCancelTest.swift; sourceTree = "<group>"; };
 		662FDA7546F253A8CAE418AB /* SanCovHooks.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = SanCovHooks.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		672D5DCDC1A16C1291F8044B /* CoverageStrategy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoverageStrategy.swift; sourceTree = "<group>"; };
+		AA0300000000000000000FF3 /* CoverageProbe.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoverageProbe.swift; sourceTree = "<group>"; };
 		676196E34E9EA63139657323 /* ck_stdint.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ck_stdint.h; sourceTree = "<group>"; };
 		683A330BCB90F626B21D2422 /* CustomFuzzableTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CustomFuzzableTests.swift; sourceTree = "<group>"; };
 		6AD3FFE8C65FFC7DFDAABC32 /* ABAInheritanceHandleTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ABAInheritanceHandleTests.swift; sourceTree = "<group>"; };
@@ -656,6 +661,8 @@
 		846F2F02B0AA5A040C5EB704 /* ArrayDuplicationMutator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArrayDuplicationMutator.swift; sourceTree = "<group>"; };
 		87964E15BDAEE902B7B38D6E /* String+MutatorProviding.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "String+MutatorProviding.swift"; sourceTree = "<group>"; };
 		8880B06469BC19A431248CDE /* PoolPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PoolPlugin.swift; sourceTree = "<group>"; };
+		AA0200000000000000000FF2 /* SchedulerCore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SchedulerCore.swift; sourceTree = "<group>"; };
+		AA0100000000000000000FF1 /* InstrumentationProbe.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InstrumentationProbe.swift; sourceTree = "<group>"; };
 		88F5B7FC44F425E39676B1D3 /* PowerOfTwoMutator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PowerOfTwoMutator.swift; sourceTree = "<group>"; };
 		8955074B94D7B6D470F922F2 /* FuzzStatsAccountingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FuzzStatsAccountingTests.swift; sourceTree = "<group>"; };
 		89B1AFF0FF50A24C9CF91760 /* ActorDeinitSchedulingTest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActorDeinitSchedulingTest.swift; sourceTree = "<group>"; };
@@ -691,6 +698,7 @@
 		A4A90F27F22BE17810AE1B6F /* ContinuousClockClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContinuousClockClient.swift; sourceTree = "<group>"; };
 		A5A7DD272E538B8E8CFE5C75 /* CoverageGapDetectorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoverageGapDetectorTests.swift; sourceTree = "<group>"; };
 		AB742600C6E1AC2CE85EC9C4 /* WeightedPoolCoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WeightedPoolCoreTests.swift; sourceTree = "<group>"; };
+		AA0400000000000000000FF4 /* InstrumentationSeamTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InstrumentationSeamTests.swift; sourceTree = "<group>"; };
 		ACE4D8AA0A411B9988FA7E7C /* FuzzEngine+Config.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "FuzzEngine+Config.swift"; sourceTree = "<group>"; };
 		AD73DE80764A2587F59AEEEB /* Bool+MutatorProviding.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Bool+MutatorProviding.swift"; sourceTree = "<group>"; };
 		AD9C5BDAEC03365A14BAA43A /* module.modulemap */ = {isa = PBXFileReference; lastKnownFileType = "sourcecode.module-map"; path = module.modulemap; sourceTree = "<group>"; };
@@ -1346,12 +1354,21 @@
 				331FF506A56D2F60F9E25916 /* CoverageGap */,
 				A529A60907EC64D6F2FE4E53 /* CoverageStrategies */,
 				E1DAE30A40C7182EDB1A08B6 /* FuzzEngine */,
+				AA0500000000000000000AA5 /* Instrumentation */,
 				276C71DE5B326F1105B8CA5C /* Mutators */,
 				F94CA8BDDC0253B0AA6FF70C /* Plugins */,
 				9F55EDA14DC6F058F1B3F32B /* Scheduler */,
 				22B14C46021ADC551142A93F /* TestCaseShrinker */,
 			);
 			path = Fuzzing;
+			sourceTree = "<group>";
+		};
+		AA0500000000000000000AA5 /* Instrumentation */ = {
+			isa = PBXGroup;
+			children = (
+				AA0100000000000000000FF1 /* InstrumentationProbe.swift */,
+			);
+			path = Instrumentation;
 			sourceTree = "<group>";
 		};
 		9389B3080515AB75B3627EE4 /* Coverage */ = {
@@ -1373,6 +1390,7 @@
 				9F2E59331674D16FC32BD5A7 /* FeatureOwnershipLedger.swift */,
 				48E05741C671DFC85D8A63A2 /* MutationScheduler.swift */,
 				8880B06469BC19A431248CDE /* PoolPlugin.swift */,
+				AA0200000000000000000FF2 /* SchedulerCore.swift */,
 				F000A4108F2BF3EC22200A76 /* WeightedPoolCore.swift */,
 			);
 			path = Scheduler;
@@ -1422,6 +1440,7 @@
 			children = (
 				EB988F36432EEA023A812BEA /* AlwaysInterestingStrategy.swift */,
 				FDD1EC805CD71A270C692864 /* CoverageEngine.swift */,
+				AA0300000000000000000FF3 /* CoverageProbe.swift */,
 				672D5DCDC1A16C1291F8044B /* CoverageStrategy.swift */,
 				78CCD0EE426F8A208203ED16 /* CoverageView.swift */,
 				0D8CCA1129D052D6BF52BCC1 /* HitCountBucketsStrategy.swift */,
@@ -1567,6 +1586,7 @@
 				F9A2D6D2D787FF8BD1869F6F /* StopOnFirstFailurePluginTests.swift */,
 				E37B0F71C6AF3FAD60F074F7 /* StopWhenQueueEmptyPluginTests.swift */,
 				F58C560D0D81EBCA41AC8282 /* TestCaseShrinkerTests.swift */,
+				AA0400000000000000000FF4 /* InstrumentationSeamTests.swift */,
 				B6528B38B2BEED018604E6FC /* TrieEdgeHookTests.swift */,
 				AB742600C6E1AC2CE85EC9C4 /* WeightedPoolCoreTests.swift */,
 			);
@@ -2158,6 +2178,7 @@
 				C352BBDC8B2905DE42CD9BDA /* TestHelpers.swift in Sources */,
 				6A0F5613921D49D2A8E2E295 /* TrieEdgeHookTests.swift in Sources */,
 				FADFA1D18BC390100662C0DF /* WeightedPoolCoreTests.swift in Sources */,
+				AA0400000000000000000BB4 /* InstrumentationSeamTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -2255,6 +2276,9 @@
 				1CEE9C52E71296E5382DD285 /* PercentageMutator.swift in Sources */,
 				7177FDDC6C703BE6ED195B56 /* PhoneNumberMutator.swift in Sources */,
 				C541AB209EF11F49F3ABD83F /* PoolPlugin.swift in Sources */,
+				AA0100000000000000000BB1 /* InstrumentationProbe.swift in Sources */,
+				AA0200000000000000000BB2 /* SchedulerCore.swift in Sources */,
+				AA0300000000000000000BB3 /* CoverageProbe.swift in Sources */,
 				3623AE0B84CB07558F777090 /* PortMutator.swift in Sources */,
 				86364D3C2F2DBEA2A9B62EA0 /* PowerOfTwoMutator.swift in Sources */,
 				2934DF4D2D0A7B2472998876 /* SQLInjectionMutator.swift in Sources */,

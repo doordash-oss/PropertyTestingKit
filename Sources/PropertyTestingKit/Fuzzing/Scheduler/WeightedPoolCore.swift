@@ -17,14 +17,6 @@
 //  `PoolAdmission` and the child `PoolPlugin`s.
 //
 
-/// What the engine should run next.
-enum PoolDirective: Equatable {
-    /// Generate a fresh input from the mutators.
-    case generate
-    /// Materialize one single-step mutant of pool entry `id`.
-    case mutate(id: Int)
-}
-
 /// Per-engine pool owner. Non-generic: entries are IDs here; the typed input
 /// for each ID is stored engine-side at the same index (IDs are sequential
 /// and never reused, so the two stay aligned by construction).
@@ -36,7 +28,10 @@ enum PoolDirective: Equatable {
 ///
 /// Confinement: one instance per engine, driven on the engine's task. No
 /// internal synchronization.
-final class WeightedPoolCore {
+final class WeightedPoolCore: SchedulerCore {
+    /// Edge coverage is the only signal the weighted pool consults.
+    static let requiredProbes: [any InstrumentationKey.Type] = [CoverageProbeKey.self]
+
     private let judge: (SparseCoverage) -> PoolAdmission.Verdict
     private let policies: [any PoolPlugin]
     private let burstLength: Int
@@ -68,13 +63,15 @@ final class WeightedPoolCore {
         self.focusOnInsert = focusOnInsert
     }
 
-    /// Report one executed iteration. Returns the new entry's ID when the
-    /// outcome was accepted AND admitted — the engine must then store the
-    /// input at that index on its side.
-    func observe(_ outcome: PoolIterationOutcome) -> Int? {
-        notifyAndApply(.iteration(outcome))
+    /// Report one executed iteration. Reads the coverage verdict out of the
+    /// context (the only probe this scheduler requires) and returns the new
+    /// entry's ID when the input was interesting AND admitted — the engine must
+    /// then store the input at that index on its side.
+    func observe(_ context: RawExecutionContext, source: SchedulerSource) -> Int? {
+        let coverage = context[CoverageProbeKey.self]?.coverage
+        notifyAndApply(.iteration(PoolIterationOutcome(source: source.asPoolSource, newCoverage: coverage)))
 
-        guard let coverage = outcome.newCoverage else { return nil }
+        guard let coverage else { return nil }
         let verdict = judge(coverage)
         guard verdict.admit else { return nil }
 
@@ -94,7 +91,7 @@ final class WeightedPoolCore {
     }
 
     /// Decide what the engine runs next.
-    func next() -> PoolDirective {
+    func next() -> SchedulerDirective {
         if let current = focus {
             if burstRemaining > 0 {
                 burstRemaining -= 1
@@ -169,5 +166,18 @@ final class WeightedPoolCore {
             if target < 0 { return id }
         }
         return live[live.count - 1]
+    }
+}
+
+/// `SchedulerSource` (the engine-facing seam) and `PoolIterationSource` (the
+/// pool's public child-policy API) describe the same thing; bridge at the
+/// boundary so the existing `PoolPlugin` surface keeps its type.
+private extension SchedulerSource {
+    var asPoolSource: PoolIterationSource {
+        switch self {
+        case .queue: return .queue
+        case .generated: return .generated
+        case .pool(let parent): return .pool(parent: parent)
+        }
     }
 }

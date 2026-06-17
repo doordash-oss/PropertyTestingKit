@@ -25,7 +25,7 @@ struct PathTrieStrategyTests {
 
     @Test("First iteration trie path is not empty")
     func firstIterationTriePathNotEmpty() {
-        let strategy: CoverageEvaluator<Int> = CoverageStrategy.pathTrie.makeEvaluator()
+        let strategy: CoverageEvaluator = CoverageStrategy.pathTrie.makeEvaluator()
         let context = SanCovCounters.beginMeasurement()
         // The context co-owns the strategy's observer (and so its trie) — no
         // lifetime pinning needed even though edges dispatch until the end.
@@ -45,7 +45,11 @@ struct PathTrieStrategyTests {
         sancov_dispatch_edge(&g2)
 
         // Evaluate the strategy
-        let didAdd = strategy.evaluate(42, nil, context, coverageClient, corpus) != nil
+        let firstSparse = strategy.evaluate(context, coverageClient)
+        if let s = firstSparse {
+            corpus.mergeCoverageAndAdd(input: 42, scheduleBytes: nil, sparse: s)
+        }
+        let didAdd = firstSparse != nil
 
         #expect(didAdd, "First iteration should be interesting")
         #expect(corpus.entries.count == 1, "Should have one corpus entry")
@@ -58,7 +62,7 @@ struct PathTrieStrategyTests {
         sancov_dispatch_edge(&g1)
         sancov_dispatch_edge(&g2)
 
-        let didAddSecond = strategy.evaluate(42, nil, context, coverageClient, corpus) != nil
+        let didAddSecond = strategy.evaluate(context, coverageClient) != nil
 
         #expect(
             !didAddSecond,

@@ -196,7 +196,7 @@ final class FuzzEngine<each Input: Codable & Sendable>: @unchecked Sendable {
 
         let corpus: Corpus<repeat each Input> = corpusRegistry.getCorpus()
         // Build a fresh evaluator per engine so each gets its own trie/index state.
-        let coverageEvaluator: CoverageEvaluator<repeat each Input> = coverageStrategy.makeEvaluator()
+        let coverageEvaluator = coverageStrategy.makeEvaluator()
 
         let stateMachine = FuzzStateMachine<repeat each Input>(
             seeds: seeds,
@@ -204,7 +204,7 @@ final class FuzzEngine<each Input: Codable & Sendable>: @unchecked Sendable {
             inputSize: inputSize,
             corpus: corpus,
             coverageEvaluator: coverageEvaluator,
-            schedulerCore: scheduler.makeCore(),
+            scheduler: scheduler.makeCore(),
             processSyncPlugins: processSyncPlugins,
             processAsyncPlugins: processAsyncPlugins,
             config: config,

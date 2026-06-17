@@ -61,12 +61,18 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
     /// Mutated inputs executed (queue pops after the seeds drained).
     private var mutantsRunCount: Int = 0
 
-    /// The coverage evaluator that determines interestingness.
-    private let coverageEvaluator: CoverageEvaluator<repeat each Input>
+    /// The coverage evaluator that determines interestingness. Wrapped in a
+    /// `CoverageProbe` and driven through the generic instrumentation seam.
+    private let coverageEvaluator: CoverageEvaluator
 
-    /// This engine's mutation pool owner: consulted for what to run when the
-    /// residual queue is empty, told about every iteration's outcome.
-    private let schedulerCore: WeightedPoolCore
+    /// This engine's scheduler: consulted for what to run when the residual
+    /// queue is empty, told about every iteration's outcome through the
+    /// per-execution `RawExecutionContext`.
+    private let scheduler: any SchedulerCore
+    /// Instrumentation probes feeding the scheduler. Built in `start()` once the
+    /// measurement context exists, then assembled into a `RawExecutionContext`
+    /// each iteration.
+    private var probes: [any InstrumentationProbe] = []
     /// Typed inputs for pool entries, index == pool entry ID. Append-only —
     /// eviction is the scheduler's concern (live set), not storage's.
     private var poolEntries: [(repeat each Input)] = []
@@ -88,8 +94,8 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
         mutators: (repeat Mutator<each Input>),
         inputSize: Int,
         corpus: Corpus<repeat each Input>,
-        coverageEvaluator: CoverageEvaluator<repeat each Input>,
-        schedulerCore: WeightedPoolCore,
+        coverageEvaluator: CoverageEvaluator,
+        scheduler: any SchedulerCore,
         processSyncPlugins: @escaping SyncPluginProcessorFn,
         processAsyncPlugins: @escaping AsyncPluginProcessorFn,
         config: FuzzEngineConfig,
@@ -105,7 +111,7 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
         self.mutators = mutators
         self.inputSize = inputSize
         self.coverageEvaluator = coverageEvaluator
-        self.schedulerCore = schedulerCore
+        self.scheduler = scheduler
         self.processSyncPlugins = processSyncPlugins
         self.processAsyncPlugins = processAsyncPlugins
         self.config = config
@@ -173,10 +179,21 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
             let coverageContext = coverageCountersClient.beginMeasurement()
             defer { coverageCountersClient.endMeasurement(coverageContext) }
 
-            // Set up the coverage evaluator before the first test execution.
-            // pathTrie needs to attach its trie to the context so edges
-            // advance the trie during the very first iteration.
-            coverageEvaluator.setup?(coverageContext)
+            // Wrap the coverage evaluator in a probe bound to this engine's
+            // measurement context, and install only the probes the scheduler
+            // asks for. Coverage is the sole built-in probe today; relocating it
+            // (and others) to userspace is a later phase.
+            let coverageProbe = CoverageProbe(
+                evaluator: coverageEvaluator,
+                context: coverageContext,
+                client: coverageCountersClient
+            )
+            let required = Set(type(of: scheduler).requiredProbes.map { ObjectIdentifier($0) })
+            probes = required.contains(ObjectIdentifier(CoverageProbeKey.self)) ? [coverageProbe] : []
+
+            // Set up probes before the first test execution. pathTrie needs to
+            // attach its trie to the context so edges advance during iteration 1.
+            for probe in probes { probe.setUp() }
 
             // Check time limit every N iterations to avoid per-iteration Date.init() overhead.
             // With ~10M iterations/sec and default interval of 1000, this means ~10K checks/sec.
@@ -227,7 +244,7 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
                             mutantsRunCount += 1
                         }
                     } else {
-                        switch schedulerCore.next() {
+                        switch scheduler.next() {
                         case .generate:
                             // Generate directly - no closure indirection
                             input = (repeat (each mutators).generate(&rng))
@@ -250,8 +267,8 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
                     // stop a regression replay before any fresh input is generated.
                     let queueCount = pendingInputs.count
 
-                    // Reset coverage for this iteration
-                    coverageCountersClient.resetCoverage(coverageContext)
+                    // Reset probes for this iteration (coverage clears its map).
+                    for probe in probes { probe.reset() }
 
                     // Run the test, capturing coverage on success and recording failures.
                     var failureRecorded = false
@@ -279,27 +296,33 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
                         failureRecorded = true
                     }
 
-                    // Delegate interestingness to the coverage evaluator. It returns
-                    // the run's coverage when the input was interesting (the sparse
-                    // snapshot it already took for the decision — no re-snapshot
-                    // here), nil otherwise.
-                    let iterationCoverage = coverageEvaluator.evaluate(
-                        input,
-                        currentScheduleBytes,
-                        coverageContext,
-                        coverageCountersClient,
-                        corpus
-                    )
+                    // Assemble the per-execution context from the installed
+                    // probes; the scheduler reads whatever signals it needs out
+                    // of it. The engine names no signal when handing this over.
+                    var execContext = RawExecutionContext()
+                    for probe in probes { probe.contribute(to: &execContext) }
+
+                    // The coverage verdict drives corpus retention: an
+                    // interesting input is recorded with its coverage and
+                    // schedule bytes. This is the one coverage-specific read
+                    // left in the engine loop; a later phase moves retention
+                    // behind the scheduler's admit signal.
+                    let iterationCoverage = execContext[CoverageProbeKey.self]?.coverage
+                    if let iterationCoverage {
+                        corpus.mergeCoverageAndAdd(
+                            input: input,
+                            scheduleBytes: currentScheduleBytes,
+                            sparse: iterationCoverage
+                        )
+                    }
 
                     // Tell the scheduler what happened. On admission it hands
                     // back the new entry's ID; the typed input is stored here
                     // at that index (IDs are sequential, so they stay aligned).
-                    let poolSource: PoolIterationSource =
+                    let poolSource: SchedulerSource =
                         poolParentID.map { .pool(parent: $0) }
                         ?? (fromMutationQueue ? .queue : .generated)
-                    if schedulerCore.observe(
-                        PoolIterationOutcome(source: poolSource, newCoverage: iterationCoverage)
-                    ) != nil {
+                    if scheduler.observe(execContext, source: poolSource) != nil {
                         poolEntries.append(input)
                     }
 

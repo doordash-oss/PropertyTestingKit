@@ -118,7 +118,7 @@ struct InterleavingContrastTest {
         // evaluate judges the run's path (and resets the trie for the next).
         let ctx = SanCovCounters.beginMeasurement()
         defer { SanCovCounters.endMeasurement(ctx) }
-        let evaluator: CoverageEvaluator<Int> = CoverageStrategy.pathTrie.makeEvaluator()
+        let evaluator: CoverageEvaluator = CoverageStrategy.pathTrie.makeEvaluator()
         evaluator.setup?(ctx)
         let coverageClient = CoverageCountersClient.liveValue
         let corpus = Corpus<Int>()
@@ -134,7 +134,7 @@ struct InterleavingContrastTest {
                 await Self.body()
             }
 
-            if evaluator.evaluate(i, nil, ctx, coverageClient, corpus) != nil { unique += 1 }
+            if evaluator.evaluate(ctx, coverageClient) != nil { unique += 1 }
         }
         print("UNCONTROLLED: \(unique) unique paths in \(iters) iterations")
         // The contrast that matters: without schedule control the lanes race on
@@ -158,7 +158,7 @@ struct InterleavingContrastTest {
 
         let ctx = SanCovCounters.beginMeasurement()
         defer { SanCovCounters.endMeasurement(ctx) }
-        let evaluator: CoverageEvaluator<Int> = CoverageStrategy.pathTrie.makeEvaluator()
+        let evaluator: CoverageEvaluator = CoverageStrategy.pathTrie.makeEvaluator()
         evaluator.setup?(ctx)
         let coverageClient = CoverageCountersClient.liveValue
         let corpus = Corpus<Int>()
@@ -175,7 +175,7 @@ struct InterleavingContrastTest {
                 await Self.body()
             }
 
-            if evaluator.evaluate(i, nil, ctx, coverageClient, corpus) != nil { unique += 1 }
+            if evaluator.evaluate(ctx, coverageClient) != nil { unique += 1 }
         }
         print("CONTROLLED: \(unique) unique paths in \(iters) iterations")
         #expect(unique == 1, "Expected 1 unique path under schedule control, got \(unique)")

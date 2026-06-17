@@ -45,14 +45,14 @@ struct CoverageEngineTests {
             }
         })
 
-        let engine1: CoverageEvaluator<Int> = strategy.makeEvaluator()
-        let engine2: CoverageEvaluator<Int> = strategy.makeEvaluator()
+        let engine1: CoverageEvaluator = strategy.makeEvaluator()
+        let engine2: CoverageEvaluator = strategy.makeEvaluator()
 
-        #expect(engine1.evaluate(1, nil, context, coverageClient, corpus) != nil,
+        #expect(engine1.evaluate(context, coverageClient) != nil,
                 "Engine 1's first iteration")
-        #expect(engine1.evaluate(2, nil, context, coverageClient, corpus) == nil,
+        #expect(engine1.evaluate(context, coverageClient) == nil,
                 "Engine 1's state must persist across its own iterations")
-        #expect(engine2.evaluate(3, nil, context, coverageClient, corpus) != nil,
+        #expect(engine2.evaluate(context, coverageClient) != nil,
                 "Engine 2 must get FRESH state from its own makeEngine call")
     }
 
@@ -71,13 +71,13 @@ struct CoverageEngineTests {
             )
         })
 
-        let evaluator: CoverageEvaluator<Int> = strategy.makeEvaluator()
+        let evaluator: CoverageEvaluator = strategy.makeEvaluator()
         evaluator.setup?(context)
 
         var g21: UInt32 = 21
         sancov_dispatch_edge(&g21)
 
-        #expect(evaluator.evaluate(1, nil, context, coverageClient, corpus) != nil,
+        #expect(evaluator.evaluate(context, coverageClient) != nil,
                 "decide must see the edges its OWN engine's onEdge observed")
     }
 
@@ -95,7 +95,7 @@ struct CoverageEngineTests {
             )
         })
 
-        let evaluator: CoverageEvaluator<Int> = strategy.makeEvaluator()
+        let evaluator: CoverageEvaluator = strategy.makeEvaluator()
         evaluator.setup?(context)
         SanCovCounters.resetCoverage(context)
 
@@ -124,7 +124,7 @@ struct CoverageEngineTests {
                 }
             }
         })
-        let evaluator: CoverageEvaluator<Int> = strategy.makeEvaluator()
+        let evaluator: CoverageEvaluator = strategy.makeEvaluator()
         evaluator.setup?(context)
 
         // Identical instrumented code in both passes, reset through evaluate
@@ -136,7 +136,11 @@ struct CoverageEngineTests {
             var g32: UInt32 = 32
             sancov_dispatch_edge(&g31)
             sancov_dispatch_edge(&g32)
-            return evaluator.evaluate(input, nil, context, coverageClient, corpus) != nil
+            let sparse = evaluator.evaluate(context, coverageClient)
+            if let s = sparse {
+                corpus.mergeCoverageAndAdd(input: input, scheduleBytes: nil, sparse: s)
+            }
+            return sparse != nil
         }
 
         let first = firePass(1)
@@ -158,9 +162,12 @@ struct CoverageEngineTests {
         let corpus = Corpus<Int>()
 
         let strategy = CoverageStrategy { _ in true }
-        let evaluator: CoverageEvaluator<Int> = strategy.makeEvaluator()
+        let evaluator: CoverageEvaluator = strategy.makeEvaluator()
 
-        let sparse = evaluator.evaluate(7, [9, 9], context, coverageClient, corpus)
+        let sparse = evaluator.evaluate(context, coverageClient)
+        if let s = sparse {
+            corpus.mergeCoverageAndAdd(input: 7, scheduleBytes: [9, 9], sparse: s)
+        }
 
         #expect(sparse != nil, "An always-true decision is interesting")
         #expect(corpus.count == 1, "The engine records the interesting input")
@@ -181,17 +188,17 @@ struct CoverageEngineTests {
         let corpus = Corpus<Int>()
 
         let strategy = CoverageStrategy.newEdge
-        let engine1: CoverageEvaluator<Int> = strategy.makeEvaluator()
-        let engine2: CoverageEvaluator<Int> = strategy.makeEvaluator()
+        let engine1: CoverageEvaluator = strategy.makeEvaluator()
+        let engine2: CoverageEvaluator = strategy.makeEvaluator()
 
         // Identical instrumented code per pass (see the trie dispatch test).
-        func firePass(_ evaluator: CoverageEvaluator<Int>, _ input: Int) -> Bool {
+        func firePass(_ evaluator: CoverageEvaluator, _ input: Int) -> Bool {
             SanCovCounters.resetCoverage(context)
             var g41: UInt32 = 41
             var g42: UInt32 = 42
             sancov_dispatch_edge(&g41)
             sancov_dispatch_edge(&g42)
-            return evaluator.evaluate(input, nil, context, coverageClient, corpus) != nil
+            return evaluator.evaluate(context, coverageClient) != nil
         }
 
         #expect(firePass(engine1, 1), "Engine 1: first sight of these edges")
@@ -217,9 +224,9 @@ struct CoverageEngineTests {
         let corpus = Corpus<Int>()
 
         let strategy = CoverageStrategy { _ in false }
-        let evaluator: CoverageEvaluator<Int> = strategy.makeEvaluator()
-        for input in 0..<10 {
-            _ = evaluator.evaluate(input, nil, context, client, corpus)
+        let evaluator: CoverageEvaluator = strategy.makeEvaluator()
+        for _ in 0..<10 {
+            _ = evaluator.evaluate(context, client)
         }
 
         #expect(snapshots.value == 0,
@@ -241,8 +248,11 @@ struct CoverageEngineTests {
         let corpus = Corpus<Int>()
 
         let strategy = CoverageStrategy { coverage in !coverage.indices.isEmpty }
-        let evaluator: CoverageEvaluator<Int> = strategy.makeEvaluator()
-        let sparse = evaluator.evaluate(1, nil, context, client, corpus)
+        let evaluator: CoverageEvaluator = strategy.makeEvaluator()
+        let sparse = evaluator.evaluate(context, client)
+        if let s = sparse {
+            corpus.mergeCoverageAndAdd(input: 1, scheduleBytes: nil, sparse: s)
+        }
 
         #expect(snapshots.value == 1,
                 "the decision's snapshot is reused for the corpus add")
@@ -273,10 +283,10 @@ struct CoverageEngineTests {
                 }
             )
         })
-        let evaluator: CoverageEvaluator<Int> = strategy.makeEvaluator()
+        let evaluator: CoverageEvaluator = strategy.makeEvaluator()
         evaluator.setup?(context)
 
-        _ = evaluator.evaluate(1, nil, context, coverageClient, corpus)
+        _ = evaluator.evaluate(context, coverageClient)
 
         #expect(!observed.value.contains(99),
                 "decide's own edges must not re-enter the engine's onEdge")

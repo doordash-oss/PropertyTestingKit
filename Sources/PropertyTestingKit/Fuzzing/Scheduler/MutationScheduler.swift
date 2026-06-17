@@ -29,9 +29,11 @@
 /// decides what runs next. Children hear every membership change the owner
 /// applies, whoever caused it.
 public struct MutationScheduler: Sendable {
-    /// Builds a fresh per-engine pool core (fresh policy instances, fresh
-    /// state) — same per-engine isolation pattern as `CoverageStrategy`.
-    let makeCore: @Sendable () -> WeightedPoolCore
+    /// Builds a fresh per-engine scheduler core (fresh policy instances, fresh
+    /// state) — same per-engine isolation pattern as `CoverageStrategy`. Typed
+    /// as `any SchedulerCore` so a `MutationScheduler` can vend any scheduler,
+    /// not only the weighted pool.
+    let makeCore: @Sendable () -> any SchedulerCore
 
     /// A weighted mutation pool with focus/burst draws.
     ///

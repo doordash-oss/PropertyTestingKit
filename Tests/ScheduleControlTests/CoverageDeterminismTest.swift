@@ -191,7 +191,7 @@ private func measureDeterminism(
     }
 
     let ctx = SanCovCounters.beginMeasurement()
-    let evaluator: CoverageEvaluator<Int> = CoverageStrategy.pathTrie.makeEvaluator()
+    let evaluator: CoverageEvaluator = CoverageStrategy.pathTrie.makeEvaluator()
     evaluator.setup?(ctx)
     let coverageClient = CoverageCountersClient.liveValue
     let corpus = Corpus<Int>()
@@ -208,7 +208,7 @@ private func measureDeterminism(
             await body()
         }
 
-        if evaluator.evaluate(i, nil, ctx, coverageClient, corpus) != nil {
+        if evaluator.evaluate(ctx, coverageClient) != nil {
             uniqueCount += 1
         }
     }
@@ -405,14 +405,14 @@ struct PathTrieReuseTest {
         // The PRODUCTION .pathTrie engine: evaluate judges-and-marks the
         // run's path; resetCoverage rewinds the cursor but keeps terminals.
         let ctx = SanCovCounters.beginMeasurement()
-        let evaluator: CoverageEvaluator<Int> = CoverageStrategy.pathTrie.makeEvaluator()
+        let evaluator: CoverageEvaluator = CoverageStrategy.pathTrie.makeEvaluator()
         evaluator.setup?(ctx)
         let coverageClient = CoverageCountersClient.liveValue
         let corpus = Corpus<Int>()
 
         // Run 1: first path should be unique
         Self.stableCode()
-        let firstUnique = evaluator.evaluate(1, nil, ctx, coverageClient, corpus) != nil
+        let firstUnique = evaluator.evaluate(ctx, coverageClient) != nil
         print("Run 1: isUnique=\(firstUnique)")
         #expect(firstUnique, "First run should always be unique")
 
@@ -421,7 +421,7 @@ struct PathTrieReuseTest {
 
         // Run 2: same code, same path — should NOT be unique
         Self.stableCode()
-        let secondUnique = evaluator.evaluate(2, nil, ctx, coverageClient, corpus) != nil
+        let secondUnique = evaluator.evaluate(ctx, coverageClient) != nil
         print("Run 2: isUnique=\(secondUnique)")
         #expect(!secondUnique, "Second run with identical code should NOT be unique — trie should recognize the path")
 
@@ -451,7 +451,7 @@ struct PathTrieReuseTest {
         }
 
         let ctx = SanCovCounters.beginMeasurement()
-        let evaluator: CoverageEvaluator<Int> = CoverageStrategy.pathTrie.makeEvaluator()
+        let evaluator: CoverageEvaluator = CoverageStrategy.pathTrie.makeEvaluator()
         evaluator.setup?(ctx)
         let coverageClient = CoverageCountersClient.liveValue
         let corpus = Corpus<Int>()
@@ -468,7 +468,7 @@ struct PathTrieReuseTest {
                 await body()
             }
 
-            let isUnique = evaluator.evaluate(i, nil, ctx, coverageClient, corpus) != nil
+            let isUnique = evaluator.evaluate(ctx, coverageClient) != nil
             results.append(isUnique)
             print("Scheduled run \(i): isUnique=\(isUnique)")
         }
