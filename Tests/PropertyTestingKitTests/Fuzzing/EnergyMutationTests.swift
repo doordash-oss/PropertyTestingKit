@@ -106,6 +106,30 @@ struct EnergyMutationTests {
         #expect(abs(w - 1.0100243271635463) < 1e-9)
     }
 
+    @Test("Over-fuzzing guard tolerates maxMutationFactor 0 without trapping")
+    func overFuzzGuardZeroFactorIsSafe() {
+        // maxMutationFactor is a public parameter; 0 must not integer-divide-by-zero.
+        // Clamped to 1, the guard treats every mutated entry as over-fuzzed.
+        let combined = entropicWeightCombining(
+            cache: entropicYieldRarityTerms(yield: [10: 1], globalFreqs: [10: 1], rareFeatureThreshold: 3),
+            mutations: 5, totalRareFeatures: 1, totalMutations: 10,
+            corpusSize: 2, maxMutationFactor: 0)
+        #expect(combined.isFinite)
+
+        let reference = entropicWeight(
+            features: [10], mutations: 5,
+            globalFreqs: [10: 1], totalRareFeatures: 1,
+            totalMutations: 10, corpusSize: 2,
+            rareFeatureThreshold: 3, maxMutationFactor: 0)
+        #expect(reference.isFinite)
+    }
+
+    @Test("weightedRandomIndex on empty weights returns a sentinel, not a trap")
+    func weightedRandomIndexEmptyIsSafe() {
+        var rng = FastRNG()
+        #expect(weightedRandomIndex(weights: [], using: &rng) == -1)
+    }
+
     // MARK: - Incremental (cached) weight equivalence
 
     /// The drain-time hot path combines per-entry rarity terms (computed at
@@ -144,6 +168,21 @@ struct EnergyMutationTests {
 
     // MARK: - Plugin behavior
 
+    /// Unwrap the `selectForMutation` an iteration is expected to schedule,
+    /// recording an issue (and returning nil) otherwise. Collapses the
+    /// guard/Issue.record/return shape repeated across the behavior tests.
+    private func expectSelect(
+        _ actions: [FuzzPluginAction<Int>],
+        _ message: Comment = "expected a selectForMutation action",
+        sourceLocation: SourceLocation = #_sourceLocation
+    ) -> FuzzPluginAction<Int>.SelectForMutationAction? {
+        guard case let .selectForMutation(sel) = actions.first else {
+            Issue.record(message, sourceLocation: sourceLocation)
+            return nil
+        }
+        return sel
+    }
+
     private func iteration(
         _ input: Int, fromQueue: Bool, queueCount: Int = 0, coverage: [UInt32]? = nil,
         parentID: Int? = nil
@@ -162,10 +201,7 @@ struct EnergyMutationTests {
         let plugin: FuzzPlugin<Int> = .energyMutation()
         let actions = plugin.handleSync(iteration(42, fromQueue: false, coverage: [1, 2]))
         #expect(actions.count == 1)
-        guard case let .selectForMutation(sel) = actions.first else {
-            Issue.record("expected selectForMutation, got \(actions)")
-            return
-        }
+        guard let sel = expectSelect(actions) else { return }
         #expect(sel.input == 42)
     }
 
@@ -190,14 +226,10 @@ struct EnergyMutationTests {
     func acceptBurstCarriesOriginID() {
         let plugin: FuzzPlugin<Int> = .energyMutation()
         let first = plugin.handleSync(iteration(1, fromQueue: false, coverage: [10]))
-        guard case let .selectForMutation(s0) = first.first else {
-            Issue.record("expected selectForMutation"); return
-        }
+        guard let s0 = expectSelect(first) else { return }
         #expect(s0.originID == 0, "first entry is index 0")
         let second = plugin.handleSync(iteration(2, fromQueue: false, coverage: [20]))
-        guard case let .selectForMutation(s1) = second.first else {
-            Issue.record("expected selectForMutation"); return
-        }
+        guard let s1 = expectSelect(second) else { return }
         #expect(s1.originID == 1, "second entry is index 1")
     }
 
@@ -214,9 +246,7 @@ struct EnergyMutationTests {
         var picks: [Int: Int] = [:]
         for _ in 0..<300 {
             let actions = plugin.handleSync(iteration(99, fromQueue: false))
-            guard case let .selectForMutation(sel) = actions.first else {
-                Issue.record("drain must schedule"); return
-            }
+            guard let sel = expectSelect(actions, "drain must schedule") else { return }
             picks[sel.input, default: 0] += 1
         }
         #expect(picks[2, default: 0] > picks[1, default: 0],
@@ -252,6 +282,29 @@ struct EnergyMutationTests {
                 "a seed whose mutants keep eliciting a rare feature carries more information")
     }
 
+    @Test("SHIPPED path: yield-cache combine fires the over-fuzz guard and boosts rare yields")
+    func shippedYieldWeightIsCharacterized() {
+        // The plugin's drain weight is entropicWeightCombining(cache:
+        // entropicYieldRarityTerms(...)). repeatedRareObservationsBoost already
+        // pins exact magnitudes; this pins the over-fuzz guard and the boost
+        // direction THROUGH the yield path (the freq-based entropicWeight is only
+        // a reference oracle and is never exercised by the plugin).
+
+        // avg = 100/2 = 50; 2000/20 = 100 > 50 -> zeroed, via the yield cache.
+        let zeroed = entropicWeightCombining(
+            cache: entropicYieldRarityTerms(yield: [10: 1], globalFreqs: [10: 1], rareFeatureThreshold: 3),
+            mutations: 2000, totalRareFeatures: 1, totalMutations: 100,
+            corpusSize: 2, maxMutationFactor: 20)
+        #expect(zeroed == 0.0)
+
+        // A fresh entry yielding a rare feature carries information: weight > 1.
+        let rareFresh = entropicWeightCombining(
+            cache: entropicYieldRarityTerms(yield: [10: 1], globalFreqs: [10: 1], rareFeatureThreshold: 3),
+            mutations: 0, totalRareFeatures: 1, totalMutations: 0,
+            corpusSize: 1, maxMutationFactor: 20)
+        #expect(rareFresh.isFinite && rareFresh > 1.0)
+    }
+
     @Test("Weighted-random drain selection reaches every entry")
     func drainSelectsAndRotates() {
         let plugin: FuzzPlugin<Int> = .energyMutation()
@@ -261,10 +314,7 @@ struct EnergyMutationTests {
         var selected = Set<Int>()
         for _ in 0..<300 {
             let actions = plugin.handleSync(iteration(99, fromQueue: false))
-            guard case let .selectForMutation(sel) = actions.first else {
-                Issue.record("drain with entries must schedule a mutation")
-                return
-            }
+            guard let sel = expectSelect(actions, "drain with entries must schedule a mutation") else { return }
             selected.insert(sel.input)
         }
         #expect(selected == [1, 2],
