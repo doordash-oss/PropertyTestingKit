@@ -102,6 +102,13 @@ if ! codesign -v "$LOCAL_RUNTIME/libTesting.dylib" 2>/dev/null; then
     codesign -s - "$SWIFT_BUILD/lib/swift/host/plugins/testing/libTestingMacros.dylib" 2>/dev/null
 fi
 
+# Build the LLVM pass plugins that provide compile-time coverage instrumentation
+# (EmitCmpTrace + TagCompilerGenerated). Instrumented targets load them via
+# -load-pass-plugin (see Package.swift). They link against this toolchain's LLVM.
+echo "=== Building LLVM pass plugins ==="
+BUILD_ROOT="$BUILD_ROOT" ./scripts/build-llvm-plugins.sh
+echo ""
+
 # First argument determines the command (build or test)
 CMD="${1:-build}"
 
