@@ -36,33 +36,36 @@ public func arraySequenceInsertionMutator<Element: MutatorProviding & Sendable>(
     return Mutator<[Element]>(
         seeds: seeds,
         mutate: { value, rng in
-            var results: [[Element]] = []
+            // Pick one applicable candidate at random, then compute only it.
+            var strategies: [() -> [Element]] = []
             let seedElements = Array(elementMutator.seeds.prefix(5))
 
             // Insert 2-element sequence
             if seedElements.count >= 2 {
                 let seq2 = Array(seedElements.prefix(2))
-                results.append(seq2 + value)
-                results.append(value + seq2)
+                strategies.append { seq2 + value }
+                strategies.append { value + seq2 }
             }
 
             // Insert 3-element sequence
             if seedElements.count >= 3 {
                 let seq3 = Array(seedElements.prefix(3))
-                results.append(seq3 + value)
-                results.append(value + seq3)
+                strategies.append { seq3 + value }
+                strategies.append { value + seq3 }
 
                 // Insert in middle
                 if !value.isEmpty {
-                    let mid = value.count / 2
-                    var copy = value
-                    copy.insert(contentsOf: seq3, at: mid)
-                    results.append(copy)
+                    strategies.append {
+                        let mid = value.count / 2
+                        var copy = value
+                        copy.insert(contentsOf: seq3, at: mid)
+                        return copy
+                    }
                 }
             }
 
-            guard !results.isEmpty else { return value }
-            return results[Int.random(in: 0..<results.count, using: &rng)]
+            guard let strategy = strategies.randomElement(using: &rng) else { return value }
+            return strategy()
         },
         generate: { rng in
             // Generate arrays containing seed sequences

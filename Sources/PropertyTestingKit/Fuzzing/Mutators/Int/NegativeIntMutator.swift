@@ -17,13 +17,14 @@ import Dependencies
 private let _negativeIntSeeds: [Int] = [-1, -2, -10, -100, -1000, Int.min, Int.min + 1]
 
 private func _negativeIntMutate(_ value: Int, _ rng: inout FastRNG) -> Int {
-    var results: [Int] = []
+    // Pick one applicable strategy lazily; preserves uniform distribution over applicable candidates.
+    var strategies: [() -> Int] = []
     // Use wrapping negation to avoid overflow when value is Int.min
-    results.append(0 &- value)
-    if value > Int.min { results.append(value - 1) }
-    if value < -1 { results.append(value / 2) }
-    guard !results.isEmpty else { return value }
-    return results[Int.random(in: 0..<results.count, using: &rng)]
+    strategies.append { 0 &- value }
+    if value > Int.min { strategies.append { value - 1 } }
+    if value < -1 { strategies.append { value / 2 } }
+    guard let strategy = strategies.randomElement(using: &rng) else { return value }
+    return strategy()
 }
 
 private func _negativeIntGenerate(_ rng: inout FastRNG) -> Int {

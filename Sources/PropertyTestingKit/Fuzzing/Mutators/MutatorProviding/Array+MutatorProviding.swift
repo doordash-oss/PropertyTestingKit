@@ -34,50 +34,57 @@ extension Array: MutatorProviding where Element: MutatorProviding {
         return Mutator<[Element]>(
             seeds: seedsArray,
             mutate: { value, rng in
-                // One candidate per variant family; a random index/element/seed
-                // stands in for the old per-position enumeration.
-                var mutations: [[Element]] = []
-                mutations.reserveCapacity(6)
+                // Pick one applicable variant family at random, then compute only it.
+                var strategies: [(inout FastRNG) -> [Element]] = []
+                strategies.reserveCapacity(6)
 
                 // === Removal mutation (drop a random element) ===
                 if !value.isEmpty {
-                    var copy = value
-                    copy.remove(at: Int.random(in: 0..<value.count, using: &rng))
-                    mutations.append(copy)
+                    strategies.append { rng in
+                        var copy = value
+                        copy.remove(at: Int.random(in: 0..<value.count, using: &rng))
+                        return copy
+                    }
                 }
 
                 // === Append element (incremental growth) ===
                 if !elementSeeds.isEmpty {
-                    let element = elementSeeds[Int.random(in: 0..<elementSeeds.count, using: &rng)]
-                    mutations.append(value + [element])
+                    strategies.append { rng in
+                        let element = elementSeeds[Int.random(in: 0..<elementSeeds.count, using: &rng)]
+                        return value + [element]
+                    }
                 }
 
                 // === Prepend element ===
                 if !elementSeeds.isEmpty {
-                    let element = elementSeeds[Int.random(in: 0..<Swift.min(2, elementSeeds.count), using: &rng)]
-                    mutations.append([element] + value)
+                    strategies.append { rng in
+                        let element = elementSeeds[Int.random(in: 0..<Swift.min(2, elementSeeds.count), using: &rng)]
+                        return [element] + value
+                    }
                 }
 
                 // === Array doubling (exponential growth) ===
                 if value.count > 0 {
-                    mutations.append(value + value)
+                    strategies.append { _ in value + value }
                 }
 
                 // === Mutate a random element ===
                 if !value.isEmpty {
-                    let i = Int.random(in: 0..<value.count, using: &rng)
-                    var copy = value
-                    copy[i] = elementMutator.mutate(value[i], &rng)
-                    mutations.append(copy)
+                    strategies.append { rng in
+                        let i = Int.random(in: 0..<value.count, using: &rng)
+                        var copy = value
+                        copy[i] = elementMutator.mutate(value[i], &rng)
+                        return copy
+                    }
                 }
 
                 // === Reversal ===
                 if value.count > 1 {
-                    mutations.append(value.reversed())
+                    strategies.append { _ in value.reversed() }
                 }
 
-                guard !mutations.isEmpty else { return value }
-                return mutations[Int.random(in: 0..<mutations.count, using: &rng)]
+                guard let strategy = strategies.randomElement(using: &rng) else { return value }
+                return strategy(&rng)
             },
             generate: { rng in
                 // Decide length with bias toward smaller arrays

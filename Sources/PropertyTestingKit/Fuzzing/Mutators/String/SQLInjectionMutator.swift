@@ -28,15 +28,15 @@ private let _sqlInjectionSeeds: [String] = [
 ]
 
 private func _sqlInjectionMutate(_ value: String, _ rng: inout FastRNG) -> String {
-    var results: [String] = []
-    results.append("'" + value)
-    results.append(value + "'")
-    results.append(value + "; DROP TABLE users; --")
-    results.append(value + " OR 1=1")
-    results.append(value.replacingOccurrences(of: "'", with: "''"))
-    results.append(value + "/**/")
-    guard !results.isEmpty else { return value }
-    return results[Int.random(in: 0..<results.count, using: &rng)]
+    // Pick one strategy at random and compute only that mutant.
+    switch Int.random(in: 0..<6, using: &rng) {
+    case 0: return "'" + value
+    case 1: return value + "'"
+    case 2: return value + "; DROP TABLE users; --"
+    case 3: return value + " OR 1=1"
+    case 4: return value.replacingOccurrences(of: "'", with: "''")
+    default: return value + "/**/"
+    }
 }
 
 private func _sqlInjectionGenerate(_ rng: inout FastRNG) -> String {

@@ -66,6 +66,36 @@ struct SingleValueMutatorTests {
         #expect(seen.count >= 2)
     }
 
+    @Test("Double default mutator never returns the input for fixed-point-prone values")
+    func doubleDefaultMutatorNeverIdentity() {
+        var rng = FastRNG()
+        // 0.0 (where `-value` and `value * 2` collapse to 0.0) and large
+        // magnitudes (where ±1 / ±0.1 fall below the ULP and round back) are
+        // the values a single-strategy pick can leave unchanged.
+        let prone: [Double] = [0.0, -0.0, 1e300, -1e300, .greatestFiniteMagnitude]
+        for value in prone {
+            for _ in 0..<500 {
+                #expect(Double.defaultMutator.mutate(value, &rng) != value,
+                        "identity mutant produced for \(value)")
+            }
+        }
+    }
+
+    @Test("String default mutator never returns the input for multi-byte strings")
+    func stringDefaultMutatorNeverIdentityMultibyte() {
+        var rng = FastRNG()
+        // utf8.count exceeds the Character count, so a byte-length-vs-`prefix`
+        // mismatch in the length-targeted branch could slice back to the whole
+        // string.
+        let prone = ["é", "café", "🎉🎉🎉", "ñoño"]
+        for value in prone {
+            for _ in 0..<500 {
+                #expect(String.defaultMutator.mutate(value, &rng) != value,
+                        "identity mutant produced for \(value)")
+            }
+        }
+    }
+
     // MARK: - Composition
 
     @Test("Composed mutator draws from every component and nothing else")

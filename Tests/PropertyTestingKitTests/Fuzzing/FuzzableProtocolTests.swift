@@ -137,10 +137,11 @@ struct MutatorProvidingTests {
 
         #expect(seen.contains(1.0))    // +1
         #expect(seen.contains(-1.0))   // -1
-        #expect(seen.contains(0.0))    // *2 (0*2=0)
         #expect(seen.contains(0.1))    // +0.1
         #expect(seen.contains(-0.1))   // -0.1
-        // Should NOT contain /2 since value is 0
+        // Identity candidates are now filtered out: -0.0, 0*2, and 0/2 all
+        // equal the input, so a mutant of 0.0 is never 0.0.
+        #expect(!seen.contains(0.0))
     }
 
     @Test("UInt seeds include boundary values")

@@ -21,13 +21,13 @@ private let _httpStatusCodeSeeds: [Int] = [
 ]
 
 private func _httpStatusCodeMutate(_ value: Int, _ rng: inout FastRNG) -> Int {
-    var results: [Int] = []
-    results.append(value + 100)
-    results.append(value - 100)
-    results.append(value % 600)
-    results = results.filter { $0 >= 0 }
-    guard !results.isEmpty else { return value }
-    return results[Int.random(in: 0..<results.count, using: &rng)]
+    // Pick one applicable strategy lazily; preserves uniform distribution over non-negative candidates.
+    var strategies: [() -> Int] = []
+    if value + 100 >= 0 { strategies.append { value + 100 } }
+    if value - 100 >= 0 { strategies.append { value - 100 } }
+    if value % 600 >= 0 { strategies.append { value % 600 } }
+    guard let strategy = strategies.randomElement(using: &rng) else { return value }
+    return strategy()
 }
 
 private func _httpStatusCodeGenerate(_ rng: inout FastRNG) -> Int {

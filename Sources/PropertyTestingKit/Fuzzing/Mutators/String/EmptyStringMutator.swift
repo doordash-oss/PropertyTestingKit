@@ -17,19 +17,16 @@ import Dependencies
 private let _emptyStringSeeds: [String] = ["", " ", "\t", "\n", "\0"]
 
 private func _emptyStringMutate(_ value: String, _ rng: inout FastRNG) -> String {
-    var results: [String] = []
+    // Collect the applicable strategies as cheap closures, then run exactly one
+    // (uniform over the applicable set, same as the old build-all-then-pick).
+    var strategies: [() -> String] = [{ value + value }]
     if !value.isEmpty {
-        results.append("")
-        if let first = value.first {
-            results.append(String(first))
-        }
-        if let last = value.last {
-            results.append(String(last))
-        }
+        strategies.append { "" }
+        if let first = value.first { strategies.append { String(first) } }
+        if let last = value.last { strategies.append { String(last) } }
     }
-    results.append(value + value)
-    guard !results.isEmpty else { return value }
-    return results[Int.random(in: 0..<results.count, using: &rng)]
+    guard let strategy = strategies.randomElement(using: &rng) else { return value }
+    return strategy()
 }
 
 private func _emptyStringGenerate(_ rng: inout FastRNG) -> String {

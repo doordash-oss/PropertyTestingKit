@@ -37,39 +37,47 @@ public func arrayRepeatedValuesMutator<Element: MutatorProviding & Sendable>() -
     return Mutator<[Element]>(
         seeds: seeds,
         mutate: { value, rng in
-            var results: [[Element]] = []
+            // Pick one applicable strategy at random, then compute only it. A random
+            // index/seed is drawn inside the chosen closure (only one runs).
+            var strategies: [(inout FastRNG) -> [Element]] = []
 
             // Create a version with more copies of a random existing element
             if !value.isEmpty {
-                let i = Int.random(in: 0..<value.count, using: &rng)
-
-                // Add 2 more copies of this element
-                var copy = value
-                copy.append(value[i])
-                copy.append(value[i])
-                results.append(copy)
+                strategies.append { rng in
+                    let i = Int.random(in: 0..<value.count, using: &rng)
+                    var copy = value
+                    copy.append(value[i])
+                    copy.append(value[i])
+                    return copy
+                }
 
                 // Replace other elements with this one
                 if value.count >= 3 {
-                    var allSame = value
-                    for j in allSame.indices.prefix(3) {
-                        allSame[j] = value[i]
+                    strategies.append { rng in
+                        let i = Int.random(in: 0..<value.count, using: &rng)
+                        var allSame = value
+                        for j in allSame.indices.prefix(3) {
+                            allSame[j] = value[i]
+                        }
+                        return allSame
                     }
-                    results.append(allSame)
                 }
             }
 
             // Create an array with a random seed repeated
-            if let element = elementMutator.seeds.prefix(3).randomElement(using: &rng) {
-                var withRepeats = value
-                withRepeats.append(element)
-                withRepeats.append(element)
-                withRepeats.append(element)
-                results.append(withRepeats)
+            if !elementMutator.seeds.prefix(3).isEmpty {
+                strategies.append { rng in
+                    guard let element = elementMutator.seeds.prefix(3).randomElement(using: &rng) else { return value }
+                    var withRepeats = value
+                    withRepeats.append(element)
+                    withRepeats.append(element)
+                    withRepeats.append(element)
+                    return withRepeats
+                }
             }
 
-            guard !results.isEmpty else { return value }
-            return results[Int.random(in: 0..<results.count, using: &rng)]
+            guard let strategy = strategies.randomElement(using: &rng) else { return value }
+            return strategy(&rng)
         },
         generate: { rng in
             // Generate arrays with repeated values

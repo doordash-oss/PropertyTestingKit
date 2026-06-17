@@ -28,17 +28,19 @@ private let _emailSeeds: [String] = [
 ]
 
 private func _emailMutate(_ value: String, _ rng: inout FastRNG) -> String {
-    var results: [String] = []
-    results.append(value.replacingOccurrences(of: "@", with: "@@"))
-    results.append(value.replacingOccurrences(of: ".", with: ".."))
-    results.append(value + ".com")
-    results.append("test@" + value)
+    // Pick one applicable strategy at random and compute only that mutant.
+    var strategies: [() -> String] = [
+        { value.replacingOccurrences(of: "@", with: "@@") },
+        { value.replacingOccurrences(of: ".", with: "..") },
+        { value + ".com" },
+        { "test@" + value },
+    ]
     if let atIndex = value.firstIndex(of: "@") {
-        results.append(String(value[..<atIndex]))
-        results.append(String(value[value.index(after: atIndex)...]))
+        strategies.append { String(value[..<atIndex]) }
+        strategies.append { String(value[value.index(after: atIndex)...]) }
     }
-    guard !results.isEmpty else { return value }
-    return results[Int.random(in: 0..<results.count, using: &rng)]
+    guard let strategy = strategies.randomElement(using: &rng) else { return value }
+    return strategy()
 }
 
 private func _emailGenerate(_ rng: inout FastRNG) -> String {

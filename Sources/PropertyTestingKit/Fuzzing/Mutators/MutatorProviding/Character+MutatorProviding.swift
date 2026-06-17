@@ -25,10 +25,10 @@ private let _whitespace: [Character] = [" ", "\t", "\n", "\r"]
 private let _emojis: [Character] = ["😀", "🎉", "🚀", "💡", "⚡", "🔥", "✨", "🌟"]
 
 private func _characterMutate(_ value: Character, _ rng: inout FastRNG) -> Character {
-    let mutations = _characterSeeds.filter { $0 != value }
-
-    guard !mutations.isEmpty else { return value }
-    return mutations[Int.random(in: 0..<mutations.count, using: &rng)]
+    // Pick ONE applicable seed (any seed other than the current value).
+    let candidates = _characterSeeds.filter { $0 != value }
+    guard let mutant = candidates.randomElement(using: &rng) else { return value }
+    return mutant
 }
 
 private func _characterGenerate(_ rng: inout FastRNG) -> Character {

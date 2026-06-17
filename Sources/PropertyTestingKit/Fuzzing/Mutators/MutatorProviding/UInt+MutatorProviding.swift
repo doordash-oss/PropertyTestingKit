@@ -17,14 +17,15 @@ import Dependencies
 private let _uintSeeds: [UInt] = [0, 1, UInt.max, UInt.max / 2, 42, 100, 1000]
 
 private func _uintMutate(_ value: UInt, _ rng: inout FastRNG) -> UInt {
-    var mutations: [UInt] = []
-    if value != UInt.max { mutations.append(value + 1) }
-    if value != 0 { mutations.append(value - 1) }
-    if value != 0 { mutations.append(value / 2) }
-    if value != 0 && value <= UInt.max / 2 { mutations.append(value * 2) }
+    // Enumerate the applicable candidate closures, then pick ONE lazily.
+    var strategies: [() -> UInt] = []
+    if value != UInt.max { strategies.append { value + 1 } }
+    if value != 0 { strategies.append { value - 1 } }
+    if value != 0 { strategies.append { value / 2 } }
+    if value != 0 && value <= UInt.max / 2 { strategies.append { value * 2 } }
 
-    guard !mutations.isEmpty else { return value }
-    return mutations[Int.random(in: 0..<mutations.count, using: &rng)]
+    guard let strategy = strategies.randomElement(using: &rng) else { return value }
+    return strategy()
 }
 
 private func _uintGenerate(_ rng: inout FastRNG) -> UInt {

@@ -17,13 +17,14 @@ import Dependencies
 private let _powerOfTwoSeeds: [Int] = [1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768, 65536]
 
 private func _powerOfTwoMutate(_ value: Int, _ rng: inout FastRNG) -> Int {
-    var results: [Int] = []
-    if value > 0 && value < Int.max / 2 { results.append(value * 2) }
-    if value > 1 { results.append(value / 2) }
-    if value < Int.max { results.append(value + 1) }
-    if value > Int.min { results.append(value - 1) }
-    guard !results.isEmpty else { return value }
-    return results[Int.random(in: 0..<results.count, using: &rng)]
+    // Pick one applicable strategy lazily; preserves uniform distribution over applicable candidates.
+    var strategies: [() -> Int] = []
+    if value > 0 && value < Int.max / 2 { strategies.append { value * 2 } }
+    if value > 1 { strategies.append { value / 2 } }
+    if value < Int.max { strategies.append { value + 1 } }
+    if value > Int.min { strategies.append { value - 1 } }
+    guard let strategy = strategies.randomElement(using: &rng) else { return value }
+    return strategy()
 }
 
 private func _powerOfTwoGenerate(_ rng: inout FastRNG) -> Int {

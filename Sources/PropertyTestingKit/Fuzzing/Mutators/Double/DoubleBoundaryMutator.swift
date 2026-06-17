@@ -23,17 +23,11 @@ private let _doubleBoundarySeeds: [Double] = [
 ]
 
 private func _doubleBoundaryMutate(_ value: Double, _ rng: inout FastRNG) -> Double {
-    var results: [Double] = []
-    results.append(value + 1)
-    results.append(value - 1)
-    results.append(value * 2)
-    results.append(value / 2)
-    results.append(-value)
-    results.append(value + 0.1)
-    results.append(value - 0.1)
-    results = results.filter(\.isFinite)
-    guard !results.isEmpty else { return value }
-    return results[Int.random(in: 0..<results.count, using: &rng)]
+    // Pick one applicable strategy lazily; preserves uniform distribution over finite candidates.
+    let candidates = [value + 1, value - 1, value * 2, value / 2, -value, value + 0.1, value - 0.1]
+    let finite = candidates.filter(\.isFinite)
+    guard let result = finite.randomElement(using: &rng) else { return value }
+    return result
 }
 
 private func _doubleBoundaryGenerate(_ rng: inout FastRNG) -> Double {

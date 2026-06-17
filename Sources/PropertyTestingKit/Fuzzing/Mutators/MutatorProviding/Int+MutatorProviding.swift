@@ -54,38 +54,36 @@ private let _intSeeds: [Int] = [
 ]
 
 private func _intMutate(_ value: Int, _ rng: inout FastRNG) -> Int {
-    // Enumerate the candidate neighborhood, then pick ONE: the mutator's job
-    // is variety per call, not effort (issue #41).
-    // Pre-allocate: up to 7 basic + 8 divisibility = 15 mutations
-    var mutations: [Int] = []
-    mutations.reserveCapacity(15)
+    // Enumerate the applicable candidate closures, then pick ONE lazily: the
+    // mutator's job is variety per call, not effort (issue #41).
+    var strategies: [() -> Int] = []
 
     // Basic arithmetic mutations (with overflow protection)
-    if value != Int.max { mutations.append(value + 1) }
-    if value != Int.min { mutations.append(value - 1) }
-    if value != 0 && value != Int.min { mutations.append(-value) }  // -Int.min overflows
-    if value != 0 { mutations.append(value / 2) }
-    if value > 0 && value <= Int.max / 2 { mutations.append(value * 2) }
-    if value < 0 && value >= Int.min / 2 { mutations.append(value * 2) }
+    if value != Int.max { strategies.append { value + 1 } }
+    if value != Int.min { strategies.append { value - 1 } }
+    if value != 0 && value != Int.min { strategies.append { -value } }  // -Int.min overflows
+    if value != 0 { strategies.append { value / 2 } }
+    if value > 0 && value <= Int.max / 2 { strategies.append { value * 2 } }
+    if value < 0 && value >= Int.min / 2 { strategies.append { value * 2 } }
 
     // Bit manipulation
-    if value != 0 { mutations.append(value ^ 1) }  // Flip LSB
+    if value != 0 { strategies.append { value ^ 1 } }  // Flip LSB
 
     // Divisibility-aware mutations: try nearby multiples of common factors
     for factor in _intDivisibilityFactors {
         let nearestMultiple = (value / factor) * factor
         if nearestMultiple != value && nearestMultiple != 0 {
-            mutations.append(nearestMultiple)
+            strategies.append { nearestMultiple }
         }
         // Also try the next multiple up
         let (next, overflow) = nearestMultiple.addingReportingOverflow(factor)
         if !overflow && next != value {
-            mutations.append(next)
+            strategies.append { next }
         }
     }
 
-    guard !mutations.isEmpty else { return value }
-    return mutations[Int.random(in: 0..<mutations.count, using: &rng)]
+    guard let strategy = strategies.randomElement(using: &rng) else { return value }
+    return strategy()
 }
 
 private func _intGenerate(_ rng: inout FastRNG) -> Int {

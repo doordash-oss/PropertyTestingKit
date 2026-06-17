@@ -21,13 +21,14 @@ private let _portSeeds: [Int] = [
 ]
 
 private func _portMutate(_ value: Int, _ rng: inout FastRNG) -> Int {
-    var results: [Int] = []
-    if value < 65535 { results.append(value + 1) }
-    if value > 0 { results.append(value - 1) }
-    results.append(value % 65536)
-    if value > 0 && value < 1024 { results.append(value + 1024) }
-    guard !results.isEmpty else { return value }
-    return results[Int.random(in: 0..<results.count, using: &rng)]
+    // Pick one applicable strategy lazily; preserves uniform distribution over applicable candidates.
+    var strategies: [() -> Int] = []
+    if value < 65535 { strategies.append { value + 1 } }
+    if value > 0 { strategies.append { value - 1 } }
+    strategies.append { value % 65536 }
+    if value > 0 && value < 1024 { strategies.append { value + 1024 } }
+    guard let strategy = strategies.randomElement(using: &rng) else { return value }
+    return strategy()
 }
 
 private func _portGenerate(_ rng: inout FastRNG) -> Int {

@@ -28,15 +28,15 @@ private let _urlSeeds: [String] = [
 ]
 
 private func _urlMutate(_ value: String, _ rng: inout FastRNG) -> String {
-    var results: [String] = []
-    results.append(value.replacingOccurrences(of: "https", with: "http"))
-    results.append(value.replacingOccurrences(of: "http", with: "https"))
-    results.append(value + "/../../../etc/passwd")
-    results.append(value + "?<script>alert(1)</script>")
-    results.append(value.replacingOccurrences(of: "/", with: "//"))
-    results.append("javascript:" + value)
-    guard !results.isEmpty else { return value }
-    return results[Int.random(in: 0..<results.count, using: &rng)]
+    // Pick one strategy at random and compute only that mutant.
+    switch Int.random(in: 0..<6, using: &rng) {
+    case 0: return value.replacingOccurrences(of: "https", with: "http")
+    case 1: return value.replacingOccurrences(of: "http", with: "https")
+    case 2: return value + "/../../../etc/passwd"
+    case 3: return value + "?<script>alert(1)</script>"
+    case 4: return value.replacingOccurrences(of: "/", with: "//")
+    default: return "javascript:" + value
+    }
 }
 
 private func _urlGenerate(_ rng: inout FastRNG) -> String {
