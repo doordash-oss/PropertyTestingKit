@@ -399,13 +399,15 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
             enqueuePending(queueAction.inputs, parent: nil)
 
         case .selectForMutation(let mutationAction):
-            // Generate input mutations. When scheduling, element 0 holds the
-            // schedule bytes and is mutated by the prepended schedule mutator as
-            // part of `generateMutations`, so schedule mutation is unified with
-            // input mutation — no separate schedule-byte pass.
+            // Queue a fixed burst of single-step mutants. When scheduling,
+            // element 0 holds the schedule bytes and is mutated by the
+            // prepended schedule mutator like any other position, so schedule
+            // mutation is unified with input mutation.
             // Each mutant carries the action's originID so iteration events can
             // report the lineage back to the emitting plugin.
-            let mutants = generateMutations(mutationAction.input)
+            let mutants = (0..<mutationBurstLength).map { _ in
+                generateMutation(mutationAction.input)
+            }
             enqueuePending(mutants, parent: mutationAction.originID)
 
         case .submitToCorpus(let corpusAction):
@@ -441,21 +443,43 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
         corpus.add(input: input, scheduleBytes: scheduleBytes, sparse: sparse, entryType: type, failure: failureInfo)
     }
 
-    /// Generate mutations for an input by mutating one position at a time.
-    /// Returns the cartesian product of mutations across all positions.
-    private func generateMutations(_ input: (repeat each Input)) -> [(repeat each Input)] {
-        let positionsMutated: [(repeat [each Input])] = (0..<inputSize).map { replacementIndex in
-            var currentIndex = 0
-            return
-                (repeat {
-                    defer { currentIndex += 1 }
-                    if currentIndex == replacementIndex {
-                        return (each mutators).mutate(each input)
-                    } else {
-                        return [(each input)]
-                    }
-                }())
-        }
-        return positionsMutated.flatMap(cartesianProduct)
+    /// Generate ONE mutant: a single mutation step at one randomly chosen
+    /// position of the input pack.
+    private func generateMutation(_ input: (repeat each Input)) -> (repeat each Input) {
+        // A 0-arity pack has no position to mutate; return it unchanged rather
+        // than trapping on `Int.random(in: 0..<0)`.
+        guard inputSize > 0 else { return input }
+        // `FastRNG` is a stateless shim over the thread-local generator, so a
+        // fresh instance draws from the same stream as the engine's own `rng`;
+        // the `inout` threading is for a uniform mutator signature, not seeding.
+        var rng = FastRNG()
+        let position = inputSize == 1 ? 0 : Int.random(in: 0..<inputSize, using: &rng)
+        return mutateOnePosition(input, position: position, rng: &rng, mutators: repeat each mutators)
     }
+}
+
+/// How many single-step mutants a `.selectForMutation` action queues.
+///
+/// Interim constant: effort per selection becomes scheduler state (focus +
+/// counter) when the pool scheduler lands; until then this preserves a
+/// burst-on-accept shape comparable to the old exhaustive-neighborhood burst.
+let mutationBurstLength = 16
+
+/// Mutate exactly `position` of the input pack with one mutator call, holding
+/// every other position fixed.
+func mutateOnePosition<each Input>(
+    _ input: (repeat each Input),
+    position: Int,
+    rng: inout FastRNG,
+    mutators: repeat Mutator<each Input>
+) -> (repeat each Input) {
+    var currentIndex = 0
+    return (repeat {
+        defer { currentIndex += 1 }
+        if currentIndex == position {
+            return (each mutators).mutate(each input, &rng)
+        } else {
+            return (each input)
+        }
+    }())
 }

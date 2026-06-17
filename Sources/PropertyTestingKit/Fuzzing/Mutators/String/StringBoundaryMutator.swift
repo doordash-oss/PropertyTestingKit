@@ -23,15 +23,20 @@ private let _stringBoundarySeeds: [String] = [
     String(repeating: "🎉", count: 100),
 ]
 
-private func _stringBoundaryMutate(_ value: String) -> [String] {
-    var results: [String] = []
-    results.append(value + value)
-    results.append(String(repeating: value, count: 10))
+private func _stringBoundaryMutate(_ value: String, _ rng: inout FastRNG) -> String {
+    // Pick one applicable strategy at random and compute only that mutant.
+    var strategies: [() -> String] = [
+        { value + value },
+        { String(repeating: value, count: 10) },
+    ]
     if value.count > 1 {
-        let mid = value.index(value.startIndex, offsetBy: value.count / 2)
-        results.append(String(value[..<mid]))
+        strategies.append {
+            let mid = value.index(value.startIndex, offsetBy: value.count / 2)
+            return String(value[..<mid])
+        }
     }
-    return results
+    guard let strategy = strategies.randomElement(using: &rng) else { return value }
+    return strategy()
 }
 
 private func _stringBoundaryGenerate(_ rng: inout FastRNG) -> String {

@@ -29,13 +29,13 @@ struct MutatorStructTests {
     func mutatorStoresSeedsAndClosures() async {
         let mutator = Mutator<String>(
             seeds: ["test1", "test2"],
-            mutate: { [$0.uppercased()] },
+            mutate: { value, _ in value.uppercased() },
             generate: { _ in "generated" }
         )
 
-        #expect(mutator.seeds == ["test1", "test2"])
-        #expect(mutator.mutate("hello") == ["HELLO"])
         var rng = FastRNG()
+        #expect(mutator.seeds == ["test1", "test2"])
+        #expect(mutator.mutate("hello", &rng) == "HELLO")
         #expect(mutator.generate(&rng) == "generated")
     }
 
@@ -49,32 +49,40 @@ struct MutatorStructTests {
         #expect(composed.seeds.contains("\t"))
     }
 
-    @Test("Mutator.compose combines mutations from all mutators")
+    @Test("Mutator.compose draws mutations from every component across draws")
     func composeCombinesMutations() async {
-        let composed = Mutator.compose([emptyStringMutator, whitespaceMutator])
-        let mutations = composed.mutate("test")
+        let appendA = Mutator<String>(seeds: ["a"], mutate: { value, _ in value + "A" })
+        let appendB = Mutator<String>(seeds: ["b"], mutate: { value, _ in value + "B" })
+        let composed = Mutator.compose([appendA, appendB])
 
-        // Should have mutations from both strategies
-        #expect(mutations.count > 1)
+        var rng = FastRNG()
+        var seen = Set<String>()
+        for _ in 0..<200 { seen.insert(composed.mutate("test", &rng)) }
+
+        // Should draw mutations from both strategies
+        #expect(seen.contains("testA"))
+        #expect(seen.contains("testB"))
     }
 
-    @Test("MutatorProviding defaultMutator provides seeds and mutations")
+    @Test("MutatorProviding defaultMutator provides seeds and a mutant")
     func defaultMutatorProvidesSeedsAndMutations() async {
         let mutator = Int.defaultMutator
 
+        var rng = FastRNG()
         #expect(!mutator.seeds.isEmpty)
-        #expect(!mutator.mutate(5).isEmpty)
+        #expect(mutator.mutate(5, &rng) != 5)
     }
 
     @Test("Mutator works with custom seeds and mutate")
     func mutatorWorksWithCustomSeedsAndMutate() async {
         let mutator = Mutator<Int>(
             seeds: [1, 2, 3],
-            mutate: { [$0 * 2] }
+            mutate: { value, _ in value * 2 }
         )
 
+        var rng = FastRNG()
         #expect(mutator.seeds == [1, 2, 3])
-        #expect(mutator.mutate(5) == [10])
+        #expect(mutator.mutate(5, &rng) == 10)
     }
 }
 
@@ -91,14 +99,16 @@ struct StringMutatorTests {
         #expect(mutator.seeds.contains(where: { $0.hasPrefix("+") }))
     }
 
-    @Test("PhoneNumber mutator generates mutations")
+    @Test("PhoneNumber mutator draws formatting mutations")
     func phoneNumberMutations() async {
         let mutator = phoneNumberMutator
-        let mutations = mutator.mutate("555-1234")
 
-        #expect(!mutations.isEmpty)
-        // Should include digit-only version
-        #expect(mutations.contains(where: { $0.allSatisfy(\.isNumber) || $0.hasPrefix("+") }))
+        var rng = FastRNG()
+        var seen = Set<String>()
+        for _ in 0..<200 { seen.insert(mutator.mutate("555-1234", &rng)) }
+
+        // Should include digit-only (or "+"-prefixed) version
+        #expect(seen.contains(where: { $0.allSatisfy(\.isNumber) || $0.hasPrefix("+") }))
     }
 
     @Test("Email mutator has valid seeds")
@@ -109,14 +119,16 @@ struct StringMutatorTests {
         #expect(mutator.seeds.contains(where: { $0.contains("@") }))
     }
 
-    @Test("Email mutator generates mutations")
+    @Test("Email mutator draws malformed variants")
     func emailMutations() async {
         let mutator = emailMutator
-        let mutations = mutator.mutate("test@example.com")
 
-        #expect(!mutations.isEmpty)
+        var rng = FastRNG()
+        var seen = Set<String>()
+        for _ in 0..<200 { seen.insert(mutator.mutate("test@example.com", &rng)) }
+
         // Should include double @ version
-        #expect(mutations.contains(where: { $0.contains("@@") }))
+        #expect(seen.contains(where: { $0.contains("@@") }))
     }
 
     @Test("URL mutator has valid seeds")
@@ -137,13 +149,15 @@ struct StringMutatorTests {
         #expect(mutator.seeds.contains(where: { $0.contains("OR") }))
     }
 
-    @Test("SQL injection mutator generates attacks")
+    @Test("SQL injection mutator draws attacks")
     func sqlMutations() async {
         let mutator = sqlInjectionMutator
-        let mutations = mutator.mutate("admin")
 
-        #expect(!mutations.isEmpty)
-        #expect(mutations.contains(where: { $0.contains("'") }))
+        var rng = FastRNG()
+        var seen = Set<String>()
+        for _ in 0..<200 { seen.insert(mutator.mutate("admin", &rng)) }
+
+        #expect(seen.contains(where: { $0.contains("'") }))
     }
 
     @Test("XSS mutator has script tags")
@@ -212,16 +226,19 @@ struct IntMutatorTests {
         #expect(mutator.seeds.contains(Int.min))
     }
 
-    @Test("Boundary mutator generates useful mutations")
+    @Test("Boundary mutator draws useful mutations")
     func boundaryMutations() async {
         let mutator = intBoundaryMutator
-        let mutations = mutator.mutate(100)
 
-        #expect(mutations.contains(101)) // +1
-        #expect(mutations.contains(99))  // -1
-        #expect(mutations.contains(200)) // *2
-        #expect(mutations.contains(50))  // /2
-        #expect(mutations.contains(-100)) // negation
+        var rng = FastRNG()
+        var seen = Set<Int>()
+        for _ in 0..<200 { seen.insert(mutator.mutate(100, &rng)) }
+
+        #expect(seen.contains(101)) // +1
+        #expect(seen.contains(99))  // -1
+        #expect(seen.contains(200)) // *2
+        #expect(seen.contains(50))  // /2
+        #expect(seen.contains(-100)) // negation
     }
 
     @Test("Port mutator has common ports")
@@ -295,8 +312,9 @@ struct BoolMutatorTests {
     func boolMutations() async {
         let mutator = Bool.defaultMutator
 
-        #expect(mutator.mutate(true) == [false])
-        #expect(mutator.mutate(false) == [true])
+        var rng = FastRNG()
+        #expect(mutator.mutate(true, &rng) == false)
+        #expect(mutator.mutate(false, &rng) == true)
     }
 }
 
@@ -355,7 +373,7 @@ struct MutatorFuzzEngineTests {
 
         let mutator = Mutator<String>(
             seeds: ["custom1", "custom2"],
-            mutate: { _ in [] }
+            mutate: { value, _ in value }
         )
 
         // Ephemeral: no on-disk corpus, so a stale one can't short-circuit the
@@ -380,7 +398,7 @@ struct MutatorFuzzEngineTests {
 
         let mutator = Mutator<String>(
             seeds: ["first", "second", "third"],
-            mutate: { [$0 + "-mutated"] }
+            mutate: { value, _ in value + "-mutated" }
         )
 
         // Ephemeral: no on-disk corpus, so a stale one can't short-circuit the
@@ -412,7 +430,7 @@ struct MutatorPublicAPITests {
 
         let mutator = Mutator<String>(
             seeds: ["test1", "test2"],
-            mutate: { _ in [] }
+            mutate: { value, _ in value }
         )
 
         // Ephemeral: in-memory only, so the run never writes a corpus to disk.
@@ -464,11 +482,11 @@ struct MutatorPublicAPITests {
         } operation: {
             let stringMutator = Mutator<String>(
                 seeds: ["hello", "world"],
-                mutate: { [$0.uppercased()] }
+                mutate: { value, _ in value.uppercased() }
             )
             let intMutator = Mutator<Int>(
                 seeds: [1, 2, 3],
-                mutate: { [$0 + 1] }
+                mutate: { value, _ in value + 1 }
             )
 
             _ = try await fuzzWithMaxIterations(

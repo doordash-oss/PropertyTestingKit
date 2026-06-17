@@ -26,19 +26,21 @@ private let _phoneNumberSeeds: [String] = [
     "+0000000000000",
 ]
 
-private func _phoneNumberMutate(_ value: String) -> [String] {
-    var results: [String] = []
-    // Add/remove formatting
-    results.append(value.filter(\.isNumber))
-    results.append("+1" + value)
-    results.append("(" + value + ")")
+private func _phoneNumberMutate(_ value: String, _ rng: inout FastRNG) -> String {
+    // Pick one applicable strategy at random and compute only that mutant.
+    var strategies: [() -> String] = [
+        { value.filter(\.isNumber) },   // add/remove formatting
+        { "+1" + value },
+        { "(" + value + ")" },
+        { value + value },
+    ]
     // Boundary mutations
     if !value.isEmpty {
-        results.append(String(value.dropFirst()))
-        results.append(String(value.dropLast()))
+        strategies.append { String(value.dropFirst()) }
+        strategies.append { String(value.dropLast()) }
     }
-    results.append(value + value)
-    return results
+    guard let strategy = strategies.randomElement(using: &rng) else { return value }
+    return strategy()
 }
 
 private func _phoneNumberGenerate(_ rng: inout FastRNG) -> String {

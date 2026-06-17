@@ -28,30 +28,36 @@ public func arrayLengthTargetedMutator<Element: MutatorProviding & Sendable>() -
 
     return Mutator<[Element]>(
         seeds: seeds,
-        mutate: { value in
-            var results: [[Element]] = []
+        mutate: { value, rng in
+            // Pick one applicable strategy at random, then compute only it.
+            var strategies: [() -> [Element]] = []
             let targetLengths = [4, 8, 10, 16, 32]
 
             for targetLength in targetLengths where value.count < targetLength {
                 // Extend with last element
                 if let last = value.last {
-                    let extension_ = Array(repeating: last, count: targetLength - value.count)
-                    results.append(value + extension_)
+                    strategies.append {
+                        let extension_ = Array(repeating: last, count: targetLength - value.count)
+                        return value + extension_
+                    }
                 }
 
                 // Extend with first seed
                 if let first = elementMutator.seeds.first {
-                    let extension_ = Array(repeating: first, count: targetLength - value.count)
-                    results.append(value + extension_)
+                    strategies.append {
+                        let extension_ = Array(repeating: first, count: targetLength - value.count)
+                        return value + extension_
+                    }
                 }
             }
 
             // Truncate to important lengths
             for targetLength in targetLengths where value.count > targetLength {
-                results.append(Array(value.prefix(targetLength)))
+                strategies.append { Array(value.prefix(targetLength)) }
             }
 
-            return results
+            guard let strategy = strategies.randomElement(using: &rng) else { return value }
+            return strategy()
         },
         generate: { rng in
             // Generate arrays at target lengths

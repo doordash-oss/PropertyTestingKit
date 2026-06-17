@@ -34,20 +34,24 @@ private let _doubleSeeds: [Double] = [
     -Double.infinity,
 ]
 
-private func _doubleMutate(_ value: Double) -> [Double] {
-    guard value.isFinite else { return _doubleNonFiniteFallback }
+private func _doubleMutate(_ value: Double, _ rng: inout FastRNG) -> Double {
+    guard value.isFinite else {
+        return _doubleNonFiniteFallback[Int.random(in: 0..<_doubleNonFiniteFallback.count, using: &rng)]
+    }
 
-    // Pre-allocate for up to 7 mutations
-    var mutations: [Double] = []
-    mutations.reserveCapacity(7)
-    mutations.append(value + 1)
-    mutations.append(value - 1)
-    mutations.append(-value)
-    if value != 0 { mutations.append(value / 2) }
-    mutations.append(value * 2)
-    mutations.append(value + 0.1)
-    mutations.append(value - 0.1)
-    return mutations
+    // Candidate neighborhood, dropping any that collapse back to `value`:
+    // `-value` is identity at 0.0 (-0.0 == 0.0), `value * 2` / `value / 2` are
+    // identity at 0.0, and the additive deltas round back when |value| is large
+    // enough that ±0.1/±1 fall below the ULP. The candidates are cheap scalars,
+    // so materialize-and-filter is the faithful way to express "non-identity".
+    let candidates: [Double] = [
+        value + 1, value - 1, -value, value * 2, value / 2, value + 0.1, value - 0.1,
+    ]
+    if let pick = candidates.filter({ $0 != value }).randomElement(using: &rng) {
+        return pick
+    }
+    // Every delta rounded back (extreme magnitude); step to an adjacent value.
+    return Bool.random(using: &rng) ? value.nextUp : value.nextDown
 }
 
 private func _doubleGenerate(_ rng: inout FastRNG) -> Double {

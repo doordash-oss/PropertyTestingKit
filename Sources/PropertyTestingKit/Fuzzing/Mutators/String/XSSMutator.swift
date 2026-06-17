@@ -27,14 +27,15 @@ private let _xssSeeds: [String] = [
     "<a href='javascript:alert(1)'>click</a>",
 ]
 
-private func _xssMutate(_ value: String) -> [String] {
-    var results: [String] = []
-    results.append("<script>" + value + "</script>")
-    results.append(value.replacingOccurrences(of: "<", with: "&lt;"))
-    results.append(value.replacingOccurrences(of: ">", with: "&gt;"))
-    results.append("<img src=x onerror=\"" + value + "\">")
-    results.append(value.replacingOccurrences(of: "script", with: "SCRIPT"))
-    return results
+private func _xssMutate(_ value: String, _ rng: inout FastRNG) -> String {
+    // Pick one strategy and build only that mutant (every strategy applies).
+    switch Int.random(in: 0..<5, using: &rng) {
+    case 0: return "<script>" + value + "</script>"
+    case 1: return value.replacingOccurrences(of: "<", with: "&lt;")
+    case 2: return value.replacingOccurrences(of: ">", with: "&gt;")
+    case 3: return "<img src=x onerror=\"" + value + "\">"
+    default: return value.replacingOccurrences(of: "script", with: "SCRIPT")
+    }
 }
 
 private func _xssGenerate(_ rng: inout FastRNG) -> String {

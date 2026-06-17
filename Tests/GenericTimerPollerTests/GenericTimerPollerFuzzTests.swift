@@ -58,7 +58,7 @@ struct ConstantPollerInput: Codable, Hashable, Sendable, MutatorProviding {
         )
         return Mutator(
             seeds: [fixed],
-            mutate: { _ in [fixed] },
+            mutate: { _, _ in fixed },
             generate: { _ in fixed }
         )
     }
@@ -99,37 +99,36 @@ struct PollerFuzzInput: Codable, Hashable, Sendable, MutatorProviding {
                     lane2: [.cancelLast, .cancelLast, .cancelLast, .cancelLast, .stopPolling]
                 ),
             ],
-            mutate: { input in
+            mutate: { input, rng in
                 var mutations: [PollerFuzzInput] = []
                 let ops = PollerOp.allCases
 
-                // Flip a single op in lane1
-                for i in input.lane1.indices {
+                // Flip a random op in lane1
+                if !input.lane1.isEmpty {
                     var copy = input
-                    let replacement = ops[Int(copy.lane1[i].rawValue + 1) % ops.count]
-                    copy.lane1[i] = replacement
+                    let i = Int.random(in: 0..<copy.lane1.count, using: &rng)
+                    copy.lane1[i] = ops[Int(copy.lane1[i].rawValue + 1) % ops.count]
                     mutations.append(copy)
                 }
-                // Flip a single op in lane2
-                for i in input.lane2.indices {
+                // Flip a random op in lane2
+                if !input.lane2.isEmpty {
                     var copy = input
-                    let replacement = ops[Int(copy.lane2[i].rawValue + 1) % ops.count]
-                    copy.lane2[i] = replacement
+                    let i = Int.random(in: 0..<copy.lane2.count, using: &rng)
+                    copy.lane2[i] = ops[Int(copy.lane2[i].rawValue + 1) % ops.count]
                     mutations.append(copy)
                 }
 
-                // Append an op to each lane
-                for op in ops {
-                    var copy1 = input
-                    copy1.lane1.append(op)
-                    mutations.append(copy1)
-
-                    var copy2 = input
-                    copy2.lane2.append(op)
-                    mutations.append(copy2)
+                // Append a random op to a lane
+                let op = ops[Int.random(in: 0..<ops.count, using: &rng)]
+                var appended = input
+                if Bool.random(using: &rng) {
+                    appended.lane1.append(op)
+                } else {
+                    appended.lane2.append(op)
                 }
+                mutations.append(appended)
 
-                // Remove an op from each lane
+                // Remove an op from a lane
                 if input.lane1.count > 1 {
                     var copy = input
                     copy.lane1.removeLast()
@@ -144,7 +143,7 @@ struct PollerFuzzInput: Codable, Hashable, Sendable, MutatorProviding {
                 // Swap lanes
                 mutations.append(PollerFuzzInput(lane1: input.lane2, lane2: input.lane1))
 
-                return mutations
+                return mutations[Int.random(in: 0..<mutations.count, using: &rng)]
             },
             generate: { rng in
                 let len1 = Int.random(in: 3...12, using: &rng)
@@ -177,26 +176,25 @@ struct SequentialPollerInput: Codable, Hashable, Sendable, MutatorProviding {
                 SequentialPollerInput(ops: [.subscribe, .subscribe, .startPolling, .cancelLast, .cancelLast, .stopPolling]),
                 SequentialPollerInput(ops: [.subscribe, .startPolling, .updateIntervalShort, .updateIntervalLong, .updateIntervalClear, .stopPolling]),
             ],
-            mutate: { input in
+            mutate: { input, rng in
                 var mutations: [SequentialPollerInput] = []
                 let ops = PollerOp.allCases
 
-                for i in input.ops.indices {
+                if !input.ops.isEmpty {
                     var copy = input
+                    let i = Int.random(in: 0..<copy.ops.count, using: &rng)
                     copy.ops[i] = ops[Int(copy.ops[i].rawValue + 1) % ops.count]
                     mutations.append(copy)
                 }
-                for op in ops {
-                    var copy = input
-                    copy.ops.append(op)
-                    mutations.append(copy)
-                }
+                var appended = input
+                appended.ops.append(ops[Int.random(in: 0..<ops.count, using: &rng)])
+                mutations.append(appended)
                 if input.ops.count > 1 {
                     var copy = input
                     copy.ops.removeLast()
                     mutations.append(copy)
                 }
-                return mutations
+                return mutations[Int.random(in: 0..<mutations.count, using: &rng)]
             },
             generate: { rng in
                 let len = Int.random(in: 3...12, using: &rng)

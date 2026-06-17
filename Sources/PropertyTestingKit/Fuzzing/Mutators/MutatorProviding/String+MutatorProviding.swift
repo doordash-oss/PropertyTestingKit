@@ -90,60 +90,69 @@ private func randomString(
     return result
 }
 
-private func _stringMutate(_ value: String) -> [String] {
-    // Pre-allocate with estimated capacity to avoid reallocations
-    var mutations: [String] = []
-    mutations.reserveCapacity(20)
+private func _stringMutate(_ value: String, _ rng: inout FastRNG) -> String {
+    // Pick one applicable strategy at random and compute only that mutant.
+    // Each `if`/`for` guard mirrors the original applicability conditions, so the
+    // distribution stays uniform over exactly the same candidate set.
 
-    // Cache count once (O(n) operation for String)
-    let valueCount = value.utf8.count  // Use utf8.count for O(1)
+    // Cache the Character count once. The length-targeted branch slices with
+    // `prefix`, which counts Characters, so the comparison must use the same
+    // unit — `utf8.count` over-counts multi-byte scalars and would let
+    // `prefix(targetLen)` return the whole string unchanged (an identity mutant).
+    let valueCount = value.count
     let isEmpty = valueCount == 0
+
+    var strategies: [() -> String] = []
+    strategies.reserveCapacity(20)
 
     // Length mutations
     if !isEmpty {
-        mutations.append(String(value.dropLast()))
-        mutations.append(String(value.dropFirst()))
+        strategies.append { String(value.dropLast()) }
+        strategies.append { String(value.dropFirst()) }
     }
-    mutations.append(value + "x")
-    mutations.append("x" + value)
+    strategies.append { value + "x" }
+    strategies.append { "x" + value }
 
     // Case mutations - only if they would differ
     let upper = value.uppercased()
-    if upper != value { mutations.append(upper) }
+    if upper != value { strategies.append { upper } }
     let lower = value.lowercased()
-    if lower != value { mutations.append(lower) }
+    if lower != value { strategies.append { lower } }
 
     // Character mutations - only for non-empty strings
     if !isEmpty, let firstChar = value.first, firstChar != "X" {
-        var result = value
-        let idx = result.startIndex
-        result.replaceSubrange(idx...idx, with: "X")
-        mutations.append(result)
+        strategies.append {
+            var result = value
+            let idx = result.startIndex
+            result.replaceSubrange(idx...idx, with: "X")
+            return result
+        }
     }
 
     // Whitespace mutations
-    mutations.append(value + " ")
-    mutations.append(" " + value)
+    strategies.append { value + " " }
+    strategies.append { " " + value }
     let trimmed = value.trimmingCharacters(in: .whitespaces)
-    if trimmed != value { mutations.append(trimmed) }
+    if trimmed != value { strategies.append { trimmed } }
 
     // Prefix mutations - use static array to avoid allocations
     for prefix in _prefixMutations {
         if !value.hasPrefix(prefix) {
-            mutations.append(prefix + value)
+            strategies.append { prefix + value }
         }
     }
 
     // Length-targeted mutations - use cached count
     for targetLen in _targetLengths {
         if valueCount < targetLen {
-            mutations.append(value + String(repeating: "x", count: targetLen - valueCount))
+            strategies.append { value + String(repeating: "x", count: targetLen - valueCount) }
         } else if valueCount > targetLen {
-            mutations.append(String(value.prefix(targetLen)))
+            strategies.append { String(value.prefix(targetLen)) }
         }
     }
 
-    return mutations
+    guard let strategy = strategies.randomElement(using: &rng) else { return value }
+    return strategy()
 }
 
 private func _stringGenerate(_ rng: inout FastRNG) -> String {

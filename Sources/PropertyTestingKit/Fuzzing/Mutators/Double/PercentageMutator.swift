@@ -16,13 +16,18 @@ import Dependencies
 
 private let _percentageSeeds: [Double] = [0.0, 0.5, 1.0, -0.1, 1.1, 0.01, 0.99, 0.001, 0.999]
 
-private func _percentageMutate(_ value: Double) -> [Double] {
-    var results: [Double] = []
-    results.append(min(1.0, value + 0.1))
-    results.append(max(0.0, value - 0.1))
-    results.append(1.0 - value)
-    results.append(value * 0.5)
-    return results
+private func _percentageMutate(_ value: Double, _ rng: inout FastRNG) -> Double {
+    // Each strategy is a fixed point for one boundary ratio (0.0 collapses the
+    // halve/decrement, 0.5 the complement, 1.0 the clamped increment), so pick
+    // uniformly among the candidates that actually change `value`.
+    let candidates: [Double] = [
+        min(1.0, value + 0.1),
+        max(0.0, value - 0.1),
+        1.0 - value,
+        value * 0.5,
+    ]
+    guard let pick = candidates.filter({ $0 != value }).randomElement(using: &rng) else { return value }
+    return pick
 }
 
 private func _percentageGenerate(_ rng: inout FastRNG) -> Double {

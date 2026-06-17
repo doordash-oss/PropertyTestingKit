@@ -273,12 +273,9 @@ extension FuzzPlugin {
         // no parent entry, so they are deliberately excluded from both sides —
         // counting them would deflate the average and trip the guard early.
         //
-        // A selection that yields zero mutants (an empty `generateMutations`,
-        // reachable only for an empty input pack or a mutator that returns `[]`)
-        // produces no attributed executions, so the guard never retires that
-        // entry. This is benign: the drain path is gated on `!fromMutationQueue`,
-        // so the engine keeps generating fresh random inputs between drains and
-        // coverage still advances; production mutators always yield >= 1 mutant.
+        // Each selection queues a fixed burst of `mutationBurstLength` mutants
+        // (mutators emit one value per call), so a selected entry always draws
+        // attributed executions and the over-fuzz guard can retire it.
         var totalExecutions = 0
         var rarityStale = false
 

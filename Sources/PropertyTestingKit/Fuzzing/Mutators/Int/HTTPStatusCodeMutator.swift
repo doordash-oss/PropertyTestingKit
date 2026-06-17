@@ -20,12 +20,17 @@ private let _httpStatusCodeSeeds: [Int] = [
     502, 503, 504, 0, -1, 999, 1000,
 ]
 
-private func _httpStatusCodeMutate(_ value: Int) -> [Int] {
-    var results: [Int] = []
-    results.append(value + 100)
-    results.append(value - 100)
-    results.append(value % 600)
-    return results.filter { $0 >= 0 }
+private func _httpStatusCodeMutate(_ value: Int, _ rng: inout FastRNG) -> Int {
+    // Build the non-negative candidates, then pick uniformly among those that
+    // actually change `value`. `value % 600` is the identity for any code in
+    // [0, 600) — exactly the standard status codes — so filtering is what keeps
+    // the mutant productive.
+    var candidates: [Int] = []
+    if value + 100 >= 0 { candidates.append(value + 100) }
+    if value - 100 >= 0 { candidates.append(value - 100) }
+    if value % 600 >= 0 { candidates.append(value % 600) }
+    guard let pick = candidates.filter({ $0 != value }).randomElement(using: &rng) else { return value }
+    return pick
 }
 
 private func _httpStatusCodeGenerate(_ rng: inout FastRNG) -> Int {

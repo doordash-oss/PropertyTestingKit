@@ -23,17 +23,19 @@ private let _intBoundarySeeds: [Int] = [
     Int(UInt8.max), Int(UInt16.max),
 ]
 
-private func _intBoundaryMutate(_ value: Int) -> [Int] {
-    var results: [Int] = []
-    if value < Int.max { results.append(value + 1) }
-    if value > Int.min { results.append(value - 1) }
+private func _intBoundaryMutate(_ value: Int, _ rng: inout FastRNG) -> Int {
+    // Pick one applicable strategy lazily; preserves uniform distribution over applicable candidates.
+    var strategies: [() -> Int] = []
+    if value < Int.max { strategies.append { value + 1 } }
+    if value > Int.min { strategies.append { value - 1 } }
     if value != 0 && value > Int.min / 2 && value < Int.max / 2 {
-        results.append(value * 2)
+        strategies.append { value * 2 }
     }
-    if value != 0 { results.append(value / 2) }
+    if value != 0 { strategies.append { value / 2 } }
     // Use wrapping negation to avoid overflow when value is Int.min
-    results.append(0 &- value)
-    return results
+    strategies.append { 0 &- value }
+    guard let strategy = strategies.randomElement(using: &rng) else { return value }
+    return strategy()
 }
 
 private func _intBoundaryGenerate(_ rng: inout FastRNG) -> Int {

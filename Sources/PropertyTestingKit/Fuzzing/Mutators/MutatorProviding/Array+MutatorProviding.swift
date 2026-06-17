@@ -33,46 +33,61 @@ extension Array: MutatorProviding where Element: MutatorProviding {
 
         return Mutator<[Element]>(
             seeds: seedsArray,
-            mutate: { value in
-                var mutations: [[Element]] = []
+            mutate: { value, rng in
+                // Pick one applicable variant family at random, then compute only it.
+                var strategies: [(inout FastRNG) -> [Element]] = []
+                strategies.reserveCapacity(6)
 
-                // === Removal mutations ===
-                for i in value.indices {
-                    var copy = value
-                    copy.remove(at: i)
-                    mutations.append(copy)
+                // === Removal mutation (drop a random element) ===
+                if !value.isEmpty {
+                    strategies.append { rng in
+                        var copy = value
+                        copy.remove(at: Int.random(in: 0..<value.count, using: &rng))
+                        return copy
+                    }
                 }
 
-                // === Append elements (incremental growth) ===
-                for element in elementMutator.seeds.prefix(3) {
-                    mutations.append(value + [element])
+                // === Append element (incremental growth) ===
+                if !elementSeeds.isEmpty {
+                    strategies.append { rng in
+                        let element = elementSeeds[Int.random(in: 0..<elementSeeds.count, using: &rng)]
+                        return value + [element]
+                    }
                 }
 
                 // === Prepend element ===
-                for element in elementMutator.seeds.prefix(2) {
-                    mutations.append([element] + value)
+                if !elementSeeds.isEmpty {
+                    strategies.append { rng in
+                        // Draw from the full seed range (matches the append path);
+                        // the old `min(2, …)` was a leftover candidate-count cap
+                        // that, post single-value, just made later seeds unprependable.
+                        let element = elementSeeds[Int.random(in: 0..<elementSeeds.count, using: &rng)]
+                        return [element] + value
+                    }
                 }
 
                 // === Array doubling (exponential growth) ===
                 if value.count > 0 {
-                    mutations.append(value + value)
+                    strategies.append { _ in value + value }
                 }
 
-                // === Mutate individual elements ===
-                for i in value.indices {
-                    for mutated in elementMutator.mutate(value[i]).prefix(2) {
+                // === Mutate a random element ===
+                if !value.isEmpty {
+                    strategies.append { rng in
+                        let i = Int.random(in: 0..<value.count, using: &rng)
                         var copy = value
-                        copy[i] = mutated
-                        mutations.append(copy)
+                        copy[i] = elementMutator.mutate(value[i], &rng)
+                        return copy
                     }
                 }
 
                 // === Reversal ===
                 if value.count > 1 {
-                    mutations.append(value.reversed())
+                    strategies.append { _ in value.reversed() }
                 }
 
-                return mutations
+                guard let strategy = strategies.randomElement(using: &rng) else { return value }
+                return strategy(&rng)
             },
             generate: { rng in
                 // Decide length with bias toward smaller arrays

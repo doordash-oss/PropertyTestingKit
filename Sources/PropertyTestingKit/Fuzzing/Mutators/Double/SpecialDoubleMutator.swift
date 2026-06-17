@@ -23,15 +23,17 @@ private let _specialDoubleSeeds: [Double] = [
     0.1 + 0.2, // classic floating point issue
 ]
 
-private func _specialDoubleMutate(_ value: Double) -> [Double] {
-    var results: [Double] = []
+private func _specialDoubleMutate(_ value: Double, _ rng: inout FastRNG) -> Double {
+    // Pick one applicable strategy lazily; preserves uniform distribution over applicable candidates.
+    var strategies: [() -> Double] = []
     if value.isFinite {
-        results.append(value.nextUp)
-        results.append(value.nextDown)
+        strategies.append { value.nextUp }
+        strategies.append { value.nextDown }
     }
-    results.append(Double.nan)
-    results.append(Double.infinity)
-    return results
+    strategies.append { Double.nan }
+    strategies.append { Double.infinity }
+    guard let strategy = strategies.randomElement(using: &rng) else { return value }
+    return strategy()
 }
 
 private func _specialDoubleGenerate(_ rng: inout FastRNG) -> Double {

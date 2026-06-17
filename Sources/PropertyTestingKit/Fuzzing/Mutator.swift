@@ -61,7 +61,7 @@ public protocol MutatorProviding: Sendable {
 /// // Create custom mutators
 /// let customMutator = Mutator<Int>(
 ///     seeds: [0, 1, -1, Int.max],
-///     mutate: { [$0 + 1, $0 - 1] },
+///     mutate: { value, rng in Bool.random(using: &rng) ? value + 1 : value - 1 },
 ///     generate: { rng in Int.random(in: Int.min...Int.max, using: &rng) }
 /// )
 /// ```
@@ -69,8 +69,13 @@ public struct Mutator<Value: Sendable>: Sendable {
     /// Seed values to start fuzzing with.
     public let seeds: [Value]
 
-    /// Generate mutations of a value.
-    public let mutate: @Sendable (Value) -> [Value]
+    /// Produce ONE mutant of a value.
+    ///
+    /// Variety comes from the supplied RNG: a mutator that knows several
+    /// mutation strategies picks one per call. Effort — how many mutants to
+    /// draw from a value, and how many mutation steps to stack — belongs to
+    /// the caller (the engine's scheduler), never to the mutator.
+    public let mutate: @Sendable (Value, inout FastRNG) -> Value
 
     /// Generate a random value using the provided RNG.
     ///
@@ -84,7 +89,7 @@ public struct Mutator<Value: Sendable>: Sendable {
     /// Create a mutator with seeds, mutation function, and generation function.
     public init(
         seeds: [Value],
-        mutate: @escaping @Sendable (Value) -> [Value],
+        mutate: @escaping @Sendable (Value, inout FastRNG) -> Value,
         generate: @escaping @Sendable (inout FastRNG) -> Value
     ) {
         self.seeds = seeds
@@ -96,7 +101,7 @@ public struct Mutator<Value: Sendable>: Sendable {
     /// Generation will pick a random seed.
     public init(
         seeds: [Value],
-        mutate: @escaping @Sendable (Value) -> [Value]
+        mutate: @escaping @Sendable (Value, inout FastRNG) -> Value
     ) {
         self.seeds = seeds
         self.mutate = mutate
@@ -116,8 +121,8 @@ public struct Mutator<Value: Sendable>: Sendable {
 extension Mutator {
     /// Combine multiple mutators into one.
     ///
-    /// Seeds are concatenated, mutations are combined, and generation
-    /// picks randomly from the component mutators.
+    /// Seeds are concatenated; mutation and generation pick a random
+    /// component mutator per call.
     public static func compose(_ mutators: [Mutator<Value>]) -> Mutator<Value> {
         guard !mutators.isEmpty else {
             fatalError("Cannot compose empty mutator list")
@@ -125,8 +130,9 @@ extension Mutator {
 
         return Mutator(
             seeds: mutators.flatMap(\.seeds),
-            mutate: { value in
-                mutators.flatMap { $0.mutate(value) }
+            mutate: { value, rng in
+                let index = Int.random(in: 0..<mutators.count, using: &rng)
+                return mutators[index].mutate(value, &rng)
             },
             generate: { rng in
                 let index = Int.random(in: 0..<mutators.count, using: &rng)

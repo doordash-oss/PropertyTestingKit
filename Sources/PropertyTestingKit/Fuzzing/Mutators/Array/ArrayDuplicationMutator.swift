@@ -28,30 +28,38 @@ public func arrayDuplicationMutator<Element: MutatorProviding & Sendable>() -> M
 
     return Mutator<[Element]>(
         seeds: seeds,
-        mutate: { value in
-            var results: [[Element]] = []
+        mutate: { value, rng in
+            // Pick one applicable strategy at random, then compute only it.
+            var strategies: [(inout FastRNG) -> [Element]] = []
 
-            // Duplicate each element in place
-            for i in value.indices {
-                var copy = value
-                copy.insert(value[i], at: i)
-                results.append(copy)
+            // Duplicate a random element in place
+            if !value.isEmpty {
+                strategies.append { rng in
+                    let i = Int.random(in: 0..<value.count, using: &rng)
+                    var copy = value
+                    copy.insert(value[i], at: i)
+                    return copy
+                }
             }
 
             // Duplicate entire array
             if !value.isEmpty && value.count < 20 {
-                results.append(value + value)
+                strategies.append { _ in value + value }
             }
 
-            // Triple an element
-            for i in value.indices where value.count < 15 {
-                var copy = value
-                copy.insert(value[i], at: i)
-                copy.insert(value[i], at: i)
-                results.append(copy)
+            // Triple a random element
+            if !value.isEmpty && value.count < 15 {
+                strategies.append { rng in
+                    let i = Int.random(in: 0..<value.count, using: &rng)
+                    var copy = value
+                    copy.insert(value[i], at: i)
+                    copy.insert(value[i], at: i)
+                    return copy
+                }
             }
 
-            return results
+            guard let strategy = strategies.randomElement(using: &rng) else { return value }
+            return strategy(&rng)
         },
         generate: { rng in
             // Generate arrays with duplicated elements
