@@ -49,7 +49,7 @@ public struct MutationScheduler: Sendable {
     ///     inputs from how many of them may stay — without it, a fine
     ///     vocabulary silently raises the population ceiling.
     public static func weightedPool(
-        admission: PoolAdmission = .everyDiscovery,
+        admission: PoolAdmission = .featureOwnership,
         policies: @escaping @Sendable () -> [any PoolPlugin] = { [] },
         burstLength: Int = 16,
         focusOnInsert: Bool = true,

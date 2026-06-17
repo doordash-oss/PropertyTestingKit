@@ -95,6 +95,23 @@ struct WeightedPoolCoreTests {
         #expect(core.next() == .mutate(id: 0))
     }
 
+    @Test("The default weightedPool admission culls: a same-feature, non-smaller redundant input is rejected")
+    func defaultAdmissionCulls() {
+        // The library default is feature ownership (REDUCE), not everyDiscovery:
+        // an unbounded pool of every accepted input bloats with large entries
+        // whose features a smaller input already owns. Build the core straight
+        // from the public default so this pins the default itself.
+        let core = MutationScheduler.weightedPool().makeCore()
+        // First input owns edges {1,2} (size 2) — admitted as id 0.
+        #expect(core.observe(PoolIterationOutcome(
+            source: .generated, newCoverage: SparseCoverage(indices: [1, 2]))) == 0)
+        // Second input: SAME features, SAME size — owns nothing new, steals
+        // nothing (ties don't steal), so it is rejected (nil). Under the old
+        // everyDiscovery default it would have been admitted as id 1.
+        #expect(core.observe(PoolIterationOutcome(
+            source: .generated, newCoverage: SparseCoverage(indices: [1, 2]))) == nil)
+    }
+
     @Test("Admitted entries get sequential stable IDs")
     func sequentialIDs() {
         let core = makeCore()
