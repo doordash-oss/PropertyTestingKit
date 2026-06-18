@@ -429,7 +429,7 @@ private func runEngines<each Input: Codable & Sendable>(
                         @Dependency(\.coverageCounters) var client
                         return [CoverageProvider(evaluator: coverageStrategy.makeEvaluator(), client: client)]
                     },
-                    scheduler: scheduler,
+                    makeScheduler: { scheduler.makeCore() },
                     scheduleBytesExtractor: scheduleBytesExtractor
                 )
                 return await engine.run(

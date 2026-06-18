@@ -71,9 +71,10 @@ final class FuzzEngine<each Input: Codable & Sendable>: @unchecked Sendable {
     /// batteries layer so the core engine never names a signal.
     private let makeProviders: @Sendable () -> [any InstrumentationProvider]
 
-    /// The mutation scheduler. Its pool core is built fresh in `run()` so each
-    /// parallel engine gets its own pool, policies, and draw state.
-    private let scheduler: MutationScheduler
+    /// Builds this engine's scheduler core, fresh per engine (its own pool,
+    /// policies, and draw state). Injected by the batteries layer so the core
+    /// engine depends only on the `SchedulerCore` seam, not a concrete scheduler.
+    private let makeScheduler: @Sendable () -> any SchedulerCore
 
     /// Initialize with mutators.
     ///
@@ -101,35 +102,15 @@ final class FuzzEngine<each Input: Codable & Sendable>: @unchecked Sendable {
         mutators: repeat Mutator<each Input>,
         config: FuzzEngineConfig,
         makeProviders: @escaping @Sendable () -> [any InstrumentationProvider],
-        scheduler: MutationScheduler,
+        makeScheduler: @escaping @Sendable () -> any SchedulerCore,
         scheduleBytesExtractor: @escaping @Sendable ((repeat each Input)) -> [UInt8]?
     ) {
         self.config = config
         self.mutators = (repeat each mutators)
         self.inputSize = Self.inputCount(for: repeat (each Input).self)
         self.makeProviders = makeProviders
-        self.scheduler = scheduler
+        self.makeScheduler = makeScheduler
         self.scheduleBytesExtractor = scheduleBytesExtractor
-    }
-
-    /// Non-scheduled convenience initializer: runs over the user's pack with a
-    /// no-op schedule-bytes extractor.
-    convenience init(
-        mutators: repeat Mutator<each Input>,
-        config: FuzzEngineConfig = FuzzEngineConfig(),
-        coverageStrategy: CoverageStrategy = .pathTrie,
-        scheduler: MutationScheduler = .weightedPool()
-    ) {
-        self.init(
-            mutators: repeat each mutators,
-            config: config,
-            makeProviders: {
-                @Dependency(\.coverageCounters) var client
-                return [CoverageProvider(evaluator: coverageStrategy.makeEvaluator(), client: client)]
-            },
-            scheduler: scheduler,
-            scheduleBytesExtractor: { _ in nil }
-        )
     }
 
     // MARK: - Helpers
@@ -195,7 +176,7 @@ final class FuzzEngine<each Input: Codable & Sendable>: @unchecked Sendable {
             inputSize: inputSize,
             corpus: corpus,
             providers: makeProviders(),
-            scheduler: scheduler.makeCore(),
+            scheduler: makeScheduler(),
             processSyncPlugins: processSyncPlugins,
             processAsyncPlugins: processAsyncPlugins,
             config: config,
