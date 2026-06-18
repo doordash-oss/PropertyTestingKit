@@ -189,7 +189,7 @@ public final class FuzzEngine<each Input: Codable & Sendable>: @unchecked Sendab
             scheduleBytesExtractor: scheduleBytesExtractor
         )
 
-        let stateMachineResult = try! await stateMachine.start()
+        let stateMachineResult = await stateMachine.start()
 
         // Extract copyable fields
         let stats = stateMachineResult.stats

@@ -222,7 +222,7 @@ struct SingleValueMutatorTests {
                         firstQueueCount.update { $0 = ctx.queueCount }
                     }
                     mutantsSeen.update { $0 += 1 }
-                    if mutantsSeen.value == mutationBurstLength {
+                    if mutantsSeen.value == FuzzEngineConfig().mutationBurstLength {
                         return [.stop(.init(reason: .custom("burst_complete")))]
                     }
                     return []
@@ -247,7 +247,7 @@ struct SingleValueMutatorTests {
         }
 
         // The first popped mutant sees the rest of its own burst queued.
-        #expect(firstQueueCount.value == mutationBurstLength - 1)
-        #expect(mutantsSeen.value == mutationBurstLength)
+        #expect(firstQueueCount.value == FuzzEngineConfig().mutationBurstLength - 1)
+        #expect(mutantsSeen.value == FuzzEngineConfig().mutationBurstLength)
     }
 }

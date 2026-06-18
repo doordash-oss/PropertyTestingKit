@@ -49,6 +49,10 @@ final class WeightedPoolCore<each Input: Codable & Sendable> {
     private var live: [Int] = []
     /// Entry ID → its position in `live`.
     private var livePos: [Int: Int] = [:]
+    /// Running sum of `weights[id]` over `live`, maintained incrementally so a
+    /// weighted draw — now on ~every mutation step (no bursts) — doesn't re-sum
+    /// the whole live set each time. Invariant: equals `live.reduce(0){$0+weights[$1]}`.
+    private var liveWeightTotal: Double = 0
 
     /// What this scheduler's most recent `next()` produced, so `observe` can
     /// report the right `PoolIterationSource` to child policies for a
@@ -139,6 +143,7 @@ final class WeightedPoolCore<each Input: Codable & Sendable> {
         pool.append(input)
         livePos[id] = live.count
         live.append(id)
+        liveWeightTotal += 1.0
         // The admission's own displacements (REDUCE losers) go through the
         // same removal path as child evictions, so every policy hears them.
         apply(verdict.evict.map { .remove(id: $0) })
@@ -183,6 +188,7 @@ final class WeightedPoolCore<each Input: Codable & Sendable> {
             switch action {
             case let .remove(id):
                 guard let pos = livePos.removeValue(forKey: id) else { continue }
+                liveWeightTotal -= weights[id]
                 let lastID = live[live.count - 1]
                 live[pos] = lastID
                 live.removeLast()
@@ -194,7 +200,10 @@ final class WeightedPoolCore<each Input: Codable & Sendable> {
 
             case let .setWeight(id, weight):
                 if id < weights.count {
-                    weights[id] = max(0, weight)
+                    let clamped = max(0, weight)
+                    // Only live entries contribute to the running total.
+                    if livePos[id] != nil { liveWeightTotal += clamped - weights[id] }
+                    weights[id] = clamped
                 }
             }
         }
@@ -203,13 +212,11 @@ final class WeightedPoolCore<each Input: Codable & Sendable> {
     // MARK: - Draw
 
     private func weightedDraw() -> Int {
-        var total = 0.0
-        for id in live { total += weights[id] }
-        guard total > 0 else {
+        guard liveWeightTotal > 0 else {
             // All-zero pool: uniform fallback rather than starvation.
             return live[Int.random(in: 0..<live.count, using: &rng)]
         }
-        var target = Double.random(in: 0..<total, using: &rng)
+        var target = Double.random(in: 0..<liveWeightTotal, using: &rng)
         for id in live {
             target -= weights[id]
             if target < 0 { return id }

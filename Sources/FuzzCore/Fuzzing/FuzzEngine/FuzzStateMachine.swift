@@ -149,7 +149,7 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
         let campaignStopRequested: Bool
     }
 
-    func start() async throws -> FuzzStateMachineResult {
+    func start() async -> FuzzStateMachineResult {
         if config.verbose {
             print("[FUZZ] FuzzStateMachine.start() called, maxDuration=\(config.maxDuration)")
         }
@@ -311,40 +311,41 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
                         )
                     }
 
-                    // Process iteration event before failure event
-                    var events = [
-                        PluginEvent.sync(
-                            .iteration(
+                    // Iteration event (sync, hot path) before failure event.
+                    // Dispatched directly — not via an `[PluginEvent]` array — to
+                    // avoid allocating that array (and the event wrapping) every
+                    // iteration. Order is preserved: sync iteration, then the
+                    // async failure event when one was recorded.
+                    processSyncPlugins(
+                        .iteration(
+                            .init(
+                                input: input,
+                                scheduleBytes: currentScheduleBytes,
+                                queueCount: queueCount,
+                                executionContext: execContext,
+                                parentID: parentID
+                            )
+                        ),
+                        executeAction
+                    )
+
+                    if failureRecorded {
+                        await processAsyncPlugins(
+                            .failureFound(
                                 .init(
                                     input: input,
                                     scheduleBytes: currentScheduleBytes,
-                                    queueCount: queueCount,
-                                    executionContext: execContext,
-                                    parentID: parentID
+                                    test: testWithIssueCapture,
+                                    sourceLocation: sourceLocation,
+                                    // The failing run's per-execution signals;
+                                    // a coverage-aware plugin reads its verdict
+                                    // out of this to tag the submitted entry.
+                                    executionContext: execContext
                                 )
-                            ))
-                    ]
-
-                    if failureRecorded {
-                        events.append(
-                            .async(
-                                .failureFound(
-                                    .init(
-                                        input: input,
-                                        scheduleBytes: currentScheduleBytes,
-                                        test: testWithIssueCapture,
-                                        sourceLocation: sourceLocation,
-                                        // The failing run's per-execution signals;
-                                        // a coverage-aware plugin reads its verdict
-                                        // out of this to tag the submitted entry.
-                                        executionContext: execContext
-                                    )
-                                )
-                            )
+                            ),
+                            executeAction
                         )
                     }
-
-                    await process(events: events)
 
                     iterationCount += 1
                 }
@@ -385,15 +386,6 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
             campaignSummary: campaignSummary,
             campaignStopRequested: haltScope == .campaign
         )
-    }
-
-    private func process(events: [PluginEvent<repeat each Input>]) async {
-        for event in events {
-            switch event {
-            case let .sync(event): processSyncPlugins(event, executeAction)
-            case let .async(event): await processAsyncPlugins(event, executeAction)
-            }
-        }
     }
 
     /// Run `body` nested inside every probe's `withCampaignScope`, in array
@@ -464,7 +456,7 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
             // mutation is unified with input mutation.
             // Each mutant carries the action's originID so iteration events can
             // report the lineage back to the emitting plugin.
-            let mutants = (0..<mutationBurstLength).map { _ in
+            let mutants = (0..<config.mutationBurstLength).map { _ in
                 mutateOneRandomPosition(
                     mutationAction.input,
                     inputSize: inputSize,
@@ -508,10 +500,3 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
     }
 
 }
-
-/// How many single-step mutants a `.selectForMutation` action queues.
-///
-/// Interim constant: effort per selection becomes scheduler state (focus +
-/// counter) when the pool scheduler lands; until then this preserves a
-/// burst-on-accept shape comparable to the old exhaustive-neighborhood burst.
-let mutationBurstLength = 16

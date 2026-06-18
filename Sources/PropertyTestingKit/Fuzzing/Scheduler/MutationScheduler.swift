@@ -53,7 +53,10 @@ public struct MutationScheduler: SchedulerFactory {
     ///     culling, …). Order matters: actions apply in array order.
     ///   - generationRatio: Probability each step generates a fresh input rather
     ///     than mutating a pool entry — `1` is all generation, `0` is all
-    ///     mutation. One input at a time, no bursts.
+    ///     mutation. One input at a time, no bursts. The default `0.1` is an
+    ///     interim starting point (≈ the 1-fresh-per-16-mutant rate of the
+    ///     previous burst model); it supersedes that model and should be
+    ///     re-tuned against the etna benchmarks rather than treated as final.
     public static func weightedPool(
         admission: PoolAdmission = .featureOwnership,
         policies: @escaping @Sendable () -> [any PoolPlugin] = { [] },

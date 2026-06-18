@@ -163,11 +163,11 @@ struct InheritanceTest {
     /// coarse range but UNMAPPED, so the raw read faulted. The walk must now read
     /// fault-safely and return 0 (no inherited context) instead of crashing.
     @Test("manual inheritance walk survives a freed/poisoned task-local chain head")
-    func manualWalkSurvivesPoisonedChainHead() {
+    func manualWalkSurvivesPoisonedChainHead() throws {
         // A page we map then unmap: a valid-RANGE but definitely UNMAPPED address,
         // exactly the poisoned-head shape that crashed during teardown.
         let page = mmap(nil, 4096, PROT_READ | PROT_WRITE, MAP_ANON | MAP_PRIVATE, -1, 0)
-        try! #require(page != MAP_FAILED, "mmap failed")
+        try #require(page != MAP_FAILED, "mmap failed")
         munmap(page, 4096)
         let poisoned = UInt(bitPattern: page)
 

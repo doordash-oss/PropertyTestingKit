@@ -27,10 +27,12 @@
 /// One input the scheduler decided to run next, tagged as generated vs mutated.
 ///
 /// `poolParentID` is **opaque to the engine** — it never indexes anything with
-/// it. `nil` means a freshly generated input; non-`nil` means a mutant (the
-/// value is the scheduler's own entry id, which the engine uses only to split
-/// the generated/mutated execution counts in `FuzzStats`). A pool-less scheduler
-/// always passes `nil`.
+/// it. `nil` means a freshly generated input; non-`nil` means a mutant. The
+/// value is the scheduler's own entry id: the engine uses only the nil/non-nil
+/// distinction (to split generated vs mutated `FuzzStats`), but it is kept as an
+/// `Int?` rather than a `Bool` on purpose — it's a scheduler-owned lineage tag
+/// that observers can use to attribute a mutant to its parent entry. A pool-less
+/// scheduler always passes `nil`.
 public struct ScheduledInput<each Input: Codable & Sendable> {
     public let input: (repeat each Input)
     public let poolParentID: Int?
