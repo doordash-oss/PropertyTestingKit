@@ -66,9 +66,10 @@ final class FuzzEngine<each Input: Codable & Sendable>: @unchecked Sendable {
     /// regression replay so they wrap execution in `ScheduleController.run`.
     private let scheduleBytesExtractor: @Sendable ((repeat each Input)) -> [UInt8]?
 
-    /// The coverage strategy. Its evaluator is built fresh in `run()` so each parallel
-    /// engine gets its own per-engine state (e.g. a distinct trie/index).
-    private let coverageStrategy: CoverageStrategy
+    /// Builds this engine's instrumentation providers, fresh per engine (each
+    /// provider holds per-engine state like a distinct trie). Injected by the
+    /// batteries layer so the core engine never names a signal.
+    private let makeProviders: @Sendable () -> [any InstrumentationProvider]
 
     /// The mutation scheduler. Its pool core is built fresh in `run()` so each
     /// parallel engine gets its own pool, policies, and draw state.
@@ -99,14 +100,14 @@ final class FuzzEngine<each Input: Codable & Sendable>: @unchecked Sendable {
     init(
         mutators: repeat Mutator<each Input>,
         config: FuzzEngineConfig,
-        coverageStrategy: CoverageStrategy,
+        makeProviders: @escaping @Sendable () -> [any InstrumentationProvider],
         scheduler: MutationScheduler,
         scheduleBytesExtractor: @escaping @Sendable ((repeat each Input)) -> [UInt8]?
     ) {
         self.config = config
         self.mutators = (repeat each mutators)
         self.inputSize = Self.inputCount(for: repeat (each Input).self)
-        self.coverageStrategy = coverageStrategy
+        self.makeProviders = makeProviders
         self.scheduler = scheduler
         self.scheduleBytesExtractor = scheduleBytesExtractor
     }
@@ -122,7 +123,10 @@ final class FuzzEngine<each Input: Codable & Sendable>: @unchecked Sendable {
         self.init(
             mutators: repeat each mutators,
             config: config,
-            coverageStrategy: coverageStrategy,
+            makeProviders: {
+                @Dependency(\.coverageCounters) var client
+                return [CoverageProvider(evaluator: coverageStrategy.makeEvaluator(), client: client)]
+            },
             scheduler: scheduler,
             scheduleBytesExtractor: { _ in nil }
         )
@@ -155,17 +159,6 @@ final class FuzzEngine<each Input: Codable & Sendable>: @unchecked Sendable {
         processAsyncPlugins: @escaping AsyncPluginProcessorFn,
         test: @escaping @Sendable (InputTuple) async throws -> Void
     ) async -> FuzzResult<repeat each Input> {
-        // Filter compiler-generated edges before any measurement.
-        // This is a one-time scan (~2s for large binaries), so we do it before
-        // capturing startTime so it doesn't eat into the fuzz duration budget.
-        SanCovCounters.applyEdgeFilter()
-        if config.verbose {
-            let filtered = SanCovCounters.filteredEdgeCount
-            if filtered > 0 {
-                print("[Fuzz] Filtered \(filtered) compiler-generated edges")
-            }
-        }
-
         let startTime = dateClient.now()
 
         // No global edge-hook install: the strategy's recorder (its measurement
@@ -195,15 +188,13 @@ final class FuzzEngine<each Input: Codable & Sendable>: @unchecked Sendable {
         }
 
         let corpus: Corpus<repeat each Input> = corpusRegistry.getCorpus()
-        // Build a fresh evaluator per engine so each gets its own trie/index state.
-        let coverageEvaluator = coverageStrategy.makeEvaluator()
 
         let stateMachine = FuzzStateMachine<repeat each Input>(
             seeds: seeds,
             mutators: mutators,
             inputSize: inputSize,
             corpus: corpus,
-            coverageEvaluator: coverageEvaluator,
+            providers: makeProviders(),
             scheduler: scheduler.makeCore(),
             processSyncPlugins: processSyncPlugins,
             processAsyncPlugins: processAsyncPlugins,

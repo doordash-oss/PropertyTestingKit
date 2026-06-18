@@ -401,6 +401,17 @@ private func runEngines<each Input: Codable & Sendable>(
         print("[Fuzz] Running \(parallelism) fuzz engine\(parallelism == 1 ? "" : "s")")
     }
 
+    // Filter compiler-generated edges before any measurement (one-time global
+    // scan). This is coverage-specific, so it lives in the coordinator/batteries
+    // layer rather than the signal-agnostic engine.
+    SanCovCounters.applyEdgeFilter()
+    if verbose {
+        let filtered = SanCovCounters.filteredEdgeCount
+        if filtered > 0 {
+            print("[Fuzz] Filtered \(filtered) compiler-generated edges")
+        }
+    }
+
     var distributedSeeds: [[(repeat each Input)]] = Array(repeating: [], count: parallelism)
     for (index, seed) in seeds.enumerated() {
         distributedSeeds[index % parallelism].append(seed)
@@ -414,7 +425,10 @@ private func runEngines<each Input: Codable & Sendable>(
                 let engine = FuzzEngine<repeat each Input>(
                     mutators: repeat each mutators,
                     config: config,
-                    coverageStrategy: coverageStrategy,
+                    makeProviders: {
+                        @Dependency(\.coverageCounters) var client
+                        return [CoverageProvider(evaluator: coverageStrategy.makeEvaluator(), client: client)]
+                    },
                     scheduler: scheduler,
                     scheduleBytesExtractor: scheduleBytesExtractor
                 )

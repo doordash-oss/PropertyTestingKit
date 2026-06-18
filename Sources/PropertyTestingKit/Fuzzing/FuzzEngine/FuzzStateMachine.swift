@@ -61,9 +61,10 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
     /// Mutated inputs executed (queue pops after the seeds drained).
     private var mutantsRunCount: Int = 0
 
-    /// The coverage evaluator that determines interestingness. Wrapped in a
-    /// `CoverageProbe` and driven through the generic instrumentation seam.
-    private let coverageEvaluator: CoverageEvaluator
+    /// Instrumentation providers injected by the batteries layer. The core
+    /// engine names no signal: it installs a probe for each key the scheduler
+    /// requires by matching provider keys, never by referencing coverage.
+    private let providers: [any InstrumentationProvider]
 
     /// This engine's scheduler: consulted for what to run when the residual
     /// queue is empty, told about every iteration's outcome through the
@@ -99,7 +100,7 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
         mutators: (repeat Mutator<each Input>),
         inputSize: Int,
         corpus: Corpus<repeat each Input>,
-        coverageEvaluator: CoverageEvaluator,
+        providers: [any InstrumentationProvider],
         scheduler: any SchedulerCore,
         processSyncPlugins: @escaping SyncPluginProcessorFn,
         processAsyncPlugins: @escaping AsyncPluginProcessorFn,
@@ -115,7 +116,7 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
         self.seeds = seeds
         self.mutators = mutators
         self.inputSize = inputSize
-        self.coverageEvaluator = coverageEvaluator
+        self.providers = providers
         self.scheduler = scheduler
         self.processSyncPlugins = processSyncPlugins
         self.processAsyncPlugins = processAsyncPlugins
@@ -162,7 +163,6 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
         pendingParents.append(nil, repeated: seeds.count)  // seeds have no lineage parent
 
         // Setup for test execution
-        let coverageCountersClient = Self.fetchCoverageCounters()
         let sourceLocation = config.sourceLocation
 
         // Resolve the RNG from the dependency once here, then pass it to the
@@ -184,15 +184,11 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
                 test: test
             )
 
-            // Build the default instrumentation providers, then install a probe
-            // for each key some active scheduler requires — matching by key, so
-            // the engine never names a signal here. Coverage is the only built-in
-            // provider today; a userspace module supplies its own. Each probe
-            // owns its native measurement lifecycle (coverage allocates its
-            // SanCov context in `setUp`, frees it in `tearDown`).
-            let providers: [any InstrumentationProvider] = [
-                CoverageProvider(evaluator: coverageEvaluator, client: coverageCountersClient)
-            ]
+            // Install a probe for each key some active scheduler requires —
+            // matching the injected providers by key, so the engine never names
+            // a signal here. Each probe owns its native measurement lifecycle
+            // (coverage allocates its SanCov context in `setUp`, frees it in
+            // `tearDown`).
             let requiredKeys = Set(type(of: scheduler).requiredProbes.map { ObjectIdentifier($0) })
             probes = providers
                 .filter { requiredKeys.contains(ObjectIdentifier($0.key)) }
@@ -463,11 +459,6 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
             return true
         }
         return false
-    }
-
-    private static func fetchCoverageCounters() -> CoverageCountersClient {
-        @Dependency(\.coverageCounters) var coverageCounters
-        return coverageCounters
     }
 
     /// Executes a single plugin action.
