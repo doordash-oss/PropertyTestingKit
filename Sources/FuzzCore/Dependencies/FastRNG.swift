@@ -96,12 +96,3 @@ extension DependencyValues {
         set { self[FastRNG.self] = newValue }
     }
 }
-
-/// Resolve the current `\.fastRNG` from the dependency system. A plain function
-/// so callers in parameter-pack-heavy generic files can dependency-inject the
-/// RNG without importing `Dependencies` themselves — that import perturbs the
-/// variadic-generic type checker on the patched toolchain.
-public func resolvedFastRNG() -> FastRNG {
-    @Dependency(\.fastRNG) var fastRNG
-    return fastRNG
-}

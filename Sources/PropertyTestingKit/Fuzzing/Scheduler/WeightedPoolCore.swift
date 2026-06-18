@@ -18,6 +18,7 @@
 //  the child `PoolPlugin`s.
 //
 
+import Dependencies
 import FuzzCore
 
 /// Per-engine weighted mutation pool. Generic over the input pack because it
@@ -226,18 +227,18 @@ struct WeightedPoolFactory: SchedulerFactory {
 
     func makeScheduler<each Input: Codable & Sendable>(
         mutators: repeat Mutator<each Input>
-    ) -> AnyScheduler<repeat each Input> {
+    ) -> FuzzCore.AnyScheduler<repeat each Input> {
+        @Dependency(\.fastRNG) var fastRNG
         let core = WeightedPoolCore<repeat each Input>(
             mutators: repeat each mutators,
             admission: admission,
             policies: makePolicies(),
             generationRatio: generationRatio,
-            // Dependency-injected (resolved via `\.fastRNG`) through a FuzzCore
-            // accessor: importing `Dependencies` directly into this
-            // parameter-pack-heavy file breaks the variadic type checker.
-            rng: resolvedFastRNG()
+            rng: fastRNG
         )
-        return AnyScheduler<repeat each Input>(
+        // Qualified `FuzzCore.AnyScheduler`: `import Dependencies` re-exports
+        // `CombineSchedulers.AnyScheduler`, so the bare name is ambiguous here.
+        return FuzzCore.AnyScheduler<repeat each Input>(
             requiredProbes: [CoverageProbeKey.self],
             next: { core.next() },
             observe: { input, context, source in core.observe(input, context, source: source) }
