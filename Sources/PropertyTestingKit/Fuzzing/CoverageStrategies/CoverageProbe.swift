@@ -41,15 +41,27 @@ public struct CoverageVerdict {
 ///
 /// Owns the measurement context for one engine: `setUp` attaches the strategy's
 /// edge observer, `reset` clears the counters between executions, and `makeView`
-/// runs the strategy's judgement and reports the verdict. It performs no
+/// runs the strategy's judgement and reports the verdict. It performs no input
 /// storage — retaining an interesting input is the engine's job, gated on the
 /// scheduler consuming this verdict.
+///
+/// It does own the *aggregate* covered-edge set: the union of every interesting
+/// run's coverage. This used to live on the `Corpus` as a bitmap; it is
+/// coverage-specific bookkeeping, so it belongs with the coverage probe rather
+/// than the engine's input store. The engine reads `coveredIndices` once at
+/// teardown to feed the coverage-gap (`.end`) event.
 final class CoverageProbe: InstrumentationProbe {
     typealias Key = CoverageProbeKey
 
     private let evaluator: CoverageEvaluator
     private let context: SanCovCounters.MeasurementContext
     private let client: CoverageCountersClient
+
+    /// Union of edge indices across every run this probe judged interesting.
+    /// Equivalent to the old `Corpus.coveredIndices`, but accumulated from the
+    /// verdicts rather than from retained entries — so pool culling no longer
+    /// shrinks the reported total coverage.
+    private(set) var coveredIndices: Set<UInt32> = []
 
     init(
         evaluator: CoverageEvaluator,
@@ -72,6 +84,10 @@ final class CoverageProbe: InstrumentationProbe {
     }
 
     func makeView() -> CoverageVerdict {
-        CoverageVerdict(coverage: evaluator.evaluate(context, client))
+        let coverage = evaluator.evaluate(context, client)
+        if let coverage {
+            coveredIndices.formUnion(coverage.indices)
+        }
+        return CoverageVerdict(coverage: coverage)
     }
 }

@@ -129,8 +129,7 @@ extension FuzzResult {
         @Dependency(\.dateClient) var dateClient
 
         let emptySnapshot = CorpusSnapshot<repeat each Input>(
-            entries: [],
-            coveredIndices: []
+            entries: []
         )
         let emptyStats = FuzzStats(
             totalInputs: 0,

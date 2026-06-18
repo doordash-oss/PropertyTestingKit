@@ -74,8 +74,7 @@ func peelScheduleResult<each Input: Codable & Sendable>(
 
     return FuzzResult<repeat each Input>(
         corpus: CorpusSnapshot<repeat each Input>(
-            entries: entries,
-            coveredIndices: result.corpus.coveredIndices
+            entries: entries
         ),
         failures: failures,
         stats: result.stats,

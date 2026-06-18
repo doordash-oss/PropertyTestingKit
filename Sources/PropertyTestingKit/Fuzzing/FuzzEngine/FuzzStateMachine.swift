@@ -73,6 +73,11 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
     /// measurement context exists, then assembled into a `RawExecutionContext`
     /// each iteration.
     private var probes: [any InstrumentationProbe] = []
+    /// The coverage probe, when the scheduler required it. Held so the engine
+    /// can read its accumulated covered-edge set at teardown for the `.end`
+    /// (coverage-gap) event — the one coverage-specific read left, and it sits
+    /// outside the hot loop.
+    private var installedCoverageProbe: CoverageProbe?
     /// Typed inputs for pool entries, index == pool entry ID. Append-only —
     /// eviction is the scheduler's concern (live set), not storage's.
     private var poolEntries: [(repeat each Input)] = []
@@ -134,6 +139,11 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
         let stats: FuzzStats
         let corpus: Corpus<repeat each Input>
         let failures: [(input: (repeat each Input), error: Error, timeElapsed: TimeInterval, scheduleBytes: [UInt8]?)]
+        /// Union of edge indices across every interesting run, surfaced from the
+        /// coverage probe so the engine can feed the coverage-gap (`.end`) event
+        /// without the corpus owning a coverage bitmap. Empty when no coverage
+        /// probe was installed.
+        let coveredIndices: Set<UInt32>
         /// A plugin asked to stop the whole parallel campaign (`StopScope.campaign`).
         let campaignStopRequested: Bool
     }
@@ -189,7 +199,12 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
                 client: coverageCountersClient
             )
             let required = Set(type(of: scheduler).requiredProbes.map { ObjectIdentifier($0) })
-            probes = required.contains(ObjectIdentifier(CoverageProbeKey.self)) ? [coverageProbe] : []
+            if required.contains(ObjectIdentifier(CoverageProbeKey.self)) {
+                probes = [coverageProbe]
+                installedCoverageProbe = coverageProbe
+            } else {
+                probes = []
+            }
 
             // Set up probes before the first test execution. pathTrie needs to
             // attach its trie to the context so edges advance during iteration 1.
@@ -302,28 +317,28 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
                     var execContext = RawExecutionContext()
                     for probe in probes { probe.contribute(to: &execContext) }
 
-                    // The coverage verdict drives corpus retention: an
-                    // interesting input is recorded with its coverage and
-                    // schedule bytes. This is the one coverage-specific read
-                    // left in the engine loop; a later phase moves retention
-                    // behind the scheduler's admit signal.
+                    // The coverage view is still read here, but only as data:
+                    // the plugin iteration/failure events report it, and an
+                    // admitted entry is tagged with it. The retention *decision*
+                    // is no longer the engine's — see below.
                     let iterationCoverage = execContext[CoverageProbeKey.self]?.coverage
-                    if let iterationCoverage {
-                        corpus.mergeCoverageAndAdd(
-                            input: input,
-                            scheduleBytes: currentScheduleBytes,
-                            sparse: iterationCoverage
-                        )
-                    }
 
-                    // Tell the scheduler what happened. On admission it hands
-                    // back the new entry's ID; the typed input is stored here
-                    // at that index (IDs are sequential, so they stay aligned).
+                    // Retention is the scheduler's call. `observe` reads whatever
+                    // signals it needs out of the context and, on admission,
+                    // hands back the new entry's ID. The engine names no signal:
+                    // an admitted input joins both the mutation pool (typed input
+                    // stored at that ID — IDs are sequential, so they stay
+                    // aligned) and the result corpus.
                     let poolSource: SchedulerSource =
                         poolParentID.map { .pool(parent: $0) }
                         ?? (fromMutationQueue ? .queue : .generated)
                     if scheduler.observe(execContext, source: poolSource) != nil {
                         poolEntries.append(input)
+                        corpus.mergeCoverageAndAdd(
+                            input: input,
+                            scheduleBytes: currentScheduleBytes,
+                            sparse: iterationCoverage ?? SparseCoverage()
+                        )
                     }
 
                     // Process iteration event before failure event
@@ -394,6 +409,7 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
             stats: stats,
             corpus: corpus,
             failures: failures,
+            coveredIndices: installedCoverageProbe?.coveredIndices ?? [],
             campaignStopRequested: haltScope == .campaign
         )
     }

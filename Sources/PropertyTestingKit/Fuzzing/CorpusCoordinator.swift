@@ -523,8 +523,7 @@ private func mergeCorpusSnapshots<each Input: Codable & Sendable>(
 
     guard let first = snapshots.first else {
         return CorpusSnapshot<repeat each Input>(
-            entries: [],
-            coveredIndices: []
+            entries: []
         )
     }
 

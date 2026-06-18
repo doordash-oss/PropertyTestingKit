@@ -180,7 +180,7 @@ final class FuzzEngine<each Input: Codable & Sendable>: @unchecked Sendable {
             // A fuzz run with no seeds is not a regression — report it as such
             // rather than via `.empty` (which is flagged `wasRegression: true`).
             return FuzzResult(
-                corpus: CorpusSnapshot<repeat each Input>(entries: [], coveredIndices: []),
+                corpus: CorpusSnapshot<repeat each Input>(entries: []),
                 failures: [],
                 stats: FuzzStats(
                     totalInputs: 0,
@@ -222,9 +222,12 @@ final class FuzzEngine<each Input: Codable & Sendable>: @unchecked Sendable {
 
         let finalSnapshot = resultCorpus.snapshot()
 
-        // Send .end event to plugins (for coverage gap analysis, etc.)
+        // Send .end event to plugins (for coverage gap analysis, etc.). The
+        // aggregate covered-edge set comes from the coverage probe (surfaced via
+        // the state-machine result), not the corpus — the corpus no longer owns
+        // a coverage bitmap.
         let endContext = AsyncPluginEvent<repeat each Input>.EndContext(
-            totalCoveredIndices: finalSnapshot.coveredIndices,
+            totalCoveredIndices: stateMachineResult.coveredIndices,
             projectPath: config.projectPath,
             sourceLocation: config.sourceLocation
         )

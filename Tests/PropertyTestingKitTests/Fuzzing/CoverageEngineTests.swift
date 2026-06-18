@@ -177,6 +177,67 @@ struct CoverageEngineTests {
                 "The entry carries the run's judged coverage")
     }
 
+    /// The aggregate covered-edge set used to live on the `Corpus` as a bitmap;
+    /// it now belongs to the `CoverageProbe`, accumulated from the verdicts the
+    /// strategy judged interesting. The engine reads this once at teardown to
+    /// feed the coverage-gap (`.end`) event, so the union must hold across runs.
+    @Test("CoverageProbe accumulates the union of every interesting run's coverage")
+    func coverageProbeAccumulatesAggregate() throws {
+        let context = SanCovCounters.beginMeasurement()
+        defer { SanCovCounters.endMeasurement(context) }
+        let coverageClient = CoverageCountersClient.liveValue
+
+        // New-edge engine: a run is interesting only when it brings an edge the
+        // strategy has not seen before.
+        let strategy = CoverageStrategy(makeEngine: {
+            let seen = PropertyTestingKit.SyncBox<Set<UInt32>>([])
+            return CoverageEngine { sparse in
+                seen.update { seenEdges in
+                    var foundNew = false
+                    for edge in sparse.indices where seenEdges.insert(edge).inserted {
+                        foundNew = true
+                    }
+                    return foundNew
+                }
+            }
+        })
+        let probe = CoverageProbe(
+            evaluator: strategy.makeEvaluator(),
+            context: context,
+            client: coverageClient
+        )
+        probe.setUp()
+
+        #expect(probe.coveredIndices.isEmpty, "No runs yet — nothing accumulated")
+
+        // Pass 1: fire two edges. New coverage → interesting.
+        probe.reset()
+        var g31: UInt32 = 31
+        var g32: UInt32 = 32
+        sancov_dispatch_edge(&g31)
+        sancov_dispatch_edge(&g32)
+        let v1 = probe.makeView()
+        let firstCoverage = try #require(v1.coverage, "First pass brings new edges")
+        #expect(probe.coveredIndices == Set(firstCoverage.indices),
+                "After one interesting run the aggregate is exactly that run's edges")
+
+        // Pass 2: replay the same two edges, plus one fresh edge. New coverage
+        // again → interesting, and the aggregate must grow to the union.
+        probe.reset()
+        sancov_dispatch_edge(&g31)
+        sancov_dispatch_edge(&g32)
+        var g33: UInt32 = 33
+        sancov_dispatch_edge(&g33)
+        let v2 = probe.makeView()
+        let secondCoverage = try #require(v2.coverage, "A fresh edge keeps the run interesting")
+
+        let expectedUnion = Set(firstCoverage.indices).union(secondCoverage.indices)
+        #expect(probe.coveredIndices == expectedUnion,
+                "The aggregate is the union across every interesting run")
+        #expect(probe.coveredIndices.count > firstCoverage.indices.count,
+                "The fresh edge widened the aggregate")
+    }
+
     /// newEdge's novelty oracle is the strategy's OWN per-engine state, not
     /// the corpus: a second engine judging the same edges finds them new for
     /// itself even when the shared corpus already holds them.

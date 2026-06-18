@@ -43,7 +43,7 @@ struct FlattenedScheduleTests {
             failure: nil
         )
         let extended = FuzzResult<[UInt8], Int, String>(
-            corpus: CorpusSnapshot(entries: [entry], coveredIndices: [1, 2]),
+            corpus: CorpusSnapshot(entries: [entry]),
             failures: [(input: ([5, 6], 7, "bye"), error: PeelTestError(), timeElapsed: 0.25, scheduleBytes: nil)],
             stats: FuzzStats(totalInputs: 1, seeds: 0, mutations: 0, generations: 1, duration: 0.5),
             wasRegression: false
@@ -59,7 +59,6 @@ struct FlattenedScheduleTests {
         #expect(es == "hi")
         #expect(e.scheduleBytes == [9, 8, 7])
         #expect(e.sparseCoverage.indices == [1, 2])
-        #expect(peeled.corpus.coveredIndices == [1, 2])
 
         // Failure: input peeled to (Int, String); the schedule that triggered it is
         // lifted from element 0 onto the `scheduleBytes` slot so it can be reproduced.
@@ -92,7 +91,7 @@ struct FlattenedScheduleTests {
             entryType: .coverage,
             failure: nil
         )
-        let snapshot = CorpusSnapshot<[UInt8], Int>(entries: [entry], coveredIndices: [])
+        let snapshot = CorpusSnapshot<[UInt8], Int>(entries: [entry])
 
         // Schedule bytes persist as input element 0 (a normal element); there is no
         // separate schedule-bytes encoding flag.
