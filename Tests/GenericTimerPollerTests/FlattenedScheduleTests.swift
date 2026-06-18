@@ -153,6 +153,16 @@ struct FlattenedScheduleTests {
         // sibling scheduled tests it must not pass vacuously: retry starved
         // runs (heavy parallel load can zero out 200 ms) until iterations
         // happen, then ALWAYS assert. The time limit backstops the retries.
+        //
+        // Admission is pinned to `.everyDiscovery`: corpus admission is the
+        // SCHEDULER's job, decoupled from the coverage strategy's decision. An
+        // always-true decision only *guarantees* entries under permissive
+        // admission — the default `.featureOwnership` legitimately rejects a run
+        // that owns no coverage feature, and the empty body here covers zero new
+        // edges under parallel load (a non-nil but empty coverage snapshot),
+        // which featureOwnership correctly drops. This test pins the strategy
+        // seam (decide runs, its result reaches the corpus), not the admission
+        // policy — that is covered by FeatureOwnershipTests.
         for attempt in 1...20 {
             let decideRan = ObservedFlag()
             let custom = CoverageStrategy(makeEngine: {
@@ -170,6 +180,7 @@ struct FlattenedScheduleTests {
                     duration: .milliseconds(200),
                     persistence: .ephemeral,
                     coverageStrategy: custom,
+                    scheduler: MutationScheduler.weightedPool(admission: .everyDiscovery),
                     scheduleFuzzing: true
                 ) { (_: Int) in }
             }
