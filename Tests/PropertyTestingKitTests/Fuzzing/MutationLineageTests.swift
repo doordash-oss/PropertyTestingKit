@@ -43,7 +43,7 @@ struct MutationLineageTests {
                     generatedParents.update { _ = $0.insert(p) }
                 }
                 // Tag the first discovery with a recognizable origin.
-                if ctx.newCoverage != nil, !tagged.value {
+                if ctx.executionContext[CoverageProbeKey.self]?.coverage != nil, !tagged.value {
                     tagged.update { $0 = true }
                     return [.selectForMutation(.init(input: ctx.input, originID: 7))]
                 }

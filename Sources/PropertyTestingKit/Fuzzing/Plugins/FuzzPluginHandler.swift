@@ -112,7 +112,7 @@ extension FuzzPlugin {
             handleSync: { event in
                 switch event {
                 case let .iteration(context):
-                    if context.newCoverage != nil {
+                    if context.executionContext[CoverageProbeKey.self]?.coverage != nil {
                         return [.selectForMutation(.init(input: context.input, scheduleBytes: context.scheduleBytes))]
                     }
                     return []
@@ -169,7 +169,7 @@ extension FuzzPlugin {
                         .submitToCorpus(.init(
                             input: minimized,
                             scheduleBytes: context.scheduleBytes,
-                            sparseCoverage: context.sparseCoverage,
+                            sparseCoverage: context.executionContext[CoverageProbeKey.self]?.coverage ?? SparseCoverage(),
                             entryType: .failure
                         )),
                         .recordIssue(.init(
@@ -266,7 +266,7 @@ extension AnalysisPlugin {
             handleSync: { event in
                 switch event {
                 case let .iteration(context):
-                    detector.record(discoveredNewCoverage: context.newCoverage != nil)
+                    detector.record(discoveredNewCoverage: context.executionContext[CoverageProbeKey.self]?.coverage != nil)
 
                     if detector.hasPlateaued {
                         return [.stop(FuzzPluginAction<repeat each Input>.StopAction(reason: .custom("coverage_plateaued")))]
@@ -315,7 +315,7 @@ extension AnalysisPlugin {
             handleSync: { event in
                 switch event {
                 case let .iteration(context):
-                    detector.record(discoveredNewCoverage: context.newCoverage != nil)
+                    detector.record(discoveredNewCoverage: context.executionContext[CoverageProbeKey.self]?.coverage != nil)
 
                     if detector.hasPlateaued {
                         return [.stop(FuzzPluginAction<repeat each Input>.StopAction(reason: .custom("stads_plateau")))]
@@ -366,7 +366,7 @@ extension AnalysisPlugin {
             handleSync: { event in
                 switch event {
                 case let .iteration(context):
-                    detector.record(discoveredNewCoverage: context.newCoverage != nil)
+                    detector.record(discoveredNewCoverage: context.executionContext[CoverageProbeKey.self]?.coverage != nil)
 
                     if detector.hasPlateaued {
                         return [.stop(FuzzPluginAction<repeat each Input>.StopAction(reason: .custom("saturation_plateau")))]

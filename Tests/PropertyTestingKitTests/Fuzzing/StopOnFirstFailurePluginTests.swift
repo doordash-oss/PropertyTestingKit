@@ -28,7 +28,7 @@ struct StopOnFirstFailurePluginTests {
             scheduleBytes: nil,
             test: { _ in },
             sourceLocation: SourceLocation(fileID: #fileID, filePath: #filePath, line: #line, column: 1),
-            sparseCoverage: SparseCoverage(indices: [])
+            executionContext: .coverage(SparseCoverage(indices: []))
         )
         return .failureFound(context)
     }

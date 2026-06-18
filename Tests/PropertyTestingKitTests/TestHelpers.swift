@@ -306,6 +306,17 @@ func fuzzWithMaxIterations<each Input: Codable & Sendable>(
     })
 }
 
+extension RawExecutionContext {
+    /// Test convenience: a context carrying just a coverage verdict, for
+    /// exercising plugin handlers that read `CoverageProbeKey`. `nil` means the
+    /// run was not interesting (no new coverage).
+    static func coverage(_ sparse: SparseCoverage?) -> RawExecutionContext {
+        var context = RawExecutionContext()
+        context.set(CoverageProbeKey.self, CoverageVerdict(coverage: sparse))
+        return context
+    }
+}
+
 extension WeightedPoolCore {
     /// Test convenience mirroring the pre-seam `observe(PoolIterationOutcome)`:
     /// wraps the outcome's coverage in a `CoverageProbe` verdict and drives the

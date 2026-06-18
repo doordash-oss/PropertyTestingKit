@@ -35,7 +35,7 @@ struct CoverageGapHandlerActionTests {
         // Sync events should always return empty
         let iterationContext = SyncPluginEvent<Int>.IterationContext(
             input: 42,
-            newCoverage: SparseCoverage()
+            executionContext: .coverage(SparseCoverage())
         )
         let syncActions = handler.handleSync(SyncPluginEvent<Int>.iteration(iterationContext))
         #expect(syncActions.isEmpty)

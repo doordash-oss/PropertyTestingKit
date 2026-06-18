@@ -38,7 +38,14 @@ public protocol InstrumentationKey {
 /// Everything the engine knows about the execution that just finished: a keyed
 /// bag of whatever probe views were enabled this run. It names no signal — a
 /// scheduler retrieves the views it cares about by key.
-public struct RawExecutionContext {
+///
+/// `@unchecked Sendable`: a context is assembled and consumed on a single
+/// engine task (the scheduler's `observe` and the synchronous plugin handlers
+/// run inline on that task), and the view contract forbids stashing a view past
+/// the call that received it. Marked unchecked so it can be embedded in the
+/// `Sendable` plugin events — mirroring `FailureFoundContext`. It never actually
+/// crosses an isolation boundary.
+public struct RawExecutionContext: @unchecked Sendable {
     @usableFromInline
     var views: [ObjectIdentifier: Any]
 

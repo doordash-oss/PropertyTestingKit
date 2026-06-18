@@ -346,7 +346,7 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
                                     scheduleBytes: currentScheduleBytes,
                                     fromMutationQueue: fromMutationQueue,
                                     queueCount: queueCount,
-                                    newCoverage: iterationCoverage,
+                                    executionContext: execContext,
                                     parentID: parentID,
                                     poolParentID: poolParentID
                                 )
@@ -362,12 +362,10 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
                                         scheduleBytes: currentScheduleBytes,
                                         test: testWithIssueCapture,
                                         sourceLocation: sourceLocation,
-                                        // The failing run's coverage as judged by
-                                        // the probe this iteration; empty when the
-                                        // run was not interesting. (The engine no
-                                        // longer owns a measurement context to take
-                                        // a fresh snapshot from.)
-                                        sparseCoverage: iterationCoverage ?? SparseCoverage()
+                                        // The failing run's per-execution signals;
+                                        // a coverage-aware plugin reads its verdict
+                                        // out of this to tag the submitted entry.
+                                        executionContext: execContext
                                     )
                                 )
                             )

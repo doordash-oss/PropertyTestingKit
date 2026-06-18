@@ -42,9 +42,12 @@ public enum SyncPluginEvent<each T: Sendable>: Sendable {
         /// use `queueCount == 0` to detect that the queue has drained — e.g. to
         /// stop a regression replay once the seeded corpus is exhausted.
         public let queueCount: Int
-        /// The new coverage this iteration discovered, or `nil` if it covered
-        /// nothing new. A non-nil value *is* the "discovered new coverage" signal.
-        public let newCoverage: SparseCoverage?
+        /// The per-execution instrumentation signals for this iteration. A
+        /// plugin reads whatever signal it cares about by key — e.g. coverage
+        /// via `executionContext[CoverageProbeKey.self]?.coverage`. The engine
+        /// names no signal here, so a userspace plugin can consume one the
+        /// library has never heard of.
+        public let executionContext: RawExecutionContext
         /// The `originID` of the `selectForMutation` action this input was
         /// mutated from, or `nil` for generated inputs, seeds, and
         /// pool-scheduled mutants (those carry `poolParentID` instead). Opaque
@@ -70,7 +73,7 @@ public enum SyncPluginEvent<each T: Sendable>: Sendable {
             scheduleBytes: [UInt8]? = nil,
             fromMutationQueue: Bool = false,
             queueCount: Int = 0,
-            newCoverage: SparseCoverage? = nil,
+            executionContext: RawExecutionContext = RawExecutionContext(),
             parentID: Int? = nil,
             poolParentID: Int? = nil
         ) {
@@ -78,7 +81,7 @@ public enum SyncPluginEvent<each T: Sendable>: Sendable {
             self.scheduleBytes = scheduleBytes
             self.fromMutationQueue = fromMutationQueue
             self.queueCount = queueCount
-            self.newCoverage = newCoverage
+            self.executionContext = executionContext
             self.parentID = parentID
             self.poolParentID = poolParentID
         }
@@ -141,20 +144,24 @@ public enum AsyncPluginEvent<each T: Sendable>: Sendable {
         public let test: @Sendable ((repeat each T)) async throws -> Void
         /// Source location where the fuzz test was called.
         public let sourceLocation: SourceLocation
-        public let sparseCoverage: SparseCoverage
+        /// The failing run's per-execution instrumentation signals. A plugin
+        /// reads what it needs by key — e.g. coverage via
+        /// `executionContext[CoverageProbeKey.self]?.coverage` to tag the
+        /// submitted corpus entry.
+        public let executionContext: RawExecutionContext
 
         public init(
             input: consuming (repeat each T),
             scheduleBytes: [UInt8]? = nil,
             test: @Sendable @escaping ((repeat each T)) async throws -> Void,
             sourceLocation: SourceLocation,
-            sparseCoverage: SparseCoverage
+            executionContext: RawExecutionContext = RawExecutionContext()
         ) {
             self.input = input
             self.scheduleBytes = scheduleBytes
             self.test = test
             self.sourceLocation = sourceLocation
-            self.sparseCoverage = sparseCoverage
+            self.executionContext = executionContext
         }
     }
 }
