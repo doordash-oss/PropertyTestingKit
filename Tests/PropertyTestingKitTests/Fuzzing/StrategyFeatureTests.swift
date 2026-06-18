@@ -127,6 +127,25 @@ struct StrategyFeatureTests {
         #expect(engine.features?() == PathGrams.features(of: [1, 2, 3, 4], gramLength: 3))
     }
 
+    @Test("A rejected (duplicate) path leaves no stale grams behind")
+    func rejectedPathClearsGrams() {
+        // The stash that carries grams from `decide` to `features` must not
+        // retain the PREVIOUS accepted iteration's grams when this iteration
+        // is rejected — otherwise a reader that consults `features` after a
+        // reject gets phantom features from an earlier path.
+        let engine = CoverageStrategy.pathTrie(gramLength: 2).makeEngine()
+        engine.onEdge?(1, true)
+        engine.onEdge?(2, true)
+        #expect(engine.decide(stubView()))
+        #expect(engine.features?() == PathGrams.features(of: [1, 2], gramLength: 2))
+
+        engine.onReset?()
+        engine.onEdge?(1, true)
+        engine.onEdge?(2, true)
+        #expect(!engine.decide(stubView()), "the duplicate path is rejected")
+        #expect(engine.features?() == [], "a rejected decide must not leave stale grams")
+    }
+
     @Test("Strategies without a vocabulary publish no features")
     func newEdgeEngineHasNoVocabulary() {
         #expect(CoverageStrategy.newEdge.makeEngine().features == nil)

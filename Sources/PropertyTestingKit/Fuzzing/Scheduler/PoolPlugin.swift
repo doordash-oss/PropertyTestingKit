@@ -34,10 +34,10 @@ public struct PoolIterationOutcome: Sendable {
     public let source: PoolIterationSource
     /// Non-nil exactly when the coverage strategy accepted the input.
     public let newCoverage: SparseCoverage?
-    /// The strategy-defined culling vocabulary of the accepted run
-    /// (`.pathTrie`: path k-grams; `.hitCountBuckets`: (edge, bucket)
-    /// pairs). `nil` when the strategy publishes none — consumers fall back
-    /// to the covered edge indices via `resolvedFeatures`.
+    /// The strategy-defined culling vocabulary of the accepted run (today only
+    /// `.pathTrie(gramLength:)`'s path k-grams). `nil` when the strategy
+    /// publishes none — consumers fall back to the covered edge indices via
+    /// `resolvedFeatures`.
     public let features: [UInt64]?
     /// The input's real size (mutator-measured, summed across the pack) on
     /// accepted runs. `nil` when no mutator measures — the pool then falls
@@ -148,9 +148,12 @@ public struct PoolAdmission: Sendable {
     /// residence (strict semantics).
     ///
     /// Ownership is accounted in the strategy's own vocabulary when it
-    /// publishes one (`.pathTrie`: path k-grams; `.hitCountBuckets`:
-    /// (edge, bucket) pairs), and the covered edge indices otherwise — so
-    /// the pool retains exactly the diversity the strategy accepts for.
+    /// publishes one (today only `.pathTrie(gramLength:)`'s path k-grams), and
+    /// the covered edge indices otherwise — so the pool retains exactly the
+    /// diversity the strategy accepts for. (The default `.pathTrie` and
+    /// `.hitCountBuckets` publish none and cull on edges; an (edge, bucket)
+    /// vocabulary equal to hcb's acceptance criterion would be a tautology
+    /// that disables culling.)
     public static let featureOwnership = PoolAdmission(makeJudge: {
         var ledger = FeatureOwnershipLedger()
         return { features, size in

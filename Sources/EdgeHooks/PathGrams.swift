@@ -23,6 +23,11 @@
 /// signal the path strategy exists to capture) and deterministic across
 /// processes (corpus accounting must not change between runs, which rules out
 /// the per-process-seeded `Hasher`).
+///
+/// The hash is lossy: two distinct path fragments that collide in 64 bits
+/// become one ledger feature, so one would falsely "own" the other. At 64 bits
+/// this is negligible, and the whole gram vocabulary is opt-in
+/// (`pathTrie(gramLength:)`) — the default edge-index features are exact.
 public enum PathGrams {
     // FNV-1a constants; the multiply makes the fold non-commutative, which is
     // what carries position into the hash.

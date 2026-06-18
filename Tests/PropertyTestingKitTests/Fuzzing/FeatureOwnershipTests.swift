@@ -95,25 +95,21 @@ struct FeatureOwnershipAdmissionTests {
         }
     }
 
-    /// Stub Int mutator: feature-ownership admission is independent of the input.
-    private static let intMutator = Mutator<Int>(seeds: [0], mutate: { v, _ in v }, generate: { _ in 0 })
-
+    // White-box scaffolding is shared via `WeightedPoolHarness`; these thin
+    // forwards pin the admission to `.featureOwnership` for this suite.
     private func makeCore(
         policies: [any PoolPlugin], generationRatio: Double = 0
     ) -> WeightedPoolCore<Int> {
-        WeightedPoolCore<Int>(
-            mutators: Self.intMutator, admission: .featureOwnership,
-            policies: policies, generationRatio: generationRatio, rng: FastRNG())
+        WeightedPoolHarness.core(
+            admission: .featureOwnership, policies: policies, generationRatio: generationRatio)
     }
 
     private func accept(_ core: WeightedPoolCore<Int>, edges: [UInt32], parent: Int? = nil) -> Int? {
-        let source: PoolIterationSource = parent.map { .pool(parent: $0) } ?? .generated
-        return core.admit(0, coverage: SparseCoverage(indices: edges), poolSource: source)
+        WeightedPoolHarness.accept(core, edges: edges, parent: parent)
     }
 
     private func miss(_ core: WeightedPoolCore<Int>, parent: Int? = nil) {
-        let source: PoolIterationSource = parent.map { .pool(parent: $0) } ?? .generated
-        _ = core.admit(0, coverage: nil, poolSource: source)
+        WeightedPoolHarness.miss(core, parent: parent)
     }
 
     @Test("Redundant accepts are not admitted: no residence")

@@ -52,11 +52,13 @@ public struct CoverageEngine: Sendable {
     let decide: CoverageDecision
 
     /// The strategy's culling vocabulary for the LAST accepted decision —
-    /// the features the mutation pool's ledger accounts ownership over
-    /// (`.pathTrie`: sliding k-grams of the ordered first-hit path;
-    /// `.hitCountBuckets`: (edge, bucket) pairs). Called only after `decide`
-    /// returns `true`, inside the same gated window. `nil` (the default)
-    /// means the pool falls back to the covered edge indices.
+    /// the features the mutation pool's ledger accounts ownership over. The
+    /// only built-in that publishes one is `.pathTrie(gramLength:)` (sliding
+    /// k-grams of the ordered first-hit path); called only after `decide`
+    /// returns `true`, inside the same gated window. `nil` (the default for
+    /// every other strategy, including the default `.pathTrie` and
+    /// `.hitCountBuckets`) means the pool falls back to the covered edge
+    /// indices.
     let features: (@Sendable () -> [UInt64])?
 
     public init(

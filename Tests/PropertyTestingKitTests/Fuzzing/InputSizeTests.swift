@@ -126,7 +126,7 @@ struct InputSizeTests {
         let sizes = SyncBox<[Int?]>([])
         let spy = SyncBox<Int>(0)
 
-        let probe = FuzzPlugin<Int, Int>(id: "stop_probe", handleSync: { event in
+        let probe = FuzzPlugin<Int, Int, Int>(id: "stop_probe", handleSync: { event in
             switch event {
             case .iteration:
                 spy.update { $0 += 1 }
@@ -148,7 +148,12 @@ struct InputSizeTests {
             }
         }
 
-        let sized = Mutator<Int>(
+        // Two SIZED positions with DIFFERENT constants plus one BLIND position:
+        // the pack size must sum to 3 + 5 = 8 (the blind position contributes
+        // nothing). A broken metric — first-wins (3 or 5), max (5), or counting
+        // the blind position — would not equal 8, so the sum is differentially
+        // exercised, not just a single constant.
+        let sizedA = Mutator<Int>(
             seeds: [1],
             mutate: { value, rng in value &+ Int(rng.next() % 7) },
             generate: { rng in Int(rng.next() % 1000) },
@@ -157,21 +162,32 @@ struct InputSizeTests {
             seeds: [2],
             mutate: { value, rng in value &- Int(rng.next() % 7) },
             generate: { rng in Int(rng.next() % 1000) })
+        let sizedB = Mutator<Int>(
+            seeds: [3],
+            mutate: { value, rng in value &+ Int(rng.next() % 5) },
+            generate: { rng in Int(rng.next() % 1000) },
+            size: { _ in 5 })
 
         _ = try await fuzz(
-            using: sized, blind,
+            using: sizedA, blind, sizedB,
             duration: .seconds(10),
             persistence: .ephemeral,
             scheduler: MutationScheduler.weightedPool(policies: { [SizeTap(sizes: sizes)] }),
             parallelism: 1,
             plugins: { [probe] }
-        ) { (a: Int, b: Int) in
-            blackHole(a &+ b)
+        ) { (a: Int, b: Int, c: Int) in
+            // Input-dependent branch → reliably distinct coverage even under
+            // parallel load (don't lean on pathTrie's first-path being novel).
+            if (a &+ b &+ c) % 2 == 0 {
+                blackHole(a &+ c)
+            } else {
+                blackHole(b &- a)
+            }
         }
 
         let accepted = sizes.value
         #expect(!accepted.isEmpty, "some inputs should be accepted")
-        // Only the sized mutator contributes; the blind one is skipped.
-        #expect(accepted.allSatisfy { $0 == 3 })
+        // 3 (sizedA) + 0 (blind, no size closure) + 5 (sizedB) = 8.
+        #expect(accepted.allSatisfy { $0 == 8 })
     }
 }

@@ -169,13 +169,15 @@ final class WeightedPoolCore<each Input: Codable & Sendable> {
         inputSize: Int? = nil,
         poolSource: PoolIterationSource
     ) -> Int? {
-        notifyAndApply(.iteration(PoolIterationOutcome(
-            source: poolSource, newCoverage: coverage, features: features, inputSize: inputSize)))
+        let outcome = PoolIterationOutcome(
+            source: poolSource, newCoverage: coverage, features: features, inputSize: inputSize)
+        notifyAndApply(.iteration(outcome))
 
         guard let coverage else { return nil }
         // The pool accounts ownership in the strategy's vocabulary when it
-        // publishes one, and widened covered edges otherwise.
-        let resolved = features ?? coverage.indices.map(UInt64.init)
+        // publishes one, and widened covered edges otherwise — `resolvedFeatures`
+        // is the single definition of that fallback.
+        let resolved = outcome.resolvedFeatures
         let verdict = judge(resolved, inputSize ?? coverage.count)
         guard verdict.admit else { return nil }
 
@@ -213,9 +215,14 @@ final class WeightedPoolCore<each Input: Codable & Sendable> {
     /// releasing them re-opens the vocabulary and the pool degenerates into a
     /// revolving door of re-claimers.
     private func capacityVictim() -> Int? {
+        // Explicit comparator (no negation) so a pathological `size` closure
+        // returning `Int.min` can't trap on `-size`.
         live.min { lhs, rhs in
-            (weights[lhs], -(sizes[lhs] ?? 0), -lhs)
-                < (weights[rhs], -(sizes[rhs] ?? 0), -rhs)
+            let (wl, wr) = (weights[lhs], weights[rhs])
+            if wl != wr { return wl < wr }              // lowest weight first
+            let (sl, sr) = (sizes[lhs] ?? 0, sizes[rhs] ?? 0)
+            if sl != sr { return sl > sr }              // largest measured size first
+            return lhs > rhs                            // newest (largest id) first
         }
     }
 

@@ -83,9 +83,14 @@ public final class PathTrie: @unchecked Sendable {
     /// would append to the path and hash grams the judgement never saw.
     public func markTerminalIfUnique(collectingGrams gramLength: Int) -> [UInt64]? {
         lock.lock()
-        defer { lock.unlock() }
-        guard judgeAndMark() else { return nil }
-        return PathGrams.features(of: path, gramLength: gramLength)
+        let unique = judgeAndMark()
+        // Snapshot the path under the lock, then hash OUTSIDE it: the O(path)
+        // FNV fold and its allocation must not sit in the critical section a
+        // straggler `advance` contends on.
+        let snapshot = unique ? path : []
+        lock.unlock()
+        guard unique else { return nil }
+        return PathGrams.features(of: snapshot, gramLength: gramLength)
     }
 
     /// Callers must hold `lock`.

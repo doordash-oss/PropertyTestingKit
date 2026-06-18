@@ -44,35 +44,23 @@ private final class ScriptedPolicy: PoolPlugin {
 @Suite("WeightedPool core")
 struct WeightedPoolCoreTests {
 
-    /// A trivial Int mutator: the pool's draw/admission policy is independent of
-    /// the typed input, so production is a no-op stub here.
-    private static let intMutator = Mutator<Int>(seeds: [0], mutate: { v, _ in v }, generate: { _ in 0 })
-
+    // White-box scaffolding is shared via `WeightedPoolHarness`; these thin
+    // forwards keep the call sites below readable.
     private func makeCore(
         policies: [any PoolPlugin] = [],
         generationRatio: Double = 0
     ) -> WeightedPoolCore<Int> {
-        WeightedPoolCore<Int>(
-            mutators: Self.intMutator,
-            admission: .everyDiscovery,
-            policies: policies,
-            generationRatio: generationRatio,
-            rng: FastRNG()
-        )
+        WeightedPoolHarness.core(policies: policies, generationRatio: generationRatio)
     }
 
-    /// One accepted discovery: coverage/lineage shaped like the engine's accept path.
     private func accept(
         _ core: WeightedPoolCore<Int>, edges: [UInt32], parent: Int? = nil
     ) -> Int? {
-        let source: PoolIterationSource = parent.map { .pool(parent: $0) } ?? .generated
-        return core.admit(0, coverage: SparseCoverage(indices: edges), poolSource: source)
+        WeightedPoolHarness.accept(core, edges: edges, parent: parent)
     }
 
-    /// One uninteresting execution attributed to `parent`.
     private func miss(_ core: WeightedPoolCore<Int>, parent: Int? = nil) {
-        let source: PoolIterationSource = parent.map { .pool(parent: $0) } ?? .generated
-        _ = core.admit(0, coverage: nil, poolSource: source)
+        WeightedPoolHarness.miss(core, parent: parent)
     }
 
     @Test("Empty pool always directs fresh generation")

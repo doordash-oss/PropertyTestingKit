@@ -41,9 +41,11 @@ extension CoverageStrategy {
     /// one-feature-per-path, where nothing ever contests ownership. `nil`
     /// (the `.pathTrie` default) publishes no vocabulary at all: the pool
     /// falls back to the covered edge indices (the coarsest, most
-    /// flood-controlling setting — and the only one measured to win).
-    /// Consider pairing a gram length with `capacity:` on the scheduler:
-    /// vocabulary size is otherwise the pool's population ceiling.
+    /// flood-controlling setting — and the only one measured to win). A
+    /// non-nil value `<= 0` behaves as `1` (order-insensitive unigrams) —
+    /// `nil`, not `0`, is the "off" switch. Consider pairing a gram length
+    /// with `capacity:` on the scheduler: vocabulary size is otherwise the
+    /// pool's population ceiling.
     public static func pathTrie(gramLength: Int?) -> CoverageStrategy {
         CoverageStrategy(makeEngine: { makePathTrieEngine(gramLength: gramLength) })
     }
@@ -96,6 +98,10 @@ private func makePathTrieEngine(gramLength: Int?) -> CoverageEngine {
         // putting the terminal mark on the wrong node and hashing grams the
         // judgement never saw.
         guard let grams = trie.markTerminalIfUnique(collectingGrams: gramLength) else {
+            // Clear the stash on reject so a stray read of `features` after a
+            // non-accept fails loud (empty) rather than returning the previous
+            // accepted iteration's grams.
+            lastGrams.value = []
             return false
         }
         lastGrams.value = grams

@@ -20,8 +20,9 @@
 /// The ownership state machine behind `PoolAdmission.featureOwnership`.
 ///
 /// A *feature* here is an opaque `UInt64` fact about a run — the strategy's
-/// own vocabulary when it publishes one (path k-grams, (edge, bucket) pairs),
-/// the covered edge indices otherwise. The *size* metric orders owners:
+/// own vocabulary when it publishes one (today only `.pathTrie(gramLength:)`'s
+/// path k-grams), the covered edge indices otherwise. The *size* metric orders
+/// owners:
 /// smaller wins (REDUCE), ties don't steal, so ownership can only ever move
 /// to strictly simpler inputs and the churn terminates.
 ///
@@ -40,7 +41,8 @@ struct FeatureOwnershipLedger {
 
     /// Feature → owning entry ID.
     private var featureOwners: [UInt64: Int] = [:]
-    /// REDUCE metric per entry (covered-edge count at accept), index == ID.
+    /// REDUCE metric per entry at accept (the mutator-measured input size when
+    /// available, the covered-edge count otherwise), index == ID.
     private var entrySize: [Int] = []
     /// Features currently owned per entry, index == ID.
     private var entryOwnedCount: [Int] = []

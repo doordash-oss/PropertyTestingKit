@@ -32,9 +32,10 @@ public struct CoverageVerdict {
     /// The run's sparse coverage when the strategy judged the input
     /// interesting; `nil` when it covered nothing worth retaining.
     public let coverage: SparseCoverage?
-    /// The strategy's culling vocabulary for the accepted run (path k-grams,
-    /// (edge, bucket) pairs); `nil` when the strategy publishes none — the
-    /// scheduler then falls back to the covered edge indices.
+    /// The strategy's culling vocabulary for the accepted run (today only
+    /// `.pathTrie(gramLength:)`'s path k-grams); `nil` when the strategy
+    /// publishes none — the scheduler then falls back to the covered edge
+    /// indices.
     public let features: [UInt64]?
 
     public init(coverage: SparseCoverage?, features: [UInt64]? = nil) {
