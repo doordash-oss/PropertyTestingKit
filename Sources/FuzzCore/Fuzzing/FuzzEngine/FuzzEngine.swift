@@ -195,11 +195,11 @@ public final class FuzzEngine<each Input: Codable & Sendable>: @unchecked Sendab
         let finalSnapshot = resultCorpus.snapshot()
 
         // Send .end event to plugins (for coverage gap analysis, etc.). The
-        // aggregate covered-edge set comes from the coverage probe (surfaced via
-        // the state-machine result), not the corpus — the corpus no longer owns
-        // a coverage bitmap.
+        // run-spanning summary is assembled from the installed probes (e.g. the
+        // coverage probe contributes its union of covered edges); the engine
+        // names no signal — a plugin reads what it needs from the summary by key.
         let endContext = AsyncPluginEvent<repeat each Input>.EndContext(
-            totalCoveredIndices: stateMachineResult.coveredIndices,
+            executionContext: stateMachineResult.campaignSummary,
             projectPath: config.projectPath,
             sourceLocation: config.sourceLocation
         )

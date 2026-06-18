@@ -74,11 +74,6 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
     /// measurement context exists, then assembled into a `RawExecutionContext`
     /// each iteration.
     private var probes: [any InstrumentationProbe] = []
-    /// An installed probe that reports an aggregate index set, if any. Held so
-    /// the engine can read it at teardown for the `.end` event (e.g. coverage
-    /// gap) without naming a signal — `AggregateIndexReporting` is a core
-    /// protocol a probe opts into. Outside the hot loop.
-    private var aggregateReporter: (any AggregateIndexReporting)?
     /// Typed inputs for pool entries, index == pool entry ID. Append-only —
     /// eviction is the scheduler's concern (live set), not storage's.
     private var poolEntries: [(repeat each Input)] = []
@@ -140,11 +135,12 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
         let stats: FuzzStats
         let corpus: Corpus<repeat each Input>
         let failures: [(input: (repeat each Input), error: Error, timeElapsed: TimeInterval, scheduleBytes: [UInt8]?)]
-        /// Union of edge indices across every interesting run, surfaced from the
-        /// coverage probe so the engine can feed the coverage-gap (`.end`) event
-        /// without the corpus owning a coverage bitmap. Empty when no coverage
-        /// probe was installed.
-        let coveredIndices: Set<UInt32>
+        /// Run-spanning instrumentation summary, assembled from the installed
+        /// probes at campaign end and surfaced to the `.end` event. The engine
+        /// names no signal: a probe contributes its own aggregate (e.g. the
+        /// coverage probe's union of covered edges) via
+        /// `contributeCampaignSummary`. Empty when no probe contributes one.
+        let campaignSummary: RawExecutionContext
         /// A plugin asked to stop the whole parallel campaign (`StopScope.campaign`).
         let campaignStopRequested: Bool
     }
@@ -193,9 +189,6 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
             probes = providers
                 .filter { requiredKeys.contains(ObjectIdentifier($0.key)) }
                 .map { $0.makeProbe() }
-            // The coverage probe, if installed, owns the aggregate covered-edge
-            // set the engine reads at teardown for the `.end` event.
-            aggregateReporter = probes.compactMap { $0 as? any AggregateIndexReporting }.first
 
             // Set up probes before the first test execution (pathTrie attaches its
             // trie so edges advance during iteration 1); tear down after the loop.
@@ -391,11 +384,17 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
                 "[FUZZ] FuzzStateMachine.start() finished: totalInputs=\(stats.totalInputs), duration=\(stats.duration), stopReason=\(stats.stopReason)"
             )
         }
+        // Assemble the run-spanning summary from the installed probes (e.g. the
+        // coverage probe contributes its union of covered edges). The engine
+        // names no signal — each probe contributes its own aggregate by key.
+        var campaignSummary = RawExecutionContext()
+        for probe in probes { probe.contributeCampaignSummary(to: &campaignSummary) }
+
         return FuzzStateMachineResult(
             stats: stats,
             corpus: corpus,
             failures: failures,
-            coveredIndices: aggregateReporter?.aggregateIndices ?? [],
+            campaignSummary: campaignSummary,
             campaignStopRequested: haltScope == .campaign
         )
     }

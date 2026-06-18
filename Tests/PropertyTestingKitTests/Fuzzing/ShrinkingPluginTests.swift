@@ -49,7 +49,7 @@ struct ShrinkingHandlerTests {
 
         // Test end event (async)
         let endContext = AsyncPluginEvent<Int>.EndContext(
-            totalCoveredIndices: Set([1, 2, 3]),
+            executionContext: .coverage(SparseCoverage(indices: [1, 2, 3])),
             projectPath: nil,
             sourceLocation: SourceLocation(fileID: #fileID, filePath: #filePath, line: #line, column: 1)
         )

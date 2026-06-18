@@ -78,7 +78,7 @@ struct StopOnFirstFailurePluginTests {
         let plugin: AnalysisPlugin<Int> = .stopOnFirstFailure()
         let start = AsyncPluginEvent<Int>.start(.init(maxDuration: .seconds(1)))
         let end = AsyncPluginEvent<Int>.end(.init(
-            totalCoveredIndices: [], projectPath: nil,
+            executionContext: RawExecutionContext(), projectPath: nil,
             sourceLocation: SourceLocation(fileID: #fileID, filePath: #filePath, line: #line, column: 1)))
         #expect(try await plugin.handleAsync(start).isEmpty)
         #expect(try await plugin.handleAsync(end).isEmpty)

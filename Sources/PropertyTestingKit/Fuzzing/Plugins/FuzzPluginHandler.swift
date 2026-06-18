@@ -401,9 +401,14 @@ extension AnalysisPlugin {
                     await SanCovCounters.startPreWarmingSourceLocations()
                     return []
                 case let .end(endContext):
+                    // The covered-edge union comes from the coverage probe's
+                    // campaign summary, read by key — the engine names no signal.
+                    let coveredIndices = Set(
+                        endContext.executionContext[CoverageProbeKey.self]?.coverage?.indices ?? []
+                    )
                     let coverageGapReport = await detector
                         .detect(
-                            from: endContext.totalCoveredIndices,
+                            from: coveredIndices,
                             projectPath: endContext.projectPath
                         )
 

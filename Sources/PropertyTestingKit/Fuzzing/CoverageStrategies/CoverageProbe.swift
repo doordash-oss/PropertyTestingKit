@@ -123,12 +123,14 @@ final class CoverageProbe: InstrumentationProbe {
         }
         return CoverageVerdict(coverage: coverage)
     }
-}
 
-extension CoverageProbe: AggregateIndexReporting {
-    /// The union of every interesting run's covered edges — what the engine
-    /// reports for the `.end` (coverage-gap) event.
-    var aggregateIndices: Set<UInt32> { coveredIndices }
+    /// Surface the union of every interesting run's covered edges to the
+    /// campaign-end (`.end`) context, keyed by `CoverageProbeKey` — exactly the
+    /// key its per-execution verdict uses. The coverage-gap plugin reads it
+    /// from there, so the engine never names coverage to feed `.end`.
+    func contributeCampaignSummary(to context: inout RawExecutionContext) {
+        context.set(CoverageProbeKey.self, CoverageVerdict(coverage: SparseCoverage(indices: Array(coveredIndices))))
+    }
 }
 
 /// Builds a `CoverageProbe` per engine for the `CoverageProbeKey` signal. The

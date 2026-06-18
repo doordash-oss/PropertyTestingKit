@@ -116,19 +116,24 @@ public enum AsyncPluginEvent<each T: Sendable>: Sendable {
 
     /// Context provided when fuzzing ends.
     public struct EndContext: Sendable {
-        /// Set of all covered edge indices.
-        public let totalCoveredIndices: Set<UInt32>
+        /// The run-spanning instrumentation summary, assembled from the
+        /// installed probes at campaign end. A plugin reads whatever aggregate
+        /// it cares about by key — e.g. the union of covered edges via
+        /// `executionContext[CoverageProbeKey.self]?.coverage`. The engine names
+        /// no signal here, so end-of-campaign analysis for a signal the library
+        /// has never heard of plugs in the same way.
+        public let executionContext: RawExecutionContext
         /// Project path for filtering (if configured).
         public let projectPath: String?
         /// Source location of the fuzz call.
         public let sourceLocation: SourceLocation
 
         public init(
-            totalCoveredIndices: Set<UInt32>,
+            executionContext: RawExecutionContext,
             projectPath: String?,
             sourceLocation: SourceLocation
         ) {
-            self.totalCoveredIndices = totalCoveredIndices
+            self.executionContext = executionContext
             self.projectPath = projectPath
             self.sourceLocation = sourceLocation
         }

@@ -100,6 +100,18 @@ public protocol InstrumentationProbe: AnyObject {
     /// Tear down native instrumentation. Called once after the loop ends,
     /// after `withCampaignScope` returns. The mirror of `setUp`.
     func tearDown()
+
+    /// Contribute a run-spanning summary view to the campaign-end (`.end`)
+    /// context. The default contributes nothing. A probe that accumulates state
+    /// across the whole run (e.g. the union of every interesting run's covered
+    /// edges) overrides this to expose that aggregate for end-of-campaign
+    /// analysis — keyed exactly like its per-execution view, so a plugin reads
+    /// it the same way it reads per-iteration signals.
+    ///
+    /// Declared as a requirement (not just an extension) so the override
+    /// dispatches dynamically when the engine holds the probe as `any
+    /// InstrumentationProbe`.
+    func contributeCampaignSummary(to context: inout RawExecutionContext)
 }
 
 extension InstrumentationProbe {
@@ -109,20 +121,13 @@ extension InstrumentationProbe {
     public func withCampaignScope(_ body: () async throws -> Void) async rethrows {
         try await body()
     }
+    public func contributeCampaignSummary(to context: inout RawExecutionContext) {}
 
     /// Contribute this probe's view into the per-execution context. Internal:
     /// the engine assembles the context; conformers only implement `makeView`.
     func contribute(to context: inout RawExecutionContext) {
         context.set(Key.self, makeView())
     }
-}
-
-/// A probe that accumulates an aggregate index set across the whole run (e.g.
-/// the union of every interesting run's covered edges). The engine reads it once
-/// at teardown to populate the `.end` event (e.g. coverage-gap analysis) without
-/// naming the underlying signal — a probe opts in by conforming.
-public protocol AggregateIndexReporting {
-    var aggregateIndices: Set<UInt32> { get }
 }
 
 /// Supplies a probe to the engine for a signal a scheduler asked for.
