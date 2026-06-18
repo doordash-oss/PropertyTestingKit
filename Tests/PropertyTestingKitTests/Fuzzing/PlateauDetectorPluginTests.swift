@@ -47,7 +47,7 @@ struct PlateauDetectorHandlerTests {
         for i in 0..<50 {
             let context = SyncPluginEvent<Int>.IterationContext(
                 input: i,
-                newCoverage: SparseCoverage()
+                executionContext: .coverage(SparseCoverage())
             )
             let actions = handler.handleSync(SyncPluginEvent<Int>.iteration(context))
             #expect(actions.isEmpty, "Should not stop when discovering coverage")

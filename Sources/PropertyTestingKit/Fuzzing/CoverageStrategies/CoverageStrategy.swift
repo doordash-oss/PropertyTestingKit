@@ -15,6 +15,7 @@
 //  Swappable coverage strategies that determine when a fuzz input is "interesting."
 //
 
+import FuzzCore
 import EdgeHooks
 import SanCovHooks
 
@@ -108,7 +109,7 @@ extension CoverageStrategy {
     /// machine drives. The wrapper owns storage — when the strategy's decision
     /// says yes, the input is recorded in the corpus with its coverage and
     /// schedule bytes. Strategies themselves never touch the corpus.
-    func makeEvaluator<each Input: Codable & Sendable>() -> CoverageEvaluator<repeat each Input> {
+    func makeEvaluator() -> CoverageEvaluator {
         let engine = makeEngine()
         // No hooks → nothing to attach: a cleared recorder field already
         // means "default recording".
@@ -120,7 +121,7 @@ extension CoverageStrategy {
                 )
             }
             : nil
-        return CoverageEvaluator(setup: setup, evaluate: { input, scheduleBytes, context, coverageClient, corpus in
+        return CoverageEvaluator(setup: setup, evaluate: { context, coverageClient in
             // The snapshot is lazy: decisions that never read coverage (the
             // default .pathTrie judges with its own trie) reject without
             // paying the O(covered-edges) snapshot.
@@ -139,15 +140,14 @@ extension CoverageStrategy {
             guard interesting else {
                 return nil
             }
-            // Judgement said yes; recording the input is the engine's job,
-            // not the strategy's. The decision's snapshot is reused — or
-            // taken now if it never read one. No coverage, no recording:
-            // storing empty coverage would make a broken measurement look
-            // like a novel empty edge set.
+            // Judgement said yes. The decision's snapshot is reused — or taken
+            // now if it never read one. No coverage, no verdict: storing empty
+            // coverage would make a broken measurement look like a novel empty
+            // edge set. Recording the interesting input in the corpus is the
+            // engine's job (driven by this non-nil verdict), not the strategy's.
             guard let sparse = coverage.materialized() else {
                 return nil
             }
-            corpus.mergeCoverageAndAdd(input: input, scheduleBytes: scheduleBytes, sparse: sparse)
             return sparse
         })
     }
@@ -161,17 +161,16 @@ extension CoverageStrategy {
 /// storage.
 public typealias CoverageDecision = @Sendable (_ coverage: CoverageView) -> Bool
 
-/// A closure that decides if an input is interesting and records it.
+/// A closure that decides if an input is interesting.
 ///
 /// Returns the run's sparse coverage when the input was interesting (the
 /// snapshot already taken for the decision — callers must not re-snapshot),
-/// or `nil` when it wasn't.
-typealias CoverageStrategyFn<each Input: Codable & Sendable> = (
-    _ input: (repeat each Input),
-    _ scheduleBytes: [UInt8]?,
+/// or `nil` when it wasn't. Pure judgement over the measurement context: it
+/// is input-pack-agnostic (and so non-generic), which is what lets coverage be
+/// produced by a plain `InstrumentationProbe` and consumed by any scheduler.
+typealias CoverageStrategyFn = (
     _ context: SanCovCounters.MeasurementContext,
-    _ coverageClient: CoverageCountersClient,
-    _ corpus: Corpus<repeat each Input>
+    _ coverageClient: CoverageCountersClient
 ) -> SparseCoverage?
 
 /// Called once with the measurement context before the first test execution.
@@ -181,8 +180,10 @@ typealias CoverageStrategySetup = (
     _ context: SanCovCounters.MeasurementContext
 ) -> Void
 
-/// A coverage evaluator with an optional setup phase. Built per-engine by `CoverageStrategy`.
-struct CoverageEvaluator<each Input: Codable & Sendable> {
+/// A coverage evaluator with an optional setup phase. Built per-engine by
+/// `CoverageStrategy`. Non-generic: it judges the measurement context and never
+/// touches the typed input or the corpus, so a `CoverageProbe` can wrap it.
+struct CoverageEvaluator {
     let setup: CoverageStrategySetup?
-    let evaluate: CoverageStrategyFn<repeat each Input>
+    let evaluate: CoverageStrategyFn
 }

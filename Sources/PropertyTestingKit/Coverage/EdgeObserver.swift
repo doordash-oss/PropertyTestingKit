@@ -30,6 +30,7 @@
 //  the coverage map; they just aren't observed.
 //
 
+import FuzzCore
 import Foundation
 import EdgeHooks
 import SanCovHooks

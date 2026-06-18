@@ -29,7 +29,7 @@ struct HitCountBucketsStrategyTests {
     /// code per pass (the loop's own edges track `hits` too — by design, that
     /// noise lands in the same buckets as the dispatched edge).
     private func firePass(
-        _ evaluator: CoverageEvaluator<Int>,
+        _ evaluator: CoverageEvaluator,
         edge: UInt32,
         hits: Int,
         input: Int,
@@ -42,7 +42,11 @@ struct HitCountBucketsStrategyTests {
         for _ in 0..<hits {
             sancov_dispatch_edge(&guardValue)
         }
-        return evaluator.evaluate(input, nil, context, coverageClient, corpus) != nil
+        let sparse = evaluator.evaluate(context, coverageClient)
+        if let s = sparse {
+            corpus.mergeCoverageAndAdd(input: input, scheduleBytes: nil, sparse: s)
+        }
+        return sparse != nil
     }
 
     @Test("First sight of an edge is interesting")
@@ -52,7 +56,7 @@ struct HitCountBucketsStrategyTests {
         let coverageClient = CoverageCountersClient.liveValue
         let corpus = Corpus<Int>()
 
-        let evaluator: CoverageEvaluator<Int> = CoverageStrategy.hitCountBuckets.makeEvaluator()
+        let evaluator: CoverageEvaluator = CoverageStrategy.hitCountBuckets.makeEvaluator()
         evaluator.setup?(context)
 
         #expect(firePass(evaluator, edge: 61, hits: 1, input: 1, context, coverageClient, corpus),
@@ -67,7 +71,7 @@ struct HitCountBucketsStrategyTests {
         let coverageClient = CoverageCountersClient.liveValue
         let corpus = Corpus<Int>()
 
-        let evaluator: CoverageEvaluator<Int> = CoverageStrategy.hitCountBuckets.makeEvaluator()
+        let evaluator: CoverageEvaluator = CoverageStrategy.hitCountBuckets.makeEvaluator()
         evaluator.setup?(context)
 
         #expect(firePass(evaluator, edge: 62, hits: 1, input: 1, context, coverageClient, corpus),
@@ -83,7 +87,7 @@ struct HitCountBucketsStrategyTests {
         let coverageClient = CoverageCountersClient.liveValue
         let corpus = Corpus<Int>()
 
-        let evaluator: CoverageEvaluator<Int> = CoverageStrategy.hitCountBuckets.makeEvaluator()
+        let evaluator: CoverageEvaluator = CoverageStrategy.hitCountBuckets.makeEvaluator()
         evaluator.setup?(context)
 
         #expect(firePass(evaluator, edge: 63, hits: 1, input: 1, context, coverageClient, corpus),
@@ -99,7 +103,7 @@ struct HitCountBucketsStrategyTests {
         let coverageClient = CoverageCountersClient.liveValue
         let corpus = Corpus<Int>()
 
-        let evaluator: CoverageEvaluator<Int> = CoverageStrategy.hitCountBuckets.makeEvaluator()
+        let evaluator: CoverageEvaluator = CoverageStrategy.hitCountBuckets.makeEvaluator()
         evaluator.setup?(context)
 
         #expect(firePass(evaluator, edge: 64, hits: 4, input: 1, context, coverageClient, corpus),
@@ -118,8 +122,8 @@ struct HitCountBucketsStrategyTests {
         let corpus = Corpus<Int>()
 
         let strategy = CoverageStrategy.hitCountBuckets
-        let engine1: CoverageEvaluator<Int> = strategy.makeEvaluator()
-        let engine2: CoverageEvaluator<Int> = strategy.makeEvaluator()
+        let engine1: CoverageEvaluator = strategy.makeEvaluator()
+        let engine2: CoverageEvaluator = strategy.makeEvaluator()
         engine1.setup?(context)
 
         #expect(firePass(engine1, edge: 65, hits: 1, input: 1, context, coverageClient, corpus),

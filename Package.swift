@@ -14,6 +14,10 @@ let package = Package(
             name: "PropertyTestingKit",
             targets: ["PropertyTestingKit"]
         ),
+        .library(
+            name: "FuzzCore",
+            targets: ["FuzzCore"]
+        ),
     ],
     dependencies: [
         .package(url: "https://github.com/pointfreeco/swift-dependencies.git", from: "1.6.0"),
@@ -86,9 +90,26 @@ let package = Package(
             ]
         ),
 
+        // The signal-agnostic fuzzing engine + extensibility seam. Knows nothing
+        // about coverage or any specific scheduler — those are defined in modules
+        // that import this one (PropertyTestingKit is the batteries-included one).
+        .target(
+            name: "FuzzCore",
+            dependencies: [
+                "SanCovHooks",
+                "ScheduleControl",
+                .product(name: "Dependencies", package: "swift-dependencies"),
+                .product(name: "DequeModule", package: "swift-collections"),
+                .product(name: "Atomics", package: "swift-atomics"),
+            ]
+        ),
+
+        // Batteries-included layer: edge coverage, the weighted-pool scheduler,
+        // the corpus coordinator, and the `fuzz()`/`regress()` entry points.
         .target(
             name: "PropertyTestingKit",
             dependencies: [
+                "FuzzCore",
                 "SanCovHooks",
                 "EdgeHooks",
                 "ScheduleControl",
@@ -105,6 +126,7 @@ let package = Package(
             name: "PropertyTestingKitTests",
             dependencies: [
                 "PropertyTestingKit",
+                "FuzzCore",
                 .product(name: "Dependencies", package: "swift-dependencies"),
                 .product(name: "FunctionSpy", package: "FunctionSpy"),
             ],
@@ -169,6 +191,7 @@ let package = Package(
             name: "TSanTests",
             dependencies: [
                 "PropertyTestingKit",
+                "FuzzCore",
             ]
         ),
 
@@ -193,6 +216,7 @@ let package = Package(
             dependencies: [
                 "GenericTimerPoller",
                 "PropertyTestingKit",
+                "FuzzCore",
                 "ScheduleControl",
                 .product(name: "Dependencies", package: "swift-dependencies"),
                 .product(name: "Clocks", package: "swift-clocks"),

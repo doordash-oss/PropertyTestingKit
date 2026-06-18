@@ -21,6 +21,7 @@
 //  and the run is terminated by the `stopWhenQueueEmpty()` plugin once those seeds drain.
 //
 
+import FuzzCore
 import Foundation
 import Testing
 import Dependencies
@@ -86,6 +87,7 @@ func runFuzz<each Input: Codable & Sendable>(
     duration: Duration,
     verbose: Bool,
     coverageStrategy: CoverageStrategy,
+    scheduler: any SchedulerFactory,
     projectPath: String?,
     sourceFileID: String,
     sourceFilePath: String,
@@ -135,6 +137,7 @@ func runFuzz<each Input: Codable & Sendable>(
             persist: true,
             config: makeConfig(),
             coverageStrategy: coverageStrategy,
+            scheduler: scheduler,
             scheduleBytesExtractor: scheduleBytesExtractor,
             makeHandlers: makeHandlers,
             test: test
@@ -156,6 +159,7 @@ func runFuzz<each Input: Codable & Sendable>(
             persist: true,
             config: makeConfig(),
             coverageStrategy: coverageStrategy,
+            scheduler: scheduler,
             scheduleBytesExtractor: scheduleBytesExtractor,
             makeHandlers: makeHandlers,
             test: test
@@ -179,6 +183,7 @@ func runFuzz<each Input: Codable & Sendable>(
             persist: true,
             config: makeConfig(),
             coverageStrategy: coverageStrategy,
+            scheduler: scheduler,
             scheduleBytesExtractor: scheduleBytesExtractor,
             makeHandlers: makeHandlers,
             test: test
@@ -195,6 +200,7 @@ func runFuzz<each Input: Codable & Sendable>(
             persist: false,
             config: makeConfig(),
             coverageStrategy: coverageStrategy,
+            scheduler: scheduler,
             scheduleBytesExtractor: scheduleBytesExtractor,
             makeHandlers: makeHandlers,
             test: test
@@ -317,6 +323,7 @@ private func fuzzCampaign<each Input: Codable & Sendable>(
     persist: Bool,
     config: FuzzEngineConfig,
     coverageStrategy: CoverageStrategy,
+    scheduler: any SchedulerFactory,
     scheduleBytesExtractor: @escaping @Sendable ((repeat each Input)) -> [UInt8]? = { _ in nil },
     makeHandlers: @escaping @Sendable () -> [FuzzPlugin<repeat each Input>],
     test: @escaping @Sendable ((repeat each Input)) async throws -> Void
@@ -339,6 +346,7 @@ private func fuzzCampaign<each Input: Codable & Sendable>(
         verbose: verbose,
         config: config,
         coverageStrategy: coverageStrategy,
+        scheduler: scheduler,
         scheduleBytesExtractor: scheduleBytesExtractor,
         makeProcessor: {
             PluginProcessor<repeat each Input>(plugins: makeHandlers())
@@ -385,12 +393,24 @@ private func runEngines<each Input: Codable & Sendable>(
     verbose: Bool,
     config: FuzzEngineConfig,
     coverageStrategy: CoverageStrategy,
+    scheduler: any SchedulerFactory = MutationScheduler.weightedPool(),
     scheduleBytesExtractor: @escaping @Sendable ((repeat each Input)) -> [UInt8]? = { _ in nil },
     makeProcessor: @escaping @Sendable () -> PluginProcessor<repeat each Input>,
     test: @escaping @Sendable ((repeat each Input)) async throws -> Void
 ) async -> FuzzResult<repeat each Input> {
     if verbose {
         print("[Fuzz] Running \(parallelism) fuzz engine\(parallelism == 1 ? "" : "s")")
+    }
+
+    // Filter compiler-generated edges before any measurement (one-time global
+    // scan). This is coverage-specific, so it lives in the coordinator/batteries
+    // layer rather than the signal-agnostic engine.
+    SanCovCounters.applyEdgeFilter()
+    if verbose {
+        let filtered = SanCovCounters.filteredEdgeCount
+        if filtered > 0 {
+            print("[Fuzz] Filtered \(filtered) compiler-generated edges")
+        }
     }
 
     var distributedSeeds: [[(repeat each Input)]] = Array(repeating: [], count: parallelism)
@@ -406,7 +426,11 @@ private func runEngines<each Input: Codable & Sendable>(
                 let engine = FuzzEngine<repeat each Input>(
                     mutators: repeat each mutators,
                     config: config,
-                    coverageStrategy: coverageStrategy,
+                    makeInstrumentationProviders: {
+                        @Dependency(\.coverageCounters) var client
+                        return [CoverageProvider(evaluator: coverageStrategy.makeEvaluator(), client: client)]
+                    },
+                    schedulerFactory: scheduler,
                     scheduleBytesExtractor: scheduleBytesExtractor
                 )
                 return await engine.run(
@@ -514,8 +538,7 @@ private func mergeCorpusSnapshots<each Input: Codable & Sendable>(
 
     guard let first = snapshots.first else {
         return CorpusSnapshot<repeat each Input>(
-            entries: [],
-            coveredIndices: []
+            entries: []
         )
     }
 

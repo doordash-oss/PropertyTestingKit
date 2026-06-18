@@ -11,6 +11,8 @@
 /// - Byte replace: replace 1-2 bytes with random values
 /// - Arithmetic: increment/decrement a random byte
 /// - Block swap: swap two 2-4 byte blocks (reorders scheduling decisions)
+import FuzzCore
+
 enum ScheduleByteMutator {
     static let defaultLength = 64
 

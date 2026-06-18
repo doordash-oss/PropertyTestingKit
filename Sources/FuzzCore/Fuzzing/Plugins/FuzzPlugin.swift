@@ -33,21 +33,20 @@ public enum SyncPluginEvent<each T: Sendable>: Sendable {
         /// Schedule bytes used for this iteration's task ordering.
         /// Non-nil when schedule fuzzing is enabled.
         public let scheduleBytes: [UInt8]?
-        /// Whether this input came from the pending mutation queue (`true`)
-        /// or was freshly generated (`false`). Plugins can use this to detect
-        /// when the mutation queue has been exhausted and re-schedule corpus
-        /// entries for mutation.
-        public let fromMutationQueue: Bool
         /// Number of inputs still queued after this one was taken. A handler can
         /// use `queueCount == 0` to detect that the queue has drained — e.g. to
         /// stop a regression replay once the seeded corpus is exhausted.
         public let queueCount: Int
-        /// The new coverage this iteration discovered, or `nil` if it covered
-        /// nothing new. A non-nil value *is* the "discovered new coverage" signal.
-        public let newCoverage: SparseCoverage?
+        /// The per-execution instrumentation signals for this iteration. A
+        /// plugin reads whatever signal it cares about by key — e.g. coverage
+        /// via `executionContext[CoverageProbeKey.self]?.coverage`. The engine
+        /// names no signal here, so a userspace plugin can consume one the
+        /// library has never heard of.
+        public let executionContext: RawExecutionContext
         /// The `originID` of the `selectForMutation` action this input was
-        /// mutated from, or `nil` for generated inputs and seeds. Opaque to
-        /// the engine — it round-trips whatever the emitting plugin chose, so
+        /// mutated from, or `nil` for generated inputs, seeds, and
+        /// pool-scheduled mutants (those carry `poolParentID` instead). Opaque
+        /// to the engine — it round-trips whatever the emitting plugin chose, so
         /// schedulers can attribute executions and discoveries to the seed
         /// that spawned them.
         ///
@@ -62,16 +61,14 @@ public enum SyncPluginEvent<each T: Sendable>: Sendable {
         public init(
             input: consuming (repeat each T),
             scheduleBytes: [UInt8]? = nil,
-            fromMutationQueue: Bool = false,
             queueCount: Int = 0,
-            newCoverage: SparseCoverage? = nil,
+            executionContext: RawExecutionContext = RawExecutionContext(),
             parentID: Int? = nil
         ) {
             self.input = input
             self.scheduleBytes = scheduleBytes
-            self.fromMutationQueue = fromMutationQueue
             self.queueCount = queueCount
-            self.newCoverage = newCoverage
+            self.executionContext = executionContext
             self.parentID = parentID
         }
     }
@@ -105,19 +102,24 @@ public enum AsyncPluginEvent<each T: Sendable>: Sendable {
 
     /// Context provided when fuzzing ends.
     public struct EndContext: Sendable {
-        /// Set of all covered edge indices.
-        public let totalCoveredIndices: Set<UInt32>
+        /// The run-spanning instrumentation summary, assembled from the
+        /// installed probes at campaign end. A plugin reads whatever aggregate
+        /// it cares about by key — e.g. the union of covered edges via
+        /// `executionContext[CoverageProbeKey.self]?.coverage`. The engine names
+        /// no signal here, so end-of-campaign analysis for a signal the library
+        /// has never heard of plugs in the same way.
+        public let executionContext: RawExecutionContext
         /// Project path for filtering (if configured).
         public let projectPath: String?
         /// Source location of the fuzz call.
         public let sourceLocation: SourceLocation
 
         public init(
-            totalCoveredIndices: Set<UInt32>,
+            executionContext: RawExecutionContext,
             projectPath: String?,
             sourceLocation: SourceLocation
         ) {
-            self.totalCoveredIndices = totalCoveredIndices
+            self.executionContext = executionContext
             self.projectPath = projectPath
             self.sourceLocation = sourceLocation
         }
@@ -133,20 +135,24 @@ public enum AsyncPluginEvent<each T: Sendable>: Sendable {
         public let test: @Sendable ((repeat each T)) async throws -> Void
         /// Source location where the fuzz test was called.
         public let sourceLocation: SourceLocation
-        public let sparseCoverage: SparseCoverage
+        /// The failing run's per-execution instrumentation signals. A plugin
+        /// reads what it needs by key — e.g. coverage via
+        /// `executionContext[CoverageProbeKey.self]?.coverage` to tag the
+        /// submitted corpus entry.
+        public let executionContext: RawExecutionContext
 
         public init(
             input: consuming (repeat each T),
             scheduleBytes: [UInt8]? = nil,
             test: @Sendable @escaping ((repeat each T)) async throws -> Void,
             sourceLocation: SourceLocation,
-            sparseCoverage: SparseCoverage
+            executionContext: RawExecutionContext = RawExecutionContext()
         ) {
             self.input = input
             self.scheduleBytes = scheduleBytes
             self.test = test
             self.sourceLocation = sourceLocation
-            self.sparseCoverage = sparseCoverage
+            self.executionContext = executionContext
         }
     }
 }

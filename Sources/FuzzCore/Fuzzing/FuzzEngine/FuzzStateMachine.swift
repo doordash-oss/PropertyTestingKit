@@ -61,8 +61,24 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
     /// Mutated inputs executed (queue pops after the seeds drained).
     private var mutantsRunCount: Int = 0
 
-    /// The coverage evaluator that determines interestingness.
-    private let coverageEvaluator: CoverageEvaluator<repeat each Input>
+    /// Instrumentation providers injected by the batteries layer. The core
+    /// engine names no signal: it installs a probe for each key the scheduler
+    /// requires by matching provider keys, never by referencing coverage.
+    private let instrumentationProviders: [any InstrumentationProvider]
+    /// Per-engine RNG for the bus-plugin mutation path, resolved from
+    /// `\.fastRNG`. `FastRNG` is a stateless shim over the thread-local
+    /// generator, so this draws from the same stream regardless.
+    private var fastRNG: FastRNG
+
+    /// This engine's scheduler: consulted for what to run when the residual
+    /// queue is empty (it produces the input itself), and told about every
+    /// iteration's outcome through the per-execution `RawExecutionContext`. It
+    /// owns its own working set — the engine holds no pool.
+    private let scheduler: AnyScheduler<repeat each Input>
+    /// Instrumentation probes feeding the scheduler. Built in `start()` once the
+    /// measurement context exists, then assembled into a `RawExecutionContext`
+    /// each iteration.
+    private var probes: [any InstrumentationProbe] = []
 
     // Simple loop state (replaces WorkerPool)
     private var pendingInputs: SimpleRingBuffer<(repeat each Input)>
@@ -81,7 +97,8 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
         mutators: (repeat Mutator<each Input>),
         inputSize: Int,
         corpus: Corpus<repeat each Input>,
-        coverageEvaluator: CoverageEvaluator<repeat each Input>,
+        instrumentationProviders: [any InstrumentationProvider],
+        scheduler: AnyScheduler<repeat each Input>,
         processSyncPlugins: @escaping SyncPluginProcessorFn,
         processAsyncPlugins: @escaping AsyncPluginProcessorFn,
         config: FuzzEngineConfig,
@@ -92,11 +109,14 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
         // Caching the dateclient
         @Dependency(\.dateClient) var dateClient: DateClient
         self.dateClient = dateClient
+        @Dependency(\.fastRNG) var fastRNG
+        self.fastRNG = fastRNG
         self.startTime = startTime
         self.seeds = seeds
         self.mutators = mutators
         self.inputSize = inputSize
-        self.coverageEvaluator = coverageEvaluator
+        self.instrumentationProviders = instrumentationProviders
+        self.scheduler = scheduler
         self.processSyncPlugins = processSyncPlugins
         self.processAsyncPlugins = processAsyncPlugins
         self.config = config
@@ -119,11 +139,17 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
         let stats: FuzzStats
         let corpus: Corpus<repeat each Input>
         let failures: [(input: (repeat each Input), error: Error, timeElapsed: TimeInterval, scheduleBytes: [UInt8]?)]
+        /// Run-spanning instrumentation summary, assembled from the installed
+        /// probes at campaign end and surfaced to the `.end` event. The engine
+        /// names no signal: a probe contributes its own aggregate (e.g. the
+        /// coverage probe's union of covered edges) via
+        /// `contributeCampaignSummary`. Empty when no probe contributes one.
+        let campaignSummary: RawExecutionContext
         /// A plugin asked to stop the whole parallel campaign (`StopScope.campaign`).
         let campaignStopRequested: Bool
     }
 
-    func start() async throws -> FuzzStateMachineResult {
+    func start() async -> FuzzStateMachineResult {
         if config.verbose {
             print("[FUZZ] FuzzStateMachine.start() called, maxDuration=\(config.maxDuration)")
         }
@@ -137,15 +163,7 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
         pendingParents.append(nil, repeated: seeds.count)  // seeds have no lineage parent
 
         // Setup for test execution
-        let coverageCountersClient = Self.fetchCoverageCounters()
         let sourceLocation = config.sourceLocation
-
-        // Resolve the RNG from the dependency once here, then pass it to the
-        // generate/mutate functions. Caching it avoids dependency-injection
-        // overhead per call (millions of calls) while still sourcing randomness
-        // from the injected `\.fastRNG`.
-        @Dependency(\.fastRNG) var fastRNG
-        var rng = fastRNG
 
         // Simple fuzz loop - no workers, just iterate
         var iterationCount = 0
@@ -159,15 +177,20 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
                 test: test
             )
 
-            // Hoist measurement context creation outside the loop for performance.
-            // This avoids millions of hash table insert/remove operations.
-            let coverageContext = coverageCountersClient.beginMeasurement()
-            defer { coverageCountersClient.endMeasurement(coverageContext) }
+            // Install a probe for each key some active scheduler requires —
+            // matching the injected providers by key, so the engine never names
+            // a signal here. Each probe owns its native measurement lifecycle
+            // (coverage allocates its SanCov context in `setUp`, frees it in
+            // `tearDown`).
+            let requiredKeys = Set(scheduler.requiredProbes.map { ObjectIdentifier($0) })
+            probes = instrumentationProviders
+                .filter { requiredKeys.contains(ObjectIdentifier($0.key)) }
+                .map { $0.makeProbe() }
 
-            // Set up the coverage evaluator before the first test execution.
-            // pathTrie needs to attach its trie to the context so edges
-            // advance the trie during the very first iteration.
-            coverageEvaluator.setup?(coverageContext)
+            // Set up probes before the first test execution (pathTrie attaches its
+            // trie so edges advance during iteration 1); tear down after the loop.
+            for probe in probes { probe.setUp() }
+            defer { for probe in probes { probe.tearDown() } }
 
             // Check time limit every N iterations to avoid per-iteration Date.init() overhead.
             // With ~10M iterations/sec and default interval of 1000, this means ~10K checks/sec.
@@ -175,13 +198,12 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
             let timeLimitCheckInterval = config.timeLimitCheckInterval
             var iterationsSinceTimeCheck = timeLimitCheckInterval  // Force check on first iteration
 
-            // Establish coverage inheritance for the whole loop so that edges
-            // recorded by child tasks (TaskGroup.addTask / Task {}) spawned inside
-            // the test body are attributed to this engine's measurement context.
-            // Set once outside the per-iteration hot path — the context is hoisted.
-            let coverageContextBits = coverageContext.inheritanceHandle
-            await CoverageInheritance.$context.withValue(coverageContextBits) {
-                CoverageInheritance.captureKeyIfNeeded(contextBits: coverageContextBits)
+            // Run the loop inside every installed probe's campaign scope, nested
+            // in install order. The engine names no signal: coverage uses its
+            // scope to install the inheritance task-local for the loop's lifetime
+            // (so child-task edges are attributed to this engine); other probes
+            // default to a transparent scope.
+            await withProbeCampaignScopes(probes[...]) {
 
                 while !Task.isCancelled && haltReason == nil {
                     // Check time limit periodically (avoids overhead from per-iteration Date.init)
@@ -193,13 +215,15 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
                         }
                     }
 
-                    // Get input: from pending queue or generate random.
+                    // Get input: the residual queue (seeds, queueInputs, bus
+                    // bursts) has priority; otherwise the scheduler directs —
+                    // mutate a pool entry or generate fresh.
                     // Schedule bytes (when scheduling) are element 0 of the input
                     // pack, generated/mutated by the prepended schedule mutator like
                     // any other element, and read back via `scheduleBytesExtractor`.
                     let input: (repeat each Input)
-                    let fromMutationQueue: Bool
                     let parentID: Int?
+                    let source: SchedulerSource
                     if !pendingInputs.isEmpty {
                         assert(
                             pendingParents.count == pendingInputs.count,
@@ -207,18 +231,27 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
                         )
                         input = pendingInputs.removeFirstUnchecked()
                         parentID = pendingParents.removeFirstUnchecked()
-                        fromMutationQueue = true
+                        source = .external
                         if seedsRunCount < seeds.count {
                             seedsRunCount += 1
                         } else {
                             mutantsRunCount += 1
                         }
                     } else {
-                        // Generate directly - no closure indirection
-                        input = (repeat (each mutators).generate(&rng))
-                        generatedCount += 1
-                        fromMutationQueue = false
+                        // The scheduler owns production: it generates a fresh
+                        // input or mutates one of its own retained entries. The
+                        // engine tracks only the generated/mutated split for
+                        // stats (the scheduler signals it via `poolParentID`);
+                        // which pool entry, if any, is the scheduler's business.
+                        let scheduled = scheduler.next()
+                        input = scheduled.input
                         parentID = nil
+                        source = .scheduled
+                        if scheduled.poolParentID == nil {
+                            generatedCount += 1
+                        } else {
+                            mutantsRunCount += 1
+                        }
                     }
                     let currentScheduleBytes: [UInt8]? = scheduleBytesExtractor(input)
 
@@ -227,8 +260,8 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
                     // stop a regression replay before any fresh input is generated.
                     let queueCount = pendingInputs.count
 
-                    // Reset coverage for this iteration
-                    coverageCountersClient.resetCoverage(coverageContext)
+                    // Reset probes for this iteration (coverage clears its map).
+                    for probe in probes { probe.reset() }
 
                     // Run the test, capturing coverage on success and recording failures.
                     var failureRecorded = false
@@ -236,12 +269,13 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
                         // Will throw if either the test throws or if it logs an Issue.
                         // When scheduling is being fuzzed, run the test under the
                         // recorded/generated schedule so task interleaving is controlled.
-                        // The coverage context is forwarded so edges recorded by the
-                        // schedule-controlled tasks are attributed to this measurement.
+                        // Coverage attribution for schedule-controlled child tasks
+                        // rides the inheritance task-local installed by the coverage
+                        // probe's campaign scope, so the engine forwards no
+                        // coverage-specific context here.
                         if let bytes = currentScheduleBytes {
                             try await ScheduleController.run(
-                                scheduleBytes: bytes,
-                                coverageContext: coverageContext.rawContext
+                                scheduleBytes: bytes
                             ) {
                                 try await testWithIssueCapture(input)
                             }
@@ -256,54 +290,62 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
                         failureRecorded = true
                     }
 
-                    // Delegate interestingness to the coverage evaluator. It returns
-                    // the run's coverage when the input was interesting (the sparse
-                    // snapshot it already took for the decision — no re-snapshot
-                    // here), nil otherwise.
-                    let iterationCoverage = coverageEvaluator.evaluate(
-                        input,
-                        currentScheduleBytes,
-                        coverageContext,
-                        coverageCountersClient,
-                        corpus
-                    )
+                    // Assemble the per-execution context from the installed
+                    // probes; the scheduler reads whatever signals it needs out
+                    // of it. The engine names no signal when handing this over.
+                    var execContext = RawExecutionContext()
+                    for probe in probes { probe.contribute(to: &execContext) }
 
-                    // Process iteration event before failure event
-                    var events = [
-                        PluginEvent.sync(
-                            .iteration(
-                                .init(
-                                    input: input,
-                                    scheduleBytes: currentScheduleBytes,
-                                    fromMutationQueue: fromMutationQueue,
-                                    queueCount: queueCount,
-                                    newCoverage: iterationCoverage,
-                                    parentID: parentID
-                                )
-                            ))
-                    ]
-
-                    if failureRecorded {
-                        events.append(
-                            .async(
-                                .failureFound(
-                                    .init(
-                                        input: input,
-                                        scheduleBytes: currentScheduleBytes,
-                                        test: testWithIssueCapture,
-                                        sourceLocation: sourceLocation,
-                                        // TODO: This should probably throw if we can't gather coverage
-                                        sparseCoverage: iterationCoverage
-                                            ?? (try? coverageCountersClient
-                                                .snapshotCoveredArraysWithContext(coverageContext))
-                                            ?? SparseCoverage()
-                                    )
-                                )
-                            )
+                    // Retention is the scheduler's call. `observe` reads whatever
+                    // signals it needs out of the context, folds them into its
+                    // own state (and its own working set, if any), and returns
+                    // the signature to persist when the input should be retained
+                    // in the corpus — or nil to retain nothing. The engine names
+                    // no signal and owns no pool: it only persists the corpus
+                    // entry (the result/dedup/cross-engine-merge store).
+                    if let signature = scheduler.observe(input, execContext, source) {
+                        corpus.mergeCoverageAndAdd(
+                            input: input,
+                            scheduleBytes: currentScheduleBytes,
+                            sparse: signature
                         )
                     }
 
-                    await process(events: events)
+                    // Iteration event (sync, hot path) before failure event.
+                    // Dispatched directly — not via an `[PluginEvent]` array — to
+                    // avoid allocating that array (and the event wrapping) every
+                    // iteration. Order is preserved: sync iteration, then the
+                    // async failure event when one was recorded.
+                    processSyncPlugins(
+                        .iteration(
+                            .init(
+                                input: input,
+                                scheduleBytes: currentScheduleBytes,
+                                queueCount: queueCount,
+                                executionContext: execContext,
+                                parentID: parentID
+                            )
+                        ),
+                        executeAction
+                    )
+
+                    if failureRecorded {
+                        await processAsyncPlugins(
+                            .failureFound(
+                                .init(
+                                    input: input,
+                                    scheduleBytes: currentScheduleBytes,
+                                    test: testWithIssueCapture,
+                                    sourceLocation: sourceLocation,
+                                    // The failing run's per-execution signals;
+                                    // a coverage-aware plugin reads its verdict
+                                    // out of this to tag the submitted entry.
+                                    executionContext: execContext
+                                )
+                            ),
+                            executeAction
+                        )
+                    }
 
                     iterationCount += 1
                 }
@@ -331,20 +373,34 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
                 "[FUZZ] FuzzStateMachine.start() finished: totalInputs=\(stats.totalInputs), duration=\(stats.duration), stopReason=\(stats.stopReason)"
             )
         }
+        // Assemble the run-spanning summary from the installed probes (e.g. the
+        // coverage probe contributes its union of covered edges). The engine
+        // names no signal — each probe contributes its own aggregate by key.
+        var campaignSummary = RawExecutionContext()
+        for probe in probes { probe.contributeCampaignSummary(to: &campaignSummary) }
+
         return FuzzStateMachineResult(
             stats: stats,
             corpus: corpus,
             failures: failures,
+            campaignSummary: campaignSummary,
             campaignStopRequested: haltScope == .campaign
         )
     }
 
-    private func process(events: [PluginEvent<repeat each Input>]) async {
-        for event in events {
-            switch event {
-            case let .sync(event): processSyncPlugins(event, executeAction)
-            case let .async(event): await processAsyncPlugins(event, executeAction)
-            }
+    /// Run `body` nested inside every probe's `withCampaignScope`, in array
+    /// order. The engine names no signal — it just composes whatever scopes the
+    /// installed probes provide around the whole loop.
+    private func withProbeCampaignScopes(
+        _ probes: ArraySlice<any InstrumentationProbe>,
+        _ body: () async -> Void
+    ) async {
+        guard let first = probes.first else {
+            await body()
+            return
+        }
+        await first.withCampaignScope {
+            await self.withProbeCampaignScopes(probes.dropFirst(), body)
         }
     }
 
@@ -379,11 +435,6 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
         return false
     }
 
-    private static func fetchCoverageCounters() -> CoverageCountersClient {
-        @Dependency(\.coverageCounters) var coverageCounters
-        return coverageCounters
-    }
-
     /// Executes a single plugin action.
     private func executeAction(_ action: FuzzPluginAction<repeat each Input>) {
         switch action {
@@ -405,8 +456,13 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
             // mutation is unified with input mutation.
             // Each mutant carries the action's originID so iteration events can
             // report the lineage back to the emitting plugin.
-            let mutants = (0..<mutationBurstLength).map { _ in
-                generateMutation(mutationAction.input)
+            let mutants = (0..<config.mutationBurstLength).map { _ in
+                mutateOneRandomPosition(
+                    mutationAction.input,
+                    inputSize: inputSize,
+                    rng: &fastRNG,
+                    mutators: repeat each mutators
+                )
             }
             enqueuePending(mutants, parent: mutationAction.originID)
 
@@ -443,43 +499,4 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
         corpus.add(input: input, scheduleBytes: scheduleBytes, sparse: sparse, entryType: type, failure: failureInfo)
     }
 
-    /// Generate ONE mutant: a single mutation step at one randomly chosen
-    /// position of the input pack.
-    private func generateMutation(_ input: (repeat each Input)) -> (repeat each Input) {
-        // A 0-arity pack has no position to mutate; return it unchanged rather
-        // than trapping on `Int.random(in: 0..<0)`.
-        guard inputSize > 0 else { return input }
-        // `FastRNG` is a stateless shim over the thread-local generator, so a
-        // fresh instance draws from the same stream as the engine's own `rng`;
-        // the `inout` threading is for a uniform mutator signature, not seeding.
-        var rng = FastRNG()
-        let position = inputSize == 1 ? 0 : Int.random(in: 0..<inputSize, using: &rng)
-        return mutateOnePosition(input, position: position, rng: &rng, mutators: repeat each mutators)
-    }
-}
-
-/// How many single-step mutants a `.selectForMutation` action queues.
-///
-/// Interim constant: effort per selection becomes scheduler state (focus +
-/// counter) when the pool scheduler lands; until then this preserves a
-/// burst-on-accept shape comparable to the old exhaustive-neighborhood burst.
-let mutationBurstLength = 16
-
-/// Mutate exactly `position` of the input pack with one mutator call, holding
-/// every other position fixed.
-func mutateOnePosition<each Input>(
-    _ input: (repeat each Input),
-    position: Int,
-    rng: inout FastRNG,
-    mutators: repeat Mutator<each Input>
-) -> (repeat each Input) {
-    var currentIndex = 0
-    return (repeat {
-        defer { currentIndex += 1 }
-        if currentIndex == position {
-            return (each mutators).mutate(each input, &rng)
-        } else {
-            return (each input)
-        }
-    }())
 }

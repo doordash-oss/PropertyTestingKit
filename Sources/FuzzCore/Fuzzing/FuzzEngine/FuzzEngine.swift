@@ -29,29 +29,31 @@ import Testing
 ///
 /// ## Algorithm
 ///
-/// Fuzzing follows AFL/FuzzChick's approach:
-/// 1. Start with the provided seeds
-/// 2. Run each input, capture coverage signature
-/// 3. If signature is new, add to corpus
-/// 4. Select corpus entries for mutation (energy-based)
-/// 5. Mutate inputs, repeat
-/// 6. Stop when: queue drained (plugin), time limit, or coverage plateau
+/// The engine is a thin executor; it names no feedback signal and owns no pool:
+/// 1. Drain the residual queue (seeds, `queueInputs`, bus-plugin bursts).
+/// 2. When the queue is empty, ask the scheduler for the next input to run.
+/// 3. Run the input under the installed instrumentation probes.
+/// 4. Assemble the probes' views into a `RawExecutionContext` and hand it to
+///    the scheduler, which folds the signals into its own state and returns the
+///    signature to persist when the input should be retained in the corpus.
+/// 5. Repeat until the queue drains and the scheduler stops, a time limit, or a
+///    plugin halts the run.
 ///
-final class FuzzEngine<each Input: Codable & Sendable>: @unchecked Sendable {
+public final class FuzzEngine<each Input: Codable & Sendable>: @unchecked Sendable {
     @Dependency(\.dateClient) private var dateClient
     @Dependency(\.corpusRegistry) private var corpusRegistry
 
     // Type alias for the combined input tuple
-    typealias InputTuple = (repeat each Input)
+    public typealias InputTuple = (repeat each Input)
 
     /// Synchronous plugin processor for iteration events (hot path).
-    typealias SyncPluginProcessorFn = @Sendable (
+    public typealias SyncPluginProcessorFn = @Sendable (
         consuming SyncPluginEvent<repeat each Input>,
         (FuzzPluginAction<repeat each Input>) -> Void
     ) -> Void
 
     /// Asynchronous plugin processor for rare events (cold path).
-    typealias AsyncPluginProcessorFn = @Sendable (
+    public typealias AsyncPluginProcessorFn = @Sendable (
         consuming AsyncPluginEvent<repeat each Input>,
         (FuzzPluginAction<repeat each Input>) -> Void
     ) async -> Void
@@ -66,9 +68,17 @@ final class FuzzEngine<each Input: Codable & Sendable>: @unchecked Sendable {
     /// regression replay so they wrap execution in `ScheduleController.run`.
     private let scheduleBytesExtractor: @Sendable ((repeat each Input)) -> [UInt8]?
 
-    /// The coverage strategy. Its evaluator is built fresh in `run()` so each parallel
-    /// engine gets its own per-engine state (e.g. a distinct trie/index).
-    private let coverageStrategy: CoverageStrategy
+    /// Builds this engine's instrumentation providers, fresh per engine (each
+    /// provider holds per-engine state like a distinct trie). Injected by the
+    /// batteries layer so the core engine never names a signal.
+    private let makeInstrumentationProviders: @Sendable () -> [any InstrumentationProvider]
+
+    /// Builds this engine's scheduler, fresh per engine (its own working set,
+    /// production, policies, and draw state). Injected by the batteries layer so
+    /// the core engine depends only on the `SchedulerFactory` seam, not a
+    /// concrete scheduler. Built with this engine's mutators so the scheduler
+    /// owns input production.
+    private let schedulerFactory: any SchedulerFactory
 
     /// Initialize with mutators.
     ///
@@ -92,32 +102,19 @@ final class FuzzEngine<each Input: Codable & Sendable>: @unchecked Sendable {
     ///   generator whose reabstraction thunk crashes SILGen. The non-scheduled
     ///   convenience initializer passes the no-op extractor as an explicit
     ///   closure literal, which lowers cleanly.
-    init(
+    public init(
         mutators: repeat Mutator<each Input>,
         config: FuzzEngineConfig,
-        coverageStrategy: CoverageStrategy,
+        makeInstrumentationProviders: @escaping @Sendable () -> [any InstrumentationProvider],
+        schedulerFactory: any SchedulerFactory,
         scheduleBytesExtractor: @escaping @Sendable ((repeat each Input)) -> [UInt8]?
     ) {
         self.config = config
         self.mutators = (repeat each mutators)
         self.inputSize = Self.inputCount(for: repeat (each Input).self)
-        self.coverageStrategy = coverageStrategy
+        self.makeInstrumentationProviders = makeInstrumentationProviders
+        self.schedulerFactory = schedulerFactory
         self.scheduleBytesExtractor = scheduleBytesExtractor
-    }
-
-    /// Non-scheduled convenience initializer: runs over the user's pack with a
-    /// no-op schedule-bytes extractor.
-    convenience init(
-        mutators: repeat Mutator<each Input>,
-        config: FuzzEngineConfig = FuzzEngineConfig(),
-        coverageStrategy: CoverageStrategy = .pathTrie
-    ) {
-        self.init(
-            mutators: repeat each mutators,
-            config: config,
-            coverageStrategy: coverageStrategy,
-            scheduleBytesExtractor: { _ in nil }
-        )
     }
 
     // MARK: - Helpers
@@ -141,23 +138,12 @@ final class FuzzEngine<each Input: Codable & Sendable>: @unchecked Sendable {
     ///   - processAsyncPlugins: Async plugin processor for rare events (cold path).
     ///   - test: The test closure to fuzz.
     /// - Returns: The fuzz result with corpus and any failures.
-    func run(
+    public func run(
         seeds: [InputTuple] = [],
         processSyncPlugins: @escaping SyncPluginProcessorFn,
         processAsyncPlugins: @escaping AsyncPluginProcessorFn,
         test: @escaping @Sendable (InputTuple) async throws -> Void
     ) async -> FuzzResult<repeat each Input> {
-        // Filter compiler-generated edges before any measurement.
-        // This is a one-time scan (~2s for large binaries), so we do it before
-        // capturing startTime so it doesn't eat into the fuzz duration budget.
-        SanCovCounters.applyEdgeFilter()
-        if config.verbose {
-            let filtered = SanCovCounters.filteredEdgeCount
-            if filtered > 0 {
-                print("[Fuzz] Filtered \(filtered) compiler-generated edges")
-            }
-        }
-
         let startTime = dateClient.now()
 
         // No global edge-hook install: the strategy's recorder (its measurement
@@ -172,7 +158,7 @@ final class FuzzEngine<each Input: Codable & Sendable>: @unchecked Sendable {
             // A fuzz run with no seeds is not a regression — report it as such
             // rather than via `.empty` (which is flagged `wasRegression: true`).
             return FuzzResult(
-                corpus: CorpusSnapshot<repeat each Input>(entries: [], coveredIndices: []),
+                corpus: CorpusSnapshot<repeat each Input>(entries: []),
                 failures: [],
                 stats: FuzzStats(
                     totalInputs: 0,
@@ -187,15 +173,14 @@ final class FuzzEngine<each Input: Codable & Sendable>: @unchecked Sendable {
         }
 
         let corpus: Corpus<repeat each Input> = corpusRegistry.getCorpus()
-        // Build a fresh evaluator per engine so each gets its own trie/index state.
-        let coverageEvaluator: CoverageEvaluator<repeat each Input> = coverageStrategy.makeEvaluator()
 
         let stateMachine = FuzzStateMachine<repeat each Input>(
             seeds: seeds,
             mutators: mutators,
             inputSize: inputSize,
             corpus: corpus,
-            coverageEvaluator: coverageEvaluator,
+            instrumentationProviders: makeInstrumentationProviders(),
+            scheduler: schedulerFactory.makeScheduler(mutators: repeat each mutators),
             processSyncPlugins: processSyncPlugins,
             processAsyncPlugins: processAsyncPlugins,
             config: config,
@@ -204,7 +189,7 @@ final class FuzzEngine<each Input: Codable & Sendable>: @unchecked Sendable {
             scheduleBytesExtractor: scheduleBytesExtractor
         )
 
-        let stateMachineResult = try! await stateMachine.start()
+        let stateMachineResult = await stateMachine.start()
 
         // Extract copyable fields
         let stats = stateMachineResult.stats
@@ -213,9 +198,12 @@ final class FuzzEngine<each Input: Codable & Sendable>: @unchecked Sendable {
 
         let finalSnapshot = resultCorpus.snapshot()
 
-        // Send .end event to plugins (for coverage gap analysis, etc.)
+        // Send .end event to plugins (for coverage gap analysis, etc.). The
+        // run-spanning summary is assembled from the installed probes (e.g. the
+        // coverage probe contributes its union of covered edges); the engine
+        // names no signal — a plugin reads what it needs from the summary by key.
         let endContext = AsyncPluginEvent<repeat each Input>.EndContext(
-            totalCoveredIndices: finalSnapshot.coveredIndices,
+            executionContext: stateMachineResult.campaignSummary,
             projectPath: config.projectPath,
             sourceLocation: config.sourceLocation
         )

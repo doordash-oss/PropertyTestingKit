@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+import FuzzCore
 import Dependencies
 import Foundation
 
@@ -74,8 +75,7 @@ func peelScheduleResult<each Input: Codable & Sendable>(
 
     return FuzzResult<repeat each Input>(
         corpus: CorpusSnapshot<repeat each Input>(
-            entries: entries,
-            coveredIndices: result.corpus.coveredIndices
+            entries: entries
         ),
         failures: failures,
         stats: result.stats,
@@ -96,8 +96,8 @@ func peelScheduleResult<each Input: Codable & Sendable>(
 /// Schedule fuzzing forces a single engine (`parallelism: 1`): the schedule
 /// controller installs a process-global task-enqueue hook that cannot be shared.
 ///
-/// - Note: schedule fuzzing uses the default `corpusMutation` plugin behavior;
-///   custom plugins are not applied to scheduled runs.
+/// - Note: custom bus plugins are not applied to scheduled runs; the
+///   scheduler passes through (it drives mutation over the extended pack).
 func runFlattenedSchedule<each Input: Codable & Sendable>(
     mutators: (repeat Mutator<each Input>),
     seeds: [(repeat each Input)],
@@ -106,6 +106,7 @@ func runFlattenedSchedule<each Input: Codable & Sendable>(
     duration: Duration,
     verbose: Bool,
     coverageStrategy: CoverageStrategy,
+    scheduler: any SchedulerFactory,
     projectPath: String?,
     sourceFileID: String,
     sourceFilePath: String,
@@ -143,12 +144,13 @@ func runFlattenedSchedule<each Input: Codable & Sendable>(
         duration: duration,
         verbose: verbose,
         coverageStrategy: coverageStrategy,
+        scheduler: scheduler,
         projectPath: projectPath,
         sourceFileID: sourceFileID,
         sourceFilePath: sourceFilePath,
         line: line,
         scheduleBytesExtractor: { $0.0 },
-        makeHandlers: { [.corpusMutation()] },
+        makeHandlers: { [] },
         test: peelTest
     )
 

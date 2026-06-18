@@ -42,14 +42,14 @@ struct ShrinkingHandlerTests {
         // Test iteration event (sync)
         let iterationContext = SyncPluginEvent<Int>.IterationContext(
             input: 42,
-            newCoverage: SparseCoverage()
+            executionContext: .coverage(SparseCoverage())
         )
         let iterationActions = handler.handleSync(SyncPluginEvent<Int>.iteration(iterationContext))
         #expect(iterationActions.isEmpty)
 
         // Test end event (async)
         let endContext = AsyncPluginEvent<Int>.EndContext(
-            totalCoveredIndices: Set([1, 2, 3]),
+            executionContext: .coverage(SparseCoverage(indices: [1, 2, 3])),
             projectPath: nil,
             sourceLocation: SourceLocation(fileID: #fileID, filePath: #filePath, line: #line, column: 1)
         )
@@ -71,7 +71,7 @@ struct ShrinkingHandlerTests {
                 }
             },
             sourceLocation: SourceLocation(fileID: #fileID, filePath: #filePath, line: #line, column: 1),
-            sparseCoverage: SparseCoverage()
+            executionContext: .coverage(SparseCoverage())
         )
 
         let actions = try await handler.handleAsync(AsyncPluginEvent<[Int]>.failureFound(failureContext))
@@ -114,7 +114,7 @@ struct ShrinkingHandlerTests {
                 }
             },
             sourceLocation: SourceLocation(fileID: #fileID, filePath: #filePath, line: #line, column: 1),
-            sparseCoverage: SparseCoverage()
+            executionContext: .coverage(SparseCoverage())
         )
 
         let actions = try await handler.handleAsync(AsyncPluginEvent<[Int]>.failureFound(failureContext))

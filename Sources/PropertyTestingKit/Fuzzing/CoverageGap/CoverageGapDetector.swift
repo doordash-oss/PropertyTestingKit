@@ -15,6 +15,7 @@
 //  Detects coverage gaps in partially-covered functions.
 //
 
+import FuzzCore
 import Foundation
 
 /// Detects coverage gaps in partially-covered functions.

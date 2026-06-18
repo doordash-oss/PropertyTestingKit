@@ -28,12 +28,12 @@ import Foundation
 /// flag.value = true  // Thread-safe write
 /// let current = flag.value  // Thread-safe read
 /// ```
-final class SyncBox<T>: @unchecked Sendable {
+public final class SyncBox<T>: @unchecked Sendable {
     private var storage: T
     private let lock = NSLock()
 
     /// Read or write the wrapped value in a thread-safe manner.
-    var value: T {
+    public var value: T {
         get {
             lock.lock()
             defer { lock.unlock() }
@@ -46,13 +46,13 @@ final class SyncBox<T>: @unchecked Sendable {
         }
     }
 
-    init(_ value: T) {
+    public init(_ value: T) {
         self.storage = value
     }
 
     /// Atomically update the value with a transform closure.
     @discardableResult
-    func update<Result>(_ transform: (inout T) throws -> Result) rethrows -> Result {
+    public func update<Result>(_ transform: (inout T) throws -> Result) rethrows -> Result {
         lock.lock()
         defer { lock.unlock() }
         return try transform(&storage)

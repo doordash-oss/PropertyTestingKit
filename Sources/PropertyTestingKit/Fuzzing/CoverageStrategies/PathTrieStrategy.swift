@@ -16,6 +16,7 @@
 //  through the same public per-engine API as any custom strategy.
 //
 
+import FuzzCore
 import EdgeHooks
 
 extension CoverageStrategy {

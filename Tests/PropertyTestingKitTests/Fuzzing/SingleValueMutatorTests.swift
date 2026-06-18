@@ -23,6 +23,7 @@
 
 import Testing
 @testable import PropertyTestingKit
+@testable import FuzzCore
 
 @Suite("Single-value mutators")
 struct SingleValueMutatorTests {
@@ -215,17 +216,20 @@ struct SingleValueMutatorTests {
         let probe = FuzzPlugin<Int>(id: "burst_probe", handleSync: { event in
             switch event {
             case let .iteration(ctx):
-                if ctx.fromMutationQueue, ctx.parentID == 7 {
+                // Burst mutants carry the emitting plugin's originID (7).
+                if ctx.parentID == 7 {
                     if firstQueueCount.value == nil {
                         firstQueueCount.update { $0 = ctx.queueCount }
                     }
                     mutantsSeen.update { $0 += 1 }
-                    if mutantsSeen.value == mutationBurstLength {
+                    if mutantsSeen.value == FuzzEngineConfig().mutationBurstLength {
                         return [.stop(.init(reason: .custom("burst_complete")))]
                     }
                     return []
                 }
-                if !tagged.value, !ctx.fromMutationQueue {
+                // Seed the burst from the first untagged input (parentID nil:
+                // generated or scheduler-produced, not a bus mutant).
+                if !tagged.value, ctx.parentID == nil {
                     tagged.update { $0 = true }
                     return [.selectForMutation(.init(input: ctx.input, originID: 7))]
                 }
@@ -243,7 +247,7 @@ struct SingleValueMutatorTests {
         }
 
         // The first popped mutant sees the rest of its own burst queued.
-        #expect(firstQueueCount.value == mutationBurstLength - 1)
-        #expect(mutantsSeen.value == mutationBurstLength)
+        #expect(firstQueueCount.value == FuzzEngineConfig().mutationBurstLength - 1)
+        #expect(mutantsSeen.value == FuzzEngineConfig().mutationBurstLength)
     }
 }

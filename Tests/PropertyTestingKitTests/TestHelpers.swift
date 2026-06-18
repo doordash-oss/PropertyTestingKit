@@ -170,7 +170,7 @@ func runFuzzWithMaxIterations<each Input: MutatorProviding & Codable & Sendable>
     persistence: CorpusPersistence,
     coverageStrategy: CoverageStrategy = .alwaysInteresting,
     parallelism: Int = 1,
-    makeHandlers: @escaping @Sendable () -> [FuzzPlugin<repeat each Input>] = { [.corpusMutation()] },
+    makeHandlers: @escaping @Sendable () -> [FuzzPlugin<repeat each Input>] = { [] },
     additionalSeeds: [(repeat each Input)] = [],
     test: @escaping @Sendable ((repeat each Input)) async throws -> Void
 ) async -> FuzzResult<repeat each Input> {
@@ -193,6 +193,7 @@ func runFuzzWithMaxIterations<each Input: MutatorProviding & Codable & Sendable>
             duration: .seconds(10),
             verbose: false,
             coverageStrategy: coverageStrategy,
+            scheduler: MutationScheduler.weightedPool(),
             projectPath: nil,
             sourceFileID: "PropertyTestingKitTests/TestHelpers.swift",
             sourceFilePath: "PropertyTestingKitTests/TestHelpers.swift",
@@ -304,4 +305,16 @@ func fuzzWithMaxIterations<each Input: Codable & Sendable>(
         )
     })
 }
+
+extension RawExecutionContext {
+    /// Test convenience: a context carrying just a coverage verdict, for
+    /// exercising plugin handlers that read `CoverageProbeKey`. `nil` means the
+    /// run was not interesting (no new coverage).
+    static func coverage(_ sparse: SparseCoverage?) -> RawExecutionContext {
+        var context = RawExecutionContext()
+        context.set(CoverageProbeKey.self, CoverageVerdict(coverage: sparse))
+        return context
+    }
+}
+
 

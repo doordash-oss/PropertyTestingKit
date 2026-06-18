@@ -18,6 +18,7 @@
 
 import Testing
 import Foundation
+import FuzzCore
 @testable import PropertyTestingKit
 
 // MARK: - SanCovCounters Concurrency Tests

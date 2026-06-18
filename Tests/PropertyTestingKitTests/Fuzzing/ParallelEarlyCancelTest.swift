@@ -56,7 +56,7 @@ struct ParallelEarlyCancelTest {
                 duration: budget,
                 persistence: .ephemeral,
                 parallelism: 4,
-                plugins: { [.corpusMutation(), stopOnFailure] }
+                plugins: { [stopOnFailure] }
             ) { (x: Int) in
                 if x == sentinel { throw Boom() }
             }
@@ -98,7 +98,7 @@ struct ParallelEarlyCancelTest {
             duration: budget,
             persistence: .ephemeral,
             parallelism: 4,
-            plugins: { [.corpusMutation(), stopCampaign] }
+            plugins: { [stopCampaign] }
         ) { (_: Int) in
             // never fails
         }

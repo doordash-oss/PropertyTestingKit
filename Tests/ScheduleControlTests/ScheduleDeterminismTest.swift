@@ -131,7 +131,7 @@ struct ScheduleDeterminismTest {
             entryType: .coverage,
             failure: nil
         )
-        let snapshot = CorpusSnapshot<[UInt8], Int>(entries: [entry], coveredIndices: [])
+        let snapshot = CorpusSnapshot<[UInt8], Int>(entries: [entry])
         try persistence.save(snapshot, to: dir)
         let reloaded: CorpusSnapshot<[UInt8], Int> = try persistence.loadSnapshot(from: dir)
 

@@ -19,31 +19,31 @@ import Dependencies
 import Foundation
 
 /// Dependency client for accessing environment variables.
-struct EnvironmentClient: Sendable {
+public struct EnvironmentClient: Sendable {
     /// Get all environment variables.
-    var environment: @Sendable () -> [String: String]
+    public var environment: @Sendable () -> [String: String]
 
-    init(environment: @escaping @Sendable () -> [String: String] = unimplemented(placeholder: [:])) {
+    public init(environment: @escaping @Sendable () -> [String: String] = unimplemented(placeholder: [:])) {
         self.environment = environment
     }
 }
 
 extension EnvironmentClient {
-    static let empty: EnvironmentClient = .init { [:] }
+    public static let empty: EnvironmentClient = .init { [:] }
 }
 
 // MARK: - Dependency Key
 
 extension EnvironmentClient: DependencyKey {
-    static let liveValue = EnvironmentClient(
+    public static let liveValue = EnvironmentClient(
         environment: { ProcessInfo.processInfo.environment }
     )
 
-    static let testValue = liveValue
+    public static let testValue = liveValue
 }
 
 extension DependencyValues {
-    var environment: EnvironmentClient {
+    public var environment: EnvironmentClient {
         get { self[EnvironmentClient.self] }
         set { self[EnvironmentClient.self] = newValue }
     }

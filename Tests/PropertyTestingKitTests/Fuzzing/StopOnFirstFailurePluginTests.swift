@@ -28,7 +28,7 @@ struct StopOnFirstFailurePluginTests {
             scheduleBytes: nil,
             test: { _ in },
             sourceLocation: SourceLocation(fileID: #fileID, filePath: #filePath, line: #line, column: 1),
-            sparseCoverage: SparseCoverage(indices: [])
+            executionContext: .coverage(SparseCoverage(indices: []))
         )
         return .failureFound(context)
     }
@@ -43,7 +43,7 @@ struct StopOnFirstFailurePluginTests {
     func doesNotStopOnIteration() {
         let plugin: AnalysisPlugin<Int> = .stopOnFirstFailure()
         let context = SyncPluginEvent<Int>.IterationContext(
-            input: 7, fromMutationQueue: true, queueCount: 3)
+            input: 7, queueCount: 3)
         #expect(plugin.handleSync(.iteration(context)).isEmpty)
     }
 
@@ -78,7 +78,7 @@ struct StopOnFirstFailurePluginTests {
         let plugin: AnalysisPlugin<Int> = .stopOnFirstFailure()
         let start = AsyncPluginEvent<Int>.start(.init(maxDuration: .seconds(1)))
         let end = AsyncPluginEvent<Int>.end(.init(
-            totalCoveredIndices: [], projectPath: nil,
+            executionContext: RawExecutionContext(), projectPath: nil,
             sourceLocation: SourceLocation(fileID: #fileID, filePath: #filePath, line: #line, column: 1)))
         #expect(try await plugin.handleAsync(start).isEmpty)
         #expect(try await plugin.handleAsync(end).isEmpty)

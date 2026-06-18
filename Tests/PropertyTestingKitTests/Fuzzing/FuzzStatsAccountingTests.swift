@@ -23,6 +23,22 @@ import Foundation
 @Suite("FuzzStats Accounting")
 struct FuzzStatsAccountingTests {
 
+    /// Stop a run once the bus has observed `count` iterations — deterministic
+    /// and load-independent, unlike a wall-clock budget (a busy CI core can run
+    /// zero iterations in 0.2s, which is what made the count-based tests flaky).
+    private func stopAfter(_ count: Int) -> FuzzPlugin<Int> {
+        let seen = SyncBox<Int>(0)
+        return FuzzPlugin<Int>(id: "iteration_counter", handleSync: { event in
+            switch event {
+            case .iteration:
+                seen.update { $0 += 1 }
+                return seen.value >= count
+                    ? [.stop(.init(reason: .custom("observed_enough")))]
+                    : []
+            }
+        })
+    }
+
     @Test("should_sum_seeds_mutations_generations_to_totalInputs")
     func accountingIdentityHolds() async throws {
         let result = try await fuzz(
@@ -43,14 +59,16 @@ struct FuzzStatsAccountingTests {
     @Test("should_count_all_mutator_seeds_as_seeds_run")
     func seedsRunMatchesMutatorSeedCount() async throws {
         // Int's default mutator ships 21 seed values; a single-element pack's
-        // seed list is exactly those. 0.2s of a trivial body runs thousands of
-        // iterations, so every seed is consumed.
+        // seed list is exactly those. Seeds are consumed before any scheduler
+        // production, so stopping after well more than 21 executed inputs runs
+        // every seed regardless of how fast the core is.
         let expectedSeeds = Int.defaultMutator.seeds.count
 
         let result = try await fuzz(
-            duration: .seconds(0.2),
+            duration: .seconds(60),
             persistence: .ephemeral,
-            parallelism: 1
+            parallelism: 1,
+            plugins: { [self.stopAfter(expectedSeeds * 5)] }
         ) { (_: Int) in }
 
         #expect(result.stats.seeds == expectedSeeds,
@@ -59,17 +77,19 @@ struct FuzzStatsAccountingTests {
 
     @Test("should_count_mutated_inputs_run_not_mutation_batches")
     func mutationsCountedInExecutedInputUnits() async throws {
+        // Run far past the 21 seeds so scheduler-produced inputs dominate. With
+        // generationRatio 0.1 (~90% mutation), mutations should outnumber
+        // generations among the post-seed inputs. Count-driven, not time-driven.
         let result = try await fuzz(
-            duration: .seconds(0.2),
+            duration: .seconds(60),
             persistence: .ephemeral,
-            parallelism: 1
+            parallelism: 1,
+            plugins: { [self.stopAfter(500)] }
         ) { (_: Int) in }
 
-        // A trivially-passing Int fuzz mutates constantly. If `mutations` were
-        // counting selection events (batches) it would be ~15x smaller than the
-        // executed-mutant count; the accounting identity in the first test pins
-        // the exact value — here we just require it to dominate generations,
-        // which is the signature of executed-input units.
+        // If `mutations` counted selection events (batches) rather than executed
+        // mutant inputs it would be far smaller; requiring it to dominate
+        // generations is the signature of executed-input units.
         #expect(result.stats.mutations > result.stats.generations,
                 "mutations(\(result.stats.mutations)) should dominate generations(\(result.stats.generations)) for a trivial body")
     }
