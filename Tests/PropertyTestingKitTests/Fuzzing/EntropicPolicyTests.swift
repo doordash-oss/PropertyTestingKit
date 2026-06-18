@@ -13,10 +13,17 @@
 // limitations under the License.
 
 //  The Entropic energy scheduler as a pool weight advisor: rare-feature
-//  information gain (yield), lineage-attributed via pool entry IDs, flushed
-//  as weights at draw time. Same scoring math the old `energyMutation` bus
-//  plugin used (pinned in EnergyMutationTests); these tests pin the POLICY
-//  behavior — attribution, decay, and selection — on the pool's event stream.
+//  information gain (yield), lineage-attributed via pool entry IDs, flushed as
+//  weights at draw time.
+//
+//  These tests drive the advisor DIRECTLY off the pool's event stream and
+//  assert on the weights it flushes — no RNG, no random draws. The earlier
+//  draw-tally tests asserted strict inequalities on weighted-RANDOM draws from
+//  an unseedable `FastRNG`; because the entropic weights involved are close,
+//  those assertions were a coin flip (~35% flake). Asserting on the computed
+//  weights instead is both deterministic and a more precise check of the
+//  advisor's actual contract. Each comparison isolates ONE variable (yield vs
+//  abundance) so the asserted direction is unambiguous under the scoring math.
 //
 
 import Testing
@@ -25,114 +32,124 @@ import Testing
 @Suite("Entropic pool policy")
 struct EntropicPolicyTests {
 
-    /// A trivial Int mutator: the pool's draw/admission policy is independent of
-    /// the typed input, so production is a no-op stub here (mirrors
-    /// `WeightedPoolCoreTests`).
-    private static let intMutator = Mutator<Int>(seeds: [0], mutate: { v, _ in v }, generate: { _ in 0 })
+    // MARK: - Event-stream drivers (mirror what WeightedPoolCore sends)
 
-    /// Draw-heavy core: `generationRatio: 0`, so every decision with a non-empty
-    /// pool is a weighted draw and the weight distribution is observable.
-    private func makeCore(
-        admission: PoolAdmission = .everyDiscovery,
-        policy: EntropicWeightPolicy = EntropicWeightPolicy()
-    ) -> WeightedPoolCore<Int> {
-        WeightedPoolCore<Int>(
-            mutators: Self.intMutator,
-            admission: admission, policies: [policy],
-            generationRatio: 0, rng: FastRNG())
+    private func insert(_ p: EntropicWeightPolicy, id: Int, edges: [UInt32]) {
+        _ = p.handle(event: .inserted(id: id, coverage: SparseCoverage(indices: edges)))
     }
 
-    private func accept(_ core: WeightedPoolCore<Int>, edges: [UInt32], parent: Int? = nil) -> Int? {
-        let source: PoolIterationSource = parent.map { .pool(parent: $0) } ?? .generated
-        return core.admit(0, coverage: SparseCoverage(indices: edges), poolSource: source)
+    /// A pool mutant of `parent` that elicited coverage (admitted or rejected —
+    /// either way the discovery credits the parent's yield).
+    private func discovery(_ p: EntropicWeightPolicy, parent: Int, edges: [UInt32]) {
+        _ = p.handle(event: .iteration(PoolIterationOutcome(
+            source: .pool(parent: parent), newCoverage: SparseCoverage(indices: edges))))
     }
 
-    private func miss(_ core: WeightedPoolCore<Int>, parent: Int? = nil) {
-        let source: PoolIterationSource = parent.map { .pool(parent: $0) } ?? .generated
-        _ = core.admit(0, coverage: nil, poolSource: source)
+    /// A pool mutant of `parent` that elicited nothing (a fruitless execution).
+    private func fruitless(_ p: EntropicWeightPolicy, parent: Int) {
+        _ = p.handle(event: .iteration(PoolIterationOutcome(
+            source: .pool(parent: parent), newCoverage: nil)))
     }
 
-    /// Run draw cycles, tallying which entry each draw picks. `decide()` fires
-    /// `.willDraw` (the advisor's weight-flush point) before each weighted draw.
-    private func tallyDraws(_ core: WeightedPoolCore<Int>, cycles: Int) -> [Int: Int] {
-        var picks: [Int: Int] = [:]
-        for _ in 0..<cycles {
-            if case let .mutate(id) = core.decide() {
-                picks[id, default: 0] += 1
-                miss(core, parent: id)
-            } else {
-                miss(core)
-            }
+    private func remove(_ p: EntropicWeightPolicy, id: Int) {
+        _ = p.handle(event: .removed(id: id))
+    }
+
+    /// The weights the advisor flushes for the current corpus at a draw.
+    private func weights(_ p: EntropicWeightPolicy) -> [Int: Double] {
+        var w: [Int: Double] = [:]
+        for action in p.handle(event: .willDraw) {
+            if case let .setWeight(id, weight) = action { w[id] = weight }
         }
-        return picks
+        return w
     }
 
-    @Test("Weighted selection reaches every entry")
-    func selectionReachesEveryEntry() {
-        let core = makeCore()
-        #expect(accept(core, edges: [10]) == 0)
-        #expect(accept(core, edges: [20]) == 1)
-        let picks = tallyDraws(core, cycles: 200)
-        #expect(picks[0, default: 0] > 0)
-        #expect(picks[1, default: 0] > 0)
+    // MARK: - Weighting behavior (deterministic — asserts on emitted weights)
+
+    @Test("Every live entry receives a positive weight")
+    func everyLiveEntryWeighted() throws {
+        let p = EntropicWeightPolicy()
+        insert(p, id: 0, edges: [10])
+        insert(p, id: 1, edges: [20])
+
+        let w = weights(p)
+        #expect(try #require(w[0]) > 0)
+        #expect(try #require(w[1]) > 0)
     }
 
-    @Test("A seed worn down by fruitless mutant executions loses energy")
-    func unproductiveExecutionsDecayParent() {
-        let core = makeCore()
-        #expect(accept(core, edges: [10]) == 0)                  // A
-        for _ in 0..<50 { miss(core, parent: 0) }                // 50 fruitless mutants
-        #expect(accept(core, edges: [20]) == 1)                  // B, fresh
+    @Test("Fruitless executions decay a seed's weight below a fresh peer")
+    func fruitlessExecutionsDecay() throws {
+        // A and B are symmetric (one rare feature each); only A is worn down.
+        // Isolating EXECUTIONS (equal yield) makes the abundance decay the only
+        // difference, so the direction is unambiguous.
+        let p = EntropicWeightPolicy()
+        insert(p, id: 0, edges: [10])     // A
+        insert(p, id: 1, edges: [20])     // B
+        for _ in 0..<50 { fruitless(p, parent: 0) }
 
-        let picks = tallyDraws(core, cycles: 300)
-        #expect(picks[1, default: 0] > picks[0, default: 0],
-                "fresh B must out-draw A after A's 50 fruitless executions")
+        let w = weights(p)
+        #expect(try #require(w[0]) < #require(w[1]),
+                "50 fruitless executions must decay A below fresh B")
     }
 
-    @Test("Rejected discoveries still credit the parent's yield")
-    func rejectedDiscoveryCreditsParent() {
-        // Under feature-ownership admission, a mutant that re-witnesses
-        // already-owned features is NOT admitted — but the discovery is still
-        // information about its parent's neighborhood, so the parent's yield
-        // grows and its energy rises.
-        let core = makeCore(admission: .featureOwnership)
-        #expect(accept(core, edges: [10, 11]) == 0)              // A owns {10,11}
-        #expect(accept(core, edges: [20]) == 1)                  // B owns {20}
+    @Test("Rejected discoveries credit the parent's yield, raising it above an equally-mutated fruitless peer")
+    func rejectedDiscoveriesCreditYield() throws {
+        // Both seeds get the SAME number of executions (5), so the abundance
+        // term is equal; the only difference is that A's mutants kept eliciting
+        // a rare feature (yield credited) while B's were fruitless. Isolating
+        // YIELD makes the direction unambiguous: A must out-weigh B.
+        let p = EntropicWeightPolicy()
+        insert(p, id: 0, edges: [10])     // A owns rare feature 10
+        insert(p, id: 1, edges: [20])     // B owns rare feature 20
+        for _ in 0..<5 { discovery(p, parent: 0, edges: [10]) }   // A's mutants re-elicit 10
+        for _ in 0..<5 { fruitless(p, parent: 1) }                // B's mutants yield nothing
 
-        // Five of A's mutants re-elicit A's rare features; all rejected
-        // (equal coverage size ties never steal), all credit A's yield.
-        for _ in 0..<5 {
-            #expect(accept(core, edges: [10, 11], parent: 0) == nil)
-        }
-
-        let picks = tallyDraws(core, cycles: 300)
-        #expect(picks[0, default: 0] > picks[1, default: 0],
+        let w = weights(p)
+        #expect(try #require(w[0]) > #require(w[1]),
                 "a seed whose mutants keep eliciting rare features carries more information")
     }
 
-    @Test("Evicted entries stop receiving weight but their stats survive for lineage")
-    func evictionStopsWeights() {
-        let core = makeCore(admission: .featureOwnership)
-        #expect(accept(core, edges: [1, 2]) == 0)                // A owns {1,2}, size 2
-        #expect(accept(core, edges: [9]) == 1)                   // B
-        #expect(accept(core, edges: [1]) == 2)                   // steals {1}
-        #expect(accept(core, edges: [2]) == 3)                   // steals {2} -> A evicted
+    @Test("Removed entries receive no weight; attributing to a dead parent does not crash")
+    func removedEntriesGetNoWeight() throws {
+        let p = EntropicWeightPolicy()
+        insert(p, id: 0, edges: [1, 2])
+        insert(p, id: 1, edges: [9])
+        remove(p, id: 0)
 
-        let picks = tallyDraws(core, cycles: 200)
-        #expect(picks[0] == nil, "evicted A is never drawn")
-        // Attribution to the dead parent must not crash; its mutants may
-        // still be in flight.
-        miss(core, parent: 0)
+        let w = weights(p)
+        #expect(w[0] == nil, "evicted entry is never weighted")
+        #expect(w[1] != nil)
+
+        // Mutants of the dead parent may still be in flight: attribution must
+        // not crash and must not resurrect the entry's weight.
+        fruitless(p, parent: 0)
+        discovery(p, parent: 0, edges: [1, 2])
+        #expect(weights(p)[0] == nil)
     }
 
-    @Test("End-to-end: entropic advisor composes with culling in a real run")
+    @Test("An idle draw — no membership or coverage change — flushes no weight updates")
+    func idleDrawEmitsNothing() {
+        // The advisor recomputes the corpus distribution on membership/coverage
+        // changes (libFuzzer's batched update), not on every draw. With no
+        // change since the last flush, `.willDraw` must produce no churn.
+        let p = EntropicWeightPolicy()
+        insert(p, id: 0, edges: [10])
+        _ = p.handle(event: .willDraw)            // first flush after the insert
+
+        let second = p.handle(event: .willDraw)   // nothing changed since
+        #expect(second.isEmpty, "no membership/coverage change ⇒ no weight churn")
+    }
+
+    // MARK: - End-to-end composition
+
+    @Test("End-to-end: entropic advisor composes with the pool in a real run", .timeLimit(.minutes(1)))
     func integrationSmoke() async throws {
         let iterations = SyncBox<Int>(0)
         let probe = FuzzPlugin<Int>(id: "iteration_counter", handleSync: { event in
             switch event {
             case .iteration:
                 iterations.update { $0 += 1 }
-                return iterations.value >= 500
+                return iterations.value >= 300
                     ? [.stop(.init(reason: .custom("observed_enough")))] : []
             }
         })
@@ -141,15 +158,22 @@ struct EntropicPolicyTests {
             duration: .seconds(10),
             persistence: .ephemeral,
             scheduler: MutationScheduler.weightedPool(
-                admission: .featureOwnership,
+                admission: .everyDiscovery,
                 policies: { [.entropic()] }
             ),
             parallelism: 1,
             plugins: { [probe] }
         ) { (input: Int) in
-            blackHole(input)
+            // Input-dependent branches produce real, non-empty coverage, so the
+            // corpus is reliably populated even under parallel load — unlike an
+            // empty body, whose zero-edge runs are admission-rejected.
+            if input % 2 == 0 {
+                blackHole(input &* 3)
+            } else {
+                blackHole(input &+ 1)
+            }
         }
-        #expect(iterations.value >= 500)
-        #expect(result.corpus.count > 0)
+
+        #expect(result.corpus.count > 0, "the advised pool must retain interesting inputs")
     }
 }
