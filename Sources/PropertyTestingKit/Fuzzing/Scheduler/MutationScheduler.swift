@@ -28,6 +28,8 @@
 /// child `PoolPlugin`s advise weights and evictions, and the owner alone
 /// decides what runs next. Children hear every membership change the owner
 /// applies, whoever caused it.
+import FuzzCore
+
 public struct MutationScheduler: Sendable {
     /// Builds a fresh per-engine scheduler core (fresh policy instances, fresh
     /// state) — same per-engine isolation pattern as `CoverageStrategy`. Typed

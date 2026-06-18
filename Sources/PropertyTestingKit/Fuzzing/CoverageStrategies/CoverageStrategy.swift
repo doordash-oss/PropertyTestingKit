@@ -15,6 +15,7 @@
 //  Swappable coverage strategies that determine when a fuzz input is "interesting."
 //
 
+import FuzzCore
 import EdgeHooks
 import SanCovHooks
 

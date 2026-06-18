@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+import FuzzCore
+
 //  The per-engine bundle a coverage strategy is built from.
 //
 

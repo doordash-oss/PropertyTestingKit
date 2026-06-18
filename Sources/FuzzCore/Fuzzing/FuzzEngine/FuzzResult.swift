@@ -125,7 +125,7 @@ public struct FuzzStats: Sendable {
 }
 
 extension FuzzResult {
-    static var empty: Self {
+    public static var empty: Self {
         @Dependency(\.dateClient) var dateClient
 
         let emptySnapshot = CorpusSnapshot<repeat each Input>(

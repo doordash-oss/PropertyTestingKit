@@ -17,6 +17,8 @@
 //
 
 /// Where one executed input came from.
+import FuzzCore
+
 public enum PoolIterationSource: Sendable, Equatable {
     /// The residual queue: seeds, `queueInputs`, or a bus plugin's
     /// `selectForMutation` burst.

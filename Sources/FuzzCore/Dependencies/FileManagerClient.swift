@@ -20,26 +20,26 @@ import Foundation
 import IssueReporting
 
 /// Dependency client for file system operations.
-struct FileManagerClient: Sendable {
+public struct FileManagerClient: Sendable {
     /// Get the current working directory path.
-    var currentDirectoryPath: @Sendable () -> String
+    public var currentDirectoryPath: @Sendable () -> String
 
     /// Check if a file exists at the given path.
-    let _fileExists: @Sendable (String) -> Bool
+    public let _fileExists: @Sendable (String) -> Bool
 
     /// Create a directory at the given URL, optionally creating intermediate directories.
-    var createDirectory: @Sendable (URL, Bool) throws -> Void
+    public var createDirectory: @Sendable (URL, Bool) throws -> Void
 
     /// Remove the item at the given URL.
-    var removeItem: @Sendable (URL) throws -> Void
+    public var removeItem: @Sendable (URL) throws -> Void
 
     /// Write data to a file at the given URL.
-    var writeData: @Sendable (Data, URL) throws -> Void
+    public var writeData: @Sendable (Data, URL) throws -> Void
 
     /// Read data from a file at the given URL.
-    var readData: @Sendable (URL) throws -> Data
+    public var readData: @Sendable (URL) throws -> Data
 
-    init(
+    public init(
         currentDirectoryPath: @escaping @Sendable () -> String = unimplemented(
             "currentDirectoryPath",
             placeholder: "/test"
@@ -70,7 +70,7 @@ struct FileManagerClient: Sendable {
         self.readData = readData
     }
 
-    func fileExists(atPath: String) -> Bool {
+    public func fileExists(atPath: String) -> Bool {
         self._fileExists(atPath)
     }
 }
@@ -78,7 +78,7 @@ struct FileManagerClient: Sendable {
 // MARK: - Dependency Key
 
 extension FileManagerClient: DependencyKey {
-    static let liveValue = FileManagerClient(
+    public static let liveValue = FileManagerClient(
         currentDirectoryPath: { FileManager.default.currentDirectoryPath },
         fileExists: { FileManager.default.fileExists(atPath: $0) },
         createDirectory: { url, createIntermediates in
@@ -92,11 +92,11 @@ extension FileManagerClient: DependencyKey {
         readData: { url in try Data(contentsOf: url) }
     )
 
-    static let testValue = liveValue
+    public static let testValue = liveValue
 }
 
 extension DependencyValues {
-    var fileManager: FileManagerClient {
+    public var fileManager: FileManagerClient {
         get { self[FileManagerClient.self] }
         set { self[FileManagerClient.self] = newValue }
     }

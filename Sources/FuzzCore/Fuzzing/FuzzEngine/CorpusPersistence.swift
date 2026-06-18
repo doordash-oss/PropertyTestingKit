@@ -45,7 +45,7 @@ public enum CorpusPersistence: Sendable {
 /// The outcome of resolving the `FUZZ_CORPUS_MODE` env var against a call site's
 /// `CorpusPersistence`. A `fuzz(...)` call either fuzzes with some persistence policy,
 /// or is forced into a pure replay by the suite-level env override.
-enum ResolvedFuzzMode {
+public enum ResolvedFuzzMode {
     /// Fuzz with this persistence policy.
     case fuzz(CorpusPersistence)
     /// The env var forced a verify-only replay (CI determinism). The replay runs with
@@ -64,7 +64,7 @@ extension CorpusPersistence {
     /// - `regressiononly` forces a replay (handler-less — see `ResolvedFuzzMode.forcedReplay`).
     /// - `refuzzreplace` / `refuzzextend` / `auto` force the corresponding persistence.
     /// - anything else (unset/unknown) honors the call site.
-    static func resolveForFuzz(callSite: CorpusPersistence) -> ResolvedFuzzMode {
+    public static func resolveForFuzz(callSite: CorpusPersistence) -> ResolvedFuzzMode {
         @Dependency(\.environment) var environment
         switch environment.environment()[environmentVariable]?.lowercased() {
         case "regressiononly": return .forcedReplay

@@ -15,6 +15,7 @@
 //  Native DWARF symbolication using LLVM for address-to-line lookup.
 //
 
+import FuzzCore
 import Foundation
 import CLLVMSymbolizer
 import Dependencies

@@ -15,7 +15,7 @@
 import Foundation
 
 extension JSONEncoder {
-    static func corpusEncoder() -> JSONEncoder {
+    public static func corpusEncoder() -> JSONEncoder {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys]
         encoder.dateEncodingStrategy = .iso8601
@@ -24,7 +24,7 @@ extension JSONEncoder {
 }
 
 extension JSONDecoder {
-    static func corpusDecoder() -> JSONDecoder {
+    public static func corpusDecoder() -> JSONDecoder {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
         return decoder

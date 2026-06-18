@@ -15,6 +15,7 @@
 //  Closure-based plugins that eliminate protocol witness overhead.
 //
 
+import FuzzCore
 import Testing
 import Foundation
 import Dependencies

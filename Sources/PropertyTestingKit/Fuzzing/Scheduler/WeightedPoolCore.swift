@@ -28,6 +28,8 @@
 ///
 /// Confinement: one instance per engine, driven on the engine's task. No
 /// internal synchronization.
+import FuzzCore
+
 final class WeightedPoolCore: SchedulerCore {
     /// Edge coverage is the only signal the weighted pool consults.
     static let requiredProbes: [any InstrumentationKey.Type] = [CoverageProbeKey.self]

@@ -16,28 +16,28 @@ import Foundation
 import Testing
 
 /// Configuration for the fuzzing run.
-struct FuzzEngineConfig: Sendable {
+public struct FuzzEngineConfig: Sendable {
     /// Maximum time to spend fuzzing.
-    var maxDuration: Duration
+    public var maxDuration: Duration
 
     /// Verbose logging.
-    var verbose: Bool
+    public var verbose: Bool
 
     /// Project root path for filtering coverage gaps to project files only.
     /// When set, only reports gaps in files under this path.
-    let projectPath: String?
+    public let projectPath: String?
 
     /// Source location where the fuzz test was called.
     /// Used for reporting failures and plugin actions.
-    let sourceLocation: SourceLocation
+    public let sourceLocation: SourceLocation
 
     /// How often to check the time limit (in iterations).
     /// Higher values reduce overhead from Date.init() calls but may overshoot the time limit slightly.
     /// Default: 1000 (checks ~10K times/sec at 10M iterations/sec, ~3x faster than per-iteration).
     /// Tests that need precise iteration control should use 1.
-    let timeLimitCheckInterval: Int
+    public let timeLimitCheckInterval: Int
 
-    init(
+    public init(
         maxDuration: Duration = .seconds(60),
         verbose: Bool = false,
         projectPath: String? = nil,

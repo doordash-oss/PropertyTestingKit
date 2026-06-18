@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+import FuzzCore
+
 //  Hit-count buckets strategy: a new per-edge hit-count bucket is interesting
 //  (AFL++/libFuzzer counter features).
 //

@@ -37,21 +37,21 @@ import Testing
 /// 5. Mutate inputs, repeat
 /// 6. Stop when: queue drained (plugin), time limit, or coverage plateau
 ///
-final class FuzzEngine<each Input: Codable & Sendable>: @unchecked Sendable {
+public final class FuzzEngine<each Input: Codable & Sendable>: @unchecked Sendable {
     @Dependency(\.dateClient) private var dateClient
     @Dependency(\.corpusRegistry) private var corpusRegistry
 
     // Type alias for the combined input tuple
-    typealias InputTuple = (repeat each Input)
+    public typealias InputTuple = (repeat each Input)
 
     /// Synchronous plugin processor for iteration events (hot path).
-    typealias SyncPluginProcessorFn = @Sendable (
+    public typealias SyncPluginProcessorFn = @Sendable (
         consuming SyncPluginEvent<repeat each Input>,
         (FuzzPluginAction<repeat each Input>) -> Void
     ) -> Void
 
     /// Asynchronous plugin processor for rare events (cold path).
-    typealias AsyncPluginProcessorFn = @Sendable (
+    public typealias AsyncPluginProcessorFn = @Sendable (
         consuming AsyncPluginEvent<repeat each Input>,
         (FuzzPluginAction<repeat each Input>) -> Void
     ) async -> Void
@@ -98,7 +98,7 @@ final class FuzzEngine<each Input: Codable & Sendable>: @unchecked Sendable {
     ///   generator whose reabstraction thunk crashes SILGen. The non-scheduled
     ///   convenience initializer passes the no-op extractor as an explicit
     ///   closure literal, which lowers cleanly.
-    init(
+    public init(
         mutators: repeat Mutator<each Input>,
         config: FuzzEngineConfig,
         makeProviders: @escaping @Sendable () -> [any InstrumentationProvider],
@@ -134,7 +134,7 @@ final class FuzzEngine<each Input: Codable & Sendable>: @unchecked Sendable {
     ///   - processAsyncPlugins: Async plugin processor for rare events (cold path).
     ///   - test: The test closure to fuzz.
     /// - Returns: The fuzz result with corpus and any failures.
-    func run(
+    public func run(
         seeds: [InputTuple] = [],
         processSyncPlugins: @escaping SyncPluginProcessorFn,
         processAsyncPlugins: @escaping AsyncPluginProcessorFn,

@@ -15,6 +15,7 @@
 //  Simple adaptive early stopping based on coverage discovery rate.
 //
 
+import FuzzCore
 import Foundation
 import Dependencies
 

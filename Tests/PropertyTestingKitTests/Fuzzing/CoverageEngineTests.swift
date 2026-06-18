@@ -24,6 +24,7 @@
 import Testing
 import SanCovHooks
 @testable import PropertyTestingKit
+@testable import FuzzCore
 
 @Suite("Per-engine coverage strategies")
 struct CoverageEngineTests {

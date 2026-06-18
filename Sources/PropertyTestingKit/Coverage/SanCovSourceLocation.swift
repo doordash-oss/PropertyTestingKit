@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+import FuzzCore
+
 /// Source location information for a covered edge.
 ///
 /// Maps a SanCov edge index to its source location using debug symbol info.

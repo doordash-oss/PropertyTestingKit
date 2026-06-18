@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+import FuzzCore
+
 /// A coverage gap in a partially-covered function.
 struct CoverageGap: Sendable, Equatable {
     /// The function name containing the gap.

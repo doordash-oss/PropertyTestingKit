@@ -18,6 +18,7 @@
 //  the defaults most callers want.
 //
 
+import FuzzCore
 import Dependencies
 
 extension FuzzEngine {

@@ -91,7 +91,7 @@ extension DependencyValues {
     /// Fast random number generator using thread-local XorShift64.
     ///
     /// Zero allocation overhead - suitable for high-throughput fuzzing.
-    var fastRNG: FastRNG {
+    public var fastRNG: FastRNG {
         get { self[FastRNG.self] }
         set { self[FastRNG.self] = newValue }
     }

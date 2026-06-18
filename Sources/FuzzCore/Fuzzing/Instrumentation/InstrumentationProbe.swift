@@ -117,6 +117,14 @@ extension InstrumentationProbe {
     }
 }
 
+/// A probe that accumulates an aggregate index set across the whole run (e.g.
+/// the union of every interesting run's covered edges). The engine reads it once
+/// at teardown to populate the `.end` event (e.g. coverage-gap analysis) without
+/// naming the underlying signal — a probe opts in by conforming.
+public protocol AggregateIndexReporting {
+    var aggregateIndices: Set<UInt32> { get }
+}
+
 /// Supplies a probe to the engine for a signal a scheduler asked for.
 ///
 /// The engine is handed a list of providers (the default list builds the

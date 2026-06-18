@@ -74,11 +74,11 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
     /// measurement context exists, then assembled into a `RawExecutionContext`
     /// each iteration.
     private var probes: [any InstrumentationProbe] = []
-    /// The coverage probe, when the scheduler required it. Held so the engine
-    /// can read its accumulated covered-edge set at teardown for the `.end`
-    /// (coverage-gap) event — the one coverage-specific read left, and it sits
-    /// outside the hot loop.
-    private var installedCoverageProbe: CoverageProbe?
+    /// An installed probe that reports an aggregate index set, if any. Held so
+    /// the engine can read it at teardown for the `.end` event (e.g. coverage
+    /// gap) without naming a signal — `AggregateIndexReporting` is a core
+    /// protocol a probe opts into. Outside the hot loop.
+    private var aggregateReporter: (any AggregateIndexReporting)?
     /// Typed inputs for pool entries, index == pool entry ID. Append-only —
     /// eviction is the scheduler's concern (live set), not storage's.
     private var poolEntries: [(repeat each Input)] = []
@@ -195,7 +195,7 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
                 .map { $0.makeProbe() }
             // The coverage probe, if installed, owns the aggregate covered-edge
             // set the engine reads at teardown for the `.end` event.
-            installedCoverageProbe = probes.compactMap { $0 as? CoverageProbe }.first
+            aggregateReporter = probes.compactMap { $0 as? any AggregateIndexReporting }.first
 
             // Set up probes before the first test execution (pathTrie attaches its
             // trie so edges advance during iteration 1); tear down after the loop.
@@ -395,7 +395,7 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
             stats: stats,
             corpus: corpus,
             failures: failures,
-            coveredIndices: installedCoverageProbe?.coveredIndices ?? [],
+            coveredIndices: aggregateReporter?.aggregateIndices ?? [],
             campaignStopRequested: haltScope == .campaign
         )
     }

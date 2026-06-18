@@ -17,6 +17,7 @@
 //  per-execution verdict view through the generic `RawExecutionContext` seam.
 //
 
+import FuzzCore
 import SanCovHooks
 
 /// Names the edge-coverage signal. A scheduler reads `CoverageProbeKey` out of
@@ -122,6 +123,12 @@ final class CoverageProbe: InstrumentationProbe {
         }
         return CoverageVerdict(coverage: coverage)
     }
+}
+
+extension CoverageProbe: AggregateIndexReporting {
+    /// The union of every interesting run's covered edges — what the engine
+    /// reports for the `.end` (coverage-gap) event.
+    var aggregateIndices: Set<UInt32> { coveredIndices }
 }
 
 /// Builds a `CoverageProbe` per engine for the `CoverageProbeKey` signal. The

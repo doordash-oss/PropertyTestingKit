@@ -17,6 +17,7 @@ import Dependencies
 import Foundation
 import Testing
 @testable import PropertyTestingKit
+@testable import FuzzCore
 @testable import ScheduleControl
 
 /// Guards the flattened-pack schedule design: schedule fuzzing runs the engine

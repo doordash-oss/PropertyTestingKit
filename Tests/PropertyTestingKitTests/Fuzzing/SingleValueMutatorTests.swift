@@ -23,6 +23,7 @@
 
 import Testing
 @testable import PropertyTestingKit
+@testable import FuzzCore
 
 @Suite("Single-value mutators")
 struct SingleValueMutatorTests {

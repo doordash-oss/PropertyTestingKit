@@ -15,6 +15,7 @@
 //  Dependency client for task-isolated coverage counters.
 //
 
+import FuzzCore
 import Dependencies
 import IssueReporting
 

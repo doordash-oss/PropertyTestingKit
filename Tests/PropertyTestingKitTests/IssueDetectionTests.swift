@@ -17,6 +17,7 @@
 
 import Testing
 @testable import PropertyTestingKit
+@testable import FuzzCore
 
 @Suite("Lightweight Issue Detection")
 struct LightweightIssueDetectionTests {

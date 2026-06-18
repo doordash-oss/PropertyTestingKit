@@ -21,6 +21,7 @@
 //  and the run is terminated by the `stopWhenQueueEmpty()` plugin once those seeds drain.
 //
 
+import FuzzCore
 import Foundation
 import Testing
 import Dependencies

@@ -20,6 +20,7 @@
 
 import Testing
 @testable import PropertyTestingKit
+@testable import FuzzCore
 
 @Suite("Instrumentation seam")
 struct InstrumentationSeamTests {

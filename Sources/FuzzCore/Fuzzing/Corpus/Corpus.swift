@@ -33,21 +33,20 @@ import Foundation
 public final class Corpus<each Input: Codable & Sendable>: @unchecked Sendable {
 
     /// All entries in the corpus.
-    @usableFromInline
-    var entries: [CorpusEntry<repeat each Input>]
+    public internal(set) var entries: [CorpusEntry<repeat each Input>]
 
-    init(entries: [CorpusEntry<repeat each Input>]) {
+    public init(entries: [CorpusEntry<repeat each Input>]) {
         self.entries = entries
     }
 
-    init() {
+    public init() {
         self.entries = []
     }
 
     // MARK: - Serialization
 
     /// Create a snapshot of the corpus state for encoding.
-    func snapshot() -> CorpusSnapshot<repeat each Input> {
+    public func snapshot() -> CorpusSnapshot<repeat each Input> {
         return CorpusSnapshot(entries: entries)
     }
 
@@ -74,7 +73,7 @@ public final class Corpus<each Input: Codable & Sendable>: @unchecked Sendable {
     ///
     /// Storage entry point for the engine once the scheduler said keep. Internal
     /// on purpose: strategies are pure judgement and never see the corpus.
-    func mergeCoverageAndAdd(
+    public func mergeCoverageAndAdd(
         input: (repeat each Input),
         scheduleBytes: [UInt8]? = nil,
         sparse: SparseCoverage
@@ -92,7 +91,7 @@ public final class Corpus<each Input: Codable & Sendable>: @unchecked Sendable {
     ///
     /// - Returns: `true` if the entry was added, `false` if it was redundant.
     @discardableResult
-    func addIfInteresting(
+    public func addIfInteresting(
         input: borrowing (repeat each Input),
         scheduleBytes: [UInt8]? = nil,
         sparse: consuming SparseCoverage,
@@ -113,7 +112,7 @@ public final class Corpus<each Input: Codable & Sendable>: @unchecked Sendable {
     }
 
     /// Add an entry unconditionally with metadata.
-    func add(
+    public func add(
         input: (repeat each Input),
         scheduleBytes: [UInt8]? = nil,
         sparse: SparseCoverage,
@@ -160,7 +159,7 @@ public struct CorpusSnapshot<each Input: Codable & Sendable>: Sendable, Codable 
 
 extension Corpus {
     /// Create a corpus from a snapshot.
-    convenience init(from snapshot: CorpusSnapshot<repeat each Input>) {
+    public convenience init(from snapshot: CorpusSnapshot<repeat each Input>) {
         self.init(entries: snapshot.entries)
     }
 }

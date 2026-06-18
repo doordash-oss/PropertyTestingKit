@@ -2,6 +2,7 @@ import Testing
 import Foundation
 import Dependencies
 @testable import PropertyTestingKit
+@testable import FuzzCore
 
 /// Guards against a swift-dependencies footgun: a `liveValue` is cached process-wide,
 /// and `@Dependency` binds to the context where its wrapper is *initialized*. If a

@@ -25,14 +25,16 @@ import Foundation
 /// Provides a factory for creating corpus instances with the appropriate type.
 /// The Corpus type is ~Copyable (non-copyable) for performance optimization,
 /// so it cannot be wrapped in closure-based clients.
-struct CorpusRegistry: Sendable, CorpusRegistryProtocol {
+public struct CorpusRegistry: Sendable, CorpusRegistryProtocol {
+    public init() {}
+
     /// Create a corpus for the given input types.
-    func getCorpus<each Input: Codable & Sendable>() -> Corpus<repeat each Input> {
+    public func getCorpus<each Input: Codable & Sendable>() -> Corpus<repeat each Input> {
         return Corpus<repeat each Input>()
     }
 }
 
-protocol CorpusRegistryProtocol: Sendable {
+public protocol CorpusRegistryProtocol: Sendable {
     func getCorpus<each T: Codable & Sendable>() -> Corpus<repeat each T>
 }
 
@@ -52,7 +54,7 @@ extension DependencyValues {
     /// @Dependency(\.corpusRegistry) var registry
     /// var corpus: Corpus<Int> = registry.getCorpus()
     /// ```
-    var corpusRegistry: CorpusRegistryProtocol {
+    public var corpusRegistry: CorpusRegistryProtocol {
         get { self[CorpusRegistryKey.self] }
         set { self[CorpusRegistryKey.self] = newValue }
     }

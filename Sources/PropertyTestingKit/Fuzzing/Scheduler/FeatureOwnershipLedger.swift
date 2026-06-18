@@ -28,6 +28,8 @@
 /// Entry IDs are assigned sequentially on admission and never reused,
 /// mirroring `WeightedPoolCore`'s ID assignment — the two stay aligned
 /// because admission is the only path that inserts.
+import FuzzCore
+
 struct FeatureOwnershipLedger {
     struct Verdict {
         /// The input claimed ≥ 1 feature and joins the pool.

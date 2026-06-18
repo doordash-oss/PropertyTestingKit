@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+import FuzzCore
 import Foundation
 
 /// A source location resolved from DWARF debug information.
