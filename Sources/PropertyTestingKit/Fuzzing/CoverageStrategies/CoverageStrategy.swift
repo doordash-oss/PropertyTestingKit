@@ -136,6 +136,9 @@ extension CoverageStrategy {
             // window — its C reader fires no edges.
             let gated = sancov_observer_enter()
             let interesting = engine.decide(coverage)
+            // The vocabulary is collected inside the same gated window as the
+            // decision — its closure reads the same engine state.
+            let features: [UInt64]? = interesting ? engine.features.map { $0() } : nil
             if gated { sancov_observer_exit() }
             guard interesting else {
                 return nil
@@ -148,9 +151,20 @@ extension CoverageStrategy {
             guard let sparse = coverage.materialized() else {
                 return nil
             }
-            return sparse
+            return CoverageAcceptance(sparse: sparse, features: features)
         })
     }
+}
+
+/// What an accepted iteration looked like: the run's sparse coverage (the
+/// snapshot already taken for the decision — callers must not re-snapshot)
+/// and the strategy's culling vocabulary, when it defines one.
+struct CoverageAcceptance {
+    let sparse: SparseCoverage
+    /// The strategy-defined features of the accepted run, `nil` when the
+    /// strategy has no vocabulary of its own (the pool falls back to the
+    /// covered edge indices).
+    let features: [UInt64]?
 }
 
 /// A coverage-interestingness decision: pure judgement over the edges the run
@@ -163,15 +177,15 @@ public typealias CoverageDecision = @Sendable (_ coverage: CoverageView) -> Bool
 
 /// A closure that decides if an input is interesting.
 ///
-/// Returns the run's sparse coverage when the input was interesting (the
-/// snapshot already taken for the decision — callers must not re-snapshot),
-/// or `nil` when it wasn't. Pure judgement over the measurement context: it
-/// is input-pack-agnostic (and so non-generic), which is what lets coverage be
-/// produced by a plain `InstrumentationProbe` and consumed by any scheduler.
+/// Returns the acceptance (coverage + strategy vocabulary) when the input was
+/// interesting, or `nil` when it wasn't. Pure judgement over the measurement
+/// context: it is input-pack-agnostic (and so non-generic), which is what lets
+/// coverage be produced by a plain `InstrumentationProbe` and consumed by any
+/// scheduler.
 typealias CoverageStrategyFn = (
     _ context: SanCovCounters.MeasurementContext,
     _ coverageClient: CoverageCountersClient
-) -> SparseCoverage?
+) -> CoverageAcceptance?
 
 /// Called once with the measurement context before the first test execution.
 /// Strategies that need to attach to the context (e.g., pathTrie) use this

@@ -49,7 +49,7 @@ public final class EntropicWeightPolicy: PoolPlugin {
 
     /// Per-entry rare-feature observation counts, keyed by pool entry ID. Freed
     /// on eviction (a dead entry is never drawn, so its yield is dead weight).
-    private var entryYield: [Int: [UInt32: Int]] = [:]
+    private var entryYield: [Int: [UInt64: Int]] = [:]
     /// Per-entry executed-mutant count, keyed by ID. Retained past eviction so
     /// in-flight mutants of a dead parent still attribute (and `totalExecutions`
     /// stays consistent) without resurrecting the entry.
@@ -60,7 +60,7 @@ public final class EntropicWeightPolicy: PoolPlugin {
     /// and the corpus-size term.
     private var liveIDs: Set<Int> = []
 
-    private var globalFeatureFreqs: [UInt32: Int] = [:]
+    private var globalFeatureFreqs: [UInt64: Int] = [:]
     private var totalRareFeatures = 0
     private var totalExecutions = 0
 
@@ -89,9 +89,11 @@ public final class EntropicWeightPolicy: PoolPlugin {
             totalExecutions += 1
             // Crediting a dead parent's yield is pointless (it is never drawn)
             // and would re-grow the dictionary freed on eviction, so only live
-            // parents accrue yield.
-            if let coverage = outcome.newCoverage, liveIDs.contains(parent) {
-                for feature in coverage.indices {
+            // parents accrue yield. Account in the run's RESOLVED features (the
+            // strategy's vocabulary, or widened edges) — the same vocabulary the
+            // ledger owns over.
+            if outcome.newCoverage != nil, liveIDs.contains(parent) {
+                for feature in outcome.resolvedFeatures {
                     entryYield[parent, default: [:]][feature, default: 0] += 1
                 }
                 dirtyRarity.insert(parent)
@@ -99,9 +101,9 @@ public final class EntropicWeightPolicy: PoolPlugin {
             }
             return []
 
-        case let .inserted(id, coverage):
-            var yield: [UInt32: Int] = [:]
-            for feature in coverage.indices {
+        case let .inserted(id, _, features):
+            var yield: [UInt64: Int] = [:]
+            for feature in features {
                 yield[feature] = 1
                 globalFeatureFreqs[feature, default: 0] += 1
             }

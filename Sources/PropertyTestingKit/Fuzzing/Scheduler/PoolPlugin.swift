@@ -34,10 +34,32 @@ public struct PoolIterationOutcome: Sendable {
     public let source: PoolIterationSource
     /// Non-nil exactly when the coverage strategy accepted the input.
     public let newCoverage: SparseCoverage?
+    /// The strategy-defined culling vocabulary of the accepted run
+    /// (`.pathTrie`: path k-grams; `.hitCountBuckets`: (edge, bucket)
+    /// pairs). `nil` when the strategy publishes none — consumers fall back
+    /// to the covered edge indices via `resolvedFeatures`.
+    public let features: [UInt64]?
+    /// The input's real size (mutator-measured, summed across the pack) on
+    /// accepted runs. `nil` when no mutator measures — the pool then falls
+    /// back to the covered-edge count as its REDUCE/eviction size metric.
+    public let inputSize: Int?
 
-    public init(source: PoolIterationSource, newCoverage: SparseCoverage?) {
+    public init(
+        source: PoolIterationSource,
+        newCoverage: SparseCoverage?,
+        features: [UInt64]? = nil,
+        inputSize: Int? = nil
+    ) {
         self.source = source
         self.newCoverage = newCoverage
+        self.features = features
+        self.inputSize = inputSize
+    }
+
+    /// The one vocabulary every pool component accounts in: the strategy's
+    /// features when it defines them, the covered edge indices otherwise.
+    public var resolvedFeatures: [UInt64] {
+        features ?? newCoverage?.indices.map(UInt64.init) ?? []
     }
 }
 
@@ -49,8 +71,9 @@ public struct PoolIterationOutcome: Sendable {
 public enum PoolEvent {
     /// An input executed. Use `outcome.source` for lineage attribution.
     case iteration(PoolIterationOutcome)
-    /// An entry was admitted to the pool.
-    case inserted(id: Int, coverage: SparseCoverage)
+    /// An entry was admitted to the pool. `features` is the entry's resolved
+    /// culling vocabulary (strategy-defined, or widened edge indices).
+    case inserted(id: Int, coverage: SparseCoverage, features: [UInt64])
     /// An entry left the pool (its ID is never reused).
     case removed(id: Int)
     /// The owner is about to draw a new focus entry. The moment for lazy
@@ -94,33 +117,44 @@ public struct PoolAdmission: Sendable {
         let evict: [Int]
     }
 
-    /// Builds a fresh per-engine judge over the accepted input's coverage.
-    let makeJudge: @Sendable () -> (SparseCoverage) -> Verdict
+    /// Builds a fresh per-engine judge over the accepted input's resolved
+    /// features and its size metric (real input size when a mutator
+    /// measures it, covered-edge count otherwise).
+    ///
+    /// Admission bookkeeping deliberately outlives pool membership: an
+    /// entry evicted for capacity stays a *ghost owner* of its features.
+    /// Re-witnessing a represented feature earns nothing (releasing ghost
+    /// claims was measured to turn a capacity-bounded pool into a revolving
+    /// door of re-claimers); only genuinely new features, or strictly
+    /// smaller witnesses, win residence.
+    let makeJudge: @Sendable () -> (_ features: [UInt64], _ size: Int) -> Verdict
 
-    init(makeJudge: @escaping @Sendable () -> (SparseCoverage) -> Verdict) {
+    init(makeJudge: @escaping @Sendable () -> ([UInt64], Int) -> Verdict) {
         self.makeJudge = makeJudge
     }
 
     /// Every strategy-accepted input joins the pool, nothing ever leaves.
     /// The behavior of the classic corpus-mutation loop.
     public static let everyDiscovery = PoolAdmission(
-        makeJudge: { { _ in Verdict(admit: true, evict: []) } })
+        makeJudge: { { _, _ in Verdict(admit: true, evict: []) } })
 
     /// libFuzzer's corpus model: an input joins the pool only by *owning*
     /// coverage features — claiming unowned ones, or stealing from a larger
-    /// owner (REDUCE; the covered-edge count is the size metric, ties don't
+    /// owner (REDUCE; the size metric is the mutator-measured input size
+    /// when available, the covered-edge count otherwise; ties don't
     /// steal). An entry that loses its last feature leaves the pool. Bounds
     /// the pool by the feature space regardless of how often the coverage
     /// strategy says "interesting"; rejected accepts get no burst and no
     /// residence (strict semantics).
     ///
-    /// Features today are the covered edge indices; for an order-sensitive
-    /// strategy like `.pathTrie` this is deliberately coarser than its
-    /// acceptance criterion — that's the flood-control point.
+    /// Ownership is accounted in the strategy's own vocabulary when it
+    /// publishes one (`.pathTrie`: path k-grams; `.hitCountBuckets`:
+    /// (edge, bucket) pairs), and the covered edge indices otherwise — so
+    /// the pool retains exactly the diversity the strategy accepts for.
     public static let featureOwnership = PoolAdmission(makeJudge: {
         var ledger = FeatureOwnershipLedger()
-        return { coverage in
-            let verdict = ledger.judge(features: coverage.indices, size: coverage.count)
+        return { features, size in
+            let verdict = ledger.judge(features: features, size: size)
             return Verdict(admit: verdict.admit, evict: verdict.evict)
         }
     })

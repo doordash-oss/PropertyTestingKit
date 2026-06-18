@@ -32,9 +32,14 @@ public struct CoverageVerdict {
     /// The run's sparse coverage when the strategy judged the input
     /// interesting; `nil` when it covered nothing worth retaining.
     public let coverage: SparseCoverage?
+    /// The strategy's culling vocabulary for the accepted run (path k-grams,
+    /// (edge, bucket) pairs); `nil` when the strategy publishes none — the
+    /// scheduler then falls back to the covered edge indices.
+    public let features: [UInt64]?
 
-    public init(coverage: SparseCoverage?) {
+    public init(coverage: SparseCoverage?, features: [UInt64]? = nil) {
         self.coverage = coverage
+        self.features = features
     }
 }
 
@@ -116,11 +121,11 @@ final class CoverageProbe: InstrumentationProbe {
 
     func makeView() -> CoverageVerdict {
         guard let context else { return CoverageVerdict(coverage: nil) }
-        let coverage = evaluator.evaluate(context, client)
-        if let coverage {
+        let acceptance = evaluator.evaluate(context, client)
+        if let coverage = acceptance?.sparse {
             coveredIndices.formUnion(coverage.indices)
         }
-        return CoverageVerdict(coverage: coverage)
+        return CoverageVerdict(coverage: acceptance?.sparse, features: acceptance?.features)
     }
 
     /// Surface the union of every interesting run's covered edges to the
