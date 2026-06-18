@@ -309,27 +309,22 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
                     var execContext = RawExecutionContext()
                     for probe in probes { probe.contribute(to: &execContext) }
 
-                    // The coverage view is still read here, but only as data:
-                    // the plugin iteration/failure events report it, and an
-                    // admitted entry is tagged with it. The retention *decision*
-                    // is no longer the engine's — see below.
-                    let iterationCoverage = execContext[CoverageProbeKey.self]?.coverage
-
                     // Retention is the scheduler's call. `observe` reads whatever
                     // signals it needs out of the context and, on admission,
-                    // hands back the new entry's ID. The engine names no signal:
-                    // an admitted input joins both the mutation pool (typed input
-                    // stored at that ID — IDs are sequential, so they stay
-                    // aligned) and the result corpus.
+                    // hands back the new entry's ID *and* the per-entry signature
+                    // to persist. The engine names no signal: it stores whatever
+                    // the scheduler returns. An admitted input joins both the
+                    // mutation pool (typed input stored at that ID — IDs are
+                    // sequential, so they stay aligned) and the result corpus.
                     let poolSource: SchedulerSource =
                         poolParentID.map { .pool(parent: $0) }
                         ?? (fromMutationQueue ? .queue : .generated)
-                    if scheduler.observe(execContext, source: poolSource) != nil {
+                    if let retained = scheduler.observe(execContext, source: poolSource) {
                         poolEntries.append(input)
                         corpus.mergeCoverageAndAdd(
                             input: input,
                             scheduleBytes: currentScheduleBytes,
-                            sparse: iterationCoverage ?? SparseCoverage()
+                            sparse: retained.coverage
                         )
                     }
 

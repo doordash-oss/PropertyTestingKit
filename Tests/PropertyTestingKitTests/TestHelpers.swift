@@ -331,7 +331,7 @@ extension WeightedPoolCore {
         case .generated: source = .generated
         case .pool(let parent): source = .pool(parent: parent)
         }
-        return observe(context, source: source)
+        return observe(context, source: source)?.id
     }
 }
 

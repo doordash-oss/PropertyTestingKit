@@ -98,10 +98,11 @@ struct InstrumentationSeamTests {
         private(set) var observedEdges: [Int] = []
         var nextDirective: SchedulerDirective = .generate
 
-        func observe(_ context: RawExecutionContext, source: SchedulerSource) -> Int? {
+        func observe(_ context: RawExecutionContext, source: SchedulerSource) -> RetainedEntry? {
             guard let view = context[CountKey.self] else { return nil }
             observedEdges.append(view.edges)
-            return view.edges > 0 ? observedEdges.count - 1 : nil
+            guard view.edges > 0 else { return nil }
+            return RetainedEntry(id: observedEdges.count - 1, coverage: SparseCoverage())
         }
 
         func next() -> SchedulerDirective { nextDirective }
@@ -113,7 +114,7 @@ struct InstrumentationSeamTests {
 
         var hit = RawExecutionContext()
         hit.set(CountKey.self, CountView(edges: 3))
-        #expect(sched.observe(hit, source: .generated) == 0)
+        #expect(sched.observe(hit, source: .generated)?.id == 0)
         #expect(sched.observedEdges == [3])
 
         var miss = RawExecutionContext()

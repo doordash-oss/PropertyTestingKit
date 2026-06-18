@@ -64,10 +64,10 @@ final class WeightedPoolCore: SchedulerCore {
     }
 
     /// Report one executed iteration. Reads the coverage verdict out of the
-    /// context (the only probe this scheduler requires) and returns the new
-    /// entry's ID when the input was interesting AND admitted — the engine must
-    /// then store the input at that index on its side.
-    func observe(_ context: RawExecutionContext, source: SchedulerSource) -> Int? {
+    /// context (the only probe this scheduler requires) and, when the input was
+    /// interesting AND admitted, returns the new entry's ID together with the
+    /// coverage to persist — so the engine never reads a coverage signal itself.
+    func observe(_ context: RawExecutionContext, source: SchedulerSource) -> RetainedEntry? {
         let coverage = context[CoverageProbeKey.self]?.coverage
         notifyAndApply(.iteration(PoolIterationOutcome(source: source.asPoolSource, newCoverage: coverage)))
 
@@ -87,7 +87,7 @@ final class WeightedPoolCore: SchedulerCore {
         // same removal path as child evictions, so every policy hears them.
         apply(verdict.evict.map { .remove(id: $0) })
         notifyAndApply(.inserted(id: id, coverage: coverage))
-        return id
+        return RetainedEntry(id: id, coverage: coverage)
     }
 
     /// Decide what the engine runs next.

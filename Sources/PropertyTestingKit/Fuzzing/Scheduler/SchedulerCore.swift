@@ -28,6 +28,27 @@ public enum SchedulerDirective: Equatable, Sendable {
     case mutate(id: Int)
 }
 
+/// The outcome of retaining an input: the new entry's ID, plus the per-entry
+/// signature to persist with it.
+///
+/// Returned by `observe` so the engine retains an input without itself naming a
+/// coverage signal — the scheduler read whatever signals it needed and hands
+/// back the `SparseCoverage` to store. `SparseCoverage` is a plain sparse index
+/// set (the per-entry signature the corpus already keeps), not a coverage probe.
+public struct RetainedEntry: Sendable {
+    /// The retained entry's ID. The engine stores the typed input at this index;
+    /// IDs are sequential and never reused, so the two stay aligned.
+    public let id: Int
+    /// The signature to persist with the entry (empty for schedulers that keep
+    /// none).
+    public let coverage: SparseCoverage
+
+    public init(id: Int, coverage: SparseCoverage) {
+        self.id = id
+        self.coverage = coverage
+    }
+}
+
 /// Where one executed input came from.
 public enum SchedulerSource: Equatable, Sendable {
     /// The residual queue: seeds or `queueInputs`.
@@ -55,10 +76,11 @@ public protocol SchedulerCore: AnyObject {
     static var requiredProbes: [any InstrumentationKey.Type] { get }
 
     /// Report one executed iteration. Read what you care about out of
-    /// `context`, update your own state, and return the new entry's ID when the
-    /// input should be retained (the engine then stores it at that index;
-    /// IDs are sequential and never reused). Return `nil` to retain nothing.
-    func observe(_ context: RawExecutionContext, source: SchedulerSource) -> Int?
+    /// `context`, update your own state, and return a `RetainedEntry` when the
+    /// input should be retained — the engine then stores the typed input at
+    /// `RetainedEntry.id` and persists `RetainedEntry.coverage` with it. Return
+    /// `nil` to retain nothing.
+    func observe(_ context: RawExecutionContext, source: SchedulerSource) -> RetainedEntry?
 
     /// Decide what the engine runs next.
     func next() -> SchedulerDirective
