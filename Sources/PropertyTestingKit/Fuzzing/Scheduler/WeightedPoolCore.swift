@@ -12,33 +12,36 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//  The mutation pool's owner: entries, weights, and the focus/burst draw
-//  loop. Mechanism only — admission and weighting policy live in
-//  `PoolAdmission` and the child `PoolPlugin`s.
+//  The mutation pool's owner: entries, weights, the focus/burst draw loop, AND
+//  the typed inputs themselves plus their production (generation + mutation).
+//  Mechanism only — admission and weighting policy live in `PoolAdmission` and
+//  the child `PoolPlugin`s.
 //
 
-/// Per-engine pool owner. Non-generic: entries are IDs here; the typed input
-/// for each ID is stored engine-side at the same index (IDs are sequential
-/// and never reused, so the two stay aligned by construction).
+import FuzzCore
+
+/// Per-engine weighted mutation pool. Generic over the input pack because it
+/// OWNS the typed inputs it schedules: `pool[id]` holds the input retained under
+/// entry `id` (IDs are sequential and never reused; `weights`/`pool` grow in
+/// lockstep so they stay aligned by construction).
 ///
-/// Draw model (focus + counter): a drawn or freshly admitted entry becomes
-/// the focus and receives `burstLength` consecutive mutants; every finished
-/// burst is followed by exactly one fresh generation, so the generator arm
-/// keeps a fixed share of executions instead of starving as bursts lengthen.
+/// Draw model (focus + counter): a drawn or freshly admitted entry becomes the
+/// focus and receives `burstLength` consecutive mutants; every finished burst is
+/// followed by exactly one fresh generation, so the generator arm keeps a fixed
+/// share of executions instead of starving as bursts lengthen.
 ///
 /// Confinement: one instance per engine, driven on the engine's task. No
 /// internal synchronization.
-import FuzzCore
-
-final class WeightedPoolCore: SchedulerCore {
-    /// Edge coverage is the only signal the weighted pool consults.
-    static let requiredProbes: [any InstrumentationKey.Type] = [CoverageProbeKey.self]
-
+final class WeightedPoolCore<each Input: Codable & Sendable> {
+    private let mutators: (repeat Mutator<each Input>)
+    private let inputSize: Int
     private let judge: (SparseCoverage) -> PoolAdmission.Verdict
     private let policies: [any PoolPlugin]
     private let burstLength: Int
     private let focusOnInsert: Bool
 
+    /// Typed inputs, index == entry ID (grows append-only, aligned with `weights`).
+    private var pool: [(repeat each Input)] = []
     /// Draw weight per entry ID (index == ID; grows append-only).
     private var weights: [Double] = []
     /// Live (drawable) entry IDs, swap-removed on eviction.
@@ -50,28 +53,85 @@ final class WeightedPoolCore: SchedulerCore {
     private var burstRemaining = 0
     /// One fresh generation is owed after every finished burst.
     private var freshOwed = false
+    /// What this scheduler's most recent `next()` produced, so `observe` can
+    /// report the right `PoolIterationSource` to child policies for a
+    /// scheduler-produced input (the engine only tells us external vs scheduled).
+    private var lastProduced: PoolIterationSource = .generated
 
     private var rng = FastRNG()
 
     init(
+        mutators: repeat Mutator<each Input>,
         admission: PoolAdmission,
         policies: [any PoolPlugin],
         burstLength: Int,
         focusOnInsert: Bool
     ) {
+        self.mutators = (repeat each mutators)
+        var n = 0
+        (repeat { _ = each mutators; n += 1 }())
+        self.inputSize = n
         self.judge = admission.makeJudge()
         self.policies = policies
         self.burstLength = max(1, burstLength)
         self.focusOnInsert = focusOnInsert
     }
 
+    // MARK: - Production (owned by the scheduler)
+
+    /// Produce the next input to run, applying this engine's mutators to its own
+    /// pool (mutate) or generating fresh, per the focus/burst decision.
+    func next() -> ScheduledInput<repeat each Input> {
+        switch decide() {
+        case .generate:
+            lastProduced = .generated
+            return ScheduledInput(
+                input: generateInput(rng: &rng, mutators: repeat each mutators),
+                poolParentID: nil
+            )
+        case .mutate(let id):
+            lastProduced = .pool(parent: id)
+            return ScheduledInput(
+                input: mutateOneRandomPosition(
+                    pool[id], inputSize: inputSize, rng: &rng, mutators: repeat each mutators
+                ),
+                poolParentID: id
+            )
+        }
+    }
+
     /// Report one executed iteration. Reads the coverage verdict out of the
     /// context (the only probe this scheduler requires) and, when the input was
-    /// interesting AND admitted, returns the new entry's ID together with the
-    /// coverage to persist — so the engine never reads a coverage signal itself.
-    func observe(_ context: RawExecutionContext, source: SchedulerSource) -> RetainedEntry? {
+    /// interesting AND admitted, stores the typed input in its own pool and
+    /// returns the coverage to persist in the corpus — so the engine never reads
+    /// a coverage signal itself and owns no pool.
+    func observe(
+        _ input: (repeat each Input),
+        _ context: RawExecutionContext,
+        source: SchedulerSource
+    ) -> SparseCoverage? {
         let coverage = context[CoverageProbeKey.self]?.coverage
-        notifyAndApply(.iteration(PoolIterationOutcome(source: source.asPoolSource, newCoverage: coverage)))
+        // The engine only knows external (seed/queue) vs scheduled; for a
+        // scheduler-produced input we reconstruct the finer source from the
+        // lineage of our own most recent `next()`.
+        let poolSource: PoolIterationSource = source == .external ? .queue : lastProduced
+        // Returns the new entry id on admission; the engine wants the signature
+        // to persist, which is exactly the coverage that was admitted.
+        return admit(input, coverage: coverage, poolSource: poolSource) != nil ? coverage : nil
+    }
+
+    /// Admission core, shared by the public `observe` seam and white-box tests.
+    /// Notifies child policies of the iteration, and when the input was
+    /// interesting AND admitted, stores it in the pool and returns its new
+    /// sequential entry id (else `nil`). `poolSource` is the policy-facing
+    /// lineage; the public seam derives it, tests pass it directly.
+    @discardableResult
+    func admit(
+        _ input: (repeat each Input),
+        coverage: SparseCoverage?,
+        poolSource: PoolIterationSource
+    ) -> Int? {
+        notifyAndApply(.iteration(PoolIterationOutcome(source: poolSource, newCoverage: coverage)))
 
         guard let coverage else { return nil }
         let verdict = judge(coverage)
@@ -79,6 +139,7 @@ final class WeightedPoolCore: SchedulerCore {
 
         let id = weights.count
         weights.append(1.0)
+        pool.append(input)
         livePos[id] = live.count
         live.append(id)
         if focusOnInsert {
@@ -89,11 +150,19 @@ final class WeightedPoolCore: SchedulerCore {
         // same removal path as child evictions, so every policy hears them.
         apply(verdict.evict.map { .remove(id: $0) })
         notifyAndApply(.inserted(id: id, coverage: coverage))
-        return RetainedEntry(id: id, coverage: coverage)
+        return id
     }
 
-    /// Decide what the engine runs next.
-    func next() -> SchedulerDirective {
+    // MARK: - Decision (policy)
+
+    /// One step of the focus/burst draw model. Internal so white-box tests can
+    /// pin the decision sequence directly; `next()` wraps it with production.
+    enum PoolDecision: Equatable {
+        case generate
+        case mutate(id: Int)
+    }
+
+    func decide() -> PoolDecision {
         if let current = focus {
             if burstRemaining > 0 {
                 burstRemaining -= 1
@@ -171,15 +240,28 @@ final class WeightedPoolCore: SchedulerCore {
     }
 }
 
-/// `SchedulerSource` (the engine-facing seam) and `PoolIterationSource` (the
-/// pool's public child-policy API) describe the same thing; bridge at the
-/// boundary so the existing `PoolPlugin` surface keeps its type.
-private extension SchedulerSource {
-    var asPoolSource: PoolIterationSource {
-        switch self {
-        case .queue: return .queue
-        case .generated: return .generated
-        case .pool(let parent): return .pool(parent: parent)
-        }
+/// Builds a `WeightedPoolCore` per engine and erases it behind `AnyScheduler`.
+/// Edge coverage is the only signal the weighted pool consults.
+struct WeightedPoolFactory: SchedulerFactory {
+    let admission: PoolAdmission
+    let makePolicies: @Sendable () -> [any PoolPlugin]
+    let burstLength: Int
+    let focusOnInsert: Bool
+
+    func makeScheduler<each Input: Codable & Sendable>(
+        mutators: repeat Mutator<each Input>
+    ) -> AnyScheduler<repeat each Input> {
+        let core = WeightedPoolCore<repeat each Input>(
+            mutators: repeat each mutators,
+            admission: admission,
+            policies: makePolicies(),
+            burstLength: burstLength,
+            focusOnInsert: focusOnInsert
+        )
+        return AnyScheduler(
+            requiredProbes: [CoverageProbeKey.self],
+            next: { core.next() },
+            observe: { input, context, source in core.observe(input, context, source: source) }
+        )
     }
 }

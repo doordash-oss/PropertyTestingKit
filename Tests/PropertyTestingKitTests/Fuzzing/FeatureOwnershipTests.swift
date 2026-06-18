@@ -95,58 +95,69 @@ struct FeatureOwnershipAdmissionTests {
         }
     }
 
+    /// Stub Int mutator: feature-ownership admission is independent of the input.
+    private static let intMutator = Mutator<Int>(seeds: [0], mutate: { v, _ in v }, generate: { _ in 0 })
+
+    private func makeCore(
+        policies: [any PoolPlugin], burstLength: Int, focusOnInsert: Bool
+    ) -> WeightedPoolCore<Int> {
+        WeightedPoolCore<Int>(
+            mutators: Self.intMutator, admission: .featureOwnership,
+            policies: policies, burstLength: burstLength, focusOnInsert: focusOnInsert)
+    }
+
+    private func accept(_ core: WeightedPoolCore<Int>, edges: [UInt32], parent: Int? = nil) -> Int? {
+        let source: PoolIterationSource = parent.map { .pool(parent: $0) } ?? .generated
+        return core.admit(0, coverage: SparseCoverage(indices: edges), poolSource: source)
+    }
+
+    private func miss(_ core: WeightedPoolCore<Int>, parent: Int? = nil) {
+        let source: PoolIterationSource = parent.map { .pool(parent: $0) } ?? .generated
+        _ = core.admit(0, coverage: nil, poolSource: source)
+    }
+
     @Test("Redundant accepts are not admitted: no residence, no burst")
     func redundantAcceptIgnored() {
-        let core = WeightedPoolCore(
-            admission: .featureOwnership, policies: [],
-            burstLength: 4, focusOnInsert: true)
+        let core = makeCore(policies: [], burstLength: 4, focusOnInsert: true)
 
-        #expect(core.observe(.init(source: .generated,
-                                   newCoverage: SparseCoverage(indices: [1, 2]))) == 0)
+        #expect(accept(core, edges: [1, 2]) == 0)
         // Drain the burst + owed fresh so focus is clear.
         for _ in 0..<4 {
-            #expect(core.next() == .mutate(id: 0))
-            _ = core.observe(.init(source: .pool(parent: 0), newCoverage: nil))
+            #expect(core.decide() == .mutate(id: 0))
+            miss(core, parent: 0)
         }
-        #expect(core.next() == .generate)
-        _ = core.observe(.init(source: .generated, newCoverage: nil))
+        #expect(core.decide() == .generate)
+        miss(core)
 
         // Strategy says interesting again, same features, same size: rejected.
-        let id = core.observe(.init(source: .generated,
-                                    newCoverage: SparseCoverage(indices: [1, 2])))
-        #expect(id == nil)
+        #expect(accept(core, edges: [1, 2]) == nil)
         // No new focus burst: the next directive draws the existing entry.
-        #expect(core.next() == .mutate(id: 0))
+        #expect(core.decide() == .mutate(id: 0))
     }
 
     @Test("REDUCE: a smaller input evicts the bankrupted owner from the draw set")
     func reduceEvictsLoser() {
         let listener = Listener()
-        let core = WeightedPoolCore(
-            admission: .featureOwnership, policies: [listener],
-            burstLength: 1, focusOnInsert: false)
+        let core = makeCore(policies: [listener], burstLength: 1, focusOnInsert: false)
 
-        #expect(core.observe(.init(source: .generated,
-                                   newCoverage: SparseCoverage(indices: [1, 2, 3]))) == 0)
+        #expect(accept(core, edges: [1, 2, 3]) == 0)
         // Smaller input covering a subset: admitted, steals {1,2}; entry 0
         // survives on {3}.
-        #expect(core.observe(.init(source: .generated,
-                                   newCoverage: SparseCoverage(indices: [1, 2]))) == 1)
+        #expect(accept(core, edges: [1, 2]) == 1)
         #expect(listener.removed.isEmpty)
 
         // Smaller still, stealing {3}: entry 0 loses its last feature.
-        #expect(core.observe(.init(source: .generated,
-                                   newCoverage: SparseCoverage(indices: [3]))) == 2)
+        #expect(accept(core, edges: [3]) == 2)
         #expect(listener.removed == [0])
 
         // Entry 0 is never drawn again.
         var drawn = Set<Int>()
         for _ in 0..<100 {
-            if case let .mutate(id) = core.next() {
+            if case let .mutate(id) = core.decide() {
                 drawn.insert(id)
-                _ = core.observe(.init(source: .pool(parent: id), newCoverage: nil))
+                miss(core, parent: id)
             } else {
-                _ = core.observe(.init(source: .generated, newCoverage: nil))
+                miss(core)
             }
         }
         #expect(!drawn.contains(0))

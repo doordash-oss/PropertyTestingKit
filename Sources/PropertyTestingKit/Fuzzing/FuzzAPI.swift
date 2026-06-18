@@ -17,9 +17,9 @@
 
 // Re-export the signal-agnostic engine layer so callers (and userspace
 // scheduler/probe modules) get the seam types — `Mutator`, `FuzzEngine`,
-// `SparseCoverage`, `SchedulerCore`, the dependency clients, etc. — by importing
-// PropertyTestingKit alone. The module split is an implementation detail; the
-// public surface is "import PropertyTestingKit."
+// `SparseCoverage`, `AnyScheduler`/`SchedulerFactory`, the dependency clients,
+// etc. — by importing PropertyTestingKit alone. The module split is an
+// implementation detail; the public surface is "import PropertyTestingKit."
 @_exported import FuzzCore
 import Foundation
 import Testing

@@ -30,12 +30,20 @@
 /// applies, whoever caused it.
 import FuzzCore
 
-public struct MutationScheduler: Sendable {
-    /// Builds a fresh per-engine scheduler core (fresh policy instances, fresh
-    /// state) — same per-engine isolation pattern as `CoverageStrategy`. Typed
-    /// as `any SchedulerCore` so a `MutationScheduler` can vend any scheduler,
-    /// not only the weighted pool.
-    let makeCore: @Sendable () -> any SchedulerCore
+public struct MutationScheduler: SchedulerFactory {
+    /// The underlying factory. Wrapping `any SchedulerFactory` (rather than
+    /// being one concrete factory) keeps the design's promise that a
+    /// `MutationScheduler` can vend any scheduler, not only the weighted pool.
+    let factory: any SchedulerFactory
+
+    /// Build this engine's scheduler at its input pack by forwarding to the
+    /// wrapped factory. One fresh scheduler per engine (the factory captures the
+    /// engine's mutators so the scheduler owns input production).
+    public func makeScheduler<each Input: Codable & Sendable>(
+        mutators: repeat Mutator<each Input>
+    ) -> AnyScheduler<repeat each Input> {
+        factory.makeScheduler(mutators: repeat each mutators)
+    }
 
     /// A weighted mutation pool with focus/burst draws.
     ///
@@ -53,13 +61,11 @@ public struct MutationScheduler: Sendable {
         burstLength: Int = 16,
         focusOnInsert: Bool = true
     ) -> MutationScheduler {
-        MutationScheduler(makeCore: {
-            WeightedPoolCore(
-                admission: admission,
-                policies: policies(),
-                burstLength: burstLength,
-                focusOnInsert: focusOnInsert
-            )
-        })
+        MutationScheduler(factory: WeightedPoolFactory(
+            admission: admission,
+            makePolicies: policies,
+            burstLength: burstLength,
+            focusOnInsert: focusOnInsert
+        ))
     }
 }

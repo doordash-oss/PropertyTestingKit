@@ -67,16 +67,14 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
     private let providers: [any InstrumentationProvider]
 
     /// This engine's scheduler: consulted for what to run when the residual
-    /// queue is empty, told about every iteration's outcome through the
-    /// per-execution `RawExecutionContext`.
-    private let scheduler: any SchedulerCore
+    /// queue is empty (it produces the input itself), and told about every
+    /// iteration's outcome through the per-execution `RawExecutionContext`. It
+    /// owns its own working set — the engine holds no pool.
+    private let scheduler: AnyScheduler<repeat each Input>
     /// Instrumentation probes feeding the scheduler. Built in `start()` once the
     /// measurement context exists, then assembled into a `RawExecutionContext`
     /// each iteration.
     private var probes: [any InstrumentationProbe] = []
-    /// Typed inputs for pool entries, index == pool entry ID. Append-only —
-    /// eviction is the scheduler's concern (live set), not storage's.
-    private var poolEntries: [(repeat each Input)] = []
 
     // Simple loop state (replaces WorkerPool)
     private var pendingInputs: SimpleRingBuffer<(repeat each Input)>
@@ -96,7 +94,7 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
         inputSize: Int,
         corpus: Corpus<repeat each Input>,
         providers: [any InstrumentationProvider],
-        scheduler: any SchedulerCore,
+        scheduler: AnyScheduler<repeat each Input>,
         processSyncPlugins: @escaping SyncPluginProcessorFn,
         processAsyncPlugins: @escaping AsyncPluginProcessorFn,
         config: FuzzEngineConfig,
@@ -161,13 +159,6 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
         // Setup for test execution
         let sourceLocation = config.sourceLocation
 
-        // Resolve the RNG from the dependency once here, then pass it to the
-        // generate/mutate functions. Caching it avoids dependency-injection
-        // overhead per call (millions of calls) while still sourcing randomness
-        // from the injected `\.fastRNG`.
-        @Dependency(\.fastRNG) var fastRNG
-        var rng = fastRNG
-
         // Simple fuzz loop - no workers, just iterate
         var iterationCount = 0
         var generatedCount = 0
@@ -185,7 +176,7 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
             // a signal here. Each probe owns its native measurement lifecycle
             // (coverage allocates its SanCov context in `setUp`, frees it in
             // `tearDown`).
-            let requiredKeys = Set(type(of: scheduler).requiredProbes.map { ObjectIdentifier($0) })
+            let requiredKeys = Set(scheduler.requiredProbes.map { ObjectIdentifier($0) })
             probes = providers
                 .filter { requiredKeys.contains(ObjectIdentifier($0.key)) }
                 .map { $0.makeProbe() }
@@ -228,6 +219,7 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
                     let fromMutationQueue: Bool
                     let parentID: Int?
                     let poolParentID: Int?
+                    let source: SchedulerSource
                     if !pendingInputs.isEmpty {
                         assert(
                             pendingParents.count == pendingInputs.count,
@@ -237,26 +229,29 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
                         parentID = pendingParents.removeFirstUnchecked()
                         poolParentID = nil
                         fromMutationQueue = true
+                        source = .external
                         if seedsRunCount < seeds.count {
                             seedsRunCount += 1
                         } else {
                             mutantsRunCount += 1
                         }
                     } else {
-                        switch scheduler.next() {
-                        case .generate:
-                            // Generate directly - no closure indirection
-                            input = (repeat (each mutators).generate(&rng))
+                        // The scheduler owns production: it generates a fresh
+                        // input or mutates one of its own retained entries. The
+                        // engine doesn't know or care which — `poolParentID` is
+                        // an opaque attribution tag the scheduler chose (`nil`
+                        // for a generated input), round-tripped to plugins.
+                        let scheduled = scheduler.next()
+                        input = scheduled.input
+                        poolParentID = scheduled.poolParentID
+                        parentID = nil
+                        source = .scheduled
+                        if scheduled.poolParentID == nil {
                             generatedCount += 1
                             fromMutationQueue = false
-                            parentID = nil
-                            poolParentID = nil
-                        case .mutate(let id):
-                            input = generateMutation(poolEntries[id])
+                        } else {
                             mutantsRunCount += 1
                             fromMutationQueue = true
-                            parentID = nil
-                            poolParentID = id
                         }
                     }
                     let currentScheduleBytes: [UInt8]? = scheduleBytesExtractor(input)
@@ -303,21 +298,17 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
                     for probe in probes { probe.contribute(to: &execContext) }
 
                     // Retention is the scheduler's call. `observe` reads whatever
-                    // signals it needs out of the context and, on admission,
-                    // hands back the new entry's ID *and* the per-entry signature
-                    // to persist. The engine names no signal: it stores whatever
-                    // the scheduler returns. An admitted input joins both the
-                    // mutation pool (typed input stored at that ID — IDs are
-                    // sequential, so they stay aligned) and the result corpus.
-                    let poolSource: SchedulerSource =
-                        poolParentID.map { .pool(parent: $0) }
-                        ?? (fromMutationQueue ? .queue : .generated)
-                    if let retained = scheduler.observe(execContext, source: poolSource) {
-                        poolEntries.append(input)
+                    // signals it needs out of the context, folds them into its
+                    // own state (and its own working set, if any), and returns
+                    // the signature to persist when the input should be retained
+                    // in the corpus — or nil to retain nothing. The engine names
+                    // no signal and owns no pool: it only persists the corpus
+                    // entry (the result/dedup/cross-engine-merge store).
+                    if let signature = scheduler.observe(input, execContext, source) {
                         corpus.mergeCoverageAndAdd(
                             input: input,
                             scheduleBytes: currentScheduleBytes,
-                            sparse: retained.coverage
+                            sparse: signature
                         )
                     }
 
@@ -476,8 +467,17 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
             // mutation is unified with input mutation.
             // Each mutant carries the action's originID so iteration events can
             // report the lineage back to the emitting plugin.
+            // `FastRNG` is a stateless shim over the thread-local generator, so
+            // a fresh instance draws from the same stream; the `inout` threading
+            // is for a uniform mutator signature, not seeding.
+            var mutationRNG = FastRNG()
             let mutants = (0..<mutationBurstLength).map { _ in
-                generateMutation(mutationAction.input)
+                mutateOneRandomPosition(
+                    mutationAction.input,
+                    inputSize: inputSize,
+                    rng: &mutationRNG,
+                    mutators: repeat each mutators
+                )
             }
             enqueuePending(mutants, parent: mutationAction.originID)
 
@@ -514,19 +514,6 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
         corpus.add(input: input, scheduleBytes: scheduleBytes, sparse: sparse, entryType: type, failure: failureInfo)
     }
 
-    /// Generate ONE mutant: a single mutation step at one randomly chosen
-    /// position of the input pack.
-    private func generateMutation(_ input: (repeat each Input)) -> (repeat each Input) {
-        // A 0-arity pack has no position to mutate; return it unchanged rather
-        // than trapping on `Int.random(in: 0..<0)`.
-        guard inputSize > 0 else { return input }
-        // `FastRNG` is a stateless shim over the thread-local generator, so a
-        // fresh instance draws from the same stream as the engine's own `rng`;
-        // the `inout` threading is for a uniform mutator signature, not seeding.
-        var rng = FastRNG()
-        let position = inputSize == 1 ? 0 : Int.random(in: 0..<inputSize, using: &rng)
-        return mutateOnePosition(input, position: position, rng: &rng, mutators: repeat each mutators)
-    }
 }
 
 /// How many single-step mutants a `.selectForMutation` action queues.
@@ -535,22 +522,3 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
 /// counter) when the pool scheduler lands; until then this preserves a
 /// burst-on-accept shape comparable to the old exhaustive-neighborhood burst.
 let mutationBurstLength = 16
-
-/// Mutate exactly `position` of the input pack with one mutator call, holding
-/// every other position fixed.
-func mutateOnePosition<each Input>(
-    _ input: (repeat each Input),
-    position: Int,
-    rng: inout FastRNG,
-    mutators: repeat Mutator<each Input>
-) -> (repeat each Input) {
-    var currentIndex = 0
-    return (repeat {
-        defer { currentIndex += 1 }
-        if currentIndex == position {
-            return (each mutators).mutate(each input, &rng)
-        } else {
-            return (each input)
-        }
-    }())
-}

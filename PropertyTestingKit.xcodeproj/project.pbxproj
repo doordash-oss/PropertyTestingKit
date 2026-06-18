@@ -15,6 +15,7 @@
 		04857930E3191C90D1EDB8EA /* AnyShrinkable.swift in Sources */ = {isa = PBXBuildFile; fileRef = FCA35A9F520278AFD6FC257F /* AnyShrinkable.swift */; };
 		05F055EADD40F4365178D246 /* Dependencies in Frameworks */ = {isa = PBXBuildFile; productRef = 33856C33773EAA4B0A27462A /* Dependencies */; };
 		05FC7400D202E26D73071D5F /* SanCovHooks.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 662FDA7546F253A8CAE418AB /* SanCovHooks.framework */; };
+		06173AFC1556564A78D9B942 /* PoollessSchedulerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 770BE6BB265C7DAB60FB119F /* PoollessSchedulerTests.swift */; };
 		073726C59F65CF54C9DB2A9D /* STADSPluginTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9475EBCF152B8D2EEACB5111 /* STADSPluginTests.swift */; };
 		0777E5DFF395C248C209EBC5 /* ScheduleControl.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = FA1A34B8FC6F4EFE3022741B /* ScheduleControl.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		07C510C0088CE6A6851F07FD /* ScheduleChoiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 25D1A7AC964578057CD75715 /* ScheduleChoiceTests.swift */; };
@@ -81,6 +82,7 @@
 		39A37D202D51C735DD44C2F8 /* SanCovHooks.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 662FDA7546F253A8CAE418AB /* SanCovHooks.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		3AE90F2D2F5E78080AAB081C /* FuzzAPITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 99DF2D2D7A9C78BEFDA1C9FF /* FuzzAPITests.swift */; };
 		3BD3F103CBAC2DB810328150 /* Shrinkable.swift in Sources */ = {isa = PBXBuildFile; fileRef = 447218A4047DEE5BBB9EFF09 /* Shrinkable.swift */; };
+		3CD3F99321403136AB93C484 /* SchedulerSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = B96335D04A27579950460A29 /* SchedulerSupport.swift */; };
 		3DE4055B12544F96FB88B490 /* FuzzEngine+Config.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF7DD32AFECCA9E69821998D /* FuzzEngine+Config.swift */; };
 		408691F1E373D68F229EA2D0 /* FuzzCore.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 69A1455BBDC81EED5F1D2C67 /* FuzzCore.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		413720205EA64C2558BD9F04 /* FuzzAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = A18400D950AE2D1D13443E9A /* FuzzAPI.swift */; };
@@ -717,6 +719,7 @@
 		7338026EE0E559A10E5ECC55 /* EnergyMutationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EnergyMutationTests.swift; sourceTree = "<group>"; };
 		74A14C05484DADACA064A68C /* SQLInjectionMutator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SQLInjectionMutator.swift; sourceTree = "<group>"; };
 		7592E82B282E9A2AEA8D1386 /* StragglerCoverageInheritanceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StragglerCoverageInheritanceTests.swift; sourceTree = "<group>"; };
+		770BE6BB265C7DAB60FB119F /* PoollessSchedulerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PoollessSchedulerTests.swift; sourceTree = "<group>"; };
 		779153C9B2EE2604BB0510F4 /* GenericTimerPollerReproductionTest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GenericTimerPollerReproductionTest.swift; sourceTree = "<group>"; };
 		78CCD0EE426F8A208203ED16 /* CoverageView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoverageView.swift; sourceTree = "<group>"; };
 		797B369A783CF8DA4F7C9190 /* RaceConditionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RaceConditionTests.swift; sourceTree = "<group>"; };
@@ -776,6 +779,7 @@
 		B64D06718A05E1272E84861D /* MockDatabase.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockDatabase.swift; sourceTree = "<group>"; };
 		B6528B38B2BEED018604E6FC /* TrieEdgeHookTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrieEdgeHookTests.swift; sourceTree = "<group>"; };
 		B69E2CAD9A2DA23DFBCC5890 /* FeatureOwnershipTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeatureOwnershipTests.swift; sourceTree = "<group>"; };
+		B96335D04A27579950460A29 /* SchedulerSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SchedulerSupport.swift; sourceTree = "<group>"; };
 		BA01B2725BCFE68C918C2336 /* PlateauDetectorPluginTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlateauDetectorPluginTests.swift; sourceTree = "<group>"; };
 		BAD161F33FE57E2FF36FC9D4 /* DoubleMutators.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DoubleMutators.swift; sourceTree = "<group>"; };
 		BC67D944E495D340262E27CC /* InstrumentationSeamTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InstrumentationSeamTests.swift; sourceTree = "<group>"; };
@@ -1704,6 +1708,7 @@
 				63C99FD379289FA24BBE7A5B /* ParallelEarlyCancelTest.swift */,
 				F5E409E9172BADE44207E55E /* PathTrieStrategyTests.swift */,
 				BA01B2725BCFE68C918C2336 /* PlateauDetectorPluginTests.swift */,
+				770BE6BB265C7DAB60FB119F /* PoollessSchedulerTests.swift */,
 				B37ED10677A92DC01DD0B289 /* SaturationPlateauDetectorTests.swift */,
 				543E53F7A2745CDD7F2C03DE /* SaturationPluginTests.swift */,
 				DBCAADBAF4AC53EA70482640 /* SchedulerIntegrationTests.swift */,
@@ -1754,6 +1759,7 @@
 			isa = PBXGroup;
 			children = (
 				2F00C937566BBAE28DC9DE16 /* SchedulerCore.swift */,
+				B96335D04A27579950460A29 /* SchedulerSupport.swift */,
 			);
 			path = Scheduler;
 			sourceTree = "<group>";
@@ -2303,6 +2309,7 @@
 				16317878571A2D1A1F16999B /* PowerOfTwoMutator.swift in Sources */,
 				D33C542AC0A54F1C506CC6EF /* SQLInjectionMutator.swift in Sources */,
 				F72C3192C96211FD0E5D9C53 /* SchedulerCore.swift in Sources */,
+				3CD3F99321403136AB93C484 /* SchedulerSupport.swift in Sources */,
 				3509EA0470EF5B7431586D5C /* ShrinkConfig.swift in Sources */,
 				C95C0C3C25258C27BC7519B3 /* ShrinkResult.swift in Sources */,
 				AE3F241318A2A099029B58C7 /* ShrinkStats.swift in Sources */,
@@ -2405,6 +2412,7 @@
 				D5645DFA85C2ABBD0E34ACC2 /* ParallelTimingTest.swift in Sources */,
 				190CC6D79C904001E2EC76BF /* PathTrieStrategyTests.swift in Sources */,
 				AB89E6673C3749E9B3F3A882 /* PlateauDetectorPluginTests.swift in Sources */,
+				06173AFC1556564A78D9B942 /* PoollessSchedulerTests.swift in Sources */,
 				14CE5AF65788D0ED532C423D /* PropertyBasedSelfTests.swift in Sources */,
 				B269AC60201884DB429C947C /* STADSPlateauDetectorTests.swift in Sources */,
 				073726C59F65CF54C9DB2A9D /* STADSPluginTests.swift in Sources */,

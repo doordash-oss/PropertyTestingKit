@@ -71,10 +71,12 @@ public final class FuzzEngine<each Input: Codable & Sendable>: @unchecked Sendab
     /// batteries layer so the core engine never names a signal.
     private let makeProviders: @Sendable () -> [any InstrumentationProvider]
 
-    /// Builds this engine's scheduler core, fresh per engine (its own pool,
-    /// policies, and draw state). Injected by the batteries layer so the core
-    /// engine depends only on the `SchedulerCore` seam, not a concrete scheduler.
-    private let makeScheduler: @Sendable () -> any SchedulerCore
+    /// Builds this engine's scheduler, fresh per engine (its own working set,
+    /// production, policies, and draw state). Injected by the batteries layer so
+    /// the core engine depends only on the `SchedulerFactory` seam, not a
+    /// concrete scheduler. Built with this engine's mutators so the scheduler
+    /// owns input production.
+    private let schedulerFactory: any SchedulerFactory
 
     /// Initialize with mutators.
     ///
@@ -102,14 +104,14 @@ public final class FuzzEngine<each Input: Codable & Sendable>: @unchecked Sendab
         mutators: repeat Mutator<each Input>,
         config: FuzzEngineConfig,
         makeProviders: @escaping @Sendable () -> [any InstrumentationProvider],
-        makeScheduler: @escaping @Sendable () -> any SchedulerCore,
+        schedulerFactory: any SchedulerFactory,
         scheduleBytesExtractor: @escaping @Sendable ((repeat each Input)) -> [UInt8]?
     ) {
         self.config = config
         self.mutators = (repeat each mutators)
         self.inputSize = Self.inputCount(for: repeat (each Input).self)
         self.makeProviders = makeProviders
-        self.makeScheduler = makeScheduler
+        self.schedulerFactory = schedulerFactory
         self.scheduleBytesExtractor = scheduleBytesExtractor
     }
 
@@ -176,7 +178,7 @@ public final class FuzzEngine<each Input: Codable & Sendable>: @unchecked Sendab
             inputSize: inputSize,
             corpus: corpus,
             providers: makeProviders(),
-            scheduler: makeScheduler(),
+            scheduler: schedulerFactory.makeScheduler(mutators: repeat each mutators),
             processSyncPlugins: processSyncPlugins,
             processAsyncPlugins: processAsyncPlugins,
             config: config,

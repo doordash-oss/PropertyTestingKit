@@ -38,7 +38,7 @@ extension FuzzEngine {
                 @Dependency(\.coverageCounters) var client
                 return [CoverageProvider(evaluator: coverageStrategy.makeEvaluator(), client: client)]
             },
-            makeScheduler: { scheduler.makeCore() },
+            schedulerFactory: scheduler,
             scheduleBytesExtractor: { _ in nil }
         )
     }

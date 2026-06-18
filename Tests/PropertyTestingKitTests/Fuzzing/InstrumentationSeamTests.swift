@@ -89,57 +89,82 @@ struct InstrumentationSeamTests {
         #expect(probe.resetCount == 2)
     }
 
-    // MARK: - SchedulerCore (userspace-style)
+    // MARK: - Scheduler seam (userspace-style)
 
     /// A scheduler that reads the count probe and retains inputs that covered
     /// something — proving a scheduler decides admission purely from a view it
-    /// asked for, with the engine naming no signal.
-    final class CountThresholdScheduler: SchedulerCore {
-        static let requiredProbes: [any InstrumentationKey.Type] = [CountKey.self]
+    /// asked for, owns its own production, and erases behind `AnyScheduler` with
+    /// the engine naming no signal. Generic over the pack, like any real
+    /// scheduler that owns the typed inputs it schedules.
+    final class CountThresholdScheduler<each Input: Codable & Sendable> {
+        let requiredProbes: [any InstrumentationKey.Type] = [CountKey.self]
         private(set) var observedEdges: [Int] = []
-        var nextDirective: SchedulerDirective = .generate
+        private let produce: () -> ScheduledInput<repeat each Input>
 
-        func observe(_ context: RawExecutionContext, source: SchedulerSource) -> RetainedEntry? {
+        init(produce: @escaping () -> ScheduledInput<repeat each Input>) {
+            self.produce = produce
+        }
+
+        func next() -> ScheduledInput<repeat each Input> { produce() }
+
+        func observe(
+            _ input: (repeat each Input),
+            _ context: RawExecutionContext,
+            source: SchedulerSource
+        ) -> SparseCoverage? {
             guard let view = context[CountKey.self] else { return nil }
             observedEdges.append(view.edges)
             guard view.edges > 0 else { return nil }
-            return RetainedEntry(id: observedEdges.count - 1, coverage: SparseCoverage())
+            return SparseCoverage()  // a non-nil signature ⇒ retain
         }
 
-        func next() -> SchedulerDirective { nextDirective }
+        func erased() -> AnyScheduler<repeat each Input> {
+            AnyScheduler(
+                requiredProbes: requiredProbes,
+                next: { self.next() },
+                observe: { self.observe($0, $1, source: $2) }
+            )
+        }
     }
 
     @Test("A scheduler reads its required probe and signals admission")
     func schedulerReadsProbeAndAdmits() {
-        let sched = CountThresholdScheduler()
+        let sched = CountThresholdScheduler<Int>(
+            produce: { ScheduledInput(input: 0, poolParentID: nil) })
 
         var hit = RawExecutionContext()
         hit.set(CountKey.self, CountView(edges: 3))
-        #expect(sched.observe(hit, source: .generated)?.id == 0)
+        #expect(sched.observe(0, hit, source: .scheduled) != nil)
         #expect(sched.observedEdges == [3])
 
         var miss = RawExecutionContext()
         miss.set(CountKey.self, CountView(edges: 0))
-        #expect(sched.observe(miss, source: .generated) == nil)
+        #expect(sched.observe(0, miss, source: .scheduled) == nil)
     }
 
     @Test("A scheduler retains nothing when its probe is absent")
     func schedulerIgnoresAbsentProbe() {
-        let sched = CountThresholdScheduler()
-        #expect(sched.observe(RawExecutionContext(), source: .generated) == nil)
+        let sched = CountThresholdScheduler<Int>(
+            produce: { ScheduledInput(input: 0, poolParentID: nil) })
+        #expect(sched.observe(0, RawExecutionContext(), source: .external) == nil)
         #expect(sched.observedEdges.isEmpty)
     }
 
     @Test("requiredProbes advertises the scheduler's instrumentation needs")
     func requiredProbesAdvertised() {
-        let probes = CountThresholdScheduler.requiredProbes
-        #expect(probes.contains { ObjectIdentifier($0) == ObjectIdentifier(CountKey.self) })
+        let sched = CountThresholdScheduler<Int>(
+            produce: { ScheduledInput(input: 0, poolParentID: nil) })
+        #expect(sched.erased().requiredProbes.contains {
+            ObjectIdentifier($0) == ObjectIdentifier(CountKey.self)
+        })
     }
 
-    @Test("next returns the scheduler's directive")
-    func nextReturnsDirective() {
-        let sched = CountThresholdScheduler()
-        sched.nextDirective = .mutate(id: 5)
-        #expect(sched.next() == .mutate(id: 5))
+    @Test("next produces the scheduler's chosen input, erased behind AnyScheduler")
+    func nextProducesChosenInput() {
+        let sched = CountThresholdScheduler<Int>(
+            produce: { ScheduledInput(input: 99, poolParentID: 5) })
+        let produced = sched.erased().next()
+        #expect(produced.input == 99)
+        #expect(produced.poolParentID == 5)
     }
 }

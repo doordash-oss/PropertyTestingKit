@@ -16,9 +16,10 @@
 //  and the focus/burst draw state; child PoolPlugins shape membership and
 //  weights through owner-mediated actions and hear about every change.
 //
-//  The core is non-generic (entries are IDs; typed input storage lives in the
-//  engine), so these tests drive it hermetically: feed iteration outcomes,
-//  assert directives.
+//  The core owns its typed inputs (it is generic over the pack), but its draw
+//  and admission policy is input-agnostic, so these tests drive it hermetically
+//  with a stub Int mutator: feed admissions/misses via `admit`, assert the
+//  `decide()` directive sequence.
 //
 
 import Testing
@@ -42,12 +43,17 @@ private final class ScriptedPolicy: PoolPlugin {
 @Suite("WeightedPool core")
 struct WeightedPoolCoreTests {
 
+    /// A trivial Int mutator: the pool's draw/admission policy is independent of
+    /// the typed input, so production is a no-op stub here.
+    private static let intMutator = Mutator<Int>(seeds: [0], mutate: { v, _ in v }, generate: { _ in 0 })
+
     private func makeCore(
         policies: [any PoolPlugin] = [],
         burstLength: Int = 16,
         focusOnInsert: Bool = true
-    ) -> WeightedPoolCore {
-        WeightedPoolCore(
+    ) -> WeightedPoolCore<Int> {
+        WeightedPoolCore<Int>(
+            mutators: Self.intMutator,
             admission: .everyDiscovery,
             policies: policies,
             burstLength: burstLength,
@@ -55,26 +61,25 @@ struct WeightedPoolCoreTests {
         )
     }
 
-    /// One accepted discovery: source/coverage shaped like the engine's accept path.
+    /// One accepted discovery: coverage/lineage shaped like the engine's accept path.
     private func accept(
-        _ core: WeightedPoolCore, edges: [UInt32], parent: Int? = nil
+        _ core: WeightedPoolCore<Int>, edges: [UInt32], parent: Int? = nil
     ) -> Int? {
         let source: PoolIterationSource = parent.map { .pool(parent: $0) } ?? .generated
-        return core.observe(PoolIterationOutcome(
-            source: source, newCoverage: SparseCoverage(indices: edges)))
+        return core.admit(0, coverage: SparseCoverage(indices: edges), poolSource: source)
     }
 
     /// One uninteresting execution attributed to `parent`.
-    private func miss(_ core: WeightedPoolCore, parent: Int? = nil) {
+    private func miss(_ core: WeightedPoolCore<Int>, parent: Int? = nil) {
         let source: PoolIterationSource = parent.map { .pool(parent: $0) } ?? .generated
-        _ = core.observe(PoolIterationOutcome(source: source, newCoverage: nil))
+        _ = core.admit(0, coverage: nil, poolSource: source)
     }
 
     @Test("Empty pool always directs fresh generation")
     func emptyPoolGeneratesFresh() {
         let core = makeCore()
         for _ in 0..<10 {
-            #expect(core.next() == .generate)
+            #expect(core.decide() == .generate)
         }
     }
 
@@ -85,14 +90,14 @@ struct WeightedPoolCoreTests {
 
         // Full burst on the new entry...
         for _ in 0..<4 {
-            #expect(core.next() == .mutate(id: 0))
+            #expect(core.decide() == .mutate(id: 0))
             miss(core, parent: 0)
         }
         // ...then exactly one fresh generation...
-        #expect(core.next() == .generate)
+        #expect(core.decide() == .generate)
         miss(core)
         // ...then back to drawing (only one entry to draw).
-        #expect(core.next() == .mutate(id: 0))
+        #expect(core.decide() == .mutate(id: 0))
     }
 
     @Test("Admitted entries get sequential stable IDs")
@@ -114,7 +119,7 @@ struct WeightedPoolCoreTests {
         #expect(accept(core, edges: [1, 2]) == 0)
         #expect(child.events.contains { if case .inserted(0, _) = $0 { return true }; return false })
         // The child evicted the only entry (and the focus with it): no burst.
-        #expect(core.next() == .generate)
+        #expect(core.decide() == .generate)
     }
 
     @Test("Children hear removed notifications for other policies' evictions")
@@ -145,7 +150,7 @@ struct WeightedPoolCoreTests {
 
         var drawn = Set<Int>()
         for _ in 0..<100 {
-            let directive = core.next()
+            let directive = core.decide()
             if case let .mutate(id) = directive {
                 drawn.insert(id)
                 miss(core, parent: id)
@@ -164,7 +169,7 @@ struct WeightedPoolCoreTests {
 
         var drawn = Set<Int>()
         for _ in 0..<200 {
-            if case let .mutate(id) = core.next() {
+            if case let .mutate(id) = core.decide() {
                 drawn.insert(id)
                 miss(core, parent: id)
             } else {
@@ -190,7 +195,7 @@ struct WeightedPoolCoreTests {
 
         var drawn = Set<Int>()
         for _ in 0..<100 {
-            if case let .mutate(id) = core.next() {
+            if case let .mutate(id) = core.decide() {
                 drawn.insert(id)
                 miss(core, parent: id)
             } else {

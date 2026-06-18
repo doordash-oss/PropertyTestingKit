@@ -317,21 +317,4 @@ extension RawExecutionContext {
     }
 }
 
-extension WeightedPoolCore {
-    /// Test convenience mirroring the pre-seam `observe(PoolIterationOutcome)`:
-    /// wraps the outcome's coverage in a `CoverageProbe` verdict and drives the
-    /// generic `observe(_:source:)` — exactly what the engine loop now does — so
-    /// pool tests can keep expressing outcomes directly.
-    func observe(_ outcome: PoolIterationOutcome) -> Int? {
-        var context = RawExecutionContext()
-        context.set(CoverageProbeKey.self, CoverageVerdict(coverage: outcome.newCoverage))
-        let source: SchedulerSource
-        switch outcome.source {
-        case .queue: source = .queue
-        case .generated: source = .generated
-        case .pool(let parent): source = .pool(parent: parent)
-        }
-        return observe(context, source: source)?.id
-    }
-}
 
