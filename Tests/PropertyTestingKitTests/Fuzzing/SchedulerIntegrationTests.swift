@@ -78,7 +78,7 @@ struct SchedulerIntegrationTests {
         _ = try await fuzz(
             duration: .seconds(10),
             persistence: .ephemeral,
-            scheduler: .weightedPool(burstLength: 4),
+            scheduler: MutationScheduler.weightedPool(burstLength: 4),
             parallelism: 1,
             plugins: { [probe] }
         ) { (input: Int) in

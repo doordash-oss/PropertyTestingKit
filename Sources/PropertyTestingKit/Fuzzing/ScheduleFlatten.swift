@@ -106,7 +106,7 @@ func runFlattenedSchedule<each Input: Codable & Sendable>(
     duration: Duration,
     verbose: Bool,
     coverageStrategy: CoverageStrategy,
-    scheduler: MutationScheduler,
+    scheduler: any SchedulerFactory,
     projectPath: String?,
     sourceFileID: String,
     sourceFilePath: String,

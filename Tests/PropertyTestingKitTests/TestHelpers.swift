@@ -193,7 +193,7 @@ func runFuzzWithMaxIterations<each Input: MutatorProviding & Codable & Sendable>
             duration: .seconds(10),
             verbose: false,
             coverageStrategy: coverageStrategy,
-            scheduler: .weightedPool(),
+            scheduler: MutationScheduler.weightedPool(),
             projectPath: nil,
             sourceFileID: "PropertyTestingKitTests/TestHelpers.swift",
             sourceFilePath: "PropertyTestingKitTests/TestHelpers.swift",

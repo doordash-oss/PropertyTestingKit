@@ -49,14 +49,12 @@ struct PoollessSchedulerTests {
 
     @Test("A scheduler with no pool drives the engine end-to-end")
     func poollessSchedulerRuns() async throws {
-        // Reachable via the internal memberwise init (visible under @testable);
-        // the engine accepts any `SchedulerFactory` through `MutationScheduler`.
-        let scheduler = MutationScheduler(factory: GenerativeOnlyFactory())
-
+        // `fuzz` accepts any `SchedulerFactory` directly — a userspace scheduler
+        // needs no `MutationScheduler` wrapper and no pool.
         let result = try await fuzz(
             duration: .seconds(0.3),
             persistence: .ephemeral,
-            scheduler: scheduler,
+            scheduler: GenerativeOnlyFactory(),
             parallelism: 1
         ) { (input: Int) in
             blackHole(input)

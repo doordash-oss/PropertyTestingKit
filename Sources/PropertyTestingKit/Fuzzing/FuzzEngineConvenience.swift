@@ -29,7 +29,7 @@ extension FuzzEngine {
         mutators: repeat Mutator<each Input>,
         config: FuzzEngineConfig = FuzzEngineConfig(),
         coverageStrategy: CoverageStrategy = .pathTrie,
-        scheduler: MutationScheduler = .weightedPool()
+        scheduler: any SchedulerFactory = MutationScheduler.weightedPool()
     ) {
         self.init(
             mutators: repeat each mutators,

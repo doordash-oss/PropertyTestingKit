@@ -87,7 +87,7 @@ func runFuzz<each Input: Codable & Sendable>(
     duration: Duration,
     verbose: Bool,
     coverageStrategy: CoverageStrategy,
-    scheduler: MutationScheduler,
+    scheduler: any SchedulerFactory,
     projectPath: String?,
     sourceFileID: String,
     sourceFilePath: String,
@@ -323,7 +323,7 @@ private func fuzzCampaign<each Input: Codable & Sendable>(
     persist: Bool,
     config: FuzzEngineConfig,
     coverageStrategy: CoverageStrategy,
-    scheduler: MutationScheduler,
+    scheduler: any SchedulerFactory,
     scheduleBytesExtractor: @escaping @Sendable ((repeat each Input)) -> [UInt8]? = { _ in nil },
     makeHandlers: @escaping @Sendable () -> [FuzzPlugin<repeat each Input>],
     test: @escaping @Sendable ((repeat each Input)) async throws -> Void
@@ -393,7 +393,7 @@ private func runEngines<each Input: Codable & Sendable>(
     verbose: Bool,
     config: FuzzEngineConfig,
     coverageStrategy: CoverageStrategy,
-    scheduler: MutationScheduler = .weightedPool(),
+    scheduler: any SchedulerFactory = MutationScheduler.weightedPool(),
     scheduleBytesExtractor: @escaping @Sendable ((repeat each Input)) -> [UInt8]? = { _ in nil },
     makeProcessor: @escaping @Sendable () -> PluginProcessor<repeat each Input>,
     test: @escaping @Sendable ((repeat each Input)) async throws -> Void
