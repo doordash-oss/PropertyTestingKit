@@ -33,11 +33,6 @@ public enum SyncPluginEvent<each T: Sendable>: Sendable {
         /// Schedule bytes used for this iteration's task ordering.
         /// Non-nil when schedule fuzzing is enabled.
         public let scheduleBytes: [UInt8]?
-        /// Whether this input came from the pending mutation queue (`true`)
-        /// or was freshly generated (`false`). Plugins can use this to detect
-        /// when the mutation queue has been exhausted and re-schedule corpus
-        /// entries for mutation.
-        public let fromMutationQueue: Bool
         /// Number of inputs still queued after this one was taken. A handler can
         /// use `queueCount == 0` to detect that the queue has drained — e.g. to
         /// stop a regression replay once the seeded corpus is exhausted.
@@ -62,28 +57,19 @@ public enum SyncPluginEvent<each T: Sendable>: Sendable {
         /// its own space and validate it (the energy scheduler drops any
         /// `parentID` outside its entry indices) rather than trusting it blind.
         public let parentID: Int?
-        /// The mutation pool entry this input was mutated from, or `nil` for
-        /// everything not directed by the engine's scheduler. A separate
-        /// namespace from `parentID` on purpose: pool entry IDs belong to the
-        /// scheduler, `originID`s belong to the emitting bus plugin.
-        public let poolParentID: Int?
 
         public init(
             input: consuming (repeat each T),
             scheduleBytes: [UInt8]? = nil,
-            fromMutationQueue: Bool = false,
             queueCount: Int = 0,
             executionContext: RawExecutionContext = RawExecutionContext(),
-            parentID: Int? = nil,
-            poolParentID: Int? = nil
+            parentID: Int? = nil
         ) {
             self.input = input
             self.scheduleBytes = scheduleBytes
-            self.fromMutationQueue = fromMutationQueue
             self.queueCount = queueCount
             self.executionContext = executionContext
             self.parentID = parentID
-            self.poolParentID = poolParentID
         }
     }
 }

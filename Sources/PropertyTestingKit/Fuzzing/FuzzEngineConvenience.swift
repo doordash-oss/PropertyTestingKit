@@ -34,7 +34,7 @@ extension FuzzEngine {
         self.init(
             mutators: repeat each mutators,
             config: config,
-            makeProviders: {
+            makeInstrumentationProviders: {
                 @Dependency(\.coverageCounters) var client
                 return [CoverageProvider(evaluator: coverageStrategy.makeEvaluator(), client: client)]
             },

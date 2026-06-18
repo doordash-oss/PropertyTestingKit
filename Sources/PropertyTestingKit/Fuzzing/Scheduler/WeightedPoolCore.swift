@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//  The mutation pool's owner: entries, weights, the focus/burst draw loop, AND
+//  The mutation pool's owner: entries, weights, the generation-ratio draw, AND
 //  the typed inputs themselves plus their production (generation + mutation).
 //  Mechanism only — admission and weighting policy live in `PoolAdmission` and
 //  the child `PoolPlugin`s.
@@ -25,10 +25,9 @@ import FuzzCore
 /// entry `id` (IDs are sequential and never reused; `weights`/`pool` grow in
 /// lockstep so they stay aligned by construction).
 ///
-/// Draw model (focus + counter): a drawn or freshly admitted entry becomes the
-/// focus and receives `burstLength` consecutive mutants; every finished burst is
-/// followed by exactly one fresh generation, so the generator arm keeps a fixed
-/// share of executions instead of starving as bursts lengthen.
+/// Draw model: each step independently either generates a fresh input (with
+/// probability `generationRatio`) or weighted-draws one pool entry to mutate —
+/// one input at a time, no bursts.
 ///
 /// Confinement: one instance per engine, driven on the engine's task. No
 /// internal synchronization.
@@ -37,8 +36,9 @@ final class WeightedPoolCore<each Input: Codable & Sendable> {
     private let inputSize: Int
     private let judge: (SparseCoverage) -> PoolAdmission.Verdict
     private let policies: [any PoolPlugin]
-    private let burstLength: Int
-    private let focusOnInsert: Bool
+    /// Probability each step generates a fresh input rather than mutating a pool
+    /// entry: `1` is all generation, `0` is all mutation. Clamped to `0...1`.
+    private let generationRatio: Double
 
     /// Typed inputs, index == entry ID (grows append-only, aligned with `weights`).
     private var pool: [(repeat each Input)] = []
@@ -49,23 +49,19 @@ final class WeightedPoolCore<each Input: Codable & Sendable> {
     /// Entry ID → its position in `live`.
     private var livePos: [Int: Int] = [:]
 
-    private var focus: Int?
-    private var burstRemaining = 0
-    /// One fresh generation is owed after every finished burst.
-    private var freshOwed = false
     /// What this scheduler's most recent `next()` produced, so `observe` can
     /// report the right `PoolIterationSource` to child policies for a
     /// scheduler-produced input (the engine only tells us external vs scheduled).
     private var lastProduced: PoolIterationSource = .generated
 
-    private var rng = FastRNG()
+    private var rng: FastRNG
 
     init(
         mutators: repeat Mutator<each Input>,
         admission: PoolAdmission,
         policies: [any PoolPlugin],
-        burstLength: Int,
-        focusOnInsert: Bool
+        generationRatio: Double,
+        rng: FastRNG
     ) {
         self.mutators = (repeat each mutators)
         var n = 0
@@ -73,14 +69,14 @@ final class WeightedPoolCore<each Input: Codable & Sendable> {
         self.inputSize = n
         self.judge = admission.makeJudge()
         self.policies = policies
-        self.burstLength = max(1, burstLength)
-        self.focusOnInsert = focusOnInsert
+        self.generationRatio = min(1.0, max(0.0, generationRatio))
+        self.rng = rng
     }
 
     // MARK: - Production (owned by the scheduler)
 
     /// Produce the next input to run, applying this engine's mutators to its own
-    /// pool (mutate) or generating fresh, per the focus/burst decision.
+    /// pool (mutate) or generating fresh, per the generation-ratio decision.
     func next() -> ScheduledInput<repeat each Input> {
         switch decide() {
         case .generate:
@@ -142,10 +138,6 @@ final class WeightedPoolCore<each Input: Codable & Sendable> {
         pool.append(input)
         livePos[id] = live.count
         live.append(id)
-        if focusOnInsert {
-            focus = id
-            burstRemaining = burstLength
-        }
         // The admission's own displacements (REDUCE losers) go through the
         // same removal path as child evictions, so every policy hears them.
         apply(verdict.evict.map { .remove(id: $0) })
@@ -155,35 +147,24 @@ final class WeightedPoolCore<each Input: Codable & Sendable> {
 
     // MARK: - Decision (policy)
 
-    /// One step of the focus/burst draw model. Internal so white-box tests can
-    /// pin the decision sequence directly; `next()` wraps it with production.
+    /// One step of the generation-ratio draw model. Internal so white-box tests
+    /// can pin the decision directly; `next()` wraps it with production.
     enum PoolDecision: Equatable {
         case generate
         case mutate(id: Int)
     }
 
+    /// Decide the next step: with probability `generationRatio` (or whenever the
+    /// pool is empty) generate fresh, otherwise weighted-draw one entry to
+    /// mutate. One input at a time — no bursts.
     func decide() -> PoolDecision {
-        if let current = focus {
-            if burstRemaining > 0 {
-                burstRemaining -= 1
-                return .mutate(id: current)
-            }
-            focus = nil
-            freshOwed = true
-        }
-        if freshOwed {
-            freshOwed = false
+        guard !live.isEmpty, Double.random(in: 0..<1, using: &rng) >= generationRatio else {
             return .generate
         }
-
         notifyAndApply(.willDraw)
-        guard !live.isEmpty else {
-            return .generate
-        }
-        let id = weightedDraw()
-        focus = id
-        burstRemaining = burstLength - 1
-        return .mutate(id: id)
+        // A policy may have emptied the pool in response to `.willDraw`.
+        guard !live.isEmpty else { return .generate }
+        return .mutate(id: weightedDraw())
     }
 
     // MARK: - Children
@@ -205,10 +186,6 @@ final class WeightedPoolCore<each Input: Codable & Sendable> {
                 live[pos] = lastID
                 live.removeLast()
                 if lastID != id { livePos[lastID] = pos }
-                if focus == id {
-                    focus = nil
-                    burstRemaining = 0
-                }
                 // Re-broadcast so every policy stays consistent with
                 // membership it didn't change itself. Terminates: each ID can
                 // be removed at most once (the guard above).
@@ -245,8 +222,7 @@ final class WeightedPoolCore<each Input: Codable & Sendable> {
 struct WeightedPoolFactory: SchedulerFactory {
     let admission: PoolAdmission
     let makePolicies: @Sendable () -> [any PoolPlugin]
-    let burstLength: Int
-    let focusOnInsert: Bool
+    let generationRatio: Double
 
     func makeScheduler<each Input: Codable & Sendable>(
         mutators: repeat Mutator<each Input>
@@ -255,10 +231,13 @@ struct WeightedPoolFactory: SchedulerFactory {
             mutators: repeat each mutators,
             admission: admission,
             policies: makePolicies(),
-            burstLength: burstLength,
-            focusOnInsert: focusOnInsert
+            generationRatio: generationRatio,
+            // Dependency-injected (resolved via `\.fastRNG`) through a FuzzCore
+            // accessor: importing `Dependencies` directly into this
+            // parameter-pack-heavy file breaks the variadic type checker.
+            rng: resolvedFastRNG()
         )
-        return AnyScheduler(
+        return AnyScheduler<repeat each Input>(
             requiredProbes: [CoverageProbeKey.self],
             next: { core.next() },
             observe: { input, context, source in core.observe(input, context, source: source) }

@@ -187,11 +187,6 @@ extension FuzzPlugin {
 
 }
 
-// The bus-plugin schedulers (`corpusMutation`, Entropic `energyMutation`) are
-// gone: mutation scheduling is the `MutationScheduler` pool's job. The pure
-// Entropic scoring math below (`entropicWeightCombining` & co.) stays, pinned
-// by its characterization tests, for the pool's entropic weight advisor.
-
 // MARK: - Built-in Analysis Plugins
 //
 // Plugins that emit only `AnalysisAction` (stop / recordIssue). They are valid in

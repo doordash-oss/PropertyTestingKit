@@ -99,11 +99,11 @@ struct FeatureOwnershipAdmissionTests {
     private static let intMutator = Mutator<Int>(seeds: [0], mutate: { v, _ in v }, generate: { _ in 0 })
 
     private func makeCore(
-        policies: [any PoolPlugin], burstLength: Int, focusOnInsert: Bool
+        policies: [any PoolPlugin], generationRatio: Double = 0
     ) -> WeightedPoolCore<Int> {
         WeightedPoolCore<Int>(
             mutators: Self.intMutator, admission: .featureOwnership,
-            policies: policies, burstLength: burstLength, focusOnInsert: focusOnInsert)
+            policies: policies, generationRatio: generationRatio, rng: FastRNG())
     }
 
     private func accept(_ core: WeightedPoolCore<Int>, edges: [UInt32], parent: Int? = nil) -> Int? {
@@ -116,29 +116,21 @@ struct FeatureOwnershipAdmissionTests {
         _ = core.admit(0, coverage: nil, poolSource: source)
     }
 
-    @Test("Redundant accepts are not admitted: no residence, no burst")
+    @Test("Redundant accepts are not admitted: no residence")
     func redundantAcceptIgnored() {
-        let core = makeCore(policies: [], burstLength: 4, focusOnInsert: true)
+        let core = makeCore(policies: [], generationRatio: 0)
 
         #expect(accept(core, edges: [1, 2]) == 0)
-        // Drain the burst + owed fresh so focus is clear.
-        for _ in 0..<4 {
-            #expect(core.decide() == .mutate(id: 0))
-            miss(core, parent: 0)
-        }
-        #expect(core.decide() == .generate)
-        miss(core)
-
         // Strategy says interesting again, same features, same size: rejected.
         #expect(accept(core, edges: [1, 2]) == nil)
-        // No new focus burst: the next directive draws the existing entry.
+        // No new entry: there is still only the one to draw.
         #expect(core.decide() == .mutate(id: 0))
     }
 
     @Test("REDUCE: a smaller input evicts the bankrupted owner from the draw set")
     func reduceEvictsLoser() {
         let listener = Listener()
-        let core = makeCore(policies: [listener], burstLength: 1, focusOnInsert: false)
+        let core = makeCore(policies: [listener], generationRatio: 0)
 
         #expect(accept(core, edges: [1, 2, 3]) == 0)
         // Smaller input covering a subset: admitted, steals {1,2}; entry 0

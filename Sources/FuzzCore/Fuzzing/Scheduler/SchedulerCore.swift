@@ -24,13 +24,13 @@
 //  PropertyTestingKit.
 //
 
-/// One input the scheduler decided to run next, plus an opaque lineage tag.
+/// One input the scheduler decided to run next, tagged as generated vs mutated.
 ///
-/// `poolParentID` is round-tripped verbatim into the plugin iteration event's
-/// `poolParentID` for attribution; it is **opaque to the engine** — the engine
-/// never indexes anything with it. `nil` means the scheduler produced a fresh
-/// (generated) input with no parent. The tag lives in the scheduler's own id
-/// space; a pool-less scheduler always passes `nil`.
+/// `poolParentID` is **opaque to the engine** — it never indexes anything with
+/// it. `nil` means a freshly generated input; non-`nil` means a mutant (the
+/// value is the scheduler's own entry id, which the engine uses only to split
+/// the generated/mutated execution counts in `FuzzStats`). A pool-less scheduler
+/// always passes `nil`.
 public struct ScheduledInput<each Input: Codable & Sendable> {
     public let input: (repeat each Input)
     public let poolParentID: Int?

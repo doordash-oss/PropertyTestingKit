@@ -64,7 +64,11 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
     /// Instrumentation providers injected by the batteries layer. The core
     /// engine names no signal: it installs a probe for each key the scheduler
     /// requires by matching provider keys, never by referencing coverage.
-    private let providers: [any InstrumentationProvider]
+    private let instrumentationProviders: [any InstrumentationProvider]
+    /// Per-engine RNG for the bus-plugin mutation path, resolved from
+    /// `\.fastRNG`. `FastRNG` is a stateless shim over the thread-local
+    /// generator, so this draws from the same stream regardless.
+    private var fastRNG: FastRNG
 
     /// This engine's scheduler: consulted for what to run when the residual
     /// queue is empty (it produces the input itself), and told about every
@@ -93,7 +97,7 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
         mutators: (repeat Mutator<each Input>),
         inputSize: Int,
         corpus: Corpus<repeat each Input>,
-        providers: [any InstrumentationProvider],
+        instrumentationProviders: [any InstrumentationProvider],
         scheduler: AnyScheduler<repeat each Input>,
         processSyncPlugins: @escaping SyncPluginProcessorFn,
         processAsyncPlugins: @escaping AsyncPluginProcessorFn,
@@ -105,11 +109,13 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
         // Caching the dateclient
         @Dependency(\.dateClient) var dateClient: DateClient
         self.dateClient = dateClient
+        @Dependency(\.fastRNG) var fastRNG
+        self.fastRNG = fastRNG
         self.startTime = startTime
         self.seeds = seeds
         self.mutators = mutators
         self.inputSize = inputSize
-        self.providers = providers
+        self.instrumentationProviders = instrumentationProviders
         self.scheduler = scheduler
         self.processSyncPlugins = processSyncPlugins
         self.processAsyncPlugins = processAsyncPlugins
@@ -177,7 +183,7 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
             // (coverage allocates its SanCov context in `setUp`, frees it in
             // `tearDown`).
             let requiredKeys = Set(scheduler.requiredProbes.map { ObjectIdentifier($0) })
-            probes = providers
+            probes = instrumentationProviders
                 .filter { requiredKeys.contains(ObjectIdentifier($0.key)) }
                 .map { $0.makeProbe() }
 
@@ -216,9 +222,7 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
                     // pack, generated/mutated by the prepended schedule mutator like
                     // any other element, and read back via `scheduleBytesExtractor`.
                     let input: (repeat each Input)
-                    let fromMutationQueue: Bool
                     let parentID: Int?
-                    let poolParentID: Int?
                     let source: SchedulerSource
                     if !pendingInputs.isEmpty {
                         assert(
@@ -227,8 +231,6 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
                         )
                         input = pendingInputs.removeFirstUnchecked()
                         parentID = pendingParents.removeFirstUnchecked()
-                        poolParentID = nil
-                        fromMutationQueue = true
                         source = .external
                         if seedsRunCount < seeds.count {
                             seedsRunCount += 1
@@ -238,20 +240,17 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
                     } else {
                         // The scheduler owns production: it generates a fresh
                         // input or mutates one of its own retained entries. The
-                        // engine doesn't know or care which — `poolParentID` is
-                        // an opaque attribution tag the scheduler chose (`nil`
-                        // for a generated input), round-tripped to plugins.
+                        // engine tracks only the generated/mutated split for
+                        // stats (the scheduler signals it via `poolParentID`);
+                        // which pool entry, if any, is the scheduler's business.
                         let scheduled = scheduler.next()
                         input = scheduled.input
-                        poolParentID = scheduled.poolParentID
                         parentID = nil
                         source = .scheduled
                         if scheduled.poolParentID == nil {
                             generatedCount += 1
-                            fromMutationQueue = false
                         } else {
                             mutantsRunCount += 1
-                            fromMutationQueue = true
                         }
                     }
                     let currentScheduleBytes: [UInt8]? = scheduleBytesExtractor(input)
@@ -319,11 +318,9 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
                                 .init(
                                     input: input,
                                     scheduleBytes: currentScheduleBytes,
-                                    fromMutationQueue: fromMutationQueue,
                                     queueCount: queueCount,
                                     executionContext: execContext,
-                                    parentID: parentID,
-                                    poolParentID: poolParentID
+                                    parentID: parentID
                                 )
                             ))
                     ]
@@ -467,15 +464,11 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
             // mutation is unified with input mutation.
             // Each mutant carries the action's originID so iteration events can
             // report the lineage back to the emitting plugin.
-            // `FastRNG` is a stateless shim over the thread-local generator, so
-            // a fresh instance draws from the same stream; the `inout` threading
-            // is for a uniform mutator signature, not seeding.
-            var mutationRNG = FastRNG()
             let mutants = (0..<mutationBurstLength).map { _ in
                 mutateOneRandomPosition(
                     mutationAction.input,
                     inputSize: inputSize,
-                    rng: &mutationRNG,
+                    rng: &fastRNG,
                     mutators: repeat each mutators
                 )
             }

@@ -29,13 +29,15 @@ import Testing
 ///
 /// ## Algorithm
 ///
-/// Fuzzing follows AFL/FuzzChick's approach:
-/// 1. Start with the provided seeds
-/// 2. Run each input, capture coverage signature
-/// 3. If signature is new, add to corpus
-/// 4. Select corpus entries for mutation (energy-based)
-/// 5. Mutate inputs, repeat
-/// 6. Stop when: queue drained (plugin), time limit, or coverage plateau
+/// The engine is a thin executor; it names no feedback signal and owns no pool:
+/// 1. Drain the residual queue (seeds, `queueInputs`, bus-plugin bursts).
+/// 2. When the queue is empty, ask the scheduler for the next input to run.
+/// 3. Run the input under the installed instrumentation probes.
+/// 4. Assemble the probes' views into a `RawExecutionContext` and hand it to
+///    the scheduler, which folds the signals into its own state and returns the
+///    signature to persist when the input should be retained in the corpus.
+/// 5. Repeat until the queue drains and the scheduler stops, a time limit, or a
+///    plugin halts the run.
 ///
 public final class FuzzEngine<each Input: Codable & Sendable>: @unchecked Sendable {
     @Dependency(\.dateClient) private var dateClient
@@ -69,7 +71,7 @@ public final class FuzzEngine<each Input: Codable & Sendable>: @unchecked Sendab
     /// Builds this engine's instrumentation providers, fresh per engine (each
     /// provider holds per-engine state like a distinct trie). Injected by the
     /// batteries layer so the core engine never names a signal.
-    private let makeProviders: @Sendable () -> [any InstrumentationProvider]
+    private let makeInstrumentationProviders: @Sendable () -> [any InstrumentationProvider]
 
     /// Builds this engine's scheduler, fresh per engine (its own working set,
     /// production, policies, and draw state). Injected by the batteries layer so
@@ -103,14 +105,14 @@ public final class FuzzEngine<each Input: Codable & Sendable>: @unchecked Sendab
     public init(
         mutators: repeat Mutator<each Input>,
         config: FuzzEngineConfig,
-        makeProviders: @escaping @Sendable () -> [any InstrumentationProvider],
+        makeInstrumentationProviders: @escaping @Sendable () -> [any InstrumentationProvider],
         schedulerFactory: any SchedulerFactory,
         scheduleBytesExtractor: @escaping @Sendable ((repeat each Input)) -> [UInt8]?
     ) {
         self.config = config
         self.mutators = (repeat each mutators)
         self.inputSize = Self.inputCount(for: repeat (each Input).self)
-        self.makeProviders = makeProviders
+        self.makeInstrumentationProviders = makeInstrumentationProviders
         self.schedulerFactory = schedulerFactory
         self.scheduleBytesExtractor = scheduleBytesExtractor
     }
@@ -177,7 +179,7 @@ public final class FuzzEngine<each Input: Codable & Sendable>: @unchecked Sendab
             mutators: mutators,
             inputSize: inputSize,
             corpus: corpus,
-            providers: makeProviders(),
+            instrumentationProviders: makeInstrumentationProviders(),
             scheduler: schedulerFactory.makeScheduler(mutators: repeat each mutators),
             processSyncPlugins: processSyncPlugins,
             processAsyncPlugins: processAsyncPlugins,

@@ -24,82 +24,55 @@ import Testing
 @Suite("Pool scheduler integration")
 struct SchedulerIntegrationTests {
 
-    @Test("Default scheduler sustains the mutation loop without any bus plugins")
-    func defaultSchedulerSustainsMutation() async throws {
-        let mutatedSeen = SyncBox<Int>(0)
-        let generatedSeen = SyncBox<Int>(0)
-
-        let probe = FuzzPlugin<Int>(id: "observer_probe", handleSync: { event in
+    /// Stop a run once the bus has observed `count` iterations — deterministic,
+    /// not time-bound.
+    private func stopAfter(_ count: Int) -> FuzzPlugin<Int> {
+        let seen = SyncBox<Int>(0)
+        return FuzzPlugin<Int>(id: "iteration_counter", handleSync: { event in
             switch event {
-            case let .iteration(ctx):
-                if ctx.poolParentID != nil {
-                    mutatedSeen.update { $0 += 1 }
-                    if mutatedSeen.value >= 32, generatedSeen.value >= 2 {
-                        return [.stop(.init(reason: .custom("observed_enough")))]
-                    }
-                } else if !ctx.fromMutationQueue {
-                    generatedSeen.update { $0 += 1 }
-                }
-                return []
+            case .iteration:
+                seen.update { $0 += 1 }
+                return seen.value >= count
+                    ? [.stop(.init(reason: .custom("observed_enough")))]
+                    : []
             }
         })
+    }
 
+    @Test("Default scheduler sustains the mutation loop without any bus plugins")
+    func defaultSchedulerSustainsMutation() async throws {
         let result = try await fuzz(
             duration: .seconds(10),
             persistence: .ephemeral,
             parallelism: 1,
-            plugins: { [probe] }
+            plugins: { [self.stopAfter(200)] }
         ) { (input: Int) in
             blackHole(input)
         }
 
-        // Pool-driven mutants executed, fresh generation kept mixing in, and
-        // the corpus grew — all without corpusMutation on the bus.
-        #expect(mutatedSeen.value >= 32)
-        #expect(generatedSeen.value >= 2)
+        // Pool-driven mutants executed AND fresh generation kept mixing in, and
+        // the corpus grew — all without a bus mutation scheduler. Lineage is the
+        // scheduler's own concern now, so we assert via the engine's stats.
+        #expect(result.stats.mutations > 0)
+        #expect(result.stats.generations > 0)
         #expect(result.corpus.count > 0)
     }
 
-    @Test("Scheduler bursts respect the configured burst length")
-    func configuredBurstLength() async throws {
-        let runs = SyncBox<[Int?]>([])
-
-        let probe = FuzzPlugin<Int>(id: "burst_probe", handleSync: { event in
-            switch event {
-            case let .iteration(ctx):
-                runs.update { $0.append(ctx.poolParentID) }
-                if runs.value.count >= 200 {
-                    return [.stop(.init(reason: .custom("observed_enough")))]
-                }
-                return []
-            }
-        })
-
-        _ = try await fuzz(
+    @Test("Generation ratio 1 runs pure generation (no pool mutation)")
+    func generationRatioAllGeneration() async throws {
+        let result = try await fuzz(
             duration: .seconds(10),
             persistence: .ephemeral,
-            scheduler: MutationScheduler.weightedPool(burstLength: 4),
+            scheduler: MutationScheduler.weightedPool(generationRatio: 1.0),
             parallelism: 1,
-            plugins: { [probe] }
+            plugins: { [self.stopAfter(200)] }
         ) { (input: Int) in
             blackHole(input)
         }
 
-        // Maximal runs of consecutive same-parent iterations never exceed the
-        // configured burst (a fresh generation or redraw breaks every run).
-        var longest = 0
-        var current = 0
-        var prev: Int? = nil
-        for parent in runs.value {
-            if let parent, parent == prev {
-                current += 1
-            } else {
-                current = parent != nil ? 1 : 0
-            }
-            prev = parent
-            longest = max(longest, current)
-        }
-        #expect(longest <= 4)
-        #expect(longest >= 1, "pool mutants should appear at all")
+        // The scheduler honors its ratio knob: at 1.0 every step generates, so
+        // no pool mutants are ever produced.
+        #expect(result.stats.mutations == 0)
+        #expect(result.stats.generations > 0)
     }
 }

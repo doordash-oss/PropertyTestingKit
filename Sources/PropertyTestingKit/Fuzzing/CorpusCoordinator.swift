@@ -426,7 +426,7 @@ private func runEngines<each Input: Codable & Sendable>(
                 let engine = FuzzEngine<repeat each Input>(
                     mutators: repeat each mutators,
                     config: config,
-                    makeProviders: {
+                    makeInstrumentationProviders: {
                         @Dependency(\.coverageCounters) var client
                         return [CoverageProvider(evaluator: coverageStrategy.makeEvaluator(), client: client)]
                     },

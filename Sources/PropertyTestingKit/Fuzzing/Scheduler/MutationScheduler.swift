@@ -45,27 +45,24 @@ public struct MutationScheduler: SchedulerFactory {
         factory.makeScheduler(mutators: repeat each mutators)
     }
 
-    /// A weighted mutation pool with focus/burst draws.
+    /// A weighted mutation pool that picks generation vs mutation by a ratio.
     ///
     /// - Parameters:
     ///   - admission: Which strategy-accepted inputs join the pool.
     ///   - policies: Child policies built fresh per engine (weight advisors,
     ///     culling, …). Order matters: actions apply in array order.
-    ///   - burstLength: Consecutive mutants per focus before the pool owes
-    ///     one fresh generation and redraws.
-    ///   - focusOnInsert: Newly admitted entries immediately become the
-    ///     focus (the classic burst-on-accept exploit behavior).
+    ///   - generationRatio: Probability each step generates a fresh input rather
+    ///     than mutating a pool entry — `1` is all generation, `0` is all
+    ///     mutation. One input at a time, no bursts.
     public static func weightedPool(
-        admission: PoolAdmission = .everyDiscovery,
+        admission: PoolAdmission = .featureOwnership,
         policies: @escaping @Sendable () -> [any PoolPlugin] = { [] },
-        burstLength: Int = 16,
-        focusOnInsert: Bool = true
+        generationRatio: Double = 0.1
     ) -> MutationScheduler {
         MutationScheduler(factory: WeightedPoolFactory(
             admission: admission,
             makePolicies: policies,
-            burstLength: burstLength,
-            focusOnInsert: focusOnInsert
+            generationRatio: generationRatio
         ))
     }
 }

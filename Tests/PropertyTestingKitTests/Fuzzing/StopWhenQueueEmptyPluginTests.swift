@@ -35,8 +35,7 @@ struct StopWhenQueueEmptyHandlerTests {
         // An iteration with inputs still queued must not stop the run.
         let context = SyncPluginEvent<Int>.IterationContext(
             input: 7,
-            fromMutationQueue: true,
-            queueCount: 3
+            queueCount:3
         )
         let actions = handler.handleSync(.iteration(context))
         #expect(actions.isEmpty)
@@ -48,8 +47,7 @@ struct StopWhenQueueEmptyHandlerTests {
 
         let context = SyncPluginEvent<Int>.IterationContext(
             input: 7,
-            fromMutationQueue: true,
-            queueCount: 0
+            queueCount:0
         )
         let actions = handler.handleSync(.iteration(context))
 
@@ -67,8 +65,7 @@ struct StopWhenQueueEmptyHandlerTests {
 
         let context = SyncPluginEvent<Int>.IterationContext(
             input: 7,
-            fromMutationQueue: true,
-            queueCount: 0
+            queueCount:0
         )
         let actions = handler.handleSync(.iteration(context))
 

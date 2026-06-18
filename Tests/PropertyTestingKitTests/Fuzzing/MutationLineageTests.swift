@@ -28,19 +28,17 @@ struct MutationLineageTests {
     @Test("originID rides the queue and returns as parentID on mutant iterations")
     func originIDReturnsAsParentID() async throws {
         let queueParents = SyncBox<Set<Int>>([])
-        let generatedParents = SyncBox<Set<Int>>([])  // non-nil parentIDs on generated inputs (must stay empty)
         let tagged = SyncBox<Bool>(false)
 
         let probe = FuzzPlugin<Int>(id: "lineage_probe", handleSync: { event in
             switch event {
             case let .iteration(ctx):
-                if ctx.fromMutationQueue {
-                    if let p = ctx.parentID {
-                        queueParents.update { _ = $0.insert(p) }
-                        return [.stop(.init(reason: .custom("lineage_observed")))]
-                    }
-                } else if let p = ctx.parentID {
-                    generatedParents.update { _ = $0.insert(p) }
+                // Only queued bus mutants carry a non-nil parentID (the emitting
+                // plugin's originID); generated and scheduler-produced inputs
+                // have none.
+                if let p = ctx.parentID {
+                    queueParents.update { _ = $0.insert(p) }
+                    return [.stop(.init(reason: .custom("lineage_observed")))]
                 }
                 // Tag the first discovery with a recognizable origin.
                 if ctx.executionContext[CoverageProbeKey.self]?.coverage != nil, !tagged.value {
@@ -62,7 +60,5 @@ struct MutationLineageTests {
 
         #expect(queueParents.value == [7],
                 "mutants of the tagged seed must report its originID as parentID")
-        #expect(generatedParents.value.isEmpty,
-                "freshly generated inputs have no parent")
     }
 }

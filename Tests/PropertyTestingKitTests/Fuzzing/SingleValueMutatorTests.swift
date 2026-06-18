@@ -216,7 +216,8 @@ struct SingleValueMutatorTests {
         let probe = FuzzPlugin<Int>(id: "burst_probe", handleSync: { event in
             switch event {
             case let .iteration(ctx):
-                if ctx.fromMutationQueue, ctx.parentID == 7 {
+                // Burst mutants carry the emitting plugin's originID (7).
+                if ctx.parentID == 7 {
                     if firstQueueCount.value == nil {
                         firstQueueCount.update { $0 = ctx.queueCount }
                     }
@@ -226,7 +227,9 @@ struct SingleValueMutatorTests {
                     }
                     return []
                 }
-                if !tagged.value, !ctx.fromMutationQueue {
+                // Seed the burst from the first untagged input (parentID nil:
+                // generated or scheduler-produced, not a bus mutant).
+                if !tagged.value, ctx.parentID == nil {
                     tagged.update { $0 = true }
                     return [.selectForMutation(.init(input: ctx.input, originID: 7))]
                 }

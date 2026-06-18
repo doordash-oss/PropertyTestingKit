@@ -49,11 +49,10 @@ public struct CoverageVerdict {
 /// frees the context. It performs no input storage — retaining an interesting
 /// input is the engine's job, gated on the scheduler consuming this verdict.
 ///
-/// It does own the *aggregate* covered-edge set: the union of every interesting
-/// run's coverage. This used to live on the `Corpus` as a bitmap; it is
-/// coverage-specific bookkeeping, so it belongs with the coverage probe rather
-/// than the engine's input store. The engine reads `coveredIndices` once at
-/// teardown to feed the coverage-gap (`.end`) event.
+/// It owns the *aggregate* covered-edge set (the union of every interesting
+/// run's coverage) — coverage-specific bookkeeping that belongs with the
+/// coverage probe, not the engine's input store. It is surfaced at campaign end
+/// (via `contributeCampaignSummary`) to feed the coverage-gap (`.end`) event.
 final class CoverageProbe: InstrumentationProbe {
     typealias Key = CoverageProbeKey
 
@@ -64,10 +63,10 @@ final class CoverageProbe: InstrumentationProbe {
     /// `tearDown`. `nil` before setup / after teardown.
     private var context: SanCovCounters.MeasurementContext?
 
-    /// Union of edge indices across every run this probe judged interesting.
-    /// Equivalent to the old `Corpus.coveredIndices`, but accumulated from the
-    /// verdicts rather than from retained entries — so pool culling no longer
-    /// shrinks the reported total coverage.
+    /// Union of edge indices across every run this probe judged interesting,
+    /// accumulated from the verdicts (not from retained entries, so pool culling
+    /// does not shrink the reported total coverage). Surfaced at campaign end for
+    /// coverage-gap analysis.
     private(set) var coveredIndices: Set<UInt32> = []
 
     init(

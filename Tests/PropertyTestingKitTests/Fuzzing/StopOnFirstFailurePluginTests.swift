@@ -43,7 +43,7 @@ struct StopOnFirstFailurePluginTests {
     func doesNotStopOnIteration() {
         let plugin: AnalysisPlugin<Int> = .stopOnFirstFailure()
         let context = SyncPluginEvent<Int>.IterationContext(
-            input: 7, fromMutationQueue: true, queueCount: 3)
+            input: 7, queueCount: 3)
         #expect(plugin.handleSync(.iteration(context)).isEmpty)
     }
 
