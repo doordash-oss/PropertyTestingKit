@@ -184,31 +184,27 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
                 test: test
             )
 
-            // Hoist measurement context creation outside the loop for performance.
-            // This avoids millions of hash table insert/remove operations.
-            let coverageContext = coverageCountersClient.beginMeasurement()
-            defer { coverageCountersClient.endMeasurement(coverageContext) }
+            // Build the default instrumentation providers, then install a probe
+            // for each key some active scheduler requires — matching by key, so
+            // the engine never names a signal here. Coverage is the only built-in
+            // provider today; a userspace module supplies its own. Each probe
+            // owns its native measurement lifecycle (coverage allocates its
+            // SanCov context in `setUp`, frees it in `tearDown`).
+            let providers: [any InstrumentationProvider] = [
+                CoverageProvider(evaluator: coverageEvaluator, client: coverageCountersClient)
+            ]
+            let requiredKeys = Set(type(of: scheduler).requiredProbes.map { ObjectIdentifier($0) })
+            probes = providers
+                .filter { requiredKeys.contains(ObjectIdentifier($0.key)) }
+                .map { $0.makeProbe() }
+            // The coverage probe, if installed, owns the aggregate covered-edge
+            // set the engine reads at teardown for the `.end` event.
+            installedCoverageProbe = probes.compactMap { $0 as? CoverageProbe }.first
 
-            // Wrap the coverage evaluator in a probe bound to this engine's
-            // measurement context, and install only the probes the scheduler
-            // asks for. Coverage is the sole built-in probe today; relocating it
-            // (and others) to userspace is a later phase.
-            let coverageProbe = CoverageProbe(
-                evaluator: coverageEvaluator,
-                context: coverageContext,
-                client: coverageCountersClient
-            )
-            let required = Set(type(of: scheduler).requiredProbes.map { ObjectIdentifier($0) })
-            if required.contains(ObjectIdentifier(CoverageProbeKey.self)) {
-                probes = [coverageProbe]
-                installedCoverageProbe = coverageProbe
-            } else {
-                probes = []
-            }
-
-            // Set up probes before the first test execution. pathTrie needs to
-            // attach its trie to the context so edges advance during iteration 1.
+            // Set up probes before the first test execution (pathTrie attaches its
+            // trie so edges advance during iteration 1); tear down after the loop.
             for probe in probes { probe.setUp() }
+            defer { for probe in probes { probe.tearDown() } }
 
             // Check time limit every N iterations to avoid per-iteration Date.init() overhead.
             // With ~10M iterations/sec and default interval of 1000, this means ~10K checks/sec.
@@ -216,13 +212,12 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
             let timeLimitCheckInterval = config.timeLimitCheckInterval
             var iterationsSinceTimeCheck = timeLimitCheckInterval  // Force check on first iteration
 
-            // Establish coverage inheritance for the whole loop so that edges
-            // recorded by child tasks (TaskGroup.addTask / Task {}) spawned inside
-            // the test body are attributed to this engine's measurement context.
-            // Set once outside the per-iteration hot path — the context is hoisted.
-            let coverageContextBits = coverageContext.inheritanceHandle
-            await CoverageInheritance.$context.withValue(coverageContextBits) {
-                CoverageInheritance.captureKeyIfNeeded(contextBits: coverageContextBits)
+            // Run the loop inside every installed probe's campaign scope, nested
+            // in install order. The engine names no signal: coverage uses its
+            // scope to install the inheritance task-local for the loop's lifetime
+            // (so child-task edges are attributed to this engine); other probes
+            // default to a transparent scope.
+            await withProbeCampaignScopes(probes[...]) {
 
                 while !Task.isCancelled && haltReason == nil {
                     // Check time limit periodically (avoids overhead from per-iteration Date.init)
@@ -291,12 +286,13 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
                         // Will throw if either the test throws or if it logs an Issue.
                         // When scheduling is being fuzzed, run the test under the
                         // recorded/generated schedule so task interleaving is controlled.
-                        // The coverage context is forwarded so edges recorded by the
-                        // schedule-controlled tasks are attributed to this measurement.
+                        // Coverage attribution for schedule-controlled child tasks
+                        // rides the inheritance task-local installed by the coverage
+                        // probe's campaign scope, so the engine forwards no
+                        // coverage-specific context here.
                         if let bytes = currentScheduleBytes {
                             try await ScheduleController.run(
-                                scheduleBytes: bytes,
-                                coverageContext: coverageContext.rawContext
+                                scheduleBytes: bytes
                             ) {
                                 try await testWithIssueCapture(input)
                             }
@@ -366,11 +362,12 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
                                         scheduleBytes: currentScheduleBytes,
                                         test: testWithIssueCapture,
                                         sourceLocation: sourceLocation,
-                                        // TODO: This should probably throw if we can't gather coverage
-                                        sparseCoverage: iterationCoverage
-                                            ?? (try? coverageCountersClient
-                                                .snapshotCoveredArraysWithContext(coverageContext))
-                                            ?? SparseCoverage()
+                                        // The failing run's coverage as judged by
+                                        // the probe this iteration; empty when the
+                                        // run was not interesting. (The engine no
+                                        // longer owns a measurement context to take
+                                        // a fresh snapshot from.)
+                                        sparseCoverage: iterationCoverage ?? SparseCoverage()
                                     )
                                 )
                             )
@@ -420,6 +417,22 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
             case let .sync(event): processSyncPlugins(event, executeAction)
             case let .async(event): await processAsyncPlugins(event, executeAction)
             }
+        }
+    }
+
+    /// Run `body` nested inside every probe's `withCampaignScope`, in array
+    /// order. The engine names no signal — it just composes whatever scopes the
+    /// installed probes provide around the whole loop.
+    private func withProbeCampaignScopes(
+        _ probes: ArraySlice<any InstrumentationProbe>,
+        _ body: () async -> Void
+    ) async {
+        guard let first = probes.first else {
+            await body()
+            return
+        }
+        await first.withCampaignScope {
+            await self.withProbeCampaignScopes(probes.dropFirst(), body)
         }
     }
 

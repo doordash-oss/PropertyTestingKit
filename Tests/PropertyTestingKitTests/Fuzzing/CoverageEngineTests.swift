@@ -183,8 +183,6 @@ struct CoverageEngineTests {
     /// feed the coverage-gap (`.end`) event, so the union must hold across runs.
     @Test("CoverageProbe accumulates the union of every interesting run's coverage")
     func coverageProbeAccumulatesAggregate() throws {
-        let context = SanCovCounters.beginMeasurement()
-        defer { SanCovCounters.endMeasurement(context) }
         let coverageClient = CoverageCountersClient.liveValue
 
         // New-edge engine: a run is interesting only when it brings an edge the
@@ -201,12 +199,14 @@ struct CoverageEngineTests {
                 }
             }
         })
+        // The probe owns its measurement context: setUp allocates (and activates)
+        // it, tearDown frees it.
         let probe = CoverageProbe(
             evaluator: strategy.makeEvaluator(),
-            context: context,
             client: coverageClient
         )
         probe.setUp()
+        defer { probe.tearDown() }
 
         #expect(probe.coveredIndices.isEmpty, "No runs yet — nothing accumulated")
 

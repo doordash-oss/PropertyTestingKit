@@ -39,11 +39,14 @@ public struct CoverageVerdict {
 
 /// Drives a `CoverageStrategy`'s per-engine evaluator as an `InstrumentationProbe`.
 ///
-/// Owns the measurement context for one engine: `setUp` attaches the strategy's
-/// edge observer, `reset` clears the counters between executions, and `makeView`
-/// runs the strategy's judgement and reports the verdict. It performs no input
-/// storage — retaining an interesting input is the engine's job, gated on the
-/// scheduler consuming this verdict.
+/// Owns the full per-engine measurement lifecycle, so the engine never names
+/// coverage to run it: `setUp` allocates the SanCov measurement context and
+/// attaches the strategy's edge observer, `withCampaignScope` installs the
+/// coverage-inheritance task-local for the loop's lifetime (so edges recorded
+/// by child tasks are attributed to this engine), `reset` clears the counters
+/// between executions, `makeView` runs the strategy's judgement, and `tearDown`
+/// frees the context. It performs no input storage — retaining an interesting
+/// input is the engine's job, gated on the scheduler consuming this verdict.
 ///
 /// It does own the *aggregate* covered-edge set: the union of every interesting
 /// run's coverage. This used to live on the `Corpus` as a bitmap; it is
@@ -54,8 +57,11 @@ final class CoverageProbe: InstrumentationProbe {
     typealias Key = CoverageProbeKey
 
     private let evaluator: CoverageEvaluator
-    private let context: SanCovCounters.MeasurementContext
     private let client: CoverageCountersClient
+
+    /// The per-engine measurement context, allocated in `setUp` and freed in
+    /// `tearDown`. `nil` before setup / after teardown.
+    private var context: SanCovCounters.MeasurementContext?
 
     /// Union of edge indices across every run this probe judged interesting.
     /// Equivalent to the old `Corpus.coveredIndices`, but accumulated from the
@@ -65,29 +71,68 @@ final class CoverageProbe: InstrumentationProbe {
 
     init(
         evaluator: CoverageEvaluator,
-        context: SanCovCounters.MeasurementContext,
         client: CoverageCountersClient
     ) {
         self.evaluator = evaluator
-        self.context = context
         self.client = client
     }
 
     func setUp() {
-        // pathTrie and friends attach their edge observer here so edges
-        // advance per-engine state from the very first iteration.
-        evaluator.setup?(context)
+        // Allocate this engine's measurement context, then let pathTrie and
+        // friends attach their edge observer so edges advance per-engine state
+        // from the very first iteration.
+        let ctx = client.beginMeasurement()
+        context = ctx
+        evaluator.setup?(ctx)
+    }
+
+    func tearDown() {
+        if let context {
+            client.endMeasurement(context)
+        }
+        context = nil
+    }
+
+    func withCampaignScope(_ body: () async throws -> Void) async rethrows {
+        guard let context else {
+            try await body()
+            return
+        }
+        // Edges recorded by child tasks (TaskGroup.addTask / Task {}) spawned
+        // inside the test body are attributed to this engine's context via the
+        // inheritance task-local, set once for the whole loop.
+        let bits = context.inheritanceHandle
+        try await CoverageInheritance.$context.withValue(bits) {
+            CoverageInheritance.captureKeyIfNeeded(contextBits: bits)
+            try await body()
+        }
     }
 
     func reset() {
-        client.resetCoverage(context)
+        if let context {
+            client.resetCoverage(context)
+        }
     }
 
     func makeView() -> CoverageVerdict {
+        guard let context else { return CoverageVerdict(coverage: nil) }
         let coverage = evaluator.evaluate(context, client)
         if let coverage {
             coveredIndices.formUnion(coverage.indices)
         }
         return CoverageVerdict(coverage: coverage)
+    }
+}
+
+/// Builds a `CoverageProbe` per engine for the `CoverageProbeKey` signal. The
+/// engine installs probes by matching provider `key`s against the scheduler's
+/// `requiredProbes`, so it never names coverage in its install path.
+struct CoverageProvider: InstrumentationProvider {
+    let key: any InstrumentationKey.Type = CoverageProbeKey.self
+    let evaluator: CoverageEvaluator
+    let client: CoverageCountersClient
+
+    func makeProbe() -> any InstrumentationProbe {
+        CoverageProbe(evaluator: evaluator, client: client)
     }
 }

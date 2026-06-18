@@ -77,15 +77,56 @@ public protocol InstrumentationProbe: AnyObject {
 
     /// Build this execution's view, after the test ran.
     func makeView() -> Key.View
+
+    /// Wrap the whole fuzzing campaign (the engine's loop). The default runs
+    /// `body` directly; a probe overrides this to establish a scope that must
+    /// span every iteration — e.g. coverage installs a task-local so edges
+    /// recorded by child tasks spawned inside the test body are attributed to
+    /// this engine's measurement context. The engine nests the scopes of all
+    /// installed probes around the loop.
+    ///
+    /// Declared as a requirement (not just an extension) so the override
+    /// dispatches dynamically when the engine holds the probe as `any
+    /// InstrumentationProbe`.
+    func withCampaignScope(_ body: () async throws -> Void) async rethrows
+
+    /// Tear down native instrumentation. Called once after the loop ends,
+    /// after `withCampaignScope` returns. The mirror of `setUp`.
+    func tearDown()
 }
 
 extension InstrumentationProbe {
     public func setUp() {}
     public func reset() {}
+    public func tearDown() {}
+    public func withCampaignScope(_ body: () async throws -> Void) async rethrows {
+        try await body()
+    }
 
     /// Contribute this probe's view into the per-execution context. Internal:
     /// the engine assembles the context; conformers only implement `makeView`.
     func contribute(to context: inout RawExecutionContext) {
         context.set(Key.self, makeView())
     }
+}
+
+/// Supplies a probe to the engine for a signal a scheduler asked for.
+///
+/// The engine is handed a list of providers (the default list builds the
+/// coverage provider; a userspace module can supply its own). For each key in
+/// the active scheduler's `requiredProbes`, the engine asks the matching
+/// provider to build a fresh probe — so the engine installs probes by matching
+/// keys, never by naming any particular signal.
+///
+/// Not `Sendable`: a provider is built per engine on that engine's own task and
+/// never crosses an isolation boundary. (A future API for passing userspace
+/// providers into a parallel run would add that constraint then.)
+public protocol InstrumentationProvider {
+    /// The signal key this provider builds a probe for.
+    var key: any InstrumentationKey.Type { get }
+
+    /// Build a fresh probe for one engine. Called once per parallel engine, so
+    /// the probe may own unsynchronized per-engine state (including its native
+    /// measurement context).
+    func makeProbe() -> any InstrumentationProbe
 }
