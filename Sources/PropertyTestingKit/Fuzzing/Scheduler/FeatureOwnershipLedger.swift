@@ -19,9 +19,10 @@
 
 /// The ownership state machine behind `PoolAdmission.featureOwnership`.
 ///
-/// A *feature* here is an opaque `UInt32` fact about a run — today the
-/// covered edge indices; strategy-defined vocabularies (k-grams, hit-count
-/// buckets) plug into the same ledger later. The *size* metric orders owners:
+/// A *feature* here is an opaque `UInt64` fact about a run — the strategy's
+/// own vocabulary when it publishes one (today only `.pathTrie(gramLength:)`'s
+/// path k-grams), the covered edge indices otherwise. The *size* metric orders
+/// owners:
 /// smaller wins (REDUCE), ties don't steal, so ownership can only ever move
 /// to strictly simpler inputs and the churn terminates.
 ///
@@ -39,15 +40,16 @@ struct FeatureOwnershipLedger {
     }
 
     /// Feature → owning entry ID.
-    private var featureOwners: [UInt32: Int] = [:]
-    /// REDUCE metric per entry (covered-edge count at accept), index == ID.
+    private var featureOwners: [UInt64: Int] = [:]
+    /// REDUCE metric per entry at accept (the mutator-measured input size when
+    /// available, the covered-edge count otherwise), index == ID.
     private var entrySize: [Int] = []
     /// Features currently owned per entry, index == ID.
     private var entryOwnedCount: [Int] = []
 
     /// Judge one accepted input: claim what it can, evict the bankrupted.
-    mutating func judge(features: [UInt32], size: Int) -> Verdict {
-        var claimed: [UInt32] = []
+    mutating func judge(features: [UInt64], size: Int) -> Verdict {
+        var claimed: [UInt64] = []
         for feature in features {
             if let owner = featureOwners[feature] {
                 if size < entrySize[owner] { claimed.append(feature) }

@@ -615,8 +615,8 @@ struct EntropicRarityTerms {
 /// keep eliciting rare features hold energy, while the abundance term decays
 /// seeds that execute without yielding.
 func entropicYieldRarityTerms(
-    yield: [UInt32: Int],
-    globalFreqs: [UInt32: Int],
+    yield: [UInt64: Int],
+    globalFreqs: [UInt64: Int],
     rareFeatureThreshold: Int
 ) -> EntropicRarityTerms {
     var energy = 0.0
@@ -639,8 +639,8 @@ func entropicYieldRarityTerms(
 /// the spec oracle that the hand-computed `entropicWeight` vectors and the
 /// split/fused equivalence test pin against — it has no production caller.
 func entropicRarityTerms(
-    features: [UInt32],
-    globalFreqs: [UInt32: Int],
+    features: [UInt64],
+    globalFreqs: [UInt64: Int],
     rareFeatureThreshold: Int
 ) -> EntropicRarityTerms {
     var energy = 0.0
@@ -707,9 +707,9 @@ func entropicWeightCombining(
 /// This exists as the spec oracle for the hand-computed weight vectors and the
 /// split/fused equivalence test; no production caller.
 func entropicWeight(
-    features: [UInt32],
+    features: [UInt64],
     mutations: Int,
-    globalFreqs: [UInt32: Int],
+    globalFreqs: [UInt64: Int],
     totalRareFeatures: Int,
     totalMutations: Int,
     corpusSize: Int,

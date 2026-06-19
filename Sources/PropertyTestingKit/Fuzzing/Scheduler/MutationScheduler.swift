@@ -57,15 +57,23 @@ public struct MutationScheduler: SchedulerFactory {
     ///     interim starting point (≈ the 1-fresh-per-16-mutant rate of the
     ///     previous burst model); it supersedes that model and should be
     ///     re-tuned against the etna benchmarks rather than treated as final.
+    ///   - capacity: Residence bound (`nil` = unbounded). Admitting past it
+    ///     evicts the lowest-weight resident (ties: largest measured input,
+    ///     then newest). The bound decouples how finely the admission
+    ///     vocabulary distinguishes inputs from how many of them may stay —
+    ///     without it, a fine vocabulary silently raises the population
+    ///     ceiling.
     public static func weightedPool(
         admission: PoolAdmission = .featureOwnership,
         policies: @escaping @Sendable () -> [any PoolPlugin] = { [] },
-        generationRatio: Double = 0.1
+        generationRatio: Double = 0.1,
+        capacity: Int? = nil
     ) -> MutationScheduler {
         MutationScheduler(factory: WeightedPoolFactory(
             admission: admission,
             makePolicies: policies,
-            generationRatio: generationRatio
+            generationRatio: generationRatio,
+            capacity: capacity
         ))
     }
 }

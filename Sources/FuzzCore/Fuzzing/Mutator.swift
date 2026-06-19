@@ -86,25 +86,36 @@ public struct Mutator<Value: Sendable>: Sendable {
     /// dependency injection on every call (millions of times per fuzz run).
     public let generate: @Sendable (inout FastRNG) -> Value
 
+    /// Measure a value's real size (term node count, byte length, …) for the
+    /// pool's REDUCE metric. When `nil` the pool falls back to the
+    /// covered-edge count — a proxy that saturates once coverage does,
+    /// leaving input growth invisible to REDUCE and capacity eviction.
+    /// Called only on strategy-accepted inputs, never per iteration.
+    public let size: (@Sendable (Value) -> Int)?
+
     /// Create a mutator with seeds, mutation function, and generation function.
     public init(
         seeds: [Value],
         mutate: @escaping @Sendable (Value, inout FastRNG) -> Value,
-        generate: @escaping @Sendable (inout FastRNG) -> Value
+        generate: @escaping @Sendable (inout FastRNG) -> Value,
+        size: (@Sendable (Value) -> Int)? = nil
     ) {
         self.seeds = seeds
         self.mutate = mutate
         self.generate = generate
+        self.size = size
     }
 
     /// Create a mutator with seeds and mutation function.
     /// Generation will pick a random seed.
     public init(
         seeds: [Value],
-        mutate: @escaping @Sendable (Value, inout FastRNG) -> Value
+        mutate: @escaping @Sendable (Value, inout FastRNG) -> Value,
+        size: (@Sendable (Value) -> Int)? = nil
     ) {
         self.seeds = seeds
         self.mutate = mutate
+        self.size = size
         // Default generate: pick a random seed
         self.generate = { rng in
             guard !seeds.isEmpty else {
@@ -137,7 +148,10 @@ extension Mutator {
             generate: { rng in
                 let index = Int.random(in: 0..<mutators.count, using: &rng)
                 return mutators[index].generate(&rng)
-            }
+            },
+            // Size is a property of the Value, not the mutation strategy:
+            // any component's measure serves the composite.
+            size: mutators.lazy.compactMap(\.size).first
         )
     }
 

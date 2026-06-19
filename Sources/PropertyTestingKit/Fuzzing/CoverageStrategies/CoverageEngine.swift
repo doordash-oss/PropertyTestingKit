@@ -51,13 +51,25 @@ public struct CoverageEngine: Sendable {
     /// `decide` may live in instrumented code and share locks with `onEdge`.
     let decide: CoverageDecision
 
+    /// The strategy's culling vocabulary for the LAST accepted decision —
+    /// the features the mutation pool's ledger accounts ownership over. The
+    /// only built-in that publishes one is `.pathTrie(gramLength:)` (sliding
+    /// k-grams of the ordered first-hit path); called only after `decide`
+    /// returns `true`, inside the same gated window. `nil` (the default for
+    /// every other strategy, including the default `.pathTrie` and
+    /// `.hitCountBuckets`) means the pool falls back to the covered edge
+    /// indices.
+    let features: (@Sendable () -> [UInt64])?
+
     public init(
         onEdge: (@Sendable (UInt32, Bool) -> Void)? = nil,
         onReset: (@Sendable () -> Void)? = nil,
+        features: (@Sendable () -> [UInt64])? = nil,
         _ decide: @escaping CoverageDecision
     ) {
         self.onEdge = onEdge
         self.onReset = onReset
+        self.features = features
         self.decide = decide
     }
 }

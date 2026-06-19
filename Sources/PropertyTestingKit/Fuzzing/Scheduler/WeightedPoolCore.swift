@@ -34,17 +34,27 @@ import FuzzCore
 /// internal synchronization.
 final class WeightedPoolCore<each Input: Codable & Sendable> {
     private let mutators: (repeat Mutator<each Input>)
-    private let inputSize: Int
-    private let judge: (SparseCoverage) -> PoolAdmission.Verdict
+    private let packArity: Int
+    private let judge: (_ features: [UInt64], _ size: Int) -> PoolAdmission.Verdict
     private let policies: [any PoolPlugin]
     /// Probability each step generates a fresh input rather than mutating a pool
     /// entry: `1` is all generation, `0` is all mutation. Clamped to `0...1`.
     private let generationRatio: Double
+    /// Residence bound (`nil` = unbounded): admitting past it evicts the
+    /// lowest-weight resident (ties: largest measured input, then newest).
+    /// Decouples how finely the vocabulary distinguishes inputs from how many
+    /// of them may stay.
+    private let capacity: Int?
 
     /// Typed inputs, index == entry ID (grows append-only, aligned with `weights`).
     private var pool: [(repeat each Input)] = []
     /// Draw weight per entry ID (index == ID; grows append-only).
     private var weights: [Double] = []
+    /// Real (mutator-measured) input size per entry ID at admission, `nil`
+    /// when unmeasured (index == ID, grows append-only). Deliberately NOT
+    /// the covered-edge fallback: more covered edges mark a *better* entry,
+    /// so the proxy must never feed the eviction order.
+    private var sizes: [Int?] = []
     /// Live (drawable) entry IDs, swap-removed on eviction.
     private var live: [Int] = []
     /// Entry ID → its position in `live`.
@@ -66,15 +76,17 @@ final class WeightedPoolCore<each Input: Codable & Sendable> {
         admission: PoolAdmission,
         policies: [any PoolPlugin],
         generationRatio: Double,
+        capacity: Int? = nil,
         rng: FastRNG
     ) {
         self.mutators = (repeat each mutators)
         var n = 0
         (repeat { _ = each mutators; n += 1 }())
-        self.inputSize = n
+        self.packArity = n
         self.judge = admission.makeJudge()
         self.policies = policies
         self.generationRatio = min(1.0, max(0.0, generationRatio))
+        self.capacity = capacity.map { max(1, $0) }
         self.rng = rng
     }
 
@@ -94,7 +106,7 @@ final class WeightedPoolCore<each Input: Codable & Sendable> {
             lastProduced = .pool(parent: id)
             return ScheduledInput(
                 input: mutateOneRandomPosition(
-                    pool[id], inputSize: inputSize, rng: &rng, mutators: repeat each mutators
+                    pool[id], inputSize: packArity, rng: &rng, mutators: repeat each mutators
                 ),
                 poolParentID: id
             )
@@ -111,14 +123,37 @@ final class WeightedPoolCore<each Input: Codable & Sendable> {
         _ context: RawExecutionContext,
         source: SchedulerSource
     ) -> SparseCoverage? {
-        let coverage = context[CoverageProbeKey.self]?.coverage
+        let verdict = context[CoverageProbeKey.self]
+        let coverage = verdict?.coverage
+        // The strategy's culling vocabulary (k-grams, edge-buckets) when it
+        // publishes one; the pool widens covered edges otherwise.
+        let features = verdict?.features
         // The engine only knows external (seed/queue) vs scheduled; for a
         // scheduler-produced input we reconstruct the finer source from the
         // lineage of our own most recent `next()`.
         let poolSource: PoolIterationSource = source == .external ? .queue : lastProduced
+        // The scheduler owns the mutators, so it measures the real input size
+        // itself — only on accepts (coverage non-nil); size closures may walk
+        // the whole input.
+        let size = coverage != nil ? measuredSize(of: repeat each input) : nil
         // Returns the new entry id on admission; the engine wants the signature
         // to persist, which is exactly the coverage that was admitted.
-        return admit(input, coverage: coverage, poolSource: poolSource) != nil ? coverage : nil
+        return admit(input, coverage: coverage, features: features, inputSize: size,
+                     poolSource: poolSource) != nil ? coverage : nil
+    }
+
+    /// Sum of the mutator-measured sizes across the input pack — the pool's
+    /// real REDUCE/eviction size metric. `nil` when no mutator measures
+    /// (positions without a `size` closure contribute nothing).
+    private func measuredSize(of input: repeat each Input) -> Int? {
+        var total = 0
+        var measured = false
+        for (mutator, value) in repeat (each mutators, each input) {
+            guard let size = mutator.size else { continue }
+            total += size(value)
+            measured = true
+        }
+        return measured ? total : nil
     }
 
     /// Admission core, shared by the public `observe` seam and white-box tests.
@@ -130,25 +165,65 @@ final class WeightedPoolCore<each Input: Codable & Sendable> {
     func admit(
         _ input: (repeat each Input),
         coverage: SparseCoverage?,
+        features: [UInt64]? = nil,
+        inputSize: Int? = nil,
         poolSource: PoolIterationSource
     ) -> Int? {
-        notifyAndApply(.iteration(PoolIterationOutcome(source: poolSource, newCoverage: coverage)))
+        let outcome = PoolIterationOutcome(
+            source: poolSource, newCoverage: coverage, features: features, inputSize: inputSize)
+        notifyAndApply(.iteration(outcome))
 
         guard let coverage else { return nil }
-        let verdict = judge(coverage)
+        // The pool accounts ownership in the strategy's vocabulary when it
+        // publishes one, and widened covered edges otherwise — `resolvedFeatures`
+        // is the single definition of that fallback.
+        let resolved = outcome.resolvedFeatures
+        let verdict = judge(resolved, inputSize ?? coverage.count)
         guard verdict.admit else { return nil }
+
+        // The admission's own displacements (REDUCE losers) go through the
+        // same removal path as child evictions, so every policy hears them.
+        // They run BEFORE the capacity check — bankruptcies may free the
+        // room, sparing an innocent resident.
+        apply(verdict.evict.map { .remove(id: $0) })
+        if let capacity {
+            while live.count >= capacity, let victim = capacityVictim() {
+                apply([.remove(id: victim)])
+            }
+        }
 
         let id = weights.count
         weights.append(1.0)
         pool.append(input)
+        sizes.append(inputSize)
         livePos[id] = live.count
         live.append(id)
         liveWeightTotal += 1.0
-        // The admission's own displacements (REDUCE losers) go through the
-        // same removal path as child evictions, so every policy hears them.
-        apply(verdict.evict.map { .remove(id: $0) })
-        notifyAndApply(.inserted(id: id, coverage: coverage))
+        notifyAndApply(.inserted(id: id, coverage: coverage, features: resolved))
         return id
+    }
+
+    /// The resident a capacity overflow removes: lowest weight, then the
+    /// LARGEST measured input, then the NEWEST. Real sizes target the drift
+    /// disease directly — the mutation random walk grows inputs, and the
+    /// monsters go first. Without measured sizes, evicting old residents
+    /// makes the bounded pool a sliding window over that walk, so the
+    /// tie-break keeps elders: they anchor the pool on the early, small,
+    /// distinctive inputs; newcomers visit, burst, and yield their slot
+    /// unless a weight advisor values them. A capacity-evicted owner keeps
+    /// its ledger claims as a ghost (the ledger is never told of evictions):
+    /// releasing them re-opens the vocabulary and the pool degenerates into a
+    /// revolving door of re-claimers.
+    private func capacityVictim() -> Int? {
+        // Explicit comparator (no negation) so a pathological `size` closure
+        // returning `Int.min` can't trap on `-size`.
+        live.min { lhs, rhs in
+            let (wl, wr) = (weights[lhs], weights[rhs])
+            if wl != wr { return wl < wr }              // lowest weight first
+            let (sl, sr) = (sizes[lhs] ?? 0, sizes[rhs] ?? 0)
+            if sl != sr { return sl > sr }              // largest measured size first
+            return lhs > rhs                            // newest (largest id) first
+        }
     }
 
     // MARK: - Decision (policy)
@@ -231,6 +306,7 @@ struct WeightedPoolFactory: SchedulerFactory {
     let admission: PoolAdmission
     let makePolicies: @Sendable () -> [any PoolPlugin]
     let generationRatio: Double
+    let capacity: Int?
 
     func makeScheduler<each Input: Codable & Sendable>(
         mutators: repeat Mutator<each Input>
@@ -241,6 +317,7 @@ struct WeightedPoolFactory: SchedulerFactory {
             admission: admission,
             policies: makePolicies(),
             generationRatio: generationRatio,
+            capacity: capacity,
             rng: fastRNG
         )
         // Qualified `FuzzCore.AnyScheduler`: `import Dependencies` re-exports

@@ -47,7 +47,7 @@ struct PathTrieStrategyTests {
         // Evaluate the strategy
         let firstSparse = strategy.evaluate(context, coverageClient)
         if let s = firstSparse {
-            corpus.mergeCoverageAndAdd(input: 42, scheduleBytes: nil, sparse: s)
+            corpus.mergeCoverageAndAdd(input: 42, scheduleBytes: nil, sparse: s.sparse)
         }
         let didAdd = firstSparse != nil
 

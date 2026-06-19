@@ -138,7 +138,7 @@ struct CoverageEngineTests {
             sancov_dispatch_edge(&g31)
             sancov_dispatch_edge(&g32)
             let sparse = evaluator.evaluate(context, coverageClient)
-            if let s = sparse {
+            if let s = sparse?.sparse {
                 corpus.mergeCoverageAndAdd(input: input, scheduleBytes: nil, sparse: s)
             }
             return sparse != nil
@@ -166,7 +166,7 @@ struct CoverageEngineTests {
         let evaluator: CoverageEvaluator = strategy.makeEvaluator()
 
         let sparse = evaluator.evaluate(context, coverageClient)
-        if let s = sparse {
+        if let s = sparse?.sparse {
             corpus.mergeCoverageAndAdd(input: 7, scheduleBytes: [9, 9], sparse: s)
         }
 
@@ -174,7 +174,7 @@ struct CoverageEngineTests {
         #expect(corpus.count == 1, "The engine records the interesting input")
         #expect(corpus.entries.first?.scheduleBytes == [9, 9],
                 "Schedule bytes ride with the entry as a storage concern")
-        #expect(corpus.entries.first?.sparseCoverage == sparse,
+        #expect(corpus.entries.first?.sparseCoverage == sparse?.sparse,
                 "The entry carries the run's judged coverage")
     }
 
@@ -312,13 +312,13 @@ struct CoverageEngineTests {
         let strategy = CoverageStrategy { coverage in !coverage.indices.isEmpty }
         let evaluator: CoverageEvaluator = strategy.makeEvaluator()
         let sparse = evaluator.evaluate(context, client)
-        if let s = sparse {
+        if let s = sparse?.sparse {
             corpus.mergeCoverageAndAdd(input: 1, scheduleBytes: nil, sparse: s)
         }
 
         #expect(snapshots.value == 1,
                 "the decision's snapshot is reused for the corpus add")
-        #expect(corpus.entries.first?.sparseCoverage == sparse,
+        #expect(corpus.entries.first?.sparseCoverage == sparse?.sparse,
                 "the entry carries the judged coverage")
     }
 

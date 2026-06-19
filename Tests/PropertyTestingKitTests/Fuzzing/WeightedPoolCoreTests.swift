@@ -44,35 +44,23 @@ private final class ScriptedPolicy: PoolPlugin {
 @Suite("WeightedPool core")
 struct WeightedPoolCoreTests {
 
-    /// A trivial Int mutator: the pool's draw/admission policy is independent of
-    /// the typed input, so production is a no-op stub here.
-    private static let intMutator = Mutator<Int>(seeds: [0], mutate: { v, _ in v }, generate: { _ in 0 })
-
+    // White-box scaffolding is shared via `WeightedPoolHarness`; these thin
+    // forwards keep the call sites below readable.
     private func makeCore(
         policies: [any PoolPlugin] = [],
         generationRatio: Double = 0
     ) -> WeightedPoolCore<Int> {
-        WeightedPoolCore<Int>(
-            mutators: Self.intMutator,
-            admission: .everyDiscovery,
-            policies: policies,
-            generationRatio: generationRatio,
-            rng: FastRNG()
-        )
+        WeightedPoolHarness.core(policies: policies, generationRatio: generationRatio)
     }
 
-    /// One accepted discovery: coverage/lineage shaped like the engine's accept path.
     private func accept(
         _ core: WeightedPoolCore<Int>, edges: [UInt32], parent: Int? = nil
     ) -> Int? {
-        let source: PoolIterationSource = parent.map { .pool(parent: $0) } ?? .generated
-        return core.admit(0, coverage: SparseCoverage(indices: edges), poolSource: source)
+        WeightedPoolHarness.accept(core, edges: edges, parent: parent)
     }
 
-    /// One uninteresting execution attributed to `parent`.
     private func miss(_ core: WeightedPoolCore<Int>, parent: Int? = nil) {
-        let source: PoolIterationSource = parent.map { .pool(parent: $0) } ?? .generated
-        _ = core.admit(0, coverage: nil, poolSource: source)
+        WeightedPoolHarness.miss(core, parent: parent)
     }
 
     @Test("Empty pool always directs fresh generation")
@@ -115,13 +103,13 @@ struct WeightedPoolCoreTests {
     @Test("Children hear inserted events and their remove actions empty the pool")
     func childRemoveOnInsert() {
         let child = ScriptedPolicy { event in
-            if case let .inserted(id, _) = event { return [.remove(id: id)] }
+            if case let .inserted(id, _, _) = event { return [.remove(id: id)] }
             return []
         }
         let core = makeCore(policies: [child], generationRatio: 0)
 
         #expect(accept(core, edges: [1, 2]) == 0)
-        #expect(child.events.contains { if case .inserted(0, _) = $0 { return true }; return false })
+        #expect(child.events.contains { if case .inserted(0, _, _) = $0 { return true }; return false })
         // The child evicted the only entry: the pool is empty, so generate.
         #expect(core.decide() == .generate)
     }
@@ -129,7 +117,7 @@ struct WeightedPoolCoreTests {
     @Test("Children hear removed notifications for other policies' evictions")
     func childHearsRemovals() {
         let remover = ScriptedPolicy { event in
-            if case .inserted(1, _) = event { return [.remove(id: 0)] }
+            if case .inserted(1, _, _) = event { return [.remove(id: 0)] }
             return []
         }
         let listener = ScriptedPolicy()
@@ -143,7 +131,7 @@ struct WeightedPoolCoreTests {
     @Test("Zero-weighted entries are never drawn")
     func zeroWeightNeverDrawn() {
         let child = ScriptedPolicy { event in
-            if case .inserted(0, _) = event { return [.setWeight(id: 0, 0.0)] }
+            if case .inserted(0, _, _) = event { return [.setWeight(id: 0, 0.0)] }
             return []
         }
         // Ratio 0: every decision with a non-empty pool is a weighted draw, so
