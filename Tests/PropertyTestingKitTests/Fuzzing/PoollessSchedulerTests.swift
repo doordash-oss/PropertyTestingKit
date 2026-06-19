@@ -47,15 +47,35 @@ private struct GenerativeOnlyFactory: SchedulerFactory {
 @Suite("Pool-less scheduler")
 struct PoollessSchedulerTests {
 
+    /// Stop a run once the bus has observed `count` iterations — deterministic
+    /// and load-independent, unlike a wall-clock budget (a busy CI core under
+    /// the full parallel suite can run zero iterations in 0.3s if probe setup
+    /// alone exhausts the budget, which is what made this test flaky).
+    private func stopAfter(_ count: Int) -> FuzzPlugin<Int> {
+        let seen = SyncBox<Int>(0)
+        return FuzzPlugin<Int>(id: "iteration_counter", handleSync: { event in
+            switch event {
+            case .iteration:
+                seen.update { $0 += 1 }
+                return seen.value >= count
+                    ? [.stop(.init(reason: .custom("observed_enough")))]
+                    : []
+            }
+        })
+    }
+
     @Test("A scheduler with no pool drives the engine end-to-end")
     func poollessSchedulerRuns() async throws {
         // `fuzz` accepts any `SchedulerFactory` directly — a userspace scheduler
-        // needs no `MutationScheduler` wrapper and no pool.
+        // needs no `MutationScheduler` wrapper and no pool. A generous wall-clock
+        // ceiling plus a count-based stop makes "it ran inputs" deterministic
+        // regardless of how loaded the machine is.
         let result = try await fuzz(
-            duration: .seconds(0.3),
+            duration: .seconds(60),
             persistence: .ephemeral,
             scheduler: GenerativeOnlyFactory(),
-            parallelism: 1
+            parallelism: 1,
+            plugins: { [self.stopAfter(50)] }
         ) { (input: Int) in
             blackHole(input)
         }
