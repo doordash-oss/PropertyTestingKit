@@ -45,9 +45,9 @@ public struct PoolIterationOutcome: Sendable {
     public let inputSize: Int?
 
     /// Per-comparison-site distance witnessed by the accepted run: site `pc`
-    /// → the lowest `|arg1 - arg2|` it drove the operands to. The vocabulary
-    /// `PoolAdmission.boundaryDistanceOwnership` owns over (lowest distance per
-    /// site wins). `nil` when the strategy publishes none.
+    /// → the lowest `|arg1 - arg2|` it drove the operands to. `featureOwnership`'s
+    /// `BoundaryDistanceEvaluator` owns over these (lowest distance per site
+    /// wins). `nil` when the strategy publishes none.
     public let boundaryDistances: [UInt64: UInt64]?
 
     public init(
@@ -165,51 +165,31 @@ public struct PoolAdmission: Sendable {
             Verdict(admit: true, evict: [], claimed: outcome.resolvedFeatures.count)
         } })
 
-    /// libFuzzer's corpus model: an input joins the pool only by *owning*
-    /// coverage features — claiming unowned ones, or stealing from a larger
-    /// owner (REDUCE; the size metric is the mutator-measured input size
-    /// when available, the covered-edge count otherwise; ties don't
-    /// steal). An entry that loses its last feature leaves the pool. Bounds
-    /// the pool by the feature space regardless of how often the coverage
-    /// strategy says "interesting"; rejected accepts get no burst and no
-    /// residence (strict semantics).
+    /// libFuzzer's corpus model: an input joins the pool only by *owning* a
+    /// feature. Ownership is decided by per-signal evaluators and recorded in
+    /// one generic `OwnershipLedger`; an entry that loses its last feature
+    /// across all signals leaves the pool. Bounds the pool by the feature space
+    /// regardless of how often the coverage strategy says "interesting".
     ///
-    /// Ownership is accounted in the strategy's own vocabulary when it
-    /// publishes one (today only `.pathTrie(gramLength:)`'s path k-grams), and
-    /// the covered edge indices otherwise — so the pool retains exactly the
-    /// diversity the strategy accepts for. (The default `.pathTrie` and
-    /// `.hitCountBuckets` publish none and cull on edges; an (edge, bucket)
-    /// vocabulary equal to hcb's acceptance criterion would be a tautology
-    /// that disables culling.)
+    /// Two evaluators feed the ledger:
+    /// - `EdgeOwnershipEvaluator` — edges (the strategy's vocabulary when it
+    ///   publishes one, the covered edge indices otherwise) owned by the
+    ///   SMALLEST input (REDUCE; ties don't steal).
+    /// - `BoundaryDistanceEvaluator` — each comparison site (`pc`) owned by the
+    ///   input that drove its operands closest (lowest `|arg1 - arg2|`; ties
+    ///   break toward the smaller input). Inert unless the strategy publishes
+    ///   `boundaryDistances` (`.boundaryDistance`, a `-sanitize-coverage=…,trace-cmp`
+    ///   target) — so this admission subsumes the former `boundaryDistanceOwnership`:
+    ///   add the cmp signal and the same admission culls over it too.
     public static let featureOwnership = PoolAdmission(makeJudge: {
-        var ledger = FeatureOwnershipLedger()
+        var edges = EdgeOwnershipEvaluator()
+        var boundaries = BoundaryDistanceEvaluator()
+        var ledger = OwnershipLedger()
         return { outcome in
-            let verdict = ledger.judge(
-                features: outcome.resolvedFeatures, size: size(of: outcome))
-            return Verdict(admit: verdict.admit, evict: verdict.evict, claimed: verdict.claimed)
-        }
-    })
-
-    /// Experimental: feature ownership PLUS a directional value-axis dimension.
-    /// Edges are owned by the smallest input (REDUCE), exactly as
-    /// `featureOwnership`; additionally each comparison site (`pc`) is owned by
-    /// the input that drove its operands closest together (lowest
-    /// `|arg1 - arg2|`). An input earns residence by claiming a new/smaller edge
-    /// OR a strictly closer boundary; it leaves when it owns neither.
-    ///
-    /// Unlike value-profile *acceptance* (`comparisonCoverage`, which keeps
-    /// every novel distance and bloats the corpus), ownership is competitive
-    /// and monotone: only the single closest witness per site is retained, so a
-    /// farther-but-novel distance earns nothing. Requires a strategy that
-    /// publishes `boundaryDistances` (`.boundaryDistance`) and a target built
-    /// with `-sanitize-coverage=…,trace-cmp`.
-    public static let boundaryDistanceOwnership = PoolAdmission(makeJudge: {
-        var ledger = BoundaryDistanceLedger()
-        return { outcome in
-            let verdict = ledger.judge(
-                features: outcome.resolvedFeatures,
-                size: size(of: outcome),
-                distances: outcome.boundaryDistances ?? [:])
+            let size = size(of: outcome)
+            var claimed = edges.claims(edges: outcome.resolvedFeatures, size: size)
+            claimed += boundaries.claims(distances: outcome.boundaryDistances ?? [:], size: size)
+            let verdict = ledger.record(claimed: claimed)
             return Verdict(admit: verdict.admit, evict: verdict.evict, claimed: verdict.claimed)
         }
     })

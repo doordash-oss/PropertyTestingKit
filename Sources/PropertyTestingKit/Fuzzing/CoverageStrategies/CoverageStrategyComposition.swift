@@ -33,7 +33,7 @@ extension CoverageStrategy {
     ///
     /// The canonical use is mixing the comparison channel with an edge strategy,
     /// e.g. `.pathTrie.combined(with: .boundaryDistanceOnly)` — pair it with
-    /// `PoolAdmission.boundaryDistanceOwnership`, which culls over both the
+    /// `PoolAdmission.featureOwnership`, which culls over both the
     /// (namespaced) features and the boundary distances.
     public static func compose(_ strategies: [CoverageStrategy]) -> CoverageStrategy {
         precondition(!strategies.isEmpty, "CoverageStrategy.compose requires at least one strategy")

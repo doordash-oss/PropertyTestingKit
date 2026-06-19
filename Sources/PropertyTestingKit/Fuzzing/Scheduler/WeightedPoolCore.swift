@@ -139,7 +139,7 @@ final class WeightedPoolCore<each Input: Codable & Sendable> {
         // publishes one; the pool widens covered edges otherwise.
         let features = verdict?.features
         // Per-comparison-site distances when the strategy publishes them
-        // (`.boundaryDistance`); consumed only by `boundaryDistanceOwnership`.
+        // (`.boundaryDistance`); consumed only by `featureOwnership`.
         let boundaryDistances = verdict?.boundaryDistances
         // The engine only knows external (seed/queue) vs scheduled; for a
         // scheduler-produced input we reconstruct the finer source from the
@@ -197,7 +197,7 @@ final class WeightedPoolCore<each Input: Codable & Sendable> {
         // The pool accounts ownership in the strategy's vocabulary when it
         // publishes one, and widened covered edges otherwise — `resolvedFeatures`
         // is the single definition of that fallback. The admission judge reads
-        // the whole outcome (so `boundaryDistanceOwnership` can see distances).
+        // the whole outcome (so `featureOwnership` can see distances).
         let resolved = outcome.resolvedFeatures
         let verdict = judge(outcome)
         guard verdict.admit else { return nil }

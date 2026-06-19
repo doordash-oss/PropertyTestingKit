@@ -70,7 +70,7 @@ public struct CoverageEngine: Sendable {
 
     /// The per-comparison-site distances of the LAST accepted decision: site
     /// `pc` → the lowest `|arg1 - arg2|` the run drove it to. The vocabulary
-    /// `PoolAdmission.boundaryDistanceOwnership` culls over. Called only after
+    /// `PoolAdmission.featureOwnership` culls over. Called only after
     /// `decide` returns `true`, inside the same gated window as `features`.
     /// `nil` (the default) means the run publishes no boundary distances.
     let boundaryDistances: (@Sendable () -> [UInt64: UInt64])?

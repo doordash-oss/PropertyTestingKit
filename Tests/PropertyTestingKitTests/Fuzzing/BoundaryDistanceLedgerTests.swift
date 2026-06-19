@@ -23,76 +23,103 @@
 import Testing
 @testable import PropertyTestingKit
 
-@Suite("Boundary-distance ledger")
+/// Boundary ownership is now the boundary evaluator composed with the edge
+/// evaluator and the generic `OwnershipLedger`, exactly as `featureOwnership`
+/// drives them. This helper composes the same three pieces so these pin the
+/// dual-dimension behavior that used to live in `BoundaryDistanceLedger.judge`.
+private struct DualJudge {
+    var edges = EdgeOwnershipEvaluator()
+    var boundaries = BoundaryDistanceEvaluator()
+    var ledger = OwnershipLedger()
+    mutating func callAsFunction(
+        features: [UInt64], size: Int, distances: [UInt64: UInt64]
+    ) -> OwnershipLedger.Verdict {
+        var claimed = edges.claims(edges: features, size: size)
+        claimed += boundaries.claims(distances: distances, size: size)
+        return ledger.record(claimed: claimed)
+    }
+}
+
+@Suite("Boundary-distance ownership (evaluators + ledger)")
 struct BoundaryDistanceLedgerTests {
 
     @Test("An unowned boundary is claimed and the entry admitted")
     func claimsUnownedBoundary() {
-        var ledger = BoundaryDistanceLedger()
-        let verdict = ledger.judge(features: [], size: 1, distances: [100: 8])
+        var judge = DualJudge()
+        let verdict = judge(features: [], size: 1, distances: [100: 8])
         #expect(verdict.admit)
         #expect(verdict.evict.isEmpty)
     }
 
     @Test("A strictly closer input steals the boundary; a farther or equal one does not")
     func closerSteals() {
-        var ledger = BoundaryDistanceLedger()
-        _ = ledger.judge(features: [], size: 1, distances: [100: 8])   // entry 0 owns pc100 @ 8
+        var judge = DualJudge()
+        _ = judge(features: [], size: 1, distances: [100: 8])   // entry 0 owns pc100 @ 8
         // Farther: nothing to claim.
-        #expect(!ledger.judge(features: [], size: 1, distances: [100: 9]).admit)
-        // Equal: ties don't steal.
-        #expect(!ledger.judge(features: [], size: 1, distances: [100: 8]).admit)
+        #expect(!judge(features: [], size: 1, distances: [100: 9]).admit)
+        // Equal distance, equal size: ties don't steal.
+        #expect(!judge(features: [], size: 1, distances: [100: 8]).admit)
         // Closer: claims it.
-        #expect(ledger.judge(features: [], size: 1, distances: [100: 3]).admit)
+        #expect(judge(features: [], size: 1, distances: [100: 3]).admit)
     }
 
     @Test("Losing the last owned boundary evicts the previous owner")
     func lastBoundaryLossEvicts() {
-        var ledger = BoundaryDistanceLedger()
-        _ = ledger.judge(features: [], size: 1, distances: [100: 8])   // entry 0 owns {pc100}
-        let verdict = ledger.judge(features: [], size: 1, distances: [100: 1])
+        var judge = DualJudge()
+        _ = judge(features: [], size: 1, distances: [100: 8])   // entry 0 owns {pc100}
+        let verdict = judge(features: [], size: 1, distances: [100: 1])
         #expect(verdict.admit)
         #expect(verdict.evict == [0])
     }
 
     @Test("Edge ownership (REDUCE by size) coexists with boundary ownership")
     func edgesAndBoundariesAreAdditive() {
-        var ledger = BoundaryDistanceLedger()
+        var judge = DualJudge()
         // entry 0: owns edge 1 (size 3) and pc100 @ 8.
-        _ = ledger.judge(features: [1], size: 3, distances: [100: 8])
+        _ = judge(features: [1], size: 3, distances: [100: 8])
         // Smaller input claims edge 1 (REDUCE) but is FARTHER on pc100: admitted
         // on the edge alone; entry 0 keeps pc100, so it survives.
-        let verdict = ledger.judge(features: [1], size: 2, distances: [100: 9])
+        let verdict = judge(features: [1], size: 2, distances: [100: 9])
         #expect(verdict.admit)
         #expect(verdict.evict.isEmpty, "entry 0 still owns pc100")
     }
 
     @Test("An entry that owns neither a new edge nor a closer boundary is rejected")
     func noClaimRejected() {
-        var ledger = BoundaryDistanceLedger()
-        _ = ledger.judge(features: [1], size: 2, distances: [100: 4])   // entry 0
-        let verdict = ledger.judge(features: [1], size: 5, distances: [100: 9])
+        var judge = DualJudge()
+        _ = judge(features: [1], size: 2, distances: [100: 4])   // entry 0
+        let verdict = judge(features: [1], size: 5, distances: [100: 9])
         #expect(!verdict.admit)
     }
 
     @Test("Both dimensions are additive in one verdict")
     func bothDimensionsAdditive() {
-        var ledger = BoundaryDistanceLedger()
-        let v = ledger.judge(features: [1], size: 3, distances: [100: 8])
+        var judge = DualJudge()
+        let v = judge(features: [1], size: 3, distances: [100: 8])
         #expect(v.admit)
         #expect(v.claimed == 2, "1 edge + 1 boundary")
     }
 
+    @Test("On equal distance the smaller input steals the boundary (tie-break)")
+    func tieBreakBySize() {
+        var judge = DualJudge()
+        _ = judge(features: [], size: 5, distances: [100: 8])    // entry 0 owns pc100 @ 8, size 5
+        // Same distance, strictly smaller input: steals (refinement over the old
+        // ledger, which never broke boundary ties).
+        let verdict = judge(features: [], size: 4, distances: [100: 8])
+        #expect(verdict.admit)
+        #expect(verdict.evict == [0])
+    }
+
     @Test("Admitted entries take sequential IDs across eviction")
     func sequentialIDs() {
-        var ledger = BoundaryDistanceLedger()
-        _ = ledger.judge(features: [], size: 1, distances: [100: 8])   // entry 0
-        _ = ledger.judge(features: [], size: 1, distances: [100: 1])   // entry 1 evicts 0
-        let verdict = ledger.judge(features: [], size: 1, distances: [200: 4]) // entry 2
-        #expect(verdict.admit)
+        var judge = DualJudge()
+        #expect(judge(features: [], size: 1, distances: [100: 8]).entryID == 0)
+        #expect(judge(features: [], size: 1, distances: [100: 1]).entryID == 1)  // evicts 0
+        #expect(judge(features: [], size: 1, distances: [200: 4]).entryID == 2)
         // A later tie on pc100 must contest the CURRENT owner (entry 1), not the
         // dead entry 0.
-        #expect(!ledger.judge(features: [], size: 1, distances: [100: 1]).admit)
+        #expect(!judge(features: [], size: 1, distances: [100: 1]).admit)
     }
 }
 
@@ -125,7 +152,7 @@ struct BoundaryDistanceAdmissionTests {
     func closerBoundaryEvicts() {
         let listener = Listener()
         let core = WeightedPoolHarness.core(
-            admission: .boundaryDistanceOwnership, policies: [listener])
+            admission: .featureOwnership, policies: [listener])
 
         // Entry 0 owns ONLY pc100 (no edges), so losing it bankrupts it.
         #expect(admit(core, edges: [], distances: [100: 8]) == 0)
@@ -136,7 +163,7 @@ struct BoundaryDistanceAdmissionTests {
     @Test("Edge ownership still earns residence with no closer boundary")
     func edgeRetentionSurvives() {
         let core = WeightedPoolHarness.core(
-            admission: .boundaryDistanceOwnership, policies: [])
+            admission: .featureOwnership, policies: [])
 
         #expect(admit(core, edges: [1], distances: [100: 8]) == 0)
         // New edge, FARTHER boundary: admitted on the edge alone.
