@@ -30,20 +30,11 @@
 /// applies, whoever caused it.
 import FuzzCore
 
-public struct MutationScheduler: SchedulerFactory {
-    /// The underlying factory. Wrapping `any SchedulerFactory` (rather than
-    /// being one concrete factory) keeps the design's promise that a
-    /// `MutationScheduler` can vend any scheduler, not only the weighted pool.
-    let factory: any SchedulerFactory
-
-    /// Build this engine's scheduler at its input pack by forwarding to the
-    /// wrapped factory. One fresh scheduler per engine (the factory captures the
-    /// engine's mutators so the scheduler owns input production).
-    public func makeScheduler<each Input: Codable & Sendable>(
-        mutators: repeat Mutator<each Input>
-    ) -> AnyScheduler<repeat each Input> {
-        factory.makeScheduler(mutators: repeat each mutators)
-    }
+/// Namespace for the library's built-in scheduler factories. Not a scheduler
+/// itself — each static method returns a concrete `any SchedulerFactory`, so the
+/// signal config (coverage strategy, and in future a cmp source) travels with the
+/// scheduler the caller picks rather than being a top-level `fuzz()` knob.
+public enum MutationScheduler {
 
     /// A weighted mutation pool that picks generation vs mutation by a ratio.
     ///
@@ -63,17 +54,24 @@ public struct MutationScheduler: SchedulerFactory {
     ///     vocabulary distinguishes inputs from how many of them may stay —
     ///     without it, a fine vocabulary silently raises the population
     ///     ceiling.
+    ///   - coverageStrategy: How a run is judged "interesting" and what culling
+    ///     vocabulary it publishes (default: `.pathTrie`). This is the scheduler's
+    ///     coverage signal — it travels with the scheduler rather than being a
+    ///     top-level `fuzz()` knob, so coverage is one battery among possible
+    ///     others, not a privileged library concept.
     public static func weightedPool(
         admission: PoolAdmission = .featureOwnership,
         policies: @escaping @Sendable () -> [any PoolPlugin] = { [] },
         generationRatio: Double = 0.1,
-        capacity: Int? = nil
-    ) -> MutationScheduler {
-        MutationScheduler(factory: WeightedPoolFactory(
+        capacity: Int? = nil,
+        coverageStrategy: CoverageStrategy = .pathTrie
+    ) -> any SchedulerFactory {
+        WeightedPoolFactory(
             admission: admission,
             makePolicies: policies,
             generationRatio: generationRatio,
-            capacity: capacity
-        ))
+            capacity: capacity,
+            coverageStrategy: coverageStrategy
+        )
     }
 }

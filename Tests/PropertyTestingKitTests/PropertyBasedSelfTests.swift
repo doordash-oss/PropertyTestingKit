@@ -325,7 +325,7 @@ struct FuzzAPIPropertyTests {
             try await fuzzWithMaxIterations(
                 maxIterations: 50,
                 persistence: .ephemeral,
-                coverageStrategy: .alwaysInteresting
+                scheduler: MutationScheduler.weightedPool(coverageStrategy: .alwaysInteresting)
             ) { (input: Int) in
                 _ = input > 0 ? "positive" : "non-positive"
             }
@@ -345,7 +345,7 @@ struct FuzzAPIPropertyTests {
                 maxIterations: 50,
                 seeds: ["custom1", "custom2", "custom3"],
                 persistence: .ephemeral,
-                coverageStrategy: .alwaysInteresting
+                scheduler: MutationScheduler.weightedPool(coverageStrategy: .alwaysInteresting)
             ) { (input: String) in
                 // Just exercise the input - no actor involvement
                 _ = input.count

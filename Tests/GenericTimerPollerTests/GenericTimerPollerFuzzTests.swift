@@ -346,7 +346,7 @@ struct GenericTimerPollerFuzzTests {
             let result = try await fuzz(
                 duration: .seconds(3),
                 persistence: .ephemeral,
-                coverageStrategy: .pathTrie
+                scheduler: MutationScheduler.weightedPool(coverageStrategy: .pathTrie)
             ) { (input: ConstantPollerInput) in
                 let poller = GenericTimerPoller(defaultInterval: .microseconds(100))
                 await withTaskGroup(of: Void.self) { group in
@@ -383,7 +383,7 @@ struct GenericTimerPollerFuzzTests {
             let result = try await fuzz(
                 duration: .seconds(2),
                 persistence: .ephemeral,
-                coverageStrategy: .pathTrie,
+                scheduler: MutationScheduler.weightedPool(coverageStrategy: .pathTrie),
                 scheduleFuzzing: true
             ) { (input: ConstantPollerInput) in
                 let poller = GenericTimerPoller(defaultInterval: .microseconds(100))

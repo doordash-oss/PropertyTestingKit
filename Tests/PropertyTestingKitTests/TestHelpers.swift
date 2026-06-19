@@ -41,7 +41,7 @@ func fuzzWithMaxIterations<each Input: MutatorProviding & Codable & Sendable>(
     seeds: [(repeat each Input)] = [],
     duration: Duration = .seconds(60),
     persistence: CorpusPersistence = .auto,
-    coverageStrategy: CoverageStrategy = .signatureMatch,
+    scheduler: any SchedulerFactory = MutationScheduler.weightedPool(coverageStrategy: .signatureMatch),
     parallelism: Int = 1,
     filePath: StaticString = #filePath,
     function: StaticString = #function,
@@ -65,7 +65,7 @@ func fuzzWithMaxIterations<each Input: MutatorProviding & Codable & Sendable>(
             seeds: seeds,
             duration: .seconds(10),
             persistence: persistence,
-            coverageStrategy: coverageStrategy,
+            scheduler: scheduler,
             parallelism: parallelism,
             filePath: filePath,
             function: function,
@@ -97,7 +97,7 @@ func fuzzWithMaxIterations<each Input: MutatorProviding & Codable & Sendable>(
 func fuzzEngineWithMaxIterations<each Input: MutatorProviding & Codable & Sendable>(
     maxIterations: Int,
     config: FuzzEngineConfig? = nil,
-    coverageStrategy: CoverageStrategy = .signatureMatch,
+    scheduler: any SchedulerFactory = MutationScheduler.weightedPool(coverageStrategy: .signatureMatch),
     additionalSeeds: [(repeat each Input)] = [],
     test: @escaping @Sendable ((repeat each Input)) async throws -> Void
 ) async -> FuzzResult<repeat each Input> {
@@ -129,7 +129,7 @@ func fuzzEngineWithMaxIterations<each Input: MutatorProviding & Codable & Sendab
         let engine = FuzzEngine(
             mutators: repeat each mutators,
             config: effectiveConfig,
-            coverageStrategy: coverageStrategy
+            scheduler: scheduler
         )
         // The engine runs exactly the seeds it's given — assemble the mutators' seed
         // values plus any caller-provided seeds, mirroring a fuzz campaign.
@@ -168,7 +168,7 @@ func runFuzzWithMaxIterations<each Input: MutatorProviding & Codable & Sendable>
     maxIterations: Int,
     corpusDir: URL,
     persistence: CorpusPersistence,
-    coverageStrategy: CoverageStrategy = .alwaysInteresting,
+    scheduler: any SchedulerFactory = MutationScheduler.weightedPool(coverageStrategy: .alwaysInteresting),
     parallelism: Int = 1,
     makeHandlers: @escaping @Sendable () -> [FuzzPlugin<repeat each Input>] = { [] },
     additionalSeeds: [(repeat each Input)] = [],
@@ -192,8 +192,7 @@ func runFuzzWithMaxIterations<each Input: MutatorProviding & Codable & Sendable>
             parallelism: parallelism,
             duration: .seconds(10),
             verbose: false,
-            coverageStrategy: coverageStrategy,
-            scheduler: MutationScheduler.weightedPool(),
+            scheduler: scheduler,
             projectPath: nil,
             sourceFileID: "PropertyTestingKitTests/TestHelpers.swift",
             sourceFilePath: "PropertyTestingKitTests/TestHelpers.swift",
@@ -266,7 +265,7 @@ func fuzzWithMaxIterations<each Input: Codable & Sendable>(
     using mutators: repeat Mutator<each Input>,
     seeds: [(repeat each Input)] = [],
     persistence: CorpusPersistence = .auto,
-    coverageStrategy: CoverageStrategy = .signatureMatch,
+    scheduler: any SchedulerFactory = MutationScheduler.weightedPool(coverageStrategy: .signatureMatch),
     parallelism: Int = 1,
     filePath: StaticString = #filePath,
     function: StaticString = #function,
@@ -291,7 +290,7 @@ func fuzzWithMaxIterations<each Input: Codable & Sendable>(
             seeds: seeds,
             duration: .seconds(10),
             persistence: persistence,
-            coverageStrategy: coverageStrategy,
+            scheduler: scheduler,
             parallelism: parallelism,
             filePath: filePath,
             function: function,

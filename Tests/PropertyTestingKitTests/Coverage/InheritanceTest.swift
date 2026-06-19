@@ -351,7 +351,7 @@ struct InheritanceTest {
             maxIterations: 100,
             seeds: [(1,), (2,), (3,)],
             persistence: .ephemeral,
-            coverageStrategy: .newEdge
+            scheduler: MutationScheduler.weightedPool(coverageStrategy: .newEdge)
         ) { (input: Int) in
             await withTaskGroup(of: Void.self) { group in
                 group.addTask {

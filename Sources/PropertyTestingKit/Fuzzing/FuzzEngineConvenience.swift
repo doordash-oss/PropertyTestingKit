@@ -22,22 +22,19 @@ import FuzzCore
 import Dependencies
 
 extension FuzzEngine {
-    /// Non-scheduled convenience initializer with the default coverage strategy
-    /// (`.pathTrie`) and scheduler (`.weightedPool()`), and a no-op
-    /// schedule-bytes extractor.
+    /// Non-scheduled convenience initializer with the default scheduler
+    /// (`.weightedPool()`, edge coverage via `.pathTrie`) and a no-op
+    /// schedule-bytes extractor. The scheduler vends its own instrumentation
+    /// providers, so coverage is no longer a separate knob here.
     convenience init(
         mutators: repeat Mutator<each Input>,
         config: FuzzEngineConfig = FuzzEngineConfig(),
-        coverageStrategy: CoverageStrategy = .pathTrie,
         scheduler: any SchedulerFactory = MutationScheduler.weightedPool()
     ) {
         self.init(
             mutators: repeat each mutators,
             config: config,
-            makeInstrumentationProviders: {
-                @Dependency(\.coverageCounters) var client
-                return [CoverageProvider(evaluator: coverageStrategy.makeEvaluator(), client: client)]
-            },
+            makeInstrumentationProviders: { scheduler.makeProviders() },
             schedulerFactory: scheduler,
             scheduleBytesExtractor: { _ in nil }
         )

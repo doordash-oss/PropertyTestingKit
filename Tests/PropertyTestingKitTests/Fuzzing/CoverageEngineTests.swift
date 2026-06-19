@@ -369,7 +369,7 @@ struct CoverageEngineTests {
         _ = try await fuzzWithMaxIterations(
             maxIterations: 8,
             persistence: .ephemeral,
-            coverageStrategy: strategy,
+            scheduler: MutationScheduler.weightedPool(coverageStrategy: strategy),
             parallelism: 4
         ) { (_: Int) in }
 

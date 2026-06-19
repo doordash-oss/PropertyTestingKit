@@ -35,7 +35,7 @@ struct CustomCoverageStrategyTests {
             maxIterations: 20,
             seeds: [1, 2, 3],
             persistence: .ephemeral,
-            coverageStrategy: everything
+            scheduler: MutationScheduler.weightedPool(coverageStrategy: everything)
         ) { (_: Int) in }
 
         #expect(!result.corpus.entries.isEmpty, "Custom strategy should have added corpus entries")
@@ -49,7 +49,7 @@ struct CustomCoverageStrategyTests {
             maxIterations: 20,
             seeds: [1, 2, 3],
             persistence: .ephemeral,
-            coverageStrategy: nothing
+            scheduler: MutationScheduler.weightedPool(coverageStrategy: nothing)
         ) { (_: Int) in }
 
         #expect(result.corpus.entries.isEmpty, "Rejecting strategy should add nothing to the corpus")

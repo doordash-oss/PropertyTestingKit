@@ -179,8 +179,7 @@ struct FlattenedScheduleTests {
                     using: Mutator<Int>(seeds: [1, 2, 3], mutate: { v, _ in v &+ 1 }),
                     duration: .milliseconds(200),
                     persistence: .ephemeral,
-                    coverageStrategy: custom,
-                    scheduler: MutationScheduler.weightedPool(admission: .everyDiscovery),
+                    scheduler: MutationScheduler.weightedPool(admission: .everyDiscovery, coverageStrategy: custom),
                     scheduleFuzzing: true
                 ) { (_: Int) in }
             }

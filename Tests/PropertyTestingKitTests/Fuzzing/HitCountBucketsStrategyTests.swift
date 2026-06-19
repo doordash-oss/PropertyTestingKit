@@ -218,7 +218,7 @@ struct HitCountBucketsStrategyTests {
         let result = try await fuzzWithMaxIterations(
             maxIterations: 50,
             persistence: .ephemeral,
-            coverageStrategy: .hitCountBuckets,
+            scheduler: MutationScheduler.weightedPool(coverageStrategy: .hitCountBuckets),
             parallelism: 2
         ) { (input: Int) in
             // Input-dependent loop so hit counts actually vary across inputs.

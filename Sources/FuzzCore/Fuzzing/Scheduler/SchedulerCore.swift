@@ -105,4 +105,16 @@ public protocol SchedulerFactory: Sendable {
     func makeScheduler<each Input: Codable & Sendable>(
         mutators: repeat Mutator<each Input>
     ) -> AnyScheduler<repeat each Input>
+
+    /// The instrumentation providers this scheduler's signals need, built fresh
+    /// per engine. The signal travels WITH the scheduler: a coverage scheduler
+    /// vends a coverage provider, a cmp scheduler a cmp provider, a pool-less or
+    /// blackbox scheduler none. The engine installs only the providers whose key
+    /// some scheduler's `requiredProbes` names, so over-vending is harmless.
+    /// Default: no providers (the scheduler reads no instrumentation signal).
+    func makeProviders() -> [any InstrumentationProvider]
+}
+
+public extension SchedulerFactory {
+    func makeProviders() -> [any InstrumentationProvider] { [] }
 }

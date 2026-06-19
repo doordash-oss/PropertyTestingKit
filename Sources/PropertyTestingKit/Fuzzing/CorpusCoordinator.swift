@@ -86,7 +86,6 @@ func runFuzz<each Input: Codable & Sendable>(
     parallelism: Int,
     duration: Duration,
     verbose: Bool,
-    coverageStrategy: CoverageStrategy,
     scheduler: any SchedulerFactory,
     projectPath: String?,
     sourceFileID: String,
@@ -122,7 +121,6 @@ func runFuzz<each Input: Codable & Sendable>(
                 mutators: mutators,
                 verbose: verbose,
                 config: makeConfig(),
-                coverageStrategy: .alwaysInteresting,
                 scheduleBytesExtractor: scheduleBytesExtractor,
                 plugins: { [] },
                 test: test
@@ -136,7 +134,6 @@ func runFuzz<each Input: Codable & Sendable>(
             verbose: verbose,
             persist: true,
             config: makeConfig(),
-            coverageStrategy: coverageStrategy,
             scheduler: scheduler,
             scheduleBytesExtractor: scheduleBytesExtractor,
             makeHandlers: makeHandlers,
@@ -158,7 +155,6 @@ func runFuzz<each Input: Codable & Sendable>(
             verbose: verbose,
             persist: true,
             config: makeConfig(),
-            coverageStrategy: coverageStrategy,
             scheduler: scheduler,
             scheduleBytesExtractor: scheduleBytesExtractor,
             makeHandlers: makeHandlers,
@@ -182,7 +178,6 @@ func runFuzz<each Input: Codable & Sendable>(
             verbose: verbose,
             persist: true,
             config: makeConfig(),
-            coverageStrategy: coverageStrategy,
             scheduler: scheduler,
             scheduleBytesExtractor: scheduleBytesExtractor,
             makeHandlers: makeHandlers,
@@ -199,7 +194,6 @@ func runFuzz<each Input: Codable & Sendable>(
             verbose: verbose,
             persist: false,
             config: makeConfig(),
-            coverageStrategy: coverageStrategy,
             scheduler: scheduler,
             scheduleBytesExtractor: scheduleBytesExtractor,
             makeHandlers: makeHandlers,
@@ -253,7 +247,6 @@ func runReplay<each Input: Codable & Sendable>(
         mutators: mutators,
         verbose: verbose,
         config: config,
-        coverageStrategy: .alwaysInteresting,
         plugins: plugins,
         test: test
     )
@@ -275,7 +268,6 @@ private func replayRegression<each Input: Codable & Sendable>(
     mutators: (repeat Mutator<each Input>),
     verbose: Bool,
     config: FuzzEngineConfig,
-    coverageStrategy: CoverageStrategy,
     scheduleBytesExtractor: @escaping @Sendable ((repeat each Input)) -> [UInt8]? = { _ in nil },
     plugins: @escaping @Sendable () -> [AnalysisPlugin<repeat each Input>],
     test: @escaping @Sendable ((repeat each Input)) async throws -> Void
@@ -290,7 +282,10 @@ private func replayRegression<each Input: Codable & Sendable>(
         parallelism: 1,
         verbose: verbose,
         config: config,
-        coverageStrategy: coverageStrategy,
+        // Replay measures coverage with `.alwaysInteresting` so the campaign-end
+        // union sees every replayed input; the pool itself is unused (the seeded
+        // queue drains and the run stops). Coverage rides the scheduler now.
+        scheduler: MutationScheduler.weightedPool(coverageStrategy: .alwaysInteresting),
         scheduleBytesExtractor: scheduleBytesExtractor,
         makeProcessor: {
             let lifted = (plugins() + [AnalysisPlugin<repeat each Input>.stopWhenQueueEmpty()])
@@ -322,7 +317,6 @@ private func fuzzCampaign<each Input: Codable & Sendable>(
     verbose: Bool,
     persist: Bool,
     config: FuzzEngineConfig,
-    coverageStrategy: CoverageStrategy,
     scheduler: any SchedulerFactory,
     scheduleBytesExtractor: @escaping @Sendable ((repeat each Input)) -> [UInt8]? = { _ in nil },
     makeHandlers: @escaping @Sendable () -> [FuzzPlugin<repeat each Input>],
@@ -345,7 +339,6 @@ private func fuzzCampaign<each Input: Codable & Sendable>(
         parallelism: max(1, parallelism),
         verbose: verbose,
         config: config,
-        coverageStrategy: coverageStrategy,
         scheduler: scheduler,
         scheduleBytesExtractor: scheduleBytesExtractor,
         makeProcessor: {
@@ -392,7 +385,6 @@ private func runEngines<each Input: Codable & Sendable>(
     parallelism: Int,
     verbose: Bool,
     config: FuzzEngineConfig,
-    coverageStrategy: CoverageStrategy,
     scheduler: any SchedulerFactory = MutationScheduler.weightedPool(),
     scheduleBytesExtractor: @escaping @Sendable ((repeat each Input)) -> [UInt8]? = { _ in nil },
     makeProcessor: @escaping @Sendable () -> PluginProcessor<repeat each Input>,
@@ -419,10 +411,12 @@ private func runEngines<each Input: Codable & Sendable>(
                 let engine = FuzzEngine<repeat each Input>(
                     mutators: repeat each mutators,
                     config: config,
-                    makeInstrumentationProviders: {
-                        @Dependency(\.coverageCounters) var client
-                        return [CoverageProvider(evaluator: coverageStrategy.makeEvaluator(), client: client)]
-                    },
+                    // The scheduler vends its own instrumentation providers — the
+                    // engine names no signal, and coverage is no longer hardcoded
+                    // here. The engine installs only providers matching the
+                    // scheduler's requiredProbes, so a pool-less or cmp-only
+                    // scheduler pays for nothing it didn't ask for.
+                    makeInstrumentationProviders: { scheduler.makeProviders() },
                     schedulerFactory: scheduler,
                     scheduleBytesExtractor: scheduleBytesExtractor
                 )

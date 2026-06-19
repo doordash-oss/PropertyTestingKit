@@ -88,7 +88,7 @@ struct FuzzEngineTests {
         let result = await fuzzEngineWithMaxIterations(
             maxIterations: 100,
             config: config,
-            coverageStrategy: .alwaysInteresting,
+            scheduler: MutationScheduler.weightedPool(coverageStrategy: .alwaysInteresting),
             additionalSeeds: [0, 1, -1, 42]
         ) { (_: Int) in }
 
@@ -109,7 +109,7 @@ struct FuzzEngineTests {
         let result = await fuzzEngineWithMaxIterations(
             maxIterations: 100,
             config: config,
-            coverageStrategy: .alwaysInteresting,
+            scheduler: MutationScheduler.weightedPool(coverageStrategy: .alwaysInteresting),
             additionalSeeds: [0, 1, 42, -1]
         ) { (input: Int) in
             if input == 42 {
@@ -131,7 +131,7 @@ struct FuzzEngineTests {
         let result = await fuzzEngineWithMaxIterations(
             maxIterations: 100,
             config: config,
-            coverageStrategy: .alwaysInteresting,
+            scheduler: MutationScheduler.weightedPool(coverageStrategy: .alwaysInteresting),
             additionalSeeds: [0, 1, -1, 42]
         ) { (_: Int) in }
 
@@ -151,7 +151,7 @@ struct FuzzEngineTests {
         let result = await fuzzEngineWithMaxIterations(
             maxIterations: 100,
             config: config,
-            coverageStrategy: .alwaysInteresting,
+            scheduler: MutationScheduler.weightedPool(coverageStrategy: .alwaysInteresting),
             additionalSeeds: [0, 10, 20, 1, 2]
         ) { (input: Int) in
             if input % 10 == 0 {
@@ -170,7 +170,7 @@ struct FuzzEngineTests {
         } operation: {
             await fuzzEngineWithMaxIterations(
                 maxIterations: 50,
-                coverageStrategy: .alwaysInteresting
+                scheduler: MutationScheduler.weightedPool(coverageStrategy: .alwaysInteresting)
             ) { (_: Int) in }
         }
 
@@ -228,7 +228,7 @@ struct FuzzEngineTests {
         let result = await fuzzEngineWithMaxIterations(
             maxIterations: 50,
             config: config,
-            coverageStrategy: .alwaysInteresting
+            scheduler: MutationScheduler.weightedPool(coverageStrategy: .alwaysInteresting)
         ) { (_: Int) in }
 
         #expect(result.corpus.count >= 1, "Should have corpus entries")
@@ -239,7 +239,7 @@ struct FuzzEngineTests {
     func testEmptyFuzzArray() async {
         let result = await fuzzEngineWithMaxIterations(
             maxIterations: 20,
-            coverageStrategy: .alwaysInteresting
+            scheduler: MutationScheduler.weightedPool(coverageStrategy: .alwaysInteresting)
         ) { (_: EmptyFuzzable) in }
 
         // With empty seeds, no seeds are processed and iterations skip via guard
@@ -252,7 +252,7 @@ struct FuzzEngineTests {
     func testEmptyMutationsArray() async {
         let result = await fuzzEngineWithMaxIterations(
             maxIterations: 20,
-            coverageStrategy: .alwaysInteresting
+            scheduler: MutationScheduler.weightedPool(coverageStrategy: .alwaysInteresting)
         ) { (_: EmptyMutationsFuzzable) in }
 
         // With one seed value, corpus gets one entry, then mutations fail
@@ -424,7 +424,7 @@ struct FuzzEngineTests {
             return await fuzzEngineWithMaxIterations(
                 maxIterations: 100,
                 config: config,
-                coverageStrategy: .pathTrie,
+                scheduler: MutationScheduler.weightedPool(coverageStrategy: .pathTrie),
                 additionalSeeds: [0, 1, -1, 100, -100, Int.max, Int.min]
             ) { (input: Int) in
                 // Exercise different code paths based on input

@@ -342,6 +342,9 @@ struct WeightedPoolFactory: SchedulerFactory {
     let makePolicies: @Sendable () -> [any PoolPlugin]
     let generationRatio: Double
     let capacity: Int?
+    /// The edge-coverage signal this pool culls over. The scheduler vends its own
+    /// provider (coverage is no longer hardcoded by the batteries).
+    let coverageStrategy: CoverageStrategy
 
     func makeScheduler<each Input: Codable & Sendable>(
         mutators: repeat Mutator<each Input>
@@ -362,5 +365,13 @@ struct WeightedPoolFactory: SchedulerFactory {
             next: { core.next() },
             observe: { input, context, source in core.observe(input, context, source: source) }
         )
+    }
+}
+
+extension WeightedPoolFactory {
+    /// Vend the edge-coverage provider this pool's signal needs, fresh per engine.
+    func makeProviders() -> [any InstrumentationProvider] {
+        @Dependency(\.coverageCounters) var client
+        return [CoverageProvider(evaluator: coverageStrategy.makeEvaluator(), client: client)]
     }
 }
