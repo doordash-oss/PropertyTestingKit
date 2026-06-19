@@ -224,6 +224,16 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
                     let input: (repeat each Input)
                     let parentID: Int?
                     let source: SchedulerSource
+                    // Suppress coverage dispatch while PRODUCING the input: the
+                    // scheduler's generate/mutate runs instrumented SUT code
+                    // (e.g. a type-directed generator calling getTyp), but that
+                    // is not the property under test and is reset away below —
+                    // dispatching and recording it wasted ~25% of the process
+                    // (Finding 41p). Straight-line synchronous (no await → no
+                    // thread hop), cleared before resetCoverage so the test is
+                    // always measured. Per-thread, so concurrent engines never
+                    // suppress each other.
+                    sancov_set_dispatch_suppressed(true)
                     if !pendingInputs.isEmpty {
                         assert(
                             pendingParents.count == pendingInputs.count,
@@ -254,6 +264,9 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
                         }
                     }
                     let currentScheduleBytes: [UInt8]? = scheduleBytesExtractor(input)
+                    // Done producing — re-enable dispatch so the test below is
+                    // measured (must precede every probe's reset and the test).
+                    sancov_set_dispatch_suppressed(false)
 
                     // Inputs still queued after taking this one. A plugin can use
                     // `queueCount == 0` to detect that the queue has drained — e.g. to

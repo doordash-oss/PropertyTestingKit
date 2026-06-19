@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-import FuzzCore
-
 //  The per-engine bundle a coverage strategy is built from.
 //
 
@@ -38,8 +36,19 @@ public struct CoverageEngine: Sendable {
     /// on first hits (loop immunity, like `.pathTrie`) get it for free.
     let onEdge: (@Sendable (_ edge: UInt32, _ isFirstHit: Bool) -> Void)?
 
+    /// Called for every instrumented comparison that routes to this engine's
+    /// measurement context: the comparison site's PC, both operands, and the
+    /// operand width in bytes. This is the trace-cmp / value-profile channel —
+    /// it gives a gradient (e.g. `popcount(arg1 ^ arg2)` as an input nears a
+    /// boundary) that edge coverage is blind to. Independent of `onEdge`; a
+    /// strategy may use both. Because Swift instruments its own runtime
+    /// comparisons, a strategy MUST key on `pc`. `nil` (the default) leaves the
+    /// cmp channel dormant (no per-comparison overhead).
+    let onCompare: (@Sendable (_ pc: UInt, _ arg1: UInt64, _ arg2: UInt64, _ size: UInt32) -> Void)?
+
     /// Called when the engine's coverage resets between iterations, so
-    /// per-iteration state starts each run clean.
+    /// per-iteration state starts each run clean. Routed to the engine's edge
+    /// observer when one is attached, otherwise to its comparison observer.
     let onReset: (@Sendable () -> Void)?
 
     /// The judgement half: decides per iteration whether the run's coverage
@@ -52,24 +61,33 @@ public struct CoverageEngine: Sendable {
     let decide: CoverageDecision
 
     /// The strategy's culling vocabulary for the LAST accepted decision —
-    /// the features the mutation pool's ledger accounts ownership over. The
-    /// only built-in that publishes one is `.pathTrie(gramLength:)` (sliding
-    /// k-grams of the ordered first-hit path); called only after `decide`
-    /// returns `true`, inside the same gated window. `nil` (the default for
-    /// every other strategy, including the default `.pathTrie` and
-    /// `.hitCountBuckets`) means the pool falls back to the covered edge
-    /// indices.
+    /// the features the mutation pool's ledger accounts ownership over
+    /// (`.pathTrie`: sliding k-grams of the ordered first-hit path;
+    /// `.hitCountBuckets`: (edge, bucket) pairs). Called only after `decide`
+    /// returns `true`, inside the same gated window. `nil` (the default)
+    /// means the pool falls back to the covered edge indices.
     let features: (@Sendable () -> [UInt64])?
+
+    /// The per-comparison-site distances of the LAST accepted decision: site
+    /// `pc` → the lowest `|arg1 - arg2|` the run drove it to. The vocabulary
+    /// `PoolAdmission.boundaryDistanceOwnership` culls over. Called only after
+    /// `decide` returns `true`, inside the same gated window as `features`.
+    /// `nil` (the default) means the run publishes no boundary distances.
+    let boundaryDistances: (@Sendable () -> [UInt64: UInt64])?
 
     public init(
         onEdge: (@Sendable (UInt32, Bool) -> Void)? = nil,
+        onCompare: (@Sendable (UInt, UInt64, UInt64, UInt32) -> Void)? = nil,
         onReset: (@Sendable () -> Void)? = nil,
         features: (@Sendable () -> [UInt64])? = nil,
+        boundaryDistances: (@Sendable () -> [UInt64: UInt64])? = nil,
         _ decide: @escaping CoverageDecision
     ) {
         self.onEdge = onEdge
+        self.onCompare = onCompare
         self.onReset = onReset
         self.features = features
+        self.boundaryDistances = boundaryDistances
         self.decide = decide
     }
 }

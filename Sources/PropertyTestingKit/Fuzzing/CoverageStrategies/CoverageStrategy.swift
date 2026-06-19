@@ -112,13 +112,29 @@ extension CoverageStrategy {
     func makeEvaluator() -> CoverageEvaluator {
         let engine = makeEngine()
         // No hooks → nothing to attach: a cleared recorder field already
-        // means "default recording".
-        let setup: CoverageStrategySetup? = (engine.onEdge != nil || engine.onReset != nil)
+        // means "default recording". An edge observer carries onReset when one
+        // is attached; otherwise a lone comparison observer carries it (a bare
+        // onReset with no measurement hook still rides an edge observer, the
+        // historical behavior).
+        let attachEdge = engine.onEdge != nil || (engine.onReset != nil && engine.onCompare == nil)
+        let attachCompare = engine.onCompare != nil
+        let setup: CoverageStrategySetup? = (attachEdge || attachCompare)
             ? { context in
-                SanCovCounters.attachObserver(
-                    EdgeObserver(onEdge: engine.onEdge ?? { _, _ in }, onReset: engine.onReset),
-                    to: context
-                )
+                if attachEdge {
+                    SanCovCounters.attachObserver(
+                        EdgeObserver(onEdge: engine.onEdge ?? { _, _ in }, onReset: engine.onReset),
+                        to: context
+                    )
+                }
+                if let onCompare = engine.onCompare {
+                    // The edge observer already owns onReset when one was
+                    // attached; route it to the comparison observer only when
+                    // it is the sole observer.
+                    SanCovCounters.attachComparisonObserver(
+                        ComparisonObserver(onCompare: onCompare, onReset: attachEdge ? nil : engine.onReset),
+                        to: context
+                    )
+                }
             }
             : nil
         return CoverageEvaluator(setup: setup, evaluate: { context, coverageClient in
@@ -139,6 +155,8 @@ extension CoverageStrategy {
             // The vocabulary is collected inside the same gated window as the
             // decision — its closure reads the same engine state.
             let features: [UInt64]? = interesting ? engine.features.map { $0() } : nil
+            let boundaryDistances: [UInt64: UInt64]? =
+                interesting ? engine.boundaryDistances.map { $0() } : nil
             if gated { sancov_observer_exit() }
             guard interesting else {
                 return nil
@@ -151,7 +169,9 @@ extension CoverageStrategy {
             guard let sparse = coverage.materialized() else {
                 return nil
             }
-            return CoverageAcceptance(sparse: sparse, features: features)
+            return CoverageAcceptance(
+                sparse: sparse, features: features,
+                boundaryDistances: boundaryDistances)
         })
     }
 }
@@ -165,6 +185,19 @@ struct CoverageAcceptance {
     /// strategy has no vocabulary of its own (the pool falls back to the
     /// covered edge indices).
     let features: [UInt64]?
+    /// The run's per-comparison-site distances (`pc` → lowest `|arg1 - arg2|`),
+    /// `nil` when the strategy publishes none.
+    let boundaryDistances: [UInt64: UInt64]?
+
+    init(
+        sparse: SparseCoverage,
+        features: [UInt64]?,
+        boundaryDistances: [UInt64: UInt64]? = nil
+    ) {
+        self.sparse = sparse
+        self.features = features
+        self.boundaryDistances = boundaryDistances
+    }
 }
 
 /// A coverage-interestingness decision: pure judgement over the edges the run

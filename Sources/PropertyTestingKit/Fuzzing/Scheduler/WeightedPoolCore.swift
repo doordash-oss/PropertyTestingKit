@@ -35,7 +35,7 @@ import FuzzCore
 final class WeightedPoolCore<each Input: Codable & Sendable> {
     private let mutators: (repeat Mutator<each Input>)
     private let packArity: Int
-    private let judge: (_ features: [UInt64], _ size: Int) -> PoolAdmission.Verdict
+    private let judge: (_ outcome: PoolIterationOutcome) -> PoolAdmission.Verdict
     private let policies: [any PoolPlugin]
     /// Probability each step generates a fresh input rather than mutating a pool
     /// entry: `1` is all generation, `0` is all mutation. Clamped to `0...1`.
@@ -50,6 +50,11 @@ final class WeightedPoolCore<each Input: Codable & Sendable> {
     private var pool: [(repeat each Input)] = []
     /// Draw weight per entry ID (index == ID; grows append-only).
     private var weights: [Double] = []
+    /// Per-entry mutation depth override (entry ID → chain length). Absent
+    /// entries mutate at depth 1; set by a policy via `.setMutationDepth`
+    /// (e.g. `AdaptiveDepthPolicy`). `next()` chains the mutator this many
+    /// times for a `.mutate(id)` directive.
+    private var entryDepth: [Int: Int] = [:]
     /// Real (mutator-measured) input size per entry ID at admission, `nil`
     /// when unmeasured (index == ID, grows append-only). Deliberately NOT
     /// the covered-edge fallback: more covered edges mark a *better* entry,
@@ -104,12 +109,17 @@ final class WeightedPoolCore<each Input: Codable & Sendable> {
             )
         case .mutate(let id):
             lastProduced = .pool(parent: id)
-            return ScheduledInput(
-                input: mutateOneRandomPosition(
-                    pool[id], inputSize: packArity, rng: &rng, mutators: repeat each mutators
-                ),
-                poolParentID: id
-            )
+            // Chain the mutator `entryDepth[id]` times (default 1). A depth
+            // policy raises it to push deeper into a productive entry's
+            // neighbourhood; each step mutates one random position of the
+            // prior result.
+            var mutant = pool[id]
+            for _ in 0..<mutationDepth(for: id) {
+                mutant = mutateOneRandomPosition(
+                    mutant, inputSize: packArity, rng: &rng, mutators: repeat each mutators
+                )
+            }
+            return ScheduledInput(input: mutant, poolParentID: id)
         }
     }
 
@@ -128,6 +138,9 @@ final class WeightedPoolCore<each Input: Codable & Sendable> {
         // The strategy's culling vocabulary (k-grams, edge-buckets) when it
         // publishes one; the pool widens covered edges otherwise.
         let features = verdict?.features
+        // Per-comparison-site distances when the strategy publishes them
+        // (`.boundaryDistance`); consumed only by `boundaryDistanceOwnership`.
+        let boundaryDistances = verdict?.boundaryDistances
         // The engine only knows external (seed/queue) vs scheduled; for a
         // scheduler-produced input we reconstruct the finer source from the
         // lineage of our own most recent `next()`.
@@ -138,8 +151,13 @@ final class WeightedPoolCore<each Input: Codable & Sendable> {
         let size = coverage != nil ? measuredSize(of: repeat each input) : nil
         // Returns the new entry id on admission; the engine wants the signature
         // to persist, which is exactly the coverage that was admitted.
-        return admit(input, coverage: coverage, features: features, inputSize: size,
-                     poolSource: poolSource) != nil ? coverage : nil
+        let admittedID = admit(input, coverage: coverage, features: features, inputSize: size,
+                               boundaryDistances: boundaryDistances, poolSource: poolSource)
+        // Diagnostic: report what we drew, at what depth, and whether it stuck.
+        let depth: Int
+        if case let .pool(parent) = poolSource { depth = mutationDepth(for: parent) } else { depth = 1 }
+        SchedulerProbe.observe?(poolSource, depth, admittedID != nil)
+        return admittedID != nil ? coverage : nil
     }
 
     /// Sum of the mutator-measured sizes across the input pack — the pool's
@@ -167,18 +185,21 @@ final class WeightedPoolCore<each Input: Codable & Sendable> {
         coverage: SparseCoverage?,
         features: [UInt64]? = nil,
         inputSize: Int? = nil,
+        boundaryDistances: [UInt64: UInt64]? = nil,
         poolSource: PoolIterationSource
     ) -> Int? {
         let outcome = PoolIterationOutcome(
-            source: poolSource, newCoverage: coverage, features: features, inputSize: inputSize)
+            source: poolSource, newCoverage: coverage, features: features,
+            inputSize: inputSize, boundaryDistances: boundaryDistances)
         notifyAndApply(.iteration(outcome))
 
         guard let coverage else { return nil }
         // The pool accounts ownership in the strategy's vocabulary when it
         // publishes one, and widened covered edges otherwise — `resolvedFeatures`
-        // is the single definition of that fallback.
+        // is the single definition of that fallback. The admission judge reads
+        // the whole outcome (so `boundaryDistanceOwnership` can see distances).
         let resolved = outcome.resolvedFeatures
-        let verdict = judge(resolved, inputSize ?? coverage.count)
+        let verdict = judge(outcome)
         guard verdict.admit else { return nil }
 
         // The admission's own displacements (REDUCE losers) go through the
@@ -199,8 +220,18 @@ final class WeightedPoolCore<each Input: Codable & Sendable> {
         livePos[id] = live.count
         live.append(id)
         liveWeightTotal += 1.0
-        notifyAndApply(.inserted(id: id, coverage: coverage, features: resolved))
+        let parent: Int?
+        if case let .pool(p) = poolSource { parent = p } else { parent = nil }
+        notifyAndApply(.inserted(id: id, coverage: coverage, features: resolved,
+                                 parent: parent, claimed: verdict.claimed))
         return id
+    }
+
+    /// How many times `next()` chains the mutator for a `.mutate(id)` directive
+    /// on this entry. Defaults to 1 (single-step) until a policy raises it via
+    /// `.setMutationDepth`.
+    func mutationDepth(for id: Int) -> Int {
+        entryDepth[id] ?? 1
     }
 
     /// The resident a capacity overflow removes: lowest weight, then the
@@ -268,6 +299,7 @@ final class WeightedPoolCore<each Input: Codable & Sendable> {
                 live[pos] = lastID
                 live.removeLast()
                 if lastID != id { livePos[lastID] = pos }
+                entryDepth[id] = nil
                 // Re-broadcast so every policy stays consistent with
                 // membership it didn't change itself. Terminates: each ID can
                 // be removed at most once (the guard above).
@@ -280,6 +312,9 @@ final class WeightedPoolCore<each Input: Codable & Sendable> {
                     if livePos[id] != nil { liveWeightTotal += clamped - weights[id] }
                     weights[id] = clamped
                 }
+
+            case let .setMutationDepth(id, depth):
+                entryDepth[id] = max(1, depth)
             }
         }
     }

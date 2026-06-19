@@ -101,7 +101,7 @@ public final class EntropicWeightPolicy: PoolPlugin {
             }
             return []
 
-        case let .inserted(id, _, features):
+        case let .inserted(id, _, features, _, _):
             var yield: [UInt64: Int] = [:]
             for feature in features {
                 yield[feature] = 1

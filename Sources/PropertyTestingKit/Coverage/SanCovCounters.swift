@@ -117,20 +117,42 @@ enum SanCovCounters {
         sancov_get_counter_count()
     }
 
-    /// Filter out compiler-generated edges (outlined destroyers, lazy witness
-    /// table accessors, lazy metadata accessors, etc.) by setting their guard
-    /// values to `UINT32_MAX`. This makes the hot-path check
-    /// `*guard < g_guard_count` fail for these edges — zero overhead.
-    ///
-    /// Call once before any measurement begins. Safe to call multiple times
-    /// (subsequent calls re-scan, which is harmless).
-    static func applyEdgeFilter() {
-        sancov_apply_edge_filter()
+    // Compiler-generated edges are now filtered at COMPILE time by the
+    // TagCompilerGenerated LLVM pass plugin (see Package.swift); the former
+    // runtime `applyEdgeFilter()` / `filteredEdgeCount` API has been removed.
+
+    // MARK: - Global ever-covered bitmap (diagnostic)
+    //
+    // A process-global accumulator that records every allowed edge fire,
+    // independent of any measurement context, the engine's per-iteration reset,
+    // and corpus banking. Use it to answer "did a whole run reach full SUT
+    // coverage?" — a question the per-context snapshot (reset each iteration)
+    // and the corpus union (admitted inputs only) cannot answer. Disabled by
+    // default; enable once, reset between runs, read the count/indices.
+
+    /// Enable global ever-covered recording (idempotent).
+    static func enableGlobalEverCovered() {
+        sancov_enable_global_ever_covered()
     }
 
-    /// The number of edges disabled by `applyEdgeFilter()`.
-    static var filteredEdgeCount: Int {
-        sancov_get_filtered_count()
+    /// Clear the global ever-covered bitmap (keeps recording enabled).
+    static func resetGlobalEverCovered() {
+        sancov_reset_global_ever_covered()
+    }
+
+    /// Number of distinct edges fired since the last reset (0 if disabled).
+    static var globalEverCoveredCount: Int {
+        sancov_global_ever_covered_count()
+    }
+
+    /// Sorted indices of every edge fired since the last reset.
+    static func snapshotGlobalEverCovered() -> [UInt32] {
+        var count = 0
+        guard let ptr = sancov_snapshot_global_ever_covered(&count), count > 0 else {
+            return []
+        }
+        defer { free(ptr) }
+        return Array(UnsafeBufferPointer(start: ptr, count: count))
     }
 }
 

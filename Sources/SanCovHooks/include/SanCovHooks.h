@@ -115,6 +115,18 @@ typedef struct {
     /// with recorder_data when the context is finally freed, or immediately
     /// when the recorder is replaced/cleared via sancov_context_set_recorder.
     uintptr_t recorder_release_bits;
+    /// Optional per-context COMPARISON recorder (the trace-cmp half), with its
+    /// own data + reset/release hooks. Fully independent of the edge recorder
+    /// above: the comparisonCoverage strategy attaches BOTH (edge union + value
+    /// profile). Stored as pointer bits like edge_recorder_bits; 0 → none
+    /// attached (sancov_dispatch_cmp is then a no-op). Set via
+    /// sancov_context_set_cmp_recorder; read per comparison by
+    /// sancov_dispatch_cmp after routing resolves this context. Same
+    /// release/acquire ordering and co-ownership contract as the edge slot.
+    uintptr_t cmp_recorder_bits;
+    void* cmp_recorder_data;
+    uintptr_t cmp_recorder_reset_bits;
+    uintptr_t cmp_recorder_release_bits;
 } SanCovMeasurementContext;
 
 /// Begin a measurement context for coverage isolation.
@@ -172,6 +184,15 @@ void* sancov_context_get_recorder_for_testing(SanCovMeasurementContext* context)
 static inline void* sancov_context_get_recorder_data(SanCovMeasurementContext* context) {
     if (context == NULL) return NULL;
     return __atomic_load_n(&context->recorder_data, __ATOMIC_ACQUIRE);
+}
+
+/// Read the context's opaque CMP recorder data (acquire). Used by Swift
+/// comparison-observer recorders once per comparison to reach their box; NULL
+/// when nothing is attached. static inline for the hot path (single acquire
+/// load), mirroring sancov_context_get_recorder_data.
+static inline void* sancov_context_get_cmp_recorder_data(SanCovMeasurementContext* context) {
+    if (context == NULL) return NULL;
+    return __atomic_load_n(&context->cmp_recorder_data, __ATOMIC_ACQUIRE);
 }
 
 /// The coverage-inheritance handle for a measurement context: a 64-bit value
@@ -278,11 +299,74 @@ void sancov_observer_exit(void);
 /// tests can drive the real dispatch path with synthetic guards.
 void sancov_dispatch_edge(uint32_t* guard);
 
+// MARK: - Comparison Recorders (trace-cmp / value profile)
+//
+// The trace-cmp half of the substrate. SanitizerCoverage's
+// __sanitizer_cov_trace_cmp{1,2,4,8} / const_cmp / switch hooks deliver the
+// OPERANDS of each instrumented comparison (plus the comparison's PC). That
+// gives a gradient — e.g. popcount(arg1 ^ arg2) shrinking as an input nears a
+// boundary `i < c` — that pure edge coverage is blind to (every near-miss
+// traces the same edge). A comparison recorder is the cmp analog of an edge
+// recorder: it lives on the measurement context, and sancov_dispatch_cmp
+// routes each comparison to it. Independent of the edge recorder slot.
+
+/// A comparison recorder. Receives the comparison site's PC, both operands
+/// (zero-extended to 64 bits), the operand width in bytes (1/2/4/8), and the
+/// already-resolved measurement context (so recorders never re-run routing).
+typedef void (*SanCovCmpRecorder)(uintptr_t pc, uint64_t arg1, uint64_t arg2,
+                                  uint32_t size_bytes, SanCovMeasurementContext* context);
+
+/// Set (or with NULL clear) the context's COMPARISON recorder, its opaque
+/// state, and the state's lifecycle hooks. Same ownership/ordering contract as
+/// sancov_context_set_recorder (the edge slot), applied to the independent cmp
+/// slot: data/hooks stored before the fn (release ordering); `release` (when
+/// non-NULL) transfers ownership of `data` to the context and is called exactly
+/// once — at the context's last reference drop, on replacement, or immediately
+/// on a clear-with-payload; `reset` (when non-NULL) is called by
+/// sancov_reset_coverage with `data`.
+void sancov_context_set_cmp_recorder(
+    SanCovMeasurementContext* context,
+    SanCovCmpRecorder recorder,
+    void* data,
+    SanCovRecorderDataFn reset,
+    SanCovRecorderDataFn release);
+
+/// TESTING ONLY: read the context's cmp recorder as raw pointer bits (NULL when
+/// none attached).
+void* sancov_context_get_cmp_recorder_for_testing(SanCovMeasurementContext* context);
+
+/// TESTING ONLY: the process-global count of measurement contexts that currently
+/// have a comparison recorder attached. sancov_dispatch_cmp early-returns (before
+/// the per-thread TLS fetch) when this is 0 — so edge-only strategies don't pay
+/// the cmp-routing cost for comparisons no one consumes.
+int sancov_cmp_recorder_count_for_testing(void);
+
 /// TESTING ONLY: drive the manual task-local inheritance chain walk directly.
 /// Lets a test feed a fake task whose chain head is an unmapped (freed/poisoned)
 /// pointer — the task #49 teardown shape — and assert it returns 0 rather than
 /// dereferencing the bad pointer and crashing.
 uint64_t sancov_manual_walk_for_inherited_context_for_testing(const void* task);
+
+/// Generation guard: when set true on a thread, sancov_dispatch_edge and
+/// sancov_dispatch_cmp early-return on that thread (after the drop filter / TLS
+/// fetch). The fuzz loop sets it around input generation/mutation — which runs
+/// instrumented SUT code (e.g. a type-directed generator calling getTyp) whose
+/// coverage is NOT the property under test and is reset away before the test —
+/// so dispatching+recording it is pure waste. Per-thread, so concurrent engines
+/// (one mutating, one testing) never suppress each other. Cheap: the flag lives
+/// in the TLS block the dispatch already fetches. Must be cleared before the
+/// property runs or its coverage is lost.
+void sancov_set_dispatch_suppressed(bool suppressed);
+
+/// Read the current thread's generation-guard flag (testing/diagnostic).
+bool sancov_dispatch_is_suppressed(void);
+
+/// Resolve routing for the current task/thread and run the context's cmp
+/// recorder with the given comparison operands. No-op when no cmp recorder is
+/// attached or no measurement is active. Called by the __sanitizer_cov_trace_cmp*
+/// hooks for every instrumented comparison; public so tests can drive the real
+/// dispatch path with synthetic operands.
+void sancov_dispatch_cmp(uintptr_t pc, uint64_t arg1, uint64_t arg2, uint32_t size_bytes);
 
 // MARK: - Schedule-Aware Coverage
 //
@@ -312,40 +396,6 @@ const void* sancov_capture_key_by_value(const void* task, uintptr_t expected_val
 /// strategies using covered_indices see the correct data.
 void sancov_rebuild_covered_indices_from_map(SanCovMeasurementContext* context);
 
-// MARK: - Edge Filter
-//
-// Filters compiler-generated edges (outlined destroyers, lazy witness table
-// accessors, lazy metadata accessors) by setting their guard value to
-// SANCOV_GUARD_SKIP. Because the hot-path check is `*guard < g_guard_count`,
-// guards set to UINT32_MAX will always fail that check — zero overhead.
-
-/// Sentinel value that disables a guard. Any guard set to this value will be
-/// skipped by the edge recording hooks (since UINT32_MAX >= g_guard_count).
-#define SANCOV_GUARD_SKIP UINT32_MAX
-
-/// Scan all guard PCs and disable compiler-generated edges.
-/// Call once before fuzzing begins — both __sanitizer_cov_trace_pc_guard_init
-/// and __sanitizer_cov_pcs_init will have completed by then.
-///
-/// Filtered symbol patterns (matched on raw mangled dli_sname):
-///   - WOh suffix — outlined destroy
-///   - WOc suffix — outlined copy
-///   - WOd suffix — outlined consume
-///   - WOr suffix — outlined release
-///   - Wl  suffix — lazy protocol witness table accessor
-///   - WL  suffix — lazy metadata accessor
-///   - Ma  suffix — type metadata accessor (generic)
-///   - __swift_ prefix — runtime internals
-///   - _swift_  prefix — runtime internals
-void sancov_apply_edge_filter(void);
-
-/// Return the number of edges disabled by sancov_apply_edge_filter().
-size_t sancov_get_filtered_count(void);
-
-/// Check if a symbol name matches compiler-generated patterns.
-/// Exposed for testing the filter logic.
-bool sancov_is_compiler_generated(const char* sname);
-
 /// Diagnostic: per-routing-path counters maintained inside get_current_coverage_map.
 /// Pure atomic loads — safe to call from anywhere; concurrent reads are consistent
 /// even if increments are interleaved.
@@ -372,6 +422,29 @@ typedef struct {
 
 /// Read the current routing-path counters into `out`. Safe to call concurrently.
 void sancov_read_route_counters(SanCovRouteCounters* out);
+
+// MARK: - Process-global "ever-covered" edge bitmap (diagnostic)
+//
+// An accumulator that records EVERY allowed edge fire, independent of the
+// per-task measurement context (which the fuzz loop resets each iteration) and
+// the corpus (which only banks admitted inputs). It answers "what is the true
+// union of edges executed across an entire run?". Disabled by default (zero
+// hot-path cost beyond one predicted-not-taken load); enable once for a
+// diagnostic run, reset between runs, then read the count/indices.
+
+/// Allocate the bitmap and start recording. Idempotent; safe under races.
+void sancov_enable_global_ever_covered(void);
+
+/// Clear all recorded bits (keeps recording enabled). For use between runs in a
+/// single-threaded diagnostic harness.
+void sancov_reset_global_ever_covered(void);
+
+/// Number of distinct edges ever fired since the last reset (0 if disabled).
+size_t sancov_global_ever_covered_count(void);
+
+/// Allocate and return the sorted indices of every edge ever fired since the
+/// last reset; sets `*out_count`. Caller must free() the result. NULL if none.
+uint32_t* sancov_snapshot_global_ever_covered(size_t* out_count);
 
 #ifdef __cplusplus
 }

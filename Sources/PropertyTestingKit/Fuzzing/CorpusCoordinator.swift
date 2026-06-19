@@ -402,16 +402,9 @@ private func runEngines<each Input: Codable & Sendable>(
         print("[Fuzz] Running \(parallelism) fuzz engine\(parallelism == 1 ? "" : "s")")
     }
 
-    // Filter compiler-generated edges before any measurement (one-time global
-    // scan). This is coverage-specific, so it lives in the coordinator/batteries
-    // layer rather than the signal-agnostic engine.
-    SanCovCounters.applyEdgeFilter()
-    if verbose {
-        let filtered = SanCovCounters.filteredEdgeCount
-        if filtered > 0 {
-            print("[Fuzz] Filtered \(filtered) compiler-generated edges")
-        }
-    }
+    // Compiler-generated edges are filtered at COMPILE time by the
+    // TagCompilerGenerated LLVM pass plugin (see Package.swift), so there is no
+    // longer a runtime filter scan to run here.
 
     var distributedSeeds: [[(repeat each Input)]] = Array(repeating: [], count: parallelism)
     for (index, seed) in seeds.enumerated() {

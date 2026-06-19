@@ -2,6 +2,35 @@
 // The swift-tools-version declares the minimum version of Swift required to build this package.
 
 import PackageDescription
+import Foundation
+
+// Compile-time coverage instrumentation is provided by two out-of-tree LLVM
+// pass plugins (sources in LLVMPasses/, built by scripts/build-llvm-plugins.sh
+// into .build/llvm-plugins). They replace the former runtime filters that used
+// to live in SanCovHooks.c:
+//   TagCompilerGenerated — tags compiler-generated functions NoSanitizeCoverage
+//                          so SanCov emits no edge/cmp guards for them (compile-
+//                          time edge filter; async resume/yield edges stay out,
+//                          preserving pathTrie determinism). MUST load first so
+//                          EmitCmpTrace also skips those functions.
+//   EmitCmpTrace         — emits __sanitizer_cov_trace_cmp* ourselves for the
+//                          comparisons we want, dropping trap-guard cmps
+//                          (bounds/overflow/precondition). Used INSTEAD of
+//                          `-sanitize-coverage=…,trace-cmp`.
+// build-local-toolchain.sh builds the plugins before compiling; for a raw
+// `swift build` run scripts/build-llvm-plugins.sh first.
+let pluginDir = URL(fileURLWithPath: #filePath)
+    .deletingLastPathComponent()
+    .appendingPathComponent(".build/llvm-plugins")
+func loadPass(_ name: String) -> [String] {
+    ["-Xfrontend", "-load-pass-plugin=\(pluginDir.appendingPathComponent(name + ".dylib").path)"]
+}
+
+// Edge coverage with the compile-time compiler-generated filter.
+let edgeCoverage: [String] =
+    ["-sanitize=undefined", "-sanitize-coverage=edge,pc-table"] + loadPass("TagCompilerGenerated")
+// Edge + comparison coverage (the cmp channel via EmitCmpTrace, not stock trace-cmp).
+let edgeCmpCoverage: [String] = edgeCoverage + loadPass("EmitCmpTrace")
 
 let package = Package(
     name: "PropertyTestingKit",
@@ -132,10 +161,10 @@ let package = Package(
             ],
             exclude: ["Corpus", "Fuzzing/Corpus"],
             swiftSettings: [
-                .unsafeFlags([
-                    "-sanitize=undefined",
-                    "-sanitize-coverage=edge,pc-table"
-                ])
+                // edge + comparison coverage; the cmp channel (via EmitCmpTrace)
+                // lets the input-to-state integration tests exercise the real cmp
+                // hooks (FuzzInputToStateTests fuzzes a magic-value SUT in-target).
+                .unsafeFlags(edgeCmpCoverage)
             ]
         ),
         .testTarget(
@@ -148,10 +177,7 @@ let package = Package(
                 .product(name: "Clocks", package: "swift-clocks"),
             ],
             swiftSettings: [
-                .unsafeFlags([
-                    "-sanitize=undefined",
-                    "-sanitize-coverage=edge,pc-table"
-                ])
+                .unsafeFlags(edgeCoverage)
             ]
         ),
         .testTarget(
@@ -163,10 +189,7 @@ let package = Package(
             ],
             exclude: ["Corpus"],
             swiftSettings: [
-                .unsafeFlags([
-                    "-sanitize=undefined",
-                    "-sanitize-coverage=edge,pc-table"
-                ])
+                .unsafeFlags(edgeCoverage)
             ]
         ),
         .testTarget(
@@ -177,10 +200,7 @@ let package = Package(
             ],
             swiftSettings: [
                 // Enable sanitizer coverage for thread-local coverage testing
-                .unsafeFlags([
-                    "-sanitize=undefined",
-                    "-sanitize-coverage=edge,pc-table"
-                ])
+                .unsafeFlags(edgeCoverage)
             ]
         ),
         // TSanTests: Race condition tests that exercise concurrent code paths.
@@ -205,10 +225,7 @@ let package = Package(
             ],
             swiftSettings: [
                 .swiftLanguageMode(.v5),
-                .unsafeFlags([
-                    "-sanitize=undefined",
-                    "-sanitize-coverage=edge,pc-table"
-                ])
+                .unsafeFlags(edgeCoverage)
             ]
         ),
         .testTarget(
@@ -238,11 +255,7 @@ package.targets += [
         swiftSettings: [
             // Enable sanitizer coverage so we have realistic counter counts
             // Note: sanitize-coverage requires a sanitizer to be enabled
-            .unsafeFlags([
-                "-O",
-                "-sanitize=undefined",
-                "-sanitize-coverage=edge,pc-table"
-            ])
+            .unsafeFlags(["-O"] + edgeCoverage)
         ],
         linkerSettings: [
             // Add rpath for Testing.framework from Xcode (needed for local toolchain)
@@ -263,11 +276,11 @@ package.targets += [
         ],
         path: "Benchmarks/ProfiledBenchmark",
         swiftSettings: [
-            .unsafeFlags([
-                "-O",
-                "-sanitize=undefined",
-                "-sanitize-coverage=edge,pc-table"
-            ])
+            // edge + comparison coverage (cmp channel via EmitCmpTrace) so the
+            // benchmark closure's integer comparisons dispatch through
+            // sancov_dispatch_cmp → the boundary observer, exercising the
+            // per-comparison hot path under profiling.
+            .unsafeFlags(["-O"] + edgeCmpCoverage)
         ],
         linkerSettings: [
             // Add rpath for Testing.framework from Xcode (needed for local toolchain)
