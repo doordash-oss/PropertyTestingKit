@@ -113,13 +113,13 @@ final class WeightedPoolCore<each Input: Codable & Sendable> {
             // policy raises it to push deeper into a productive entry's
             // neighbourhood; each step mutates one random position of the
             // prior result.
-            var mutant = pool[id]
-            for _ in 0..<mutationDepth(for: id) {
-                mutant = mutateOneRandomPosition(
-                    mutant, inputSize: packArity, rng: &rng, mutators: repeat each mutators
-                )
-            }
-            return ScheduledInput(input: mutant, poolParentID: id)
+            return ScheduledInput(
+                input: chainMutate(
+                    pool[id], depth: mutationDepth(for: id), inputSize: packArity,
+                    rng: &rng, mutators: repeat each mutators
+                ),
+                poolParentID: id
+            )
         }
     }
 

@@ -112,7 +112,8 @@ struct InterleavingContrastTest {
         // may be mid-`ScheduleController.run`, so the check races. This test's
         // validity does not depend on it: with no SessionTag/TLS set, this
         // task's enqueues pass through `original` regardless of installation.
-        SanCovCounters.applyEdgeFilter()
+        // (Compiler-generated edges are filtered at compile time by the
+        // TagCompilerGenerated pass plugin — no runtime filter call needed.)
 
         // The PRODUCTION .pathTrie engine: setup attaches its trie observer,
         // evaluate judges the run's path (and resets the trie for the next).
@@ -150,8 +151,6 @@ struct InterleavingContrastTest {
     @Test("CONTROLLED: schedule bytes pin the ordering to 1 unique path",
           .timeLimit(.minutes(1)))
     func controlledHasOnePath() async throws {
-        SanCovCounters.applyEdgeFilter()
-
         try await ScheduleController.run(scheduleBytes: Self.scheduleBytes) {
             await Self.body()
         }

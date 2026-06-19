@@ -59,3 +59,23 @@ public func mutateOneRandomPosition<each Input>(
     let position = inputSize == 1 ? 0 : Int.random(in: 0..<inputSize, using: &rng)
     return mutateOnePosition(input, position: position, rng: &rng, mutators: repeat each mutators)
 }
+
+/// Chain the single-position mutator `depth` times (depth-d = mutate∘…∘mutate),
+/// each step picking its own random position. `depth` clamps to ≥ 1, so a chain
+/// is never a no-op pass-through; depth 1 reproduces the single-step mutant. A
+/// depth policy (e.g. `AdaptiveDepthPolicy`) raises depth to push deeper into a
+/// productive entry's neighbourhood; the weighted pool calls this in `next()`.
+public func chainMutate<each Input>(
+    _ input: (repeat each Input),
+    depth: Int,
+    inputSize: Int,
+    rng: inout FastRNG,
+    mutators: repeat Mutator<each Input>
+) -> (repeat each Input) {
+    var current = input
+    for _ in 0..<max(1, depth) {
+        current = mutateOneRandomPosition(
+            current, inputSize: inputSize, rng: &rng, mutators: repeat each mutators)
+    }
+    return current
+}

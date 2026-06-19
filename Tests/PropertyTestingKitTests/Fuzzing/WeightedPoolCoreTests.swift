@@ -92,6 +92,23 @@ struct WeightedPoolCoreTests {
         }
     }
 
+    @Test("The default weightedPool admission culls: a same-feature, non-smaller redundant input is rejected")
+    func defaultAdmissionCulls() {
+        // The library default is feature ownership (REDUCE), not everyDiscovery:
+        // an unbounded pool of every accepted input bloats with large entries
+        // whose features a smaller input already owns. Build the core straight
+        // from the public default so this pins the default itself.
+        // `.featureOwnership` is `MutationScheduler.weightedPool(admission:)`'s
+        // documented default, so this pins the default admission's behavior.
+        let core = WeightedPoolHarness.core(admission: .featureOwnership)
+        // First input owns edges {1,2} (size 2) — admitted as id 0.
+        #expect(WeightedPoolHarness.accept(core, edges: [1, 2]) == 0)
+        // Second input: SAME features, SAME size — owns nothing new, steals
+        // nothing (ties don't steal), so it is rejected (nil). Under the old
+        // everyDiscovery default it would have been admitted as id 1.
+        #expect(WeightedPoolHarness.accept(core, edges: [1, 2]) == nil)
+    }
+
     @Test("Admitted entries get sequential stable IDs")
     func sequentialIDs() {
         let core = makeCore()
@@ -103,13 +120,13 @@ struct WeightedPoolCoreTests {
     @Test("Children hear inserted events and their remove actions empty the pool")
     func childRemoveOnInsert() {
         let child = ScriptedPolicy { event in
-            if case let .inserted(id, _, _) = event { return [.remove(id: id)] }
+            if case let .inserted(id, _, _, _, _) = event { return [.remove(id: id)] }
             return []
         }
         let core = makeCore(policies: [child], generationRatio: 0)
 
         #expect(accept(core, edges: [1, 2]) == 0)
-        #expect(child.events.contains { if case .inserted(0, _, _) = $0 { return true }; return false })
+        #expect(child.events.contains { if case .inserted(0, _, _, _, _) = $0 { return true }; return false })
         // The child evicted the only entry: the pool is empty, so generate.
         #expect(core.decide() == .generate)
     }
@@ -117,7 +134,7 @@ struct WeightedPoolCoreTests {
     @Test("Children hear removed notifications for other policies' evictions")
     func childHearsRemovals() {
         let remover = ScriptedPolicy { event in
-            if case .inserted(1, _, _) = event { return [.remove(id: 0)] }
+            if case .inserted(1, _, _, _, _) = event { return [.remove(id: 0)] }
             return []
         }
         let listener = ScriptedPolicy()
@@ -131,7 +148,7 @@ struct WeightedPoolCoreTests {
     @Test("Zero-weighted entries are never drawn")
     func zeroWeightNeverDrawn() {
         let child = ScriptedPolicy { event in
-            if case .inserted(0, _, _) = event { return [.setWeight(id: 0, 0.0)] }
+            if case .inserted(0, _, _, _, _) = event { return [.setWeight(id: 0, 0.0)] }
             return []
         }
         // Ratio 0: every decision with a non-empty pool is a weighted draw, so
