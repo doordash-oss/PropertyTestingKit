@@ -1,0 +1,58 @@
+// Copyright 2026 DoorDash, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+import Foundation
+import Dependencies
+
+/// A single entry in the corpus: an input the scheduler chose to retain.
+public struct CorpusEntry<each Input: Codable & Sendable>: Sendable, Codable {
+    /// The test input.
+    public let input: (repeat each Input)
+
+    /// Schedule bytes controlling task interleaving order.
+    /// Non-nil when schedule fuzzing is enabled.
+    public let scheduleBytes: [UInt8]?
+
+    public init(
+        input: repeat each Input,
+        scheduleBytes: [UInt8]? = nil
+    ) {
+        self.input = (repeat each input)
+        self.scheduleBytes = scheduleBytes
+    }
+
+    /// Encodes as a plain JSON array of the input pack: `[42]` or `["hello", 3]`.
+    ///
+    /// During schedule fuzzing the schedule bytes are input element 0 of the
+    /// extended pack (`([UInt8], repeat each Input)`), so they persist as an
+    /// ordinary input element here. They are deliberately NOT also written from the
+    /// `scheduleBytes` field: that field is a user-facing convenience populated by
+    /// `peelScheduleResult` from element 0, and writing it again would store the
+    /// schedule twice and corrupt the entry on reload.
+    public func encode(to encoder: any Encoder) throws {
+        var container = encoder.unkeyedContainer()
+        (repeat try container.encode(each input))
+    }
+
+    /// Decodes from a plain JSON array of inputs.
+    ///
+    /// Schedule bytes, when present, are input element 0 and decode as a normal
+    /// input element; the `scheduleBytes` field is not persisted (it is repopulated
+    /// from element 0 by `peelScheduleResult`).
+    public init(from decoder: any Decoder) throws {
+        var container = try decoder.unkeyedContainer()
+        self.scheduleBytes = nil
+        self.input = (repeat try container.decode((each Input).self))
+    }
+}

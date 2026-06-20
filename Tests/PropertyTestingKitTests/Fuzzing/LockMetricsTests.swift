@@ -19,6 +19,7 @@
 
 import Testing
 import Foundation
+@testable import FuzzCore
 @testable import PropertyTestingKit
 
 @Suite("Lock metrics")

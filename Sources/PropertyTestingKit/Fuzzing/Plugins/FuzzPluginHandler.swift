@@ -15,6 +15,7 @@
 //  Closure-based plugins that eliminate protocol witness overhead.
 //
 
+import FuzzCore
 import Testing
 import Foundation
 import Dependencies
@@ -112,7 +113,7 @@ extension FuzzPlugin {
             handleSync: { event in
                 switch event {
                 case let .iteration(context):
-                    if context.newCoverage != nil {
+                    if context.executionContext[CoverageProbeKey.self]?.coverage != nil {
                         return [.selectForMutation(.init(input: context.input, scheduleBytes: context.scheduleBytes))]
                     }
                     return []
@@ -163,15 +164,12 @@ extension FuzzPlugin {
                         print(message)
                     }
 
-                    // Return actions: select for mutation, add to corpus, and record issue
+                    // Return actions: bias mutation toward the bug's neighbourhood
+                    // and record the issue. The minimized input is NOT persisted to
+                    // the corpus — failure retention for regression is tracked
+                    // separately (corpus is now purely the scheduler's retained set).
                     return [
                         .selectForMutation(.init(input: minimized, scheduleBytes: context.scheduleBytes)),
-                        .submitToCorpus(.init(
-                            input: minimized,
-                            scheduleBytes: context.scheduleBytes,
-                            sparseCoverage: context.sparseCoverage,
-                            entryType: .failure
-                        )),
                         .recordIssue(.init(
                             comment: Comment(rawValue: message),
                             sourceLocation: context.sourceLocation
@@ -185,11 +183,6 @@ extension FuzzPlugin {
     }
 
 }
-
-// The bus-plugin schedulers (`corpusMutation`, Entropic `energyMutation`) are
-// gone: mutation scheduling is the `MutationScheduler` pool's job. The pure
-// Entropic scoring math below (`entropicWeightCombining` & co.) stays, pinned
-// by its characterization tests, for the pool's entropic weight advisor.
 
 // MARK: - Built-in Analysis Plugins
 //
@@ -266,7 +259,7 @@ extension AnalysisPlugin {
             handleSync: { event in
                 switch event {
                 case let .iteration(context):
-                    detector.record(discoveredNewCoverage: context.newCoverage != nil)
+                    detector.record(discoveredNewCoverage: context.executionContext[CoverageProbeKey.self]?.coverage != nil)
 
                     if detector.hasPlateaued {
                         return [.stop(FuzzPluginAction<repeat each Input>.StopAction(reason: .custom("coverage_plateaued")))]
@@ -315,7 +308,7 @@ extension AnalysisPlugin {
             handleSync: { event in
                 switch event {
                 case let .iteration(context):
-                    detector.record(discoveredNewCoverage: context.newCoverage != nil)
+                    detector.record(discoveredNewCoverage: context.executionContext[CoverageProbeKey.self]?.coverage != nil)
 
                     if detector.hasPlateaued {
                         return [.stop(FuzzPluginAction<repeat each Input>.StopAction(reason: .custom("stads_plateau")))]
@@ -366,7 +359,7 @@ extension AnalysisPlugin {
             handleSync: { event in
                 switch event {
                 case let .iteration(context):
-                    detector.record(discoveredNewCoverage: context.newCoverage != nil)
+                    detector.record(discoveredNewCoverage: context.executionContext[CoverageProbeKey.self]?.coverage != nil)
 
                     if detector.hasPlateaued {
                         return [.stop(FuzzPluginAction<repeat each Input>.StopAction(reason: .custom("saturation_plateau")))]
@@ -400,9 +393,14 @@ extension AnalysisPlugin {
                     await SanCovCounters.startPreWarmingSourceLocations()
                     return []
                 case let .end(endContext):
+                    // The covered-edge union comes from the coverage probe's
+                    // campaign summary, read by key — the engine names no signal.
+                    let coveredIndices = Set(
+                        endContext.executionContext[CoverageProbeKey.self]?.coverage?.indices ?? []
+                    )
                     let coverageGapReport = await detector
                         .detect(
-                            from: endContext.totalCoveredIndices,
+                            from: coveredIndices,
                             projectPath: endContext.projectPath
                         )
 
@@ -632,8 +630,11 @@ func entropicYieldRarityTerms(
     return EntropicRarityTerms(energy: energy, sumIncidence: sumIncidence, coveredRare: coveredRare)
 }
 
-/// Compute an entry's rarity terms from the current global frequencies.
-/// Called at acceptance time (frequencies only change then), not per drain.
+/// FREQUENCY-based rarity terms (incidence = `globalFreq + 1`). This is the
+/// legacy reference form, NOT what the plugin ships: the drain hot path uses
+/// `entropicYieldRarityTerms` (observation-count incidence). Retained only as
+/// the spec oracle that the hand-computed `entropicWeight` vectors and the
+/// split/fused equivalence test pin against — it has no production caller.
 func entropicRarityTerms(
     features: [UInt64],
     globalFreqs: [UInt64: Int],
@@ -653,8 +654,13 @@ func entropicRarityTerms(
     return EntropicRarityTerms(energy: energy, sumIncidence: sumIncidence, coveredRare: coveredRare)
 }
 
-/// Combine cached rarity terms with the per-drain abundance term. O(1).
-/// Must agree exactly with `entropicWeight` (see the equivalence test).
+/// Combine cached rarity terms with the per-drain abundance term. O(1). This
+/// is the SHIPPED per-drain step: the plugin feeds it `entropicYieldRarityTerms`
+/// (yield-based) caches. The over-fuzz guard + abundance + normalization here
+/// match `entropicWeight`'s tail exactly (pinned by the equivalence test); only
+/// the rarity cache feeding it differs (yield- vs frequency-based incidence).
+/// The shipped composition is pinned directly by `repeatedRareObservationsBoost`
+/// and `shippedYieldWeightIsCharacterized`.
 func entropicWeightCombining(
     cache: EntropicRarityTerms,
     mutations: Int,
@@ -665,7 +671,9 @@ func entropicWeightCombining(
 ) -> Double {
     if corpusSize > 0, totalMutations > 0 {
         let avgMutations = totalMutations / corpusSize
-        if avgMutations > 0, mutations / maxMutationFactor > avgMutations {
+        // `maxMutationFactor` is a public parameter; clamp to >= 1 so a caller
+        // passing 0 cannot integer-divide-by-zero on this hot path.
+        if avgMutations > 0, mutations / max(1, maxMutationFactor) > avgMutations {
             return 0.0
         }
     }
@@ -690,9 +698,11 @@ func entropicWeightCombining(
 /// get proportionally more mutations. Returns 1.0 (uniform) when no rare
 /// features have been recorded yet.
 ///
-/// Reference (fused) form of `entropicRarityTerms` + `entropicWeightCombining`;
-/// the plugin's hot path uses the split form, and the equivalence test holds
-/// the two together.
+/// FREQUENCY-based reference (fused form of `entropicRarityTerms` +
+/// `entropicWeightCombining`). The plugin does NOT call this — its drain uses
+/// the yield-based split form (`entropicYieldRarityTerms` + the same combine).
+/// This exists as the spec oracle for the hand-computed weight vectors and the
+/// split/fused equivalence test; no production caller.
 func entropicWeight(
     features: [UInt64],
     mutations: Int,
@@ -706,7 +716,9 @@ func entropicWeight(
     // Over-fuzzing guard: zero out entries mutated far beyond the average.
     if corpusSize > 0, totalMutations > 0 {
         let avgMutations = totalMutations / corpusSize
-        if avgMutations > 0, mutations / maxMutationFactor > avgMutations {
+        // `maxMutationFactor` is a public parameter; clamp to >= 1 so a caller
+        // passing 0 cannot integer-divide-by-zero on this hot path.
+        if avgMutations > 0, mutations / max(1, maxMutationFactor) > avgMutations {
             return 0.0
         }
     }
@@ -740,6 +752,10 @@ func entropicWeight(
 
 /// Weighted-random index selection. Falls back to uniform random if all weights are zero.
 func weightedRandomIndex(weights: [Double], using rng: inout some RandomNumberGenerator) -> Int {
+    // No entries to choose from: -1 signals "no selection" rather than trapping
+    // on `Int.random(in: 0..<0)`. Callers (the drain) guard `!entries.isEmpty`,
+    // so this is defensive against the now-internal-visibility misuse.
+    guard !weights.isEmpty else { return -1 }
     let total = weights.reduce(0.0, +)
     guard total > 0 else {
         return Int.random(in: 0..<weights.count, using: &rng)

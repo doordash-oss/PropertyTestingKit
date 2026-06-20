@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+import FuzzCore
+
 //  Hit-count buckets strategy: a new per-edge hit-count bucket is interesting
 //  (AFL++/libFuzzer counter features).
 //
@@ -27,12 +29,6 @@ extension CoverageStrategy {
     /// Strictly finer than `.newEdge`: a first-ever edge is always a new
     /// bucket, and a known edge re-hit a bucket-crossing number of times is
     /// novel too.
-    ///
-    /// Publishes no culling vocabulary — the pool culls on covered edges. An
-    /// (edge, bucket) vocabulary is this strategy's own acceptance criterion,
-    /// and a culling vocabulary equal to acceptance is a tautology: every
-    /// accepted input owns a fresh feature, so culling silently turns off
-    /// (measured: fsub regressed exactly to its unculled solve rate).
     public static var hitCountBuckets: CoverageStrategy {
         CoverageStrategy(makeEngine: { makeHitCountBucketsEngine() })
     }

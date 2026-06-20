@@ -15,6 +15,12 @@
 //  Public API for coverage-guided fuzz testing.
 //
 
+// Re-export the signal-agnostic engine layer so callers (and userspace
+// scheduler/probe modules) get the seam types — `Mutator`, `FuzzEngine`,
+// `SparseCoverage`, `AnyScheduler`/`SchedulerFactory`, the dependency clients,
+// etc. — by importing PropertyTestingKit alone. The module split is an
+// implementation detail; the public surface is "import PropertyTestingKit."
+@_exported import FuzzCore
 import Foundation
 import Testing
 import Dependencies
@@ -94,7 +100,6 @@ import Dependencies
 ///     or `.extend` (load corpus as seeds, then fuzz). To verify a corpus without
 ///     fuzzing, use `regress(...)` instead. Can be overridden suite-wide via the
 ///     `FUZZ_CORPUS_MODE` environment variable.
-///   - coverageStrategy: How an input is judged "interesting" (default: `.pathTrie`).
 ///     A strategy carries its own per-edge measurement (`onEdge` sees every
 ///     hit, with the first-hit bit) and judgement (`decide`); build a custom
 ///     `CoverageStrategy` for custom per-edge measurement — e.g. tallying
@@ -130,8 +135,7 @@ public func fuzz<each Input: Codable & Sendable>(
     seeds: [(repeat each Input)] = [],
     duration: Duration = .seconds(60),
     persistence: CorpusPersistence = .auto,
-    coverageStrategy: CoverageStrategy = .pathTrie,
-    scheduler: MutationScheduler = .weightedPool(),
+    scheduler: any SchedulerFactory = MutationScheduler.weightedPool(),
     scheduleFuzzing: Bool = false,
     parallelism: Int = ProcessInfo.processInfo.processorCount,
     plugins: @escaping @Sendable () -> [FuzzPlugin<repeat each Input>] = { [] },
@@ -145,7 +149,6 @@ public func fuzz<each Input: Codable & Sendable>(
         seeds: seeds,
         duration: duration,
         persistence: persistence,
-        coverageStrategy: coverageStrategy,
         scheduler: scheduler,
         scheduleFuzzing: scheduleFuzzing,
         parallelism: parallelism,
@@ -164,8 +167,7 @@ func fuzzInternal<each Input: Codable & Sendable>(
     seeds: [(repeat each Input)],
     duration: Duration,
     persistence: CorpusPersistence,
-    coverageStrategy: CoverageStrategy,
-    scheduler: MutationScheduler,
+    scheduler: any SchedulerFactory,
     scheduleFuzzing: Bool,
     parallelism: Int,
     plugins: @escaping @Sendable () -> [FuzzPlugin<repeat each Input>],
@@ -214,7 +216,6 @@ func fuzzInternal<each Input: Codable & Sendable>(
             persistence: persistence,
             duration: duration,
             verbose: verbose,
-            coverageStrategy: coverageStrategy,
             scheduler: scheduler,
             projectPath: projectPath(from: filePath),
             sourceFileID: testFilePath,
@@ -240,7 +241,6 @@ func fuzzInternal<each Input: Codable & Sendable>(
             parallelism: effectiveParallelism,
             duration: duration,
             verbose: verbose,
-            coverageStrategy: coverageStrategy,
             scheduler: scheduler,
             projectPath: projectPath(from: filePath),
             sourceFileID: testFilePath,
@@ -317,7 +317,6 @@ func regressInternal<each Input: Codable & Sendable>(
 ///   - persistence: How the on-disk corpus is treated (`.auto`/`.replace`/`.extend`).
 ///     To verify a corpus without fuzzing, use `regress(...)`. Can be overridden
 ///     suite-wide via `FUZZ_CORPUS_MODE`.
-///   - coverageStrategy: How an input is judged "interesting" (default: `.pathTrie`).
 ///     A strategy carries its own per-edge measurement (`onEdge` sees every
 ///     hit, with the first-hit bit) and judgement (`decide`); build a custom
 ///     `CoverageStrategy` for custom per-edge measurement — e.g. tallying
@@ -345,8 +344,7 @@ public func fuzz<each Input: MutatorProviding & Codable & Sendable>(
     seeds: [(repeat each Input)] = [],
     duration: Duration = .seconds(60),
     persistence: CorpusPersistence = .auto,
-    coverageStrategy: CoverageStrategy = .pathTrie,
-    scheduler: MutationScheduler = .weightedPool(),
+    scheduler: any SchedulerFactory = MutationScheduler.weightedPool(),
     scheduleFuzzing: Bool = false,
     parallelism: Int = ProcessInfo.processInfo.processorCount,
     plugins: @escaping @Sendable () -> [FuzzPlugin<repeat each Input>] = { [] },
@@ -360,7 +358,6 @@ public func fuzz<each Input: MutatorProviding & Codable & Sendable>(
         seeds: seeds,
         duration: duration,
         persistence: persistence,
-        coverageStrategy: coverageStrategy,
         scheduler: scheduler,
         scheduleFuzzing: scheduleFuzzing,
         parallelism: parallelism,
@@ -378,7 +375,7 @@ public func fuzz<each Input: MutatorProviding & Codable & Sendable>(
 ///
 /// Unlike `fuzz(...)`, this never explores: it runs exactly the inputs in the saved
 /// corpus and fails if any of them now trips the test. Because it only replays, it
-/// takes none of the fuzz-only knobs (`seeds`, `coverageStrategy`, `parallelism`,
+/// takes none of the fuzz-only knobs (`seeds`, `scheduler`, `parallelism`,
 /// mutators) — they would be meaningless here. Its plugins are
 /// `AnalysisPlugin`s, which can only emit `stop`/`recordIssue`, so a replay can never be
 /// handed a plugin that would mutate the run or the corpus. If no corpus exists, the run

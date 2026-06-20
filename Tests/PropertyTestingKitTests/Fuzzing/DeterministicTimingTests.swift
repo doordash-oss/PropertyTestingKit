@@ -21,6 +21,7 @@ import Clocks
 import Dependencies
 import FunctionSpy
 @testable import PropertyTestingKit
+@testable import FuzzCore
 
 /// Helper to create a mock CoverageCountersClient with coverage data.
 private func makeMockCoverageClient(

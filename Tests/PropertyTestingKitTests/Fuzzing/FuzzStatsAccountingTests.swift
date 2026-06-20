@@ -23,6 +23,22 @@ import Foundation
 @Suite("FuzzStats Accounting")
 struct FuzzStatsAccountingTests {
 
+    /// Stop a run once the bus has observed `count` iterations — deterministic
+    /// and load-independent, unlike a wall-clock budget (a busy CI core can run
+    /// zero iterations in 0.2s, which is what made the count-based tests flaky).
+    private func stopAfter(_ count: Int) -> FuzzPlugin<Int> {
+        let seen = SyncBox<Int>(0)
+        return FuzzPlugin<Int>(id: "iteration_counter", handleSync: { event in
+            switch event {
+            case .iteration:
+                seen.update { $0 += 1 }
+                return seen.value >= count
+                    ? [.stop(.init(reason: .custom("observed_enough")))]
+                    : []
+            }
+        })
+    }
+
     @Test("should_sum_seeds_mutations_generations_to_totalInputs")
     func accountingIdentityHolds() async throws {
         let result = try await fuzz(
@@ -43,52 +59,39 @@ struct FuzzStatsAccountingTests {
     @Test("should_count_all_mutator_seeds_as_seeds_run")
     func seedsRunMatchesMutatorSeedCount() async throws {
         // Int's default mutator ships 21 seed values; a single-element pack's
-        // seed list is exactly those. 0.2s of a trivial body runs thousands of
-        // iterations, so every seed is consumed.
+        // seed list is exactly those. Seeds are consumed before any scheduler
+        // production, so stopping after well more than 21 executed inputs runs
+        // every seed regardless of how fast the core is.
         let expectedSeeds = Int.defaultMutator.seeds.count
 
         let result = try await fuzz(
-            duration: .seconds(0.2),
+            duration: .seconds(60),
             persistence: .ephemeral,
-            parallelism: 1
+            parallelism: 1,
+            plugins: { [self.stopAfter(expectedSeeds * 5)] }
         ) { (_: Int) in }
 
-        // Seeds are consumed before any mutation/generation, so the count is
-        // exactly the seed list — UNLESS the engine was starved (cooperative
-        // pool saturated under the full parallel suite) and ran fewer total
-        // inputs than there are seeds. Bounding by totalInputs keeps the
-        // contract precise without flaking on starvation.
-        #expect(result.stats.seeds == min(expectedSeeds, result.stats.totalInputs),
-                "expected \(min(expectedSeeds, result.stats.totalInputs)) seed inputs run (min of \(expectedSeeds) seeds and \(result.stats.totalInputs) total), got \(result.stats.seeds)")
+        #expect(result.stats.seeds == expectedSeeds,
+                "expected \(expectedSeeds) seed inputs run, got \(result.stats.seeds)")
     }
 
     @Test("should_count_mutated_inputs_run_not_mutation_batches")
     func mutationsCountedInExecutedInputUnits() async throws {
-        let seedCount = Int.defaultMutator.seeds.count
+        // Run far past the 21 seeds so scheduler-produced inputs dominate. With
+        // generationRatio 0.1 (~90% mutation), mutations should outnumber
+        // generations among the post-seed inputs. Count-driven, not time-driven.
         let result = try await fuzz(
-            duration: .seconds(0.2),
+            duration: .seconds(60),
             persistence: .ephemeral,
-            parallelism: 1
+            parallelism: 1,
+            plugins: { [self.stopAfter(500)] }
         ) { (_: Int) in }
 
-        // A trivially-passing Int fuzz mutates constantly. If `mutations` were
-        // counting selection events (batches) it would be ~15x smaller than the
-        // executed-mutant count; the accounting identity in the first test pins
-        // the exact value — here we just require it to dominate generations,
-        // which is the signature of executed-input units.
-        //
-        // This only holds once the engine has run past the seed phase. Under a
-        // saturated cooperative pool (full parallel suite) it can be starved to
-        // fewer inputs than there are seeds, in which case mutations==0 is
-        // correct, not a regression — so we only assert dominance past seeds.
-        try withKnownIssue("engine may be starved below the seed phase under full-suite oversubscription", isIntermittent: true) {
-            #expect(result.stats.totalInputs > seedCount,
-                    "expected the engine to run past the \(seedCount)-seed phase, ran \(result.stats.totalInputs) total")
-        }
-        if result.stats.totalInputs > seedCount {
-            #expect(result.stats.mutations > result.stats.generations,
-                    "mutations(\(result.stats.mutations)) should dominate generations(\(result.stats.generations)) for a trivial body")
-        }
+        // If `mutations` counted selection events (batches) rather than executed
+        // mutant inputs it would be far smaller; requiring it to dominate
+        // generations is the signature of executed-input units.
+        #expect(result.stats.mutations > result.stats.generations,
+                "mutations(\(result.stats.mutations)) should dominate generations(\(result.stats.generations)) for a trivial body")
     }
 
     @Test("should_hold_accounting_identity_across_parallel_engines")

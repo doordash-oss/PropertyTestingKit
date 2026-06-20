@@ -127,6 +127,25 @@ struct StrategyFeatureTests {
         #expect(engine.features?() == PathGrams.features(of: [1, 2, 3, 4], gramLength: 3))
     }
 
+    @Test("A rejected (duplicate) path leaves no stale grams behind")
+    func rejectedPathClearsGrams() {
+        // The stash that carries grams from `decide` to `features` must not
+        // retain the PREVIOUS accepted iteration's grams when this iteration
+        // is rejected — otherwise a reader that consults `features` after a
+        // reject gets phantom features from an earlier path.
+        let engine = CoverageStrategy.pathTrie(gramLength: 2).makeEngine()
+        engine.onEdge?(1, true)
+        engine.onEdge?(2, true)
+        #expect(engine.decide(stubView()))
+        #expect(engine.features?() == PathGrams.features(of: [1, 2], gramLength: 2))
+
+        engine.onReset?()
+        engine.onEdge?(1, true)
+        engine.onEdge?(2, true)
+        #expect(!engine.decide(stubView()), "the duplicate path is rejected")
+        #expect(engine.features?() == [], "a rejected decide must not leave stale grams")
+    }
+
     @Test("Strategies without a vocabulary publish no features")
     func newEdgeEngineHasNoVocabulary() {
         #expect(CoverageStrategy.newEdge.makeEngine().features == nil)
@@ -183,23 +202,13 @@ struct StrategyFeatureTests {
 
     @Test("Feature-ownership admission judges on strategy features, not edges")
     func admissionUsesStrategyFeatures() {
-        let core = WeightedPoolCore(
-            admission: .featureOwnership, policies: [],
-            burstLength: 1, focusOnInsert: false)
+        let core = WeightedPoolHarness.core(admission: .featureOwnership)
 
         // Disjoint edge sets, identical feature: the second accept owns
         // nothing (ties don't steal) — only the vocabulary can explain a
         // rejection here.
-        let first = core.observe(PoolIterationOutcome(
-            source: .generated,
-            newCoverage: SparseCoverage(indices: [1]),
-            features: [100]))
-        #expect(first == 0)
-        let second = core.observe(PoolIterationOutcome(
-            source: .generated,
-            newCoverage: SparseCoverage(indices: [2]),
-            features: [100]))
-        #expect(second == nil)
+        #expect(WeightedPoolHarness.accept(core, edges: [1], features: [100]) == 0)
+        #expect(WeightedPoolHarness.accept(core, edges: [2], features: [100]) == nil)
     }
 
     @Test("Insertion notifications carry the resolved features")
@@ -214,17 +223,10 @@ struct StrategyFeatureTests {
             }
         }
         let capture = CapturePolicy()
-        let core = WeightedPoolCore(
-            admission: .everyDiscovery, policies: [capture],
-            burstLength: 1, focusOnInsert: false)
+        let core = WeightedPoolHarness.core(policies: [capture])
 
-        _ = core.observe(PoolIterationOutcome(
-            source: .generated,
-            newCoverage: SparseCoverage(indices: [1, 2]),
-            features: [42]))
-        _ = core.observe(PoolIterationOutcome(
-            source: .generated,
-            newCoverage: SparseCoverage(indices: [1, 2])))
+        _ = WeightedPoolHarness.accept(core, edges: [1, 2], features: [42])
+        _ = WeightedPoolHarness.accept(core, edges: [1, 2])
 
         #expect(capture.insertedFeatures == [[42], [1, 2]],
                 "explicit vocabulary first, widened-edge fallback second")

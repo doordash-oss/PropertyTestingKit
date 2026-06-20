@@ -19,6 +19,7 @@
 //  This enables parallel fuzzing without coverage contamination.
 //
 
+import FuzzCore
 import Foundation
 import os
 import SanCovHooks

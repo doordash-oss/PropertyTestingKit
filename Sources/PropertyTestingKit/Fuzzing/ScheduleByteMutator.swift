@@ -11,6 +11,8 @@
 /// - Byte replace: replace 1-2 bytes with random values
 /// - Arithmetic: increment/decrement a random byte
 /// - Block swap: swap two 2-4 byte blocks (reorders scheduling decisions)
+import FuzzCore
+
 enum ScheduleByteMutator {
     static let defaultLength = 64
 
@@ -54,27 +56,36 @@ enum ScheduleByteMutator {
             return arith
 
         default:
-            // Block swap: swap two small blocks to reorder scheduling decisions
-            guard bytes.count >= 4 else { return mutate(bytes, using: &rng) }
-            let blockSize = Int.random(in: 2...min(4, bytes.count / 2), using: &rng)
-            let maxStart = bytes.count - blockSize
-            // Re-roll BOTH endpoints until the blocks are non-overlapping. Only
-            // re-rolling `b` can spin forever (e.g. count == 4, blockSize == 2,
-            // a == 1 leaves no valid `b`), so vary `a` too and cap attempts.
-            var a = Int.random(in: 0...maxStart, using: &rng)
-            var b = Int.random(in: 0...maxStart, using: &rng)
-            var attempts = 0
-            while abs(a - b) < blockSize && attempts < 16 {
-                a = Int.random(in: 0...maxStart, using: &rng)
-                b = Int.random(in: 0...maxStart, using: &rng)
-                attempts += 1
+            // Block swap: swap two small blocks to reorder scheduling decisions.
+            // Falls back to a single byte replace when the array is too short or
+            // no non-overlapping block pair turns up — never recurses.
+            if bytes.count >= 4 {
+                let blockSize = Int.random(in: 2...min(4, bytes.count / 2), using: &rng)
+                let maxStart = bytes.count - blockSize
+                // Re-roll BOTH endpoints until the blocks are non-overlapping. Only
+                // re-rolling `b` can spin forever (e.g. count == 4, blockSize == 2,
+                // a == 1 leaves no valid `b`), so vary `a` too and cap attempts.
+                var a = Int.random(in: 0...maxStart, using: &rng)
+                var b = Int.random(in: 0...maxStart, using: &rng)
+                var attempts = 0
+                while abs(a - b) < blockSize && attempts < 16 {
+                    a = Int.random(in: 0...maxStart, using: &rng)
+                    b = Int.random(in: 0...maxStart, using: &rng)
+                    attempts += 1
+                }
+                if abs(a - b) >= blockSize {
+                    var blockSwap = bytes
+                    for i in 0..<blockSize {
+                        blockSwap.swapAt(a + i, b + i)
+                    }
+                    return blockSwap
+                }
             }
-            guard abs(a - b) >= blockSize else { return mutate(bytes, using: &rng) }
-            var blockSwap = bytes
-            for i in 0..<blockSize {
-                blockSwap.swapAt(a + i, b + i)
-            }
-            return blockSwap
+            // Fallback (short array, or no non-overlapping pair found): replace
+            // one random byte. Always applicable since `bytes` is non-empty.
+            var fallback = bytes
+            fallback[Int.random(in: 0..<bytes.count, using: &rng)] = UInt8.random(in: 0...255, using: &rng)
+            return fallback
         }
     }
 }

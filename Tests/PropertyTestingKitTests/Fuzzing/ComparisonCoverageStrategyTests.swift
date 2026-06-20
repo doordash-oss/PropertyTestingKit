@@ -33,19 +33,18 @@ struct ComparisonCoverageStrategyTests {
         teardown: () -> Void
     ) {
         let context = SanCovCounters.beginMeasurement()
-        let evaluator: CoverageEvaluator<Int> = CoverageStrategy.comparisonCoverage.makeEvaluator()
+        let evaluator = CoverageStrategy.comparisonCoverage.makeEvaluator()
         evaluator.setup?(context)
         let client = CoverageCountersClient.liveValue
-        let corpus = Corpus<Int>()
 
-        let fire: (UInt, UInt64, UInt64, [UInt32], Int) -> Bool = { pc, a, b, edges, input in
+        let fire: (UInt, UInt64, UInt64, [UInt32], Int) -> Bool = { pc, a, b, edges, _ in
             SanCovCounters.resetCoverage(context)
             for e in edges {
                 var g = e
                 sancov_dispatch_edge(&g)
             }
             sancov_dispatch_cmp(pc, a, b, 8)
-            return evaluator.evaluate(input, nil, context, client, corpus) != nil
+            return evaluator.evaluate(context, client) != nil
         }
         return (fire, { SanCovCounters.endMeasurement(context) })
     }
@@ -102,7 +101,7 @@ struct ComparisonCoverageStrategyTests {
         let context = SanCovCounters.beginMeasurement()
         defer { SanCovCounters.endMeasurement(context) }
 
-        let evaluator: CoverageEvaluator<Int> = CoverageStrategy.comparisonCoverage.makeEvaluator()
+        let evaluator = CoverageStrategy.comparisonCoverage.makeEvaluator()
         evaluator.setup?(context)
 
         #expect(sancov_context_get_recorder_for_testing(context.rawContext) == nil,

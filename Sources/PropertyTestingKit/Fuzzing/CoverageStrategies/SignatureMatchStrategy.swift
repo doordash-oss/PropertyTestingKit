@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+import FuzzCore
+
 //  Signature match strategy: exact edge-set matching via inverted index.
 //
 

@@ -45,13 +45,10 @@ struct AdaptiveDepthChainTests {
     @Test("core stores per-entry mutation depth; defaults to 1")
     func coreStoresDepth() {
         let setter = Setter { id in [.setMutationDepth(id: id, depth: 3)] }
-        let core = WeightedPoolCore(
-            admission: .everyDiscovery, policies: [setter],
-            burstLength: 16, focusOnInsert: true)
+        let core = WeightedPoolHarness.core(admission: .everyDiscovery, policies: [setter])
 
         #expect(core.mutationDepth(for: 0) == 1)   // default before any entry exists
-        _ = core.observe(PoolIterationOutcome(
-            source: .generated, newCoverage: SparseCoverage(indices: [1])))
+        _ = WeightedPoolHarness.accept(core, edges: [1])
         #expect(core.mutationDepth(for: 0) == 3)   // policy escalated it
     }
 }

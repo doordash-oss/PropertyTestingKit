@@ -16,6 +16,7 @@ import Testing
 import Foundation
 import Dependencies
 @testable import PropertyTestingKit
+@testable import FuzzCore
 
 @Suite("TestCaseShrinker")
 struct TestCaseShrinkerTests {

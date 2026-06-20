@@ -28,41 +28,67 @@
 /// child `PoolPlugin`s advise weights and evictions, and the owner alone
 /// decides what runs next. Children hear every membership change the owner
 /// applies, whoever caused it.
-public struct MutationScheduler: Sendable {
-    /// Builds a fresh per-engine pool core (fresh policy instances, fresh
-    /// state) — same per-engine isolation pattern as `CoverageStrategy`.
-    let makeCore: @Sendable () -> WeightedPoolCore
+import FuzzCore
 
-    /// A weighted mutation pool with focus/burst draws.
+/// Decides which inputs the engine mutates and when it generates fresh ones, and
+/// vends the instrumentation the chosen signal needs. Wrapping `any SchedulerFactory`
+/// (rather than being one concrete factory) keeps the design's promise that a
+/// `MutationScheduler` can vend any scheduler, not only the weighted pool. The
+/// signal config (coverage strategy, and in future a cmp source) travels with the
+/// scheduler the caller picks rather than being a top-level `fuzz()` knob.
+public struct MutationScheduler: SchedulerFactory {
+    let factory: any SchedulerFactory
+
+    /// Build this engine's scheduler at its input pack by forwarding to the
+    /// wrapped factory (one fresh scheduler per engine).
+    public func makeScheduler<each Input: Codable & Sendable>(
+        mutators: repeat Mutator<each Input>
+    ) -> AnyScheduler<repeat each Input> {
+        factory.makeScheduler(mutators: repeat each mutators)
+    }
+
+    /// Forward the wrapped factory's instrumentation providers (e.g. the weighted
+    /// pool's coverage provider).
+    public func makeProviders() -> [any InstrumentationProvider] {
+        factory.makeProviders()
+    }
+
+    /// A weighted mutation pool that picks generation vs mutation by a ratio.
     ///
     /// - Parameters:
     ///   - admission: Which strategy-accepted inputs join the pool.
     ///   - policies: Child policies built fresh per engine (weight advisors,
     ///     culling, …). Order matters: actions apply in array order.
-    ///   - burstLength: Consecutive mutants per focus before the pool owes
-    ///     one fresh generation and redraws.
-    ///   - focusOnInsert: Newly admitted entries immediately become the
-    ///     focus (the classic burst-on-accept exploit behavior).
+    ///   - generationRatio: Probability each step generates a fresh input rather
+    ///     than mutating a pool entry — `1` is all generation, `0` is all
+    ///     mutation. One input at a time, no bursts. The default `0.1` is an
+    ///     interim starting point (≈ the 1-fresh-per-16-mutant rate of the
+    ///     previous burst model); it supersedes that model and should be
+    ///     re-tuned against the etna benchmarks rather than treated as final.
     ///   - capacity: Residence bound (`nil` = unbounded). Admitting past it
-    ///     evicts the lowest-weight resident (ties: oldest). The bound
-    ///     decouples how finely the admission vocabulary distinguishes
-    ///     inputs from how many of them may stay — without it, a fine
-    ///     vocabulary silently raises the population ceiling.
+    ///     evicts the lowest-weight resident (ties: largest measured input,
+    ///     then newest). The bound decouples how finely the admission
+    ///     vocabulary distinguishes inputs from how many of them may stay —
+    ///     without it, a fine vocabulary silently raises the population
+    ///     ceiling.
+    ///   - coverageStrategy: How a run is judged "interesting" and what culling
+    ///     vocabulary it publishes (default: `.pathTrie`). This is the scheduler's
+    ///     coverage signal — it travels with the scheduler rather than being a
+    ///     top-level `fuzz()` knob, so coverage is one battery among possible
+    ///     others, not a privileged library concept.
     public static func weightedPool(
         admission: PoolAdmission = .featureOwnership,
         policies: @escaping @Sendable () -> [any PoolPlugin] = { [] },
-        burstLength: Int = 16,
-        focusOnInsert: Bool = true,
-        capacity: Int? = nil
+        generationRatio: Double = 0.1,
+        capacity: Int? = nil,
+        coverageStrategy: CoverageStrategy = .pathTrie
     ) -> MutationScheduler {
-        MutationScheduler(makeCore: {
-            WeightedPoolCore(
-                admission: admission,
-                policies: policies(),
-                burstLength: burstLength,
-                focusOnInsert: focusOnInsert,
-                capacity: capacity
-            )
-        })
+        MutationScheduler(factory: WeightedPoolFactory(
+            admission: admission,
+            makePolicies: policies,
+            generationRatio: generationRatio,
+            capacity: capacity,
+            coverageStrategy: coverageStrategy
+        ))
     }
 }

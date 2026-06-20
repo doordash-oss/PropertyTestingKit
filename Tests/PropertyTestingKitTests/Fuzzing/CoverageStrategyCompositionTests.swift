@@ -36,15 +36,14 @@ struct CoverageStrategyCompositionTests {
         teardown: () -> Void
     ) {
         let context = SanCovCounters.beginMeasurement()
-        let evaluator: CoverageEvaluator<Int> = strategy.makeEvaluator()
+        let evaluator = strategy.makeEvaluator()
         evaluator.setup?(context)
         let client = CoverageCountersClient.liveValue
-        let corpus = Corpus<Int>()
         let fire: (UInt, UInt64, UInt64, [UInt32]) -> CoverageAcceptance? = { pc, a, b, edges in
             SanCovCounters.resetCoverage(context)
             for e in edges { var g = e; sancov_dispatch_edge(&g) }
             sancov_dispatch_cmp(pc, a, b, 8)
-            return evaluator.evaluate(1, nil, context, client, corpus)
+            return evaluator.evaluate(context, client)
         }
         return (fire, { SanCovCounters.endMeasurement(context) })
     }

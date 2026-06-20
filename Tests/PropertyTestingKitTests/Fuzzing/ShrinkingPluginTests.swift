@@ -42,14 +42,14 @@ struct ShrinkingHandlerTests {
         // Test iteration event (sync)
         let iterationContext = SyncPluginEvent<Int>.IterationContext(
             input: 42,
-            newCoverage: SparseCoverage()
+            executionContext: .coverage(SparseCoverage())
         )
         let iterationActions = handler.handleSync(SyncPluginEvent<Int>.iteration(iterationContext))
         #expect(iterationActions.isEmpty)
 
         // Test end event (async)
         let endContext = AsyncPluginEvent<Int>.EndContext(
-            totalCoveredIndices: Set([1, 2, 3]),
+            executionContext: .coverage(SparseCoverage(indices: [1, 2, 3])),
             projectPath: nil,
             sourceLocation: SourceLocation(fileID: #fileID, filePath: #filePath, line: #line, column: 1)
         )
@@ -71,25 +71,24 @@ struct ShrinkingHandlerTests {
                 }
             },
             sourceLocation: SourceLocation(fileID: #fileID, filePath: #filePath, line: #line, column: 1),
-            sparseCoverage: SparseCoverage()
+            executionContext: .coverage(SparseCoverage())
         )
 
         let actions = try await handler.handleAsync(AsyncPluginEvent<[Int]>.failureFound(failureContext))
 
-        // Should return 3 actions: selectForMutation, submitToCorpus, recordIssue
-        #expect(actions.count == 3)
+        // Should return 2 actions: selectForMutation, recordIssue. The minimized
+        // failing input is no longer submitted to the corpus (failure retention
+        // for regression is tracked as a separate feature).
+        #expect(actions.count == 2)
 
         // Verify action types
         var hasSelectForMutation = false
-        var hasSubmitToCorpus = false
         var hasRecordIssue = false
 
         for action in actions {
             switch action {
             case .selectForMutation:
                 hasSelectForMutation = true
-            case .submitToCorpus:
-                hasSubmitToCorpus = true
             case .recordIssue:
                 hasRecordIssue = true
             default:
@@ -98,7 +97,6 @@ struct ShrinkingHandlerTests {
         }
 
         #expect(hasSelectForMutation)
-        #expect(hasSubmitToCorpus)
         #expect(hasRecordIssue)
     }
 
@@ -114,7 +112,7 @@ struct ShrinkingHandlerTests {
                 }
             },
             sourceLocation: SourceLocation(fileID: #fileID, filePath: #filePath, line: #line, column: 1),
-            sparseCoverage: SparseCoverage()
+            executionContext: .coverage(SparseCoverage())
         )
 
         let actions = try await handler.handleAsync(AsyncPluginEvent<[Int]>.failureFound(failureContext))

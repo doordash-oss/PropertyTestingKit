@@ -21,6 +21,7 @@
 //  and the run is terminated by the `stopWhenQueueEmpty()` plugin once those seeds drain.
 //
 
+import FuzzCore
 import Foundation
 import Testing
 import Dependencies
@@ -85,8 +86,7 @@ func runFuzz<each Input: Codable & Sendable>(
     parallelism: Int,
     duration: Duration,
     verbose: Bool,
-    coverageStrategy: CoverageStrategy,
-    scheduler: MutationScheduler,
+    scheduler: any SchedulerFactory,
     projectPath: String?,
     sourceFileID: String,
     sourceFilePath: String,
@@ -121,7 +121,6 @@ func runFuzz<each Input: Codable & Sendable>(
                 mutators: mutators,
                 verbose: verbose,
                 config: makeConfig(),
-                coverageStrategy: .alwaysInteresting,
                 scheduleBytesExtractor: scheduleBytesExtractor,
                 plugins: { [] },
                 test: test
@@ -135,7 +134,6 @@ func runFuzz<each Input: Codable & Sendable>(
             verbose: verbose,
             persist: true,
             config: makeConfig(),
-            coverageStrategy: coverageStrategy,
             scheduler: scheduler,
             scheduleBytesExtractor: scheduleBytesExtractor,
             makeHandlers: makeHandlers,
@@ -157,7 +155,6 @@ func runFuzz<each Input: Codable & Sendable>(
             verbose: verbose,
             persist: true,
             config: makeConfig(),
-            coverageStrategy: coverageStrategy,
             scheduler: scheduler,
             scheduleBytesExtractor: scheduleBytesExtractor,
             makeHandlers: makeHandlers,
@@ -181,7 +178,6 @@ func runFuzz<each Input: Codable & Sendable>(
             verbose: verbose,
             persist: true,
             config: makeConfig(),
-            coverageStrategy: coverageStrategy,
             scheduler: scheduler,
             scheduleBytesExtractor: scheduleBytesExtractor,
             makeHandlers: makeHandlers,
@@ -198,7 +194,6 @@ func runFuzz<each Input: Codable & Sendable>(
             verbose: verbose,
             persist: false,
             config: makeConfig(),
-            coverageStrategy: coverageStrategy,
             scheduler: scheduler,
             scheduleBytesExtractor: scheduleBytesExtractor,
             makeHandlers: makeHandlers,
@@ -252,7 +247,6 @@ func runReplay<each Input: Codable & Sendable>(
         mutators: mutators,
         verbose: verbose,
         config: config,
-        coverageStrategy: .alwaysInteresting,
         plugins: plugins,
         test: test
     )
@@ -274,7 +268,6 @@ private func replayRegression<each Input: Codable & Sendable>(
     mutators: (repeat Mutator<each Input>),
     verbose: Bool,
     config: FuzzEngineConfig,
-    coverageStrategy: CoverageStrategy,
     scheduleBytesExtractor: @escaping @Sendable ((repeat each Input)) -> [UInt8]? = { _ in nil },
     plugins: @escaping @Sendable () -> [AnalysisPlugin<repeat each Input>],
     test: @escaping @Sendable ((repeat each Input)) async throws -> Void
@@ -289,7 +282,10 @@ private func replayRegression<each Input: Codable & Sendable>(
         parallelism: 1,
         verbose: verbose,
         config: config,
-        coverageStrategy: coverageStrategy,
+        // Replay measures coverage with `.alwaysInteresting` so the campaign-end
+        // union sees every replayed input; the pool itself is unused (the seeded
+        // queue drains and the run stops). Coverage rides the scheduler now.
+        scheduler: MutationScheduler.weightedPool(coverageStrategy: .alwaysInteresting),
         scheduleBytesExtractor: scheduleBytesExtractor,
         makeProcessor: {
             let lifted = (plugins() + [AnalysisPlugin<repeat each Input>.stopWhenQueueEmpty()])
@@ -321,8 +317,7 @@ private func fuzzCampaign<each Input: Codable & Sendable>(
     verbose: Bool,
     persist: Bool,
     config: FuzzEngineConfig,
-    coverageStrategy: CoverageStrategy,
-    scheduler: MutationScheduler,
+    scheduler: any SchedulerFactory,
     scheduleBytesExtractor: @escaping @Sendable ((repeat each Input)) -> [UInt8]? = { _ in nil },
     makeHandlers: @escaping @Sendable () -> [FuzzPlugin<repeat each Input>],
     test: @escaping @Sendable ((repeat each Input)) async throws -> Void
@@ -344,7 +339,6 @@ private func fuzzCampaign<each Input: Codable & Sendable>(
         parallelism: max(1, parallelism),
         verbose: verbose,
         config: config,
-        coverageStrategy: coverageStrategy,
         scheduler: scheduler,
         scheduleBytesExtractor: scheduleBytesExtractor,
         makeProcessor: {
@@ -391,8 +385,7 @@ private func runEngines<each Input: Codable & Sendable>(
     parallelism: Int,
     verbose: Bool,
     config: FuzzEngineConfig,
-    coverageStrategy: CoverageStrategy,
-    scheduler: MutationScheduler = .weightedPool(),
+    scheduler: any SchedulerFactory = MutationScheduler.weightedPool(),
     scheduleBytesExtractor: @escaping @Sendable ((repeat each Input)) -> [UInt8]? = { _ in nil },
     makeProcessor: @escaping @Sendable () -> PluginProcessor<repeat each Input>,
     test: @escaping @Sendable ((repeat each Input)) async throws -> Void
@@ -400,6 +393,10 @@ private func runEngines<each Input: Codable & Sendable>(
     if verbose {
         print("[Fuzz] Running \(parallelism) fuzz engine\(parallelism == 1 ? "" : "s")")
     }
+
+    // Compiler-generated edges are filtered at COMPILE time by the
+    // TagCompilerGenerated LLVM pass plugin (see Package.swift), so there is no
+    // longer a runtime filter scan to run here.
 
     var distributedSeeds: [[(repeat each Input)]] = Array(repeating: [], count: parallelism)
     for (index, seed) in seeds.enumerated() {
@@ -414,8 +411,13 @@ private func runEngines<each Input: Codable & Sendable>(
                 let engine = FuzzEngine<repeat each Input>(
                     mutators: repeat each mutators,
                     config: config,
-                    coverageStrategy: coverageStrategy,
-                    scheduler: scheduler,
+                    // The scheduler vends its own instrumentation providers — the
+                    // engine names no signal, and coverage is no longer hardcoded
+                    // here. The engine installs only providers matching the
+                    // scheduler's requiredProbes, so a pool-less or cmp-only
+                    // scheduler pays for nothing it didn't ask for.
+                    makeInstrumentationProviders: { scheduler.makeProviders() },
+                    schedulerFactory: scheduler,
                     scheduleBytesExtractor: scheduleBytesExtractor
                 )
                 return await engine.run(
@@ -515,35 +517,38 @@ private func mergeResults<each Input: Codable & Sendable>(
     )
 }
 
-/// Merges multiple corpus snapshots into one, combining coverage.
-private func mergeCorpusSnapshots<each Input: Codable & Sendable>(
+/// Merges multiple parallel engines' corpus snapshots into one, deduplicating by
+/// input identity.
+///
+/// Coverage is no longer a corpus concern, so the dedup key is the entry's
+/// encoded input bytes — two engines that retained the same input keep one copy.
+/// `CorpusEntry.encode` writes exactly the input array, so identical inputs
+/// encode identically; an entry that fails to encode is kept rather than dropped.
+///
+/// Internal (not private) so the dedup contract can be unit-tested directly.
+func mergeCorpusSnapshots<each Input: Codable & Sendable>(
     _ snapshots: [CorpusSnapshot<repeat each Input>]
 ) -> CorpusSnapshot<repeat each Input> {
-    @Dependency(\.corpusRegistry) var corpusRegistry
-
     guard let first = snapshots.first else {
-        return CorpusSnapshot<repeat each Input>(
-            entries: [],
-            coveredIndices: []
-        )
+        return CorpusSnapshot<repeat each Input>(entries: [])
     }
 
     guard snapshots.count > 1 else {
         return first
     }
 
-    // Create a temporary corpus to deduplicate entries
-    let mergedCorpus: Corpus<repeat each Input> = corpusRegistry.getCorpus()
+    let encoder = JSONEncoder()
+    var seen = Set<Data>()
+    var merged: [CorpusEntry<repeat each Input>] = []
 
-    // Use a local signature hash set for deduplication
-    var signatureHashes = Set<Int>()
-
-    // Add all entries - addIfInteresting handles deduplication by coverage
     for snapshot in snapshots {
         for entry in snapshot.entries {
-            _ = mergedCorpus.addIfInteresting(input: entry.input, sparse: entry.sparseCoverage, signatureHashes: &signatureHashes)
+            if let key = try? encoder.encode(entry), !seen.insert(key).inserted {
+                continue  // an identical input from another engine already kept
+            }
+            merged.append(entry)
         }
     }
 
-    return mergedCorpus.snapshot()
+    return CorpusSnapshot<repeat each Input>(entries: merged)
 }

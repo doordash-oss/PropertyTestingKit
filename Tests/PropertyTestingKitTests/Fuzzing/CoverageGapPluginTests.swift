@@ -35,7 +35,7 @@ struct CoverageGapHandlerActionTests {
         // Sync events should always return empty
         let iterationContext = SyncPluginEvent<Int>.IterationContext(
             input: 42,
-            newCoverage: SparseCoverage()
+            executionContext: .coverage(SparseCoverage())
         )
         let syncActions = handler.handleSync(SyncPluginEvent<Int>.iteration(iterationContext))
         #expect(syncActions.isEmpty)
@@ -46,5 +46,24 @@ struct CoverageGapHandlerActionTests {
         )
         let startActions = try await handler.handleAsync(AsyncPluginEvent<Int>.start(startContext))
         #expect(startActions.isEmpty)
+    }
+
+    @Test("End handler sources covered edges from the campaign-summary execution context")
+    func testEndEventReadsExecutionContext() async throws {
+        let handler: AnalysisPlugin<Int> = .coverageGap()
+
+        // The gap handler now reads its covered-edge set from
+        // `executionContext[CoverageProbeKey.self]` (the campaign summary the
+        // engine assembles at `.end`), not a bespoke `totalCoveredIndices`
+        // field. A bogus project path excludes every symbolized function, so
+        // detection runs against the supplied edges but yields no gap issues —
+        // gap *content* is covered by CoverageGapDetectorTests.
+        let endContext = AsyncPluginEvent<Int>.EndContext(
+            executionContext: .coverage(SparseCoverage(indices: [0, 1, 2])),
+            projectPath: "/nonexistent/project/path/for/test",
+            sourceLocation: SourceLocation(fileID: #fileID, filePath: #filePath, line: #line, column: 1)
+        )
+        let actions = try await handler.handleAsync(AsyncPluginEvent<Int>.end(endContext))
+        #expect(actions.isEmpty)
     }
 }

@@ -106,6 +106,30 @@ struct EnergyMutationTests {
         #expect(abs(w - 1.0100243271635463) < 1e-9)
     }
 
+    @Test("Over-fuzzing guard tolerates maxMutationFactor 0 without trapping")
+    func overFuzzGuardZeroFactorIsSafe() {
+        // maxMutationFactor is a public parameter; 0 must not integer-divide-by-zero.
+        // Clamped to 1, the guard treats every mutated entry as over-fuzzed.
+        let combined = entropicWeightCombining(
+            cache: entropicYieldRarityTerms(yield: [10: 1], globalFreqs: [10: 1], rareFeatureThreshold: 3),
+            mutations: 5, totalRareFeatures: 1, totalMutations: 10,
+            corpusSize: 2, maxMutationFactor: 0)
+        #expect(combined.isFinite)
+
+        let reference = entropicWeight(
+            features: [10], mutations: 5,
+            globalFreqs: [10: 1], totalRareFeatures: 1,
+            totalMutations: 10, corpusSize: 2,
+            rareFeatureThreshold: 3, maxMutationFactor: 0)
+        #expect(reference.isFinite)
+    }
+
+    @Test("weightedRandomIndex on empty weights returns a sentinel, not a trap")
+    func weightedRandomIndexEmptyIsSafe() {
+        var rng = FastRNG()
+        #expect(weightedRandomIndex(weights: [], using: &rng) == -1)
+    }
+
     // MARK: - Incremental (cached) weight equivalence
 
     /// The drain-time hot path combines per-entry rarity terms (computed at

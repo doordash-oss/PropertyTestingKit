@@ -13,12 +13,14 @@
 // limitations under the License.
 
 //  The weighted mutation pool: one owner per engine holding entries, weights,
-//  and the focus/burst draw state; child PoolPlugins shape membership and
+//  and the generation-ratio draw; child PoolPlugins shape membership and
 //  weights through owner-mediated actions and hear about every change.
 //
-//  The core is non-generic (entries are IDs; typed input storage lives in the
-//  engine), so these tests drive it hermetically: feed iteration outcomes,
-//  assert directives.
+//  The core owns its typed inputs (it is generic over the pack), but its draw
+//  and admission policy is input-agnostic, so these tests drive it hermetically
+//  with a stub Int mutator: feed admissions/misses via `admit`, assert the
+//  `decide()` directive. `generationRatio: 0` makes every decision (with a
+//  non-empty pool) a draw, so draw-distribution tests are deterministic.
 //
 
 import Testing
@@ -42,57 +44,52 @@ private final class ScriptedPolicy: PoolPlugin {
 @Suite("WeightedPool core")
 struct WeightedPoolCoreTests {
 
+    // White-box scaffolding is shared via `WeightedPoolHarness`; these thin
+    // forwards keep the call sites below readable.
     private func makeCore(
         policies: [any PoolPlugin] = [],
-        burstLength: Int = 16,
-        focusOnInsert: Bool = true
-    ) -> WeightedPoolCore {
-        WeightedPoolCore(
-            admission: .everyDiscovery,
-            policies: policies,
-            burstLength: burstLength,
-            focusOnInsert: focusOnInsert
-        )
+        generationRatio: Double = 0
+    ) -> WeightedPoolCore<Int> {
+        WeightedPoolHarness.core(policies: policies, generationRatio: generationRatio)
     }
 
-    /// One accepted discovery: source/coverage shaped like the engine's accept path.
     private func accept(
-        _ core: WeightedPoolCore, edges: [UInt32], parent: Int? = nil
+        _ core: WeightedPoolCore<Int>, edges: [UInt32], parent: Int? = nil
     ) -> Int? {
-        let source: PoolIterationSource = parent.map { .pool(parent: $0) } ?? .generated
-        return core.observe(PoolIterationOutcome(
-            source: source, newCoverage: SparseCoverage(indices: edges)))
+        WeightedPoolHarness.accept(core, edges: edges, parent: parent)
     }
 
-    /// One uninteresting execution attributed to `parent`.
-    private func miss(_ core: WeightedPoolCore, parent: Int? = nil) {
-        let source: PoolIterationSource = parent.map { .pool(parent: $0) } ?? .generated
-        _ = core.observe(PoolIterationOutcome(source: source, newCoverage: nil))
+    private func miss(_ core: WeightedPoolCore<Int>, parent: Int? = nil) {
+        WeightedPoolHarness.miss(core, parent: parent)
     }
 
     @Test("Empty pool always directs fresh generation")
     func emptyPoolGeneratesFresh() {
-        let core = makeCore()
+        // Even at ratio 0 (all-mutation) an empty pool has nothing to draw.
+        let core = makeCore(generationRatio: 0)
         for _ in 0..<10 {
-            #expect(core.next() == .generate)
+            #expect(core.decide() == .generate)
         }
     }
 
-    @Test("Admitted discovery becomes the focus for a full burst, then one fresh")
-    func admittedDiscoveryFocusBurst() {
-        let core = makeCore(burstLength: 4)
+    @Test("Generation ratio 0 always mutates when the pool is non-empty")
+    func ratioZeroAlwaysMutates() {
+        let core = makeCore(generationRatio: 0)
         #expect(accept(core, edges: [1, 2]) == 0)
-
-        // Full burst on the new entry...
-        for _ in 0..<4 {
-            #expect(core.next() == .mutate(id: 0))
+        for _ in 0..<20 {
+            #expect(core.decide() == .mutate(id: 0))
             miss(core, parent: 0)
         }
-        // ...then exactly one fresh generation...
-        #expect(core.next() == .generate)
-        miss(core)
-        // ...then back to drawing (only one entry to draw).
-        #expect(core.next() == .mutate(id: 0))
+    }
+
+    @Test("Generation ratio 1 always generates even with a non-empty pool")
+    func ratioOneAlwaysGenerates() {
+        let core = makeCore(generationRatio: 1)
+        #expect(accept(core, edges: [1, 2]) == 0)
+        for _ in 0..<20 {
+            #expect(core.decide() == .generate)
+            miss(core)
+        }
     }
 
     @Test("The default weightedPool admission culls: a same-feature, non-smaller redundant input is rejected")
@@ -101,15 +98,15 @@ struct WeightedPoolCoreTests {
         // an unbounded pool of every accepted input bloats with large entries
         // whose features a smaller input already owns. Build the core straight
         // from the public default so this pins the default itself.
-        let core = MutationScheduler.weightedPool().makeCore()
+        // `.featureOwnership` is `MutationScheduler.weightedPool(admission:)`'s
+        // documented default, so this pins the default admission's behavior.
+        let core = WeightedPoolHarness.core(admission: .featureOwnership)
         // First input owns edges {1,2} (size 2) — admitted as id 0.
-        #expect(core.observe(PoolIterationOutcome(
-            source: .generated, newCoverage: SparseCoverage(indices: [1, 2]))) == 0)
+        #expect(WeightedPoolHarness.accept(core, edges: [1, 2]) == 0)
         // Second input: SAME features, SAME size — owns nothing new, steals
         // nothing (ties don't steal), so it is rejected (nil). Under the old
         // everyDiscovery default it would have been admitted as id 1.
-        #expect(core.observe(PoolIterationOutcome(
-            source: .generated, newCoverage: SparseCoverage(indices: [1, 2]))) == nil)
+        #expect(WeightedPoolHarness.accept(core, edges: [1, 2]) == nil)
     }
 
     @Test("Admitted entries get sequential stable IDs")
@@ -120,18 +117,18 @@ struct WeightedPoolCoreTests {
         #expect(accept(core, edges: [3]) == 2)
     }
 
-    @Test("Children hear inserted events and their remove actions kill the burst")
+    @Test("Children hear inserted events and their remove actions empty the pool")
     func childRemoveOnInsert() {
         let child = ScriptedPolicy { event in
             if case let .inserted(id, _, _, _, _) = event { return [.remove(id: id)] }
             return []
         }
-        let core = makeCore(policies: [child], burstLength: 4)
+        let core = makeCore(policies: [child], generationRatio: 0)
 
         #expect(accept(core, edges: [1, 2]) == 0)
         #expect(child.events.contains { if case .inserted(0, _, _, _, _) = $0 { return true }; return false })
-        // The child evicted the only entry (and the focus with it): no burst.
-        #expect(core.next() == .generate)
+        // The child evicted the only entry: the pool is empty, so generate.
+        #expect(core.decide() == .generate)
     }
 
     @Test("Children hear removed notifications for other policies' evictions")
@@ -154,20 +151,17 @@ struct WeightedPoolCoreTests {
             if case .inserted(0, _, _, _, _) = event { return [.setWeight(id: 0, 0.0)] }
             return []
         }
-        // burstLength 1 + no focus-on-insert: every cycle is draw → mutate → fresh,
-        // so draws dominate and the distribution is observable.
-        let core = makeCore(policies: [child], burstLength: 1, focusOnInsert: false)
+        // Ratio 0: every decision with a non-empty pool is a weighted draw, so
+        // the distribution is observable.
+        let core = makeCore(policies: [child], generationRatio: 0)
         _ = accept(core, edges: [1])
         _ = accept(core, edges: [2])
 
         var drawn = Set<Int>()
         for _ in 0..<100 {
-            let directive = core.next()
-            if case let .mutate(id) = directive {
+            if case let .mutate(id) = core.decide() {
                 drawn.insert(id)
                 miss(core, parent: id)
-            } else {
-                miss(core)
             }
         }
         #expect(drawn == [1])
@@ -175,17 +169,15 @@ struct WeightedPoolCoreTests {
 
     @Test("Weighted draw reaches every live entry")
     func drawReachesAllLiveEntries() {
-        let core = makeCore(burstLength: 1, focusOnInsert: false)
+        let core = makeCore(generationRatio: 0)
         _ = accept(core, edges: [1])
         _ = accept(core, edges: [2])
 
         var drawn = Set<Int>()
         for _ in 0..<200 {
-            if case let .mutate(id) = core.next() {
+            if case let .mutate(id) = core.decide() {
                 drawn.insert(id)
                 miss(core, parent: id)
-            } else {
-                miss(core)
             }
         }
         #expect(drawn == [0, 1])
@@ -201,17 +193,15 @@ struct WeightedPoolCoreTests {
             }
             return []
         }
-        let core = makeCore(policies: [child], burstLength: 1, focusOnInsert: false)
+        let core = makeCore(policies: [child], generationRatio: 0)
         _ = accept(core, edges: [1])
         _ = accept(core, edges: [2])
 
         var drawn = Set<Int>()
         for _ in 0..<100 {
-            if case let .mutate(id) = core.next() {
+            if case let .mutate(id) = core.decide() {
                 drawn.insert(id)
                 miss(core, parent: id)
-            } else {
-                miss(core)
             }
         }
         #expect(drawn == [1])

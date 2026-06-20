@@ -19,6 +19,7 @@
 //    ISSTA 2023
 //
 
+import FuzzCore
 import Foundation
 import Dependencies
 

@@ -45,7 +45,7 @@ struct CustomMutatorProvidingTests {
 
         let result = await fuzzEngineWithMaxIterations(
             maxIterations: 50,
-            coverageStrategy: .alwaysInteresting
+            scheduler: MutationScheduler.weightedPool(coverageStrategy: .alwaysInteresting)
         ) { (input: TestConfig) in
             await seenTimeouts.update { $0.insert(input.timeout) }
             await seenRetries.update { $0.insert(input.retries) }

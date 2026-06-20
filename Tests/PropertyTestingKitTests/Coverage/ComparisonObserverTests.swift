@@ -46,7 +46,7 @@ struct ComparisonObserverTests {
             }) { _ in false }
         })
 
-        let evaluator: CoverageEvaluator<Int> = strategy.makeEvaluator()
+        let evaluator = strategy.makeEvaluator()
         evaluator.setup?(context)
 
         sancov_dispatch_cmp(0xABC, 3, 7, 4)
@@ -63,7 +63,7 @@ struct ComparisonObserverTests {
         let strategy = CoverageStrategy(makeEngine: {
             CoverageEngine(onCompare: { _, _, _, _ in }) { _ in false }
         })
-        let evaluator: CoverageEvaluator<Int> = strategy.makeEvaluator()
+        let evaluator = strategy.makeEvaluator()
         evaluator.setup?(context)
 
         #expect(sancov_context_get_cmp_recorder_for_testing(context.rawContext) == cmpRecorderBits(comparisonObserverRecorder))
@@ -78,7 +78,7 @@ struct ComparisonObserverTests {
         let context = SanCovCounters.beginMeasurement()
         defer { SanCovCounters.endMeasurement(context) }
 
-        let evaluator: CoverageEvaluator<Int> = CoverageStrategy.pathTrie.makeEvaluator()
+        let evaluator = CoverageStrategy.pathTrie.makeEvaluator()
         evaluator.setup?(context)
 
         #expect(sancov_context_get_cmp_recorder_for_testing(context.rawContext) == nil,
@@ -98,7 +98,7 @@ struct ComparisonObserverTests {
                 onCompare: { _, _, _, _ in cmps.update { $0 += 1 } }
             ) { _ in false }
         })
-        let evaluator: CoverageEvaluator<Int> = strategy.makeEvaluator()
+        let evaluator = strategy.makeEvaluator()
         evaluator.setup?(context)
 
         var g7: UInt32 = 7

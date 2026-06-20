@@ -159,6 +159,44 @@ targets:
           - $(SRCROOT)/Sources/CScheduleHooks/include
           - $(SRCROOT)/Sources/SanCovHooks/include
 
+  # The signal-agnostic fuzzing engine + extensibility seam. Names no feedback
+  # signal; coverage and the weighted-pool scheduler live in PropertyTestingKit,
+  # which imports this. Exposed as its own product so userspace modules can
+  # define probes/schedulers by importing only FuzzCore.
+  FuzzCore:
+    type: framework
+    platform: macOS
+    sources:
+      - path: Sources/FuzzCore
+    dependencies:
+      - target: SanCovHooks
+        link: true
+      - target: ScheduleControl
+        link: true
+      - package: swift-dependencies
+        product: Dependencies
+      - package: swift-collections
+        product: DequeModule
+      - package: swift-atomics
+        product: Atomics
+      - package: xctest-dynamic-overlay
+        product: IssueReporting
+      - package: swift-clocks
+        product: Clocks
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_NAME: FuzzCore
+        PRODUCT_BUNDLE_IDENTIFIER: com.propertytestingkit.fuzzcore
+        SWIFT_INCLUDE_PATHS:
+          - $(SRCROOT)/Sources/SanCovHooks/include
+          - $(SRCROOT)/Sources/CScheduleHooks/include
+          - $(TOOLCHAIN_DIR)/usr/lib/swift/macosx
+        OTHER_SWIFT_FLAGS: >-
+          $(inherited)
+          -plugin-path $(TOOLCHAIN_DIR)/usr/lib/swift/host/plugins/testing
+        # NO sanitizer flags for the library itself - only for tests
+
   # Build the main library without sanitizer flags
   PropertyTestingKit:
     type: framework
@@ -166,6 +204,8 @@ targets:
     sources:
       - path: Sources/PropertyTestingKit
     dependencies:
+      - target: FuzzCore
+        link: true
       - target: SanCovHooks
         link: true
       - target: EdgeHooks
@@ -248,6 +288,7 @@ targets:
     dependencies:
       - target: SanCovHooks
         link: true
+      - target: FuzzCore
       - target: PropertyTestingKit
       - package: swift-dependencies
         product: Dependencies
@@ -345,6 +386,7 @@ targets:
     dependencies:
       - target: SanCovHooks
         link: true
+      - target: FuzzCore
       - target: GenericTimerPoller
       - target: PropertyTestingKit
       - target: ScheduleControl
@@ -466,6 +508,7 @@ targets:
     dependencies:
       - target: SanCovHooks
         link: true
+      - target: FuzzCore
       - target: PropertyTestingKit
     settings:
       base:

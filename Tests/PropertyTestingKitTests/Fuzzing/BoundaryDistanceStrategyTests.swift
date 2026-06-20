@@ -36,19 +36,18 @@ struct BoundaryDistanceStrategyTests {
         teardown: () -> Void
     ) {
         let context = SanCovCounters.beginMeasurement()
-        let evaluator: CoverageEvaluator<Int> = CoverageStrategy.boundaryDistance.makeEvaluator()
+        let evaluator = CoverageStrategy.boundaryDistance.makeEvaluator()
         evaluator.setup?(context)
         let client = CoverageCountersClient.liveValue
-        let corpus = Corpus<Int>()
 
-        let fire: (UInt, UInt64, UInt64, [UInt32], Int) -> CoverageAcceptance? = { pc, a, b, edges, input in
+        let fire: (UInt, UInt64, UInt64, [UInt32], Int) -> CoverageAcceptance? = { pc, a, b, edges, _ in
             SanCovCounters.resetCoverage(context)
             for e in edges {
                 var g = e
                 sancov_dispatch_edge(&g)
             }
             sancov_dispatch_cmp(pc, a, b, 8)
-            return evaluator.evaluate(input, nil, context, client, corpus)
+            return evaluator.evaluate(context, client)
         }
         return (fire, { SanCovCounters.endMeasurement(context) })
     }
@@ -115,7 +114,7 @@ struct BoundaryDistanceStrategyTests {
         let context = SanCovCounters.beginMeasurement()
         defer { SanCovCounters.endMeasurement(context) }
 
-        let evaluator: CoverageEvaluator<Int> = CoverageStrategy.boundaryDistance.makeEvaluator()
+        let evaluator = CoverageStrategy.boundaryDistance.makeEvaluator()
         evaluator.setup?(context)
 
         #expect(sancov_context_get_recorder_for_testing(context.rawContext) == nil,

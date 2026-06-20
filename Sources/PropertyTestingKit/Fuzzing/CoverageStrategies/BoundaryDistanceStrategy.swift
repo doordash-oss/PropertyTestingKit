@@ -15,7 +15,7 @@
 //  Boundary-distance strategy (experimental). The acceptance/publishing half of
 //  boundary-distance ownership: accept inputs that get a comparison's operands
 //  CLOSER than seen, and publish the run's per-site minimum |arg1 - arg2| for
-//  the pool's `boundaryDistanceOwnership` admission to cull on.
+//  the pool's `featureOwnership` admission to cull on.
 //
 
 extension CoverageStrategy {
@@ -23,7 +23,7 @@ extension CoverageStrategy {
     /// comparison site's operands strictly closer together than this engine has
     /// seen (lower `|arg1 - arg2|`), OR it covers a new edge (union with
     /// `.newEdge`). It publishes the run's per-site minimum distance as its
-    /// pool vocabulary, so `PoolAdmission.boundaryDistanceOwnership` retains, per
+    /// pool vocabulary, so `PoolAdmission.featureOwnership` retains, per
     /// site, the single closest witness.
     ///
     /// Unlike `.comparisonCoverage` (value-profile acceptance, which keeps every

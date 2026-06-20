@@ -23,6 +23,7 @@
 
 import Testing
 @testable import PropertyTestingKit
+@testable import FuzzCore
 
 @Suite("Single-value mutators")
 struct SingleValueMutatorTests {
@@ -64,6 +65,94 @@ struct SingleValueMutatorTests {
             seen.insert(String.defaultMutator.mutate("hello", &rng))
         }
         #expect(seen.count >= 2)
+    }
+
+    @Test("Double default mutator never returns the input for fixed-point-prone values")
+    func doubleDefaultMutatorNeverIdentity() {
+        var rng = FastRNG()
+        // 0.0 (where `-value` and `value * 2` collapse to 0.0) and large
+        // magnitudes (where ±1 / ±0.1 fall below the ULP and round back) are
+        // the values a single-strategy pick can leave unchanged.
+        let prone: [Double] = [0.0, -0.0, 1e300, -1e300, .greatestFiniteMagnitude]
+        for value in prone {
+            for _ in 0..<500 {
+                #expect(Double.defaultMutator.mutate(value, &rng) != value,
+                        "identity mutant produced for \(value)")
+            }
+        }
+    }
+
+    @Test("String default mutator never returns the input for multi-byte strings")
+    func stringDefaultMutatorNeverIdentityMultibyte() {
+        var rng = FastRNG()
+        // utf8.count exceeds the Character count, so a byte-length-vs-`prefix`
+        // mismatch in the length-targeted branch could slice back to the whole
+        // string.
+        let prone = ["é", "café", "🎉🎉🎉", "ñoño"]
+        for value in prone {
+            for _ in 0..<500 {
+                #expect(String.defaultMutator.mutate(value, &rng) != value,
+                        "identity mutant produced for \(value)")
+            }
+        }
+    }
+
+    // MARK: - Named mutators never produce identity mutants
+
+    @Test("Port mutator never returns the input for well-known ports")
+    func portMutatorNeverIdentity() {
+        var rng = FastRNG()
+        // `value % 65536` is the identity branch for any port in [0, 65536);
+        // these are exactly the ports the seed list targets.
+        let prone = [0, 80, 443, 8080, 65535]
+        for value in prone {
+            for _ in 0..<500 {
+                #expect(Mutator<Int>.ports.mutate(value, &rng) != value,
+                        "identity mutant produced for port \(value)")
+            }
+        }
+    }
+
+    @Test("HTTP status code mutator never returns the input for standard codes")
+    func httpStatusCodeMutatorNeverIdentity() {
+        var rng = FastRNG()
+        // `value % 600` is the identity branch for any code in [0, 600).
+        let prone = [200, 301, 404, 500, 0]
+        for value in prone {
+            for _ in 0..<500 {
+                #expect(Mutator<Int>.httpStatusCodes.mutate(value, &rng) != value,
+                        "identity mutant produced for status \(value)")
+            }
+        }
+    }
+
+    @Test("Percentage mutator never returns the input for boundary ratios")
+    func percentageMutatorNeverIdentity() {
+        var rng = FastRNG()
+        // 0.0 (`value * 0.5` and `max(0, value - 0.1)` collapse), 0.5
+        // (`1 - value`), and 1.0 (`min(1, value + 0.1)`) each pin one strategy.
+        let prone: [Double] = [0.0, 0.5, 1.0]
+        for value in prone {
+            for _ in 0..<500 {
+                #expect(Mutator<Double>.percentages.mutate(value, &rng) != value,
+                        "identity mutant produced for percentage \(value)")
+            }
+        }
+    }
+
+    @Test("Empty string mutator never returns the input, including empty")
+    func emptyStringMutatorNeverIdentity() {
+        var rng = FastRNG()
+        // A single character pins both `String(first)` and `String(last)` to the
+        // input; the empty string pins the only other strategy (doubling "" is
+        // "") and must escape to a non-empty whitespace seed.
+        let prone = ["", "a", " ", "\t", "ab"]
+        for value in prone {
+            for _ in 0..<500 {
+                #expect(emptyStringMutator.mutate(value, &rng) != value,
+                        "identity mutant produced for \(value.debugDescription)")
+            }
+        }
     }
 
     // MARK: - Composition
@@ -127,17 +216,20 @@ struct SingleValueMutatorTests {
         let probe = FuzzPlugin<Int>(id: "burst_probe", handleSync: { event in
             switch event {
             case let .iteration(ctx):
-                if ctx.fromMutationQueue, ctx.parentID == 7 {
+                // Burst mutants carry the emitting plugin's originID (7).
+                if ctx.parentID == 7 {
                     if firstQueueCount.value == nil {
                         firstQueueCount.update { $0 = ctx.queueCount }
                     }
                     mutantsSeen.update { $0 += 1 }
-                    if mutantsSeen.value == mutationBurstLength {
+                    if mutantsSeen.value == FuzzEngineConfig().mutationBurstLength {
                         return [.stop(.init(reason: .custom("burst_complete")))]
                     }
                     return []
                 }
-                if !tagged.value, !ctx.fromMutationQueue {
+                // Seed the burst from the first untagged input (parentID nil:
+                // generated or scheduler-produced, not a bus mutant).
+                if !tagged.value, ctx.parentID == nil {
                     tagged.update { $0 = true }
                     return [.selectForMutation(.init(input: ctx.input, originID: 7))]
                 }
@@ -155,7 +247,7 @@ struct SingleValueMutatorTests {
         }
 
         // The first popped mutant sees the rest of its own burst queued.
-        #expect(firstQueueCount.value == mutationBurstLength - 1)
-        #expect(mutantsSeen.value == mutationBurstLength)
+        #expect(firstQueueCount.value == FuzzEngineConfig().mutationBurstLength - 1)
+        #expect(mutantsSeen.value == FuzzEngineConfig().mutationBurstLength)
     }
 }

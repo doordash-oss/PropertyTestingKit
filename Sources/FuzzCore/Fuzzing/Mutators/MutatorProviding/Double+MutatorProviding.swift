@@ -1,0 +1,105 @@
+// Copyright 2026 DoorDash, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+import Dependencies
+import Foundation
+
+// Static arrays at file scope to avoid extension static initialization issues
+private let _doubleSpecialValues: [Double] = [.nan, .infinity, -.infinity, .pi, .ulpOfOne]
+private let _doubleCommonBases: [Double] = [0.0, 1.0, -1.0, 0.5, 100.0, -100.0]
+private let _doubleNonFiniteFallback: [Double] = [0.0, 1.0, -1.0]
+
+private let _doubleSeeds: [Double] = [
+    0.0,
+    1.0,
+    -1.0,
+    0.5,
+    -0.5,
+    Double.greatestFiniteMagnitude,
+    -Double.greatestFiniteMagnitude,
+    Double.leastNormalMagnitude,
+    Double.nan,
+    Double.infinity,
+    -Double.infinity,
+]
+
+private func _doubleMutate(_ value: Double, _ rng: inout FastRNG) -> Double {
+    guard value.isFinite else {
+        return _doubleNonFiniteFallback[Int.random(in: 0..<_doubleNonFiniteFallback.count, using: &rng)]
+    }
+
+    // Candidate neighborhood, dropping any that collapse back to `value`:
+    // `-value` is identity at 0.0 (-0.0 == 0.0), `value * 2` / `value / 2` are
+    // identity at 0.0, and the additive deltas round back when |value| is large
+    // enough that ±0.1/±1 fall below the ULP. The candidates are cheap scalars,
+    // so materialize-and-filter is the faithful way to express "non-identity".
+    let candidates: [Double] = [
+        value + 1, value - 1, -value, value * 2, value / 2, value + 0.1, value - 0.1,
+    ]
+    if let pick = candidates.filter({ $0 != value }).randomElement(using: &rng) {
+        return pick
+    }
+    // Every delta rounded back (extreme magnitude); step to an adjacent value.
+    return Bool.random(using: &rng) ? value.nextUp : value.nextDown
+}
+
+private func _doubleGenerate(_ rng: inout FastRNG) -> Double {
+    // Mix of strategies for interesting random double generation
+    let strategy = Int.random(in: 0..<10, using: &rng)
+    switch strategy {
+    case 0:
+        // Zero
+        return 0.0
+    case 1:
+        // Small range [-1, 1]
+        return Double.random(in: -1.0...1.0, using: &rng)
+    case 2:
+        // Percentage range [0, 1]
+        return Double.random(in: 0.0...1.0, using: &rng)
+    case 3:
+        // Medium range [-1000, 1000]
+        return Double.random(in: -1000.0...1000.0, using: &rng)
+    case 4:
+        // Large range
+        return Double.random(in: -1_000_000.0...1_000_000.0, using: &rng)
+    case 5:
+        // Very small positive values
+        return Double.random(in: Double.leastNormalMagnitude...0.001, using: &rng)
+    case 6:
+        // Integer-like doubles
+        return Double(Int.random(in: -1000...1000, using: &rng))
+    case 7:
+        // Powers of 2 - use scalbn for efficiency
+        let power = Int.random(in: -10...10, using: &rng)
+        return scalbn(1.0, power)
+    case 8:
+        // Special values (rarely)
+        let index = Int.random(in: 0..<_doubleSpecialValues.count, using: &rng)
+        return _doubleSpecialValues[index]
+    default:
+        // Near common values with small offset
+        let index = Int.random(in: 0..<_doubleCommonBases.count, using: &rng)
+        let base = _doubleCommonBases[index]
+        let offset = Double.random(in: -0.1...0.1, using: &rng)
+        return base + offset
+    }
+}
+
+extension Double: MutatorProviding {
+    public static let defaultMutator = Mutator<Double>(
+        seeds: _doubleSeeds,
+        mutate: _doubleMutate,
+        generate: _doubleGenerate
+    )
+}

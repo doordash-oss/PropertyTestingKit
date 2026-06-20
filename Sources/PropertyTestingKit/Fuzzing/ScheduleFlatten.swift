@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+import FuzzCore
 import Dependencies
 import Foundation
 
@@ -65,17 +66,13 @@ func peelScheduleResult<each Input: Codable & Sendable>(
         // exactly as before the flattening.
         CorpusEntry<repeat each Input>(
             input: repeat each entry.input.1,
-            scheduleBytes: entry.input.0,
-            sparseCoverage: entry.sparseCoverage,
-            entryType: entry.entryType,
-            failure: entry.failure
+            scheduleBytes: entry.input.0
         )
     }
 
     return FuzzResult<repeat each Input>(
         corpus: CorpusSnapshot<repeat each Input>(
-            entries: entries,
-            coveredIndices: result.corpus.coveredIndices
+            entries: entries
         ),
         failures: failures,
         stats: result.stats,
@@ -105,8 +102,7 @@ func runFlattenedSchedule<each Input: Codable & Sendable>(
     persistence: CorpusPersistence,
     duration: Duration,
     verbose: Bool,
-    coverageStrategy: CoverageStrategy,
-    scheduler: MutationScheduler,
+    scheduler: any SchedulerFactory,
     projectPath: String?,
     sourceFileID: String,
     sourceFilePath: String,
@@ -143,7 +139,6 @@ func runFlattenedSchedule<each Input: Codable & Sendable>(
         parallelism: 1,
         duration: duration,
         verbose: verbose,
-        coverageStrategy: coverageStrategy,
         scheduler: scheduler,
         projectPath: projectPath,
         sourceFileID: sourceFileID,

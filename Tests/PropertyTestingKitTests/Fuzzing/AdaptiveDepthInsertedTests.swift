@@ -31,16 +31,12 @@ struct AdaptiveDepthInsertedTests {
     @Test("inserted reports source parent and newly-owned feature count")
     func insertedCarriesParentAndClaimed() {
         let rec = Recorder()
-        let core = WeightedPoolCore(
-            admission: .featureOwnership, policies: [rec],
-            burstLength: 16, focusOnInsert: true)
+        let core = WeightedPoolHarness.core(admission: .featureOwnership, policies: [rec])
 
         // Entry 0: generated, owns edges {1,2}.
-        _ = core.observe(PoolIterationOutcome(
-            source: .generated, newCoverage: SparseCoverage(indices: [1, 2])))
+        _ = WeightedPoolHarness.accept(core, edges: [1, 2])
         // Entry 1: a mutant of parent 0, owns one NEW edge {3}.
-        _ = core.observe(PoolIterationOutcome(
-            source: .pool(parent: 0), newCoverage: SparseCoverage(indices: [3])))
+        _ = WeightedPoolHarness.accept(core, edges: [3], parent: 0)
 
         func inserted(_ id: Int) -> (parent: Int?, claimed: Int)? {
             for e in rec.events {

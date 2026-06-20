@@ -145,10 +145,9 @@ struct ScheduleCoverageTest {
         // The PRODUCTION .pathTrie engine, judged via its evaluator.
         let ctx = SanCovCounters.beginMeasurement()
         defer { SanCovCounters.endMeasurement(ctx) }
-        let evaluator: CoverageEvaluator<Int> = CoverageStrategy.pathTrie.makeEvaluator()
+        let evaluator: CoverageEvaluator = CoverageStrategy.pathTrie.makeEvaluator()
         evaluator.setup?(ctx)
         let coverageClient = CoverageCountersClient.liveValue
-        let corpus = Corpus<Int>()
 
         // Two runs over DIFFERENT branches. If g_target_context routes edges
         // into the context, both paths advance the trie and both judge
@@ -159,7 +158,7 @@ struct ScheduleCoverageTest {
             try await ScheduleController.run(scheduleBytes: [0], coverageContext: ctx.rawContext) {
                 let _ = Self.branchingCode(input)
             }
-            return evaluator.evaluate(input, nil, ctx, coverageClient, corpus) != nil
+            return evaluator.evaluate(ctx, coverageClient) != nil
         }
 
         let first = try await judgedRun(111)

@@ -17,6 +17,7 @@ import Dependencies
 import Foundation
 import Testing
 @testable import PropertyTestingKit
+@testable import FuzzCore
 @testable import ScheduleControl
 
 /// Guards the flattened-pack schedule design: schedule fuzzing runs the engine
@@ -37,13 +38,10 @@ struct FlattenedScheduleTests {
     func peelMovesElementZeroToScheduleBytes() throws {
         let entry = CorpusEntry<[UInt8], Int, String>(
             input: [9, 8, 7], 42, "hi",
-            scheduleBytes: nil,
-            sparseCoverage: SparseCoverage(indices: [1, 2]),
-            entryType: .coverage,
-            failure: nil
+            scheduleBytes: nil
         )
         let extended = FuzzResult<[UInt8], Int, String>(
-            corpus: CorpusSnapshot(entries: [entry], coveredIndices: [1, 2]),
+            corpus: CorpusSnapshot(entries: [entry]),
             failures: [(input: ([5, 6], 7, "bye"), error: PeelTestError(), timeElapsed: 0.25, scheduleBytes: nil)],
             stats: FuzzStats(totalInputs: 1, seeds: 0, mutations: 0, generations: 1, duration: 0.5),
             wasRegression: false
@@ -58,8 +56,6 @@ struct FlattenedScheduleTests {
         #expect(ei == 42)
         #expect(es == "hi")
         #expect(e.scheduleBytes == [9, 8, 7])
-        #expect(e.sparseCoverage.indices == [1, 2])
-        #expect(peeled.corpus.coveredIndices == [1, 2])
 
         // Failure: input peeled to (Int, String); the schedule that triggered it is
         // lifted from element 0 onto the `scheduleBytes` slot so it can be reproduced.
@@ -87,12 +83,9 @@ struct FlattenedScheduleTests {
         let entry = CorpusEntry<[UInt8], Int>(
             input: schedule, 42,
             // The engine sets this from the element-0 extractor during a scheduled run.
-            scheduleBytes: schedule,
-            sparseCoverage: SparseCoverage(indices: [1, 2]),
-            entryType: .coverage,
-            failure: nil
+            scheduleBytes: schedule
         )
-        let snapshot = CorpusSnapshot<[UInt8], Int>(entries: [entry], coveredIndices: [])
+        let snapshot = CorpusSnapshot<[UInt8], Int>(entries: [entry])
 
         // Schedule bytes persist as input element 0 (a normal element); there is no
         // separate schedule-bytes encoding flag.
@@ -153,6 +146,16 @@ struct FlattenedScheduleTests {
         // sibling scheduled tests it must not pass vacuously: retry starved
         // runs (heavy parallel load can zero out 200 ms) until iterations
         // happen, then ALWAYS assert. The time limit backstops the retries.
+        //
+        // Admission is pinned to `.everyDiscovery`: corpus admission is the
+        // SCHEDULER's job, decoupled from the coverage strategy's decision. An
+        // always-true decision only *guarantees* entries under permissive
+        // admission — the default `.featureOwnership` legitimately rejects a run
+        // that owns no coverage feature, and the empty body here covers zero new
+        // edges under parallel load (a non-nil but empty coverage snapshot),
+        // which featureOwnership correctly drops. This test pins the strategy
+        // seam (decide runs, its result reaches the corpus), not the admission
+        // policy — that is covered by FeatureOwnershipTests.
         for attempt in 1...20 {
             let decideRan = ObservedFlag()
             let custom = CoverageStrategy(makeEngine: {
@@ -169,7 +172,7 @@ struct FlattenedScheduleTests {
                     using: Mutator<Int>(seeds: [1, 2, 3], mutate: { v, _ in v &+ 1 }),
                     duration: .milliseconds(200),
                     persistence: .ephemeral,
-                    coverageStrategy: custom,
+                    scheduler: MutationScheduler.weightedPool(admission: .everyDiscovery, coverageStrategy: custom),
                     scheduleFuzzing: true
                 ) { (_: Int) in }
             }

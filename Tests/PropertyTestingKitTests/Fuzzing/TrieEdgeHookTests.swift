@@ -234,7 +234,7 @@ struct TrieEdgeHookTests {
         // The PRODUCTION .pathTrie engine: the context co-owns the observer
         // (and so the trie) — no lifetime pinning needed even though
         // instrumented edges keep dispatching.
-        let evaluator: CoverageEvaluator<Int> = CoverageStrategy.pathTrie.makeEvaluator()
+        let evaluator: CoverageEvaluator = CoverageStrategy.pathTrie.makeEvaluator()
         evaluator.setup?(context)
 
         var g0: UInt32 = 0
@@ -245,8 +245,7 @@ struct TrieEdgeHookTests {
         // The dispatched edges must have advanced the engine's trie: a first
         // sight of this path judges unique.
         let coverageClient = CoverageCountersClient.liveValue
-        let corpus = Corpus<Int>()
-        #expect(evaluator.evaluate(1, nil, context, coverageClient, corpus) != nil)
+        #expect(evaluator.evaluate(context, coverageClient) != nil)
 
         // Also verify coverage map was written
         let map = context.rawContext.pointee.coverage_map

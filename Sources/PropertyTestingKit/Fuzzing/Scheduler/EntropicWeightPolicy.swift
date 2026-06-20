@@ -28,28 +28,52 @@
 /// - `.inserted` registers the entry (its own coverage seeds its yield) and
 ///   updates global feature frequencies — rarity is "few pool entries
 ///   exhibit it".
-/// - `.willDraw` flushes weights: rarity terms are cached and recomputed
-///   only when acceptance changed them; the abundance term varies per draw.
-/// - `.removed` entries stop receiving weights; their stats stay (mutants
-///   of a dead parent may still be in flight and attribute correctly).
+/// - `.removed` entries stop receiving weights and have their per-entry yield
+///   freed (a dead entry is never drawn again); their execution count survives
+///   so mutants of a dead parent still attribute without resurrecting it.
+/// - `.willDraw` flushes weights — but only when the corpus distribution
+///   actually changed since the last flush (an insertion, an eviction, or a
+///   new discovery). Idle draws cost nothing. This mirrors libFuzzer, which
+///   recomputes its corpus distribution in batches on corpus change rather
+///   than on every mutation step; between discoveries the abundance decay is
+///   deferred to the next distribution update.
 ///
-/// The scoring math is `entropicWeightCombining` & co., pinned by
-/// characterization tests against hand-computed vectors.
+/// Rarity caching: an entry's rarity terms are recomputed only when they can
+/// have moved — a full pass when an insertion shifts the global frequencies
+/// (which can re-classify any entry's features), otherwise only the entries
+/// whose own yield grew. The scoring math is `entropicWeightCombining` & co.,
+/// pinned by characterization tests against hand-computed vectors.
 public final class EntropicWeightPolicy: PoolPlugin {
     private let rareFeatureThreshold: Int
     private let maxMutationFactor: Int
 
-    /// Per-entry rare-feature observation counts, index == pool entry ID.
-    private var entryYield: [[UInt64: Int]] = []
-    /// Per-entry executed-mutant count, attributed via `.pool(parent:)`.
-    private var entryExecutions: [Int] = []
-    /// Cached rarity terms (refreshed when `rarityStale`).
-    private var entryRarity: [EntropicRarityTerms] = []
+    /// Per-entry rare-feature observation counts, keyed by pool entry ID. Freed
+    /// on eviction (a dead entry is never drawn, so its yield is dead weight).
+    private var entryYield: [Int: [UInt64: Int]] = [:]
+    /// Per-entry executed-mutant count, keyed by ID. Retained past eviction so
+    /// in-flight mutants of a dead parent still attribute (and `totalExecutions`
+    /// stays consistent) without resurrecting the entry.
+    private var entryExecutions: [Int: Int] = [:]
+    /// Cached rarity terms per live entry, keyed by ID (freed on eviction).
+    private var entryRarity: [Int: EntropicRarityTerms] = [:]
+    /// Live (drawable) entry IDs — authoritative membership for weight emission
+    /// and the corpus-size term.
+    private var liveIDs: Set<Int> = []
+
     private var globalFeatureFreqs: [UInt64: Int] = [:]
     private var totalRareFeatures = 0
     private var totalExecutions = 0
-    private var rarityStale = false
-    private var removed: Set<Int> = []
+
+    /// Entries whose YIELD changed since the last rarity recompute; a per-entry
+    /// recompute suffices because their global frequencies did not move.
+    private var dirtyRarity: Set<Int> = []
+    /// Set when an insertion changed `globalFeatureFreqs`, which can shift the
+    /// rare/abundant classification of EVERY entry — forcing a full recompute.
+    private var rarityAllStale = false
+    /// Set when the corpus distribution changed (insert / removal / new
+    /// coverage) and must be re-flushed as weights at the next draw. Cleared
+    /// after a flush, so an idle `.willDraw` (no change since) emits nothing.
+    private var distributionStale = false
 
     public init(rareFeatureThreshold: Int = 3, maxMutationFactor: Int = 20) {
         self.rareFeatureThreshold = rareFeatureThreshold
@@ -60,62 +84,95 @@ public final class EntropicWeightPolicy: PoolPlugin {
         switch event {
         case let .iteration(outcome):
             guard case let .pool(parent) = outcome.source,
-                  entryExecutions.indices.contains(parent) else { return [] }
-            entryExecutions[parent] += 1
+                  let executions = entryExecutions[parent] else { return [] }
+            entryExecutions[parent] = executions + 1
             totalExecutions += 1
-            if outcome.newCoverage != nil {
+            // Crediting a dead parent's yield is pointless (it is never drawn)
+            // and would re-grow the dictionary freed on eviction, so only live
+            // parents accrue yield. Account in the run's RESOLVED features (the
+            // strategy's vocabulary, or widened edges) — the same vocabulary the
+            // ledger owns over.
+            if outcome.newCoverage != nil, liveIDs.contains(parent) {
                 for feature in outcome.resolvedFeatures {
-                    entryYield[parent][feature, default: 0] += 1
+                    entryYield[parent, default: [:]][feature, default: 0] += 1
                 }
-                rarityStale = true
+                dirtyRarity.insert(parent)
+                distributionStale = true
             }
             return []
 
         case let .inserted(id, _, features, _, _):
-            // IDs are sequential by the owner's contract; the only way to
-            // see a gap would be another inserter, which the admission role
-            // precludes.
-            assert(id == entryYield.count, "pool entry IDs must be sequential")
+            var yield: [UInt64: Int] = [:]
             for feature in features {
+                yield[feature] = 1
                 globalFeatureFreqs[feature, default: 0] += 1
             }
-            entryYield.append(Dictionary(features.map { ($0, 1) },
-                                         uniquingKeysWith: +))
-            entryExecutions.append(0)
-            entryRarity.append(EntropicRarityTerms(energy: 0, sumIncidence: 0, coveredRare: 0))
-            rarityStale = true
+            entryYield[id] = yield
+            entryExecutions[id] = 0
+            entryRarity[id] = EntropicRarityTerms(energy: 0, sumIncidence: 0, coveredRare: 0)
+            liveIDs.insert(id)
+            // Global frequencies moved → any entry's rarity may have shifted.
+            rarityAllStale = true
+            distributionStale = true
             return []
 
         case let .removed(id):
-            removed.insert(id)
+            liveIDs.remove(id)
+            // Free the heavy per-entry payload; keep the scalar execution count
+            // so in-flight mutants of this dead parent still attribute.
+            entryYield[id] = nil
+            entryRarity[id] = nil
+            dirtyRarity.remove(id)
+            distributionStale = true
             return []
 
         case .willDraw:
-            guard !entryYield.isEmpty else { return [] }
-            if rarityStale {
-                totalRareFeatures = globalFeatureFreqs.values
-                    .filter { $0 <= rareFeatureThreshold }.count
-                entryRarity = entryYield.map {
-                    entropicYieldRarityTerms(
-                        yield: $0,
-                        globalFreqs: globalFeatureFreqs,
-                        rareFeatureThreshold: rareFeatureThreshold)
-                }
-                rarityStale = false
-            }
+            guard distributionStale, !liveIDs.isEmpty else { return [] }
+            refreshRarityIfNeeded()
+
+            let corpusSize = liveIDs.count
             var actions: [PoolAction] = []
-            actions.reserveCapacity(entryYield.count - removed.count)
-            for id in 0..<entryYield.count where !removed.contains(id) {
+            actions.reserveCapacity(corpusSize)
+            for id in liveIDs {
+                let cache = entryRarity[id]
+                    ?? EntropicRarityTerms(energy: 0, sumIncidence: 0, coveredRare: 0)
                 actions.append(.setWeight(id: id, entropicWeightCombining(
-                    cache: entryRarity[id],
-                    mutations: entryExecutions[id],
+                    cache: cache,
+                    mutations: entryExecutions[id] ?? 0,
                     totalRareFeatures: totalRareFeatures,
                     totalMutations: totalExecutions,
-                    corpusSize: entryYield.count - removed.count,
+                    corpusSize: corpusSize,
                     maxMutationFactor: maxMutationFactor
                 )))
             }
+            distributionStale = false
             return actions
+        }
+    }
+
+    /// Recompute cached rarity terms — all live entries when global frequencies
+    /// moved (an insertion can re-classify any entry's features), otherwise only
+    /// the entries whose own yield changed.
+    private func refreshRarityIfNeeded() {
+        if rarityAllStale {
+            totalRareFeatures = globalFeatureFreqs.values
+                .filter { $0 <= rareFeatureThreshold }.count
+            for id in liveIDs {
+                entryRarity[id] = entropicYieldRarityTerms(
+                    yield: entryYield[id] ?? [:],
+                    globalFreqs: globalFeatureFreqs,
+                    rareFeatureThreshold: rareFeatureThreshold)
+            }
+            rarityAllStale = false
+            dirtyRarity.removeAll()
+        } else if !dirtyRarity.isEmpty {
+            for id in dirtyRarity where liveIDs.contains(id) {
+                entryRarity[id] = entropicYieldRarityTerms(
+                    yield: entryYield[id] ?? [:],
+                    globalFreqs: globalFeatureFreqs,
+                    rareFeatureThreshold: rareFeatureThreshold)
+            }
+            dirtyRarity.removeAll()
         }
     }
 }

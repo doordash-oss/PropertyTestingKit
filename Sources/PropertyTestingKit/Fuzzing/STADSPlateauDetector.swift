@@ -19,6 +19,7 @@
 //    https://mboehme.github.io/paper/TSE18.pdf
 //
 
+import FuzzCore
 import Foundation
 import Dependencies
 

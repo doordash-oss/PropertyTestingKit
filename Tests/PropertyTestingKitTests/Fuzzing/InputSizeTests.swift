@@ -35,19 +35,6 @@ struct InputSizeTests {
         }
     }
 
-    private func accept(
-        _ core: WeightedPoolCore,
-        edges: [UInt32],
-        features: [UInt64]? = nil,
-        inputSize: Int? = nil
-    ) -> Int? {
-        core.observe(PoolIterationOutcome(
-            source: .generated,
-            newCoverage: SparseCoverage(indices: edges),
-            features: features,
-            inputSize: inputSize))
-    }
-
     // MARK: - Mutator surface
 
     @Test("Mutator size closure defaults to nil")
@@ -86,31 +73,25 @@ struct InputSizeTests {
 
     @Test("REDUCE steals on real input size when coverage counts tie")
     func reduceStealsOnRealSize() {
-        let core = WeightedPoolCore(
-            admission: .featureOwnership, policies: [],
-            burstLength: 1, focusOnInsert: false)
+        let core = WeightedPoolHarness.core(admission: .featureOwnership)
         // Equal coverage counts: under the edge-count proxy this is a tie and
         // ties never steal. Real size 10 < 50 must win the feature.
-        #expect(accept(core, edges: [1, 2], features: [100], inputSize: 50) == 0)
-        #expect(accept(core, edges: [3, 4], features: [100], inputSize: 10) == 1)
+        #expect(WeightedPoolHarness.accept(core, edges: [1, 2], features: [100], inputSize: 50) == 0)
+        #expect(WeightedPoolHarness.accept(core, edges: [3, 4], features: [100], inputSize: 10) == 1)
     }
 
     @Test("Without a size metric the edge-count proxy still rules (ties don't steal)")
     func edgeCountProxyFallback() {
-        let core = WeightedPoolCore(
-            admission: .featureOwnership, policies: [],
-            burstLength: 1, focusOnInsert: false)
-        #expect(accept(core, edges: [1, 2], features: [100]) == 0)
-        #expect(accept(core, edges: [3, 4], features: [100]) == nil)
+        let core = WeightedPoolHarness.core(admission: .featureOwnership)
+        #expect(WeightedPoolHarness.accept(core, edges: [1, 2], features: [100]) == 0)
+        #expect(WeightedPoolHarness.accept(core, edges: [3, 4], features: [100]) == nil)
     }
 
     @Test("A larger real size never steals even with fewer covered edges")
     func largerRealSizeNeverSteals() {
-        let core = WeightedPoolCore(
-            admission: .featureOwnership, policies: [],
-            burstLength: 1, focusOnInsert: false)
-        #expect(accept(core, edges: [1, 2, 3], features: [100], inputSize: 10) == 0)
-        #expect(accept(core, edges: [4], features: [100], inputSize: 50) == nil)
+        let core = WeightedPoolHarness.core(admission: .featureOwnership)
+        #expect(WeightedPoolHarness.accept(core, edges: [1, 2, 3], features: [100], inputSize: 10) == 0)
+        #expect(WeightedPoolHarness.accept(core, edges: [4], features: [100], inputSize: 50) == nil)
     }
 
     // MARK: - Capacity eviction on real size
@@ -118,27 +99,23 @@ struct InputSizeTests {
     @Test("Capacity victim is the largest resident among weight ties")
     func capacityEvictsLargest() {
         let log = EventLog()
-        let core = WeightedPoolCore(
-            admission: .everyDiscovery, policies: [log],
-            burstLength: 1, focusOnInsert: false, capacity: 2)
+        let core = WeightedPoolHarness.core(policies: [log], capacity: 2)
         // Entry 0 is the big one; entry 1 is small and NEWER. Under the
         // size-blind rule the tie-break (newest) would evict 1 — with real
         // sizes the monster goes.
-        #expect(accept(core, edges: [1], inputSize: 50) == 0)
-        #expect(accept(core, edges: [2], inputSize: 10) == 1)
-        #expect(accept(core, edges: [3], inputSize: 20) == 2)
+        #expect(WeightedPoolHarness.accept(core, edges: [1], inputSize: 50) == 0)
+        #expect(WeightedPoolHarness.accept(core, edges: [2], inputSize: 10) == 1)
+        #expect(WeightedPoolHarness.accept(core, edges: [3], inputSize: 20) == 2)
         #expect(log.removed == [0], "the largest resident yields, not the newest")
     }
 
     @Test("Capacity victim falls back to evict-newest when sizes are absent")
     func capacityVictimFallsBackToNewest() {
         let log = EventLog()
-        let core = WeightedPoolCore(
-            admission: .everyDiscovery, policies: [log],
-            burstLength: 1, focusOnInsert: false, capacity: 2)
-        #expect(accept(core, edges: [1]) == 0)
-        #expect(accept(core, edges: [2]) == 1)
-        #expect(accept(core, edges: [3]) == 2)
+        let core = WeightedPoolHarness.core(policies: [log], capacity: 2)
+        #expect(WeightedPoolHarness.accept(core, edges: [1]) == 0)
+        #expect(WeightedPoolHarness.accept(core, edges: [2]) == 1)
+        #expect(WeightedPoolHarness.accept(core, edges: [3]) == 2)
         #expect(log.removed == [1], "size-blind pools keep the elder-anchoring rule")
     }
 
@@ -149,7 +126,7 @@ struct InputSizeTests {
         let sizes = SyncBox<[Int?]>([])
         let spy = SyncBox<Int>(0)
 
-        let probe = FuzzPlugin<Int, Int>(id: "stop_probe", handleSync: { event in
+        let probe = FuzzPlugin<Int, Int, Int>(id: "stop_probe", handleSync: { event in
             switch event {
             case .iteration:
                 spy.update { $0 += 1 }
@@ -171,7 +148,12 @@ struct InputSizeTests {
             }
         }
 
-        let sized = Mutator<Int>(
+        // Two SIZED positions with DIFFERENT constants plus one BLIND position:
+        // the pack size must sum to 3 + 5 = 8 (the blind position contributes
+        // nothing). A broken metric — first-wins (3 or 5), max (5), or counting
+        // the blind position — would not equal 8, so the sum is differentially
+        // exercised, not just a single constant.
+        let sizedA = Mutator<Int>(
             seeds: [1],
             mutate: { value, rng in value &+ Int(rng.next() % 7) },
             generate: { rng in Int(rng.next() % 1000) },
@@ -180,21 +162,32 @@ struct InputSizeTests {
             seeds: [2],
             mutate: { value, rng in value &- Int(rng.next() % 7) },
             generate: { rng in Int(rng.next() % 1000) })
+        let sizedB = Mutator<Int>(
+            seeds: [3],
+            mutate: { value, rng in value &+ Int(rng.next() % 5) },
+            generate: { rng in Int(rng.next() % 1000) },
+            size: { _ in 5 })
 
         _ = try await fuzz(
-            using: sized, blind,
+            using: sizedA, blind, sizedB,
             duration: .seconds(10),
             persistence: .ephemeral,
-            scheduler: .weightedPool(policies: { [SizeTap(sizes: sizes)] }),
+            scheduler: MutationScheduler.weightedPool(policies: { [SizeTap(sizes: sizes)] }),
             parallelism: 1,
             plugins: { [probe] }
-        ) { (a: Int, b: Int) in
-            blackHole(a &+ b)
+        ) { (a: Int, b: Int, c: Int) in
+            // Input-dependent branch → reliably distinct coverage even under
+            // parallel load (don't lean on pathTrie's first-path being novel).
+            if (a &+ b &+ c) % 2 == 0 {
+                blackHole(a &+ c)
+            } else {
+                blackHole(b &- a)
+            }
         }
 
         let accepted = sizes.value
         #expect(!accepted.isEmpty, "some inputs should be accepted")
-        // Only the sized mutator contributes; the blind one is skipped.
-        #expect(accepted.allSatisfy { $0 == 3 })
+        // 3 (sizedA) + 0 (blind, no size closure) + 5 (sizedB) = 8.
+        #expect(accepted.allSatisfy { $0 == 8 })
     }
 }

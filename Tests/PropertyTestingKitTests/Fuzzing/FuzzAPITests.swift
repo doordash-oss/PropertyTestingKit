@@ -42,7 +42,7 @@ struct FuzzAPITests {
                 maxIterations: 100,
                 corpusDir: corpusDir,
                 persistence: .auto,
-                coverageStrategy: .pathTrie,
+                scheduler: MutationScheduler.weightedPool(coverageStrategy: .pathTrie),
                 additionalSeeds: numberParserSeeds
             ) { input in
                 // Just call parse - coverage will be tracked automatically
@@ -91,7 +91,7 @@ struct FuzzAPITests {
                 maxIterations: 100,
                 corpusDir: corpusDir,
                 persistence: .auto,
-                coverageStrategy: .alwaysInteresting,
+                scheduler: MutationScheduler.weightedPool(coverageStrategy: .alwaysInteresting),
                 additionalSeeds: numberParserSeeds
             ) { input in
                 _ = NumberParser.parse(input)
@@ -116,7 +116,7 @@ struct FuzzAPITests {
                 maxIterations: 100,
                 seeds: ["0", "-0", "-1", "abc", String(Int.max)],
                 persistence: .ephemeral,
-                coverageStrategy: .alwaysInteresting
+                scheduler: MutationScheduler.weightedPool(coverageStrategy: .alwaysInteresting)
             ) { input in
                 let parsed = NumberParser.parse(input)
 
@@ -220,7 +220,7 @@ struct FuzzAPITests {
         let result = await fuzzEngineWithMaxIterations(
             maxIterations: 100,
             config: config,
-            coverageStrategy: .alwaysInteresting,
+            scheduler: MutationScheduler.weightedPool(coverageStrategy: .alwaysInteresting),
             additionalSeeds: [true, false]
         ) { (_: Bool) in
             // Throw for any input to guarantee a failure
@@ -257,7 +257,7 @@ struct FuzzAPITests {
                 _ = try await fuzzWithMaxIterations(
                     maxIterations: 10,
                     persistence: .ephemeral,
-                    coverageStrategy: .alwaysInteresting
+                    scheduler: MutationScheduler.weightedPool(coverageStrategy: .alwaysInteresting)
                 ) { (_: Bool) in
                     throw TestFailure()
                 }
@@ -281,7 +281,7 @@ struct FuzzAPITests {
             try await fuzzWithMaxIterations(
                 maxIterations: 50,
                 seeds: ["a", "ab", "abc"],
-                coverageStrategy: .alwaysInteresting
+                scheduler: MutationScheduler.weightedPool(coverageStrategy: .alwaysInteresting)
             ) { input in
                 _ = input.count
             }
@@ -292,13 +292,8 @@ struct FuzzAPITests {
 
     @Test("fuzz reads existing corpus from filesystem")
     func testFuzzReadsCorpus() async throws {
-        // Create a mock corpus with known entries
-        var existingCorpus = Corpus<String>()
-        existingCorpus.add(
-            input: ("from_corpus"),
-            sparse: SparseCoverage(indices: [1])
-        )
-        let corpusSnapshot = existingCorpus.snapshot()
+        // Create a mock corpus snapshot with a known entry
+        let corpusSnapshot = CorpusSnapshot<String>(entries: [CorpusEntry(input: "from_corpus")])
         let corpusData = try JSONEncoder.corpusEncoder().encode(corpusSnapshot)
 
         let (loadSpy, loadFn) = spy { (_: URL) -> Data in
@@ -320,7 +315,7 @@ struct FuzzAPITests {
             try await fuzzWithMaxIterations(
                 maxIterations: 50,
                 seeds: ["from_corpus"],
-                coverageStrategy: .alwaysInteresting
+                scheduler: MutationScheduler.weightedPool(coverageStrategy: .alwaysInteresting)
             ) { input in
                 await seenInputs.update { $0.append(input) }
             }
