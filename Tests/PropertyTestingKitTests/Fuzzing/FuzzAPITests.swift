@@ -294,10 +294,7 @@ struct FuzzAPITests {
     func testFuzzReadsCorpus() async throws {
         // Create a mock corpus with known entries
         var existingCorpus = Corpus<String>()
-        existingCorpus.add(
-            input: ("from_corpus"),
-            sparse: SparseCoverage(indices: [1])
-        )
+        existingCorpus.add(input: ("from_corpus"))
         let corpusSnapshot = existingCorpus.snapshot()
         let corpusData = try JSONEncoder.corpusEncoder().encode(corpusSnapshot)
 

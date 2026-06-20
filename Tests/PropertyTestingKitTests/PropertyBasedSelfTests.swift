@@ -166,31 +166,23 @@ struct MutatorProvidingPropertyTests {
 @Suite("Corpus Properties")
 struct CorpusPropertyTests {
 
-    @Test("Corpus addIfInteresting uses signature-based uniqueness")
-    func testAddIfInterestingSignatureBasedUniqueness() throws {
-        var corpus = Corpus<String>()
-        var signatureHashes = Set<Int>()
+    @Test("Cross-engine merge deduplicates by input identity")
+    func testMergeDeduplicatesByInput() throws {
+        // Two parallel engines retained overlapping inputs; coverage is no longer
+        // a corpus concern, so the merge keeps one copy per distinct input.
+        let engineA = CorpusSnapshot<String>(entries: [
+            CorpusEntry(input: "first"),
+            CorpusEntry(input: "second"),
+        ])
+        let engineB = CorpusSnapshot<String>(entries: [
+            CorpusEntry(input: "second"),  // identical input ⇒ dropped
+            CorpusEntry(input: "third"),
+        ])
 
-        let sparse1 = SparseCoverage(indices: [0, 1, 2])
+        let merged = mergeCorpusSnapshots([engineA, engineB])
 
-        // First add should succeed
-        let added1 = corpus.addIfInteresting(input: ("first"), sparse: sparse1, signatureHashes: &signatureHashes)
-        #expect(added1 == true, "First entry should be added")
-
-        // Different signature (subset) IS interesting - represents a different code path
-        let sparseSubset = SparseCoverage(indices: [0, 1])
-        let added2 = corpus.addIfInteresting(input: ("subset"), sparse: sparseSubset, signatureHashes: &signatureHashes)
-        #expect(added2 == true, "Different signature should be accepted (unique code path)")
-
-        // Same signature as first should be rejected
-        let sparseSame = SparseCoverage(indices: [0, 1, 2])
-        let added3 = corpus.addIfInteresting(input: ("same"), sparse: sparseSame, signatureHashes: &signatureHashes)
-        #expect(added3 == false, "Identical signature should be rejected")
-
-        // Different signature with new edges should be accepted
-        let sparseNew = SparseCoverage(indices: [3])
-        let added4 = corpus.addIfInteresting(input: ("new"), sparse: sparseNew, signatureHashes: &signatureHashes)
-        #expect(added4 == true, "New signature should be accepted")
+        #expect(merged.entries.map(\.input).sorted() == ["first", "second", "third"],
+                "each distinct input survives exactly once")
     }
 
     @Test("Corpus isEmpty property")
@@ -199,7 +191,7 @@ struct CorpusPropertyTests {
         var isEmpty = corpus.isEmpty
         #expect(isEmpty, "New corpus should be empty")
 
-        corpus.add(input: ("a"), sparse: SparseCoverage(indices: [0]))
+        corpus.add(input: ("a"))
         isEmpty = corpus.isEmpty
         #expect(!isEmpty, "Corpus with entry should not be empty")
     }
@@ -208,8 +200,8 @@ struct CorpusPropertyTests {
     func testCorpusInputs() throws {
         var corpus = Corpus<String>()
 
-        corpus.add(input: ("hello"), sparse: SparseCoverage(indices: [0]))
-        corpus.add(input: ("world"), sparse: SparseCoverage(indices: [1]))
+        corpus.add(input: ("hello"))
+        corpus.add(input: ("world"))
 
         let inputs = corpus.inputs
         #expect(inputs.count == 2, "Should have 2 inputs")
@@ -228,7 +220,6 @@ struct CorpusEntryPropertyTests {
     func testCorpusEntryCodable() async throws {
         let entry = CorpusEntry(
             input: "test input",
-            sparseCoverage: SparseCoverage(indices: [0, 5]),
             entryType: .coverage,
             failure: nil
         )
@@ -240,7 +231,6 @@ struct CorpusEntryPropertyTests {
         let decoded = try decoder.decode(CorpusEntry<String>.self, from: data)
 
         #expect(decoded.input == entry.input)
-        #expect(decoded.sparseCoverage == SparseCoverage(), "Coverage is not persisted")
         #expect(decoded.entryType == .coverage, "Defaults to .coverage on decode")
         #expect(decoded.failure == nil)
     }
@@ -284,18 +274,9 @@ struct EdgeCaseTests {
     func testCorpusComplexTypes() throws {
         var corpus = Corpus<[String]>()
 
-        corpus.add(
-            input: (["a", "b", "c"]),
-            sparse: SparseCoverage(indices: [0])
-        )
-        corpus.add(
-            input: ([]),
-            sparse: SparseCoverage(indices: [1])
-        )
-        corpus.add(
-            input: (["single"]),
-            sparse: SparseCoverage(indices: [2])
-        )
+        corpus.add(input: (["a", "b", "c"]))
+        corpus.add(input: ([]))
+        corpus.add(input: (["single"]))
 
         let count = corpus.count
         #expect(count == 3)

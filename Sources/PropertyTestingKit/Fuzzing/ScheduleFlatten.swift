@@ -67,7 +67,6 @@ func peelScheduleResult<each Input: Codable & Sendable>(
         CorpusEntry<repeat each Input>(
             input: repeat each entry.input.1,
             scheduleBytes: entry.input.0,
-            sparseCoverage: entry.sparseCoverage,
             entryType: entry.entryType,
             failure: entry.failure
         )

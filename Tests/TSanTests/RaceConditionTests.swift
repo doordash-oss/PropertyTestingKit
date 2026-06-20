@@ -168,9 +168,10 @@ struct HighContentionTests {
                     sparse = makeSparse(indices: [i, j])
                 }
                 SanCovCounters.endMeasurement(context)
+                _ = sparse  // measurement still exercised under TSan; corpus no longer stores it
 
                 // Add to corpus
-                corpus.add(input: (i * 100 + j), sparse: sparse)
+                corpus.add(input: (i * 100 + j))
             }
         }
 

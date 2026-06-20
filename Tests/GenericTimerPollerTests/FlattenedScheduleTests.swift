@@ -39,7 +39,6 @@ struct FlattenedScheduleTests {
         let entry = CorpusEntry<[UInt8], Int, String>(
             input: [9, 8, 7], 42, "hi",
             scheduleBytes: nil,
-            sparseCoverage: SparseCoverage(indices: [1, 2]),
             entryType: .coverage,
             failure: nil
         )
@@ -59,7 +58,6 @@ struct FlattenedScheduleTests {
         #expect(ei == 42)
         #expect(es == "hi")
         #expect(e.scheduleBytes == [9, 8, 7])
-        #expect(e.sparseCoverage.indices == [1, 2])
 
         // Failure: input peeled to (Int, String); the schedule that triggered it is
         // lifted from element 0 onto the `scheduleBytes` slot so it can be reproduced.
@@ -88,7 +86,6 @@ struct FlattenedScheduleTests {
             input: schedule, 42,
             // The engine sets this from the element-0 extractor during a scheduled run.
             scheduleBytes: schedule,
-            sparseCoverage: SparseCoverage(indices: [1, 2]),
             entryType: .coverage,
             failure: nil
         )

@@ -43,8 +43,8 @@ struct HitCountBucketsStrategyTests {
             sancov_dispatch_edge(&guardValue)
         }
         let sparse = evaluator.evaluate(context, coverageClient)
-        if let s = sparse?.sparse {
-            corpus.mergeCoverageAndAdd(input: input, scheduleBytes: nil, sparse: s)
+        if sparse != nil {
+            corpus.add(input: input)
         }
         return sparse != nil
     }

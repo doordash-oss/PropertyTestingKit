@@ -127,7 +127,6 @@ struct ScheduleDeterminismTest {
         let entry = CorpusEntry<[UInt8], Int>(
             input: bytes, 0,
             scheduleBytes: bytes,
-            sparseCoverage: SparseCoverage(indices: []),
             entryType: .coverage,
             failure: nil
         )

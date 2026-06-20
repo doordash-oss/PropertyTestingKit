@@ -24,7 +24,7 @@ import Testing
 @testable import FuzzCore
 
 /// A scheduler with no working set: every `next()` generates fresh, `observe`
-/// retains nothing, and it requires no probes.
+/// retains nothing, its `snapshot` is empty, and it requires no probes.
 private struct GenerativeOnlyFactory: SchedulerFactory {
     func makeScheduler<each Input: Codable & Sendable>(
         mutators: repeat Mutator<each Input>
@@ -39,7 +39,36 @@ private struct GenerativeOnlyFactory: SchedulerFactory {
                     poolParentID: nil
                 )
             },
-            observe: { _, _, _ in nil }
+            observe: { _, _, _ in },
+            snapshot: { [] }
+        )
+    }
+}
+
+/// A scheduler whose `observe` retains nothing per iteration, but whose
+/// `snapshot` vends exactly one (freshly generated) input. It proves the engine
+/// builds the corpus from `snapshot()` at run-end — NOT from `observe` as the run
+/// proceeds: the corpus must hold exactly the one snapshot entry regardless of
+/// how many iterations ran.
+private struct SnapshotOnlyFactory: SchedulerFactory {
+    func makeScheduler<each Input: Codable & Sendable>(
+        mutators: repeat Mutator<each Input>
+    ) -> AnyScheduler<repeat each Input> {
+        let mutators = (repeat each mutators)
+        return AnyScheduler(
+            requiredProbes: [],
+            next: {
+                var rng = FastRNG()
+                return ScheduledInput(
+                    input: generateInput(rng: &rng, mutators: repeat each mutators),
+                    poolParentID: nil
+                )
+            },
+            observe: { _, _, _ in },
+            snapshot: {
+                var rng = FastRNG()
+                return [generateInput(rng: &rng, mutators: repeat each mutators)]
+            }
         )
     }
 }
@@ -83,5 +112,23 @@ struct PoollessSchedulerTests {
         // It ran inputs (the engine never assumed a pool) and retained none.
         #expect(result.stats.totalInputs > 0)
         #expect(result.corpus.count == 0)
+    }
+
+    @Test("The engine builds the corpus from the scheduler's run-end snapshot")
+    func corpusComesFromSnapshot() async throws {
+        let result = try await fuzz(
+            duration: .seconds(60),
+            persistence: .ephemeral,
+            scheduler: SnapshotOnlyFactory(),
+            parallelism: 1,
+            plugins: { [self.stopAfter(50)] }
+        ) { (input: Int) in
+            blackHole(input)
+        }
+
+        // Many iterations ran, but `observe` retained nothing — the corpus holds
+        // exactly the one input `snapshot()` vended at run-end.
+        #expect(result.stats.totalInputs > 0)
+        #expect(result.corpus.count == 1)
     }
 }

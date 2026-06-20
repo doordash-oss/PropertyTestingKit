@@ -125,14 +125,15 @@ final class WeightedPoolCore<each Input: Codable & Sendable> {
 
     /// Report one executed iteration. Reads the coverage verdict out of the
     /// context (the only probe this scheduler requires) and, when the input was
-    /// interesting AND admitted, stores the typed input in its own pool and
-    /// returns the coverage to persist in the corpus — so the engine never reads
-    /// a coverage signal itself and owns no pool.
+    /// interesting AND admitted, stores the typed input in its own pool — so the
+    /// engine never reads a coverage signal itself and owns no pool. Retention is
+    /// no longer a per-iteration corpus write: the pool IS the retained set, and
+    /// the engine reads it back via `snapshot()` once at run-end.
     func observe(
         _ input: (repeat each Input),
         _ context: RawExecutionContext,
         source: SchedulerSource
-    ) -> SparseCoverage? {
+    ) {
         let verdict = context[CoverageProbeKey.self]
         let coverage = verdict?.coverage
         // The strategy's culling vocabulary (k-grams, edge-buckets) when it
@@ -157,7 +158,14 @@ final class WeightedPoolCore<each Input: Codable & Sendable> {
         let depth: Int
         if case let .pool(parent) = poolSource { depth = mutationDepth(for: parent) } else { depth = 1 }
         SchedulerProbe.observe?(poolSource, depth, admittedID != nil)
-        return admittedID != nil ? coverage : nil
+    }
+
+    /// The inputs the pool currently retains, in live (drawable) order — the
+    /// scheduler's contribution to the corpus, read once by the engine at
+    /// run-end. Evicted entries are already gone from `live`, so the snapshot is
+    /// exactly the surviving working set, not a running tally.
+    func snapshot() -> [(repeat each Input)] {
+        live.map { pool[$0] }
     }
 
     /// Sum of the mutator-measured sizes across the input pack — the pool's
@@ -363,7 +371,8 @@ struct WeightedPoolFactory: SchedulerFactory {
         return FuzzCore.AnyScheduler<repeat each Input>(
             requiredProbes: [CoverageProbeKey.self],
             next: { core.next() },
-            observe: { input, context, source in core.observe(input, context, source: source) }
+            observe: { input, context, source in core.observe(input, context, source: source) },
+            snapshot: { core.snapshot() }
         )
     }
 }

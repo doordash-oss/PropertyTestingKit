@@ -170,7 +170,6 @@ extension FuzzPlugin {
                         .submitToCorpus(.init(
                             input: minimized,
                             scheduleBytes: context.scheduleBytes,
-                            sparseCoverage: context.executionContext[CoverageProbeKey.self]?.coverage ?? SparseCoverage(),
                             entryType: .failure
                         )),
                         .recordIssue(.init(

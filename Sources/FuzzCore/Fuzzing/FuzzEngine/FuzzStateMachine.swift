@@ -310,19 +310,12 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
                     for probe in probes { probe.contribute(to: &execContext) }
 
                     // Retention is the scheduler's call. `observe` reads whatever
-                    // signals it needs out of the context, folds them into its
-                    // own state (and its own working set, if any), and returns
-                    // the signature to persist when the input should be retained
-                    // in the corpus — or nil to retain nothing. The engine names
-                    // no signal and owns no pool: it only persists the corpus
-                    // entry (the result/dedup/cross-engine-merge store).
-                    if let signature = scheduler.observe(input, execContext, source) {
-                        corpus.mergeCoverageAndAdd(
-                            input: input,
-                            scheduleBytes: currentScheduleBytes,
-                            sparse: signature
-                        )
-                    }
+                    // signals it needs out of the context and folds them into its
+                    // own state and working set. The engine persists nothing here:
+                    // the corpus is built once, after the loop, from the
+                    // scheduler's retained set (`snapshot()`). The engine names no
+                    // signal and owns no pool.
+                    scheduler.observe(input, execContext, source)
 
                     // Iteration event (sync, hot path) before failure event.
                     // Dispatched directly — not via an `[PluginEvent]` array — to
@@ -386,6 +379,16 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
                 "[FUZZ] FuzzStateMachine.start() finished: totalInputs=\(stats.totalInputs), duration=\(stats.duration), stopReason=\(stats.stopReason)"
             )
         }
+        // Build the corpus from the scheduler's retained set, now that the run
+        // is over. The corpus is the scheduler's working set serialized — not a
+        // running tally maintained per iteration — so evicted inputs are already
+        // absent. Plugin-submitted entries (e.g. tagged failures) appended during
+        // the run via `addToCorpus` are preserved; these retained inputs are
+        // appended after them.
+        for retained in scheduler.snapshot() {
+            corpus.add(input: retained, entryType: .coverage)
+        }
+
         // Assemble the run-spanning summary from the installed probes (e.g. the
         // coverage probe contributes its union of covered edges). The engine
         // names no signal — each probe contributes its own aggregate by key.
@@ -483,7 +486,6 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
             addToCorpus(
                 corpusAction.input,
                 scheduleBytes: corpusAction.scheduleBytes,
-                sparse: corpusAction.sparseCoverage,
                 type: corpusAction.entryType,
                 failureInfo: corpusAction.failureInfo
             )
@@ -506,10 +508,10 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
     }
 
     private func addToCorpus(
-        _ input: (repeat each Input), scheduleBytes: [UInt8]? = nil, sparse: SparseCoverage,
+        _ input: (repeat each Input), scheduleBytes: [UInt8]? = nil,
         type: CorpusEntryType, failureInfo: FailureInfo?
     ) {
-        corpus.add(input: input, scheduleBytes: scheduleBytes, sparse: sparse, entryType: type, failure: failureInfo)
+        corpus.add(input: input, scheduleBytes: scheduleBytes, entryType: type, failure: failureInfo)
     }
 
 }

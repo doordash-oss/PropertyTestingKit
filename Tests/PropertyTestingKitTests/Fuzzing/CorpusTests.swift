@@ -22,22 +22,17 @@ import FunctionSpy
 struct CorpusTests {
 
     @Test("Corpus adds interesting entries")
-    func testCorpusAddsInteresting() {
+    func testCorpusAppendsEntries() {
+        // The corpus no longer judges interestingness or dedups — membership is
+        // the scheduler's decision, and the corpus just stores what it is given.
+        // (Cross-engine input-identity dedup lives in `mergeCorpusSnapshots`.)
         let corpus = Corpus<Int>()
-        var signatureHashes = Set<Int>()
 
-        let sparse1 = SparseCoverage(indices: [0])
-        let sparse2 = SparseCoverage(indices: [1])
-        let sparse3 = SparseCoverage(indices: [0])  // Duplicate coverage
+        corpus.add(input: 1)
+        corpus.add(input: 2)
+        corpus.add(input: 3)
 
-        let added1 = corpus.addIfInteresting(input: (1), sparse: sparse1, signatureHashes: &signatureHashes)
-        let added2 = corpus.addIfInteresting(input: (2), sparse: sparse2, signatureHashes: &signatureHashes)
-        let added3 = corpus.addIfInteresting(input: (3), sparse: sparse3, signatureHashes: &signatureHashes)
-
-        #expect(added1)
-        #expect(added2)
-        #expect(!added3)  // Redundant
-
-        #expect(corpus.count == 2)
+        #expect(corpus.count == 3)
+        #expect(corpus.inputs == [1, 2, 3])
     }
 }

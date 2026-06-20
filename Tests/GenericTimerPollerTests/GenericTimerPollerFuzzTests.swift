@@ -252,8 +252,7 @@ struct GenericTimerPollerFuzzTests {
                 // Poller deinits here — deinit cancels task and finishes continuation
             }
             for (i, entry) in result.corpus.entries.enumerated() {
-                let edges = entry.sparseCoverage.indices.sorted()
-                print("Entry \(i): \(edges.count) edges, input=\(entry.input)")
+                print("Entry \(i): input=\(entry.input)")
             }
         }
     }
@@ -287,8 +286,7 @@ struct GenericTimerPollerFuzzTests {
                     }
                 }
             }
-            let allEdges = result.corpus.entries.reduce(into: Set<UInt32>()) { $0.formUnion($1.sparseCoverage.indices) }
-            print("Schedule fuzz: \(result.stats.totalInputs) iterations, \(result.corpus.entries.count) corpus entries, \(String(format: "%.1f", result.stats.inputsPerSecond)) iter/s, \(allEdges.count) unique edges total")
+            print("Schedule fuzz: \(result.stats.totalInputs) iterations, \(result.corpus.entries.count) corpus entries, \(String(format: "%.1f", result.stats.inputsPerSecond)) iter/s")
         }
     }
 
@@ -316,13 +314,6 @@ struct GenericTimerPollerFuzzTests {
 
             let corpusCount = result.corpus.entries.count
             print("Fixed input: \(result.stats.totalInputs) iterations, \(corpusCount) corpus entries")
-
-            // Dump edge -> PC mapping for all edges seen
-            let allEdges = result.corpus.entries.reduce(into: Set<UInt32>()) { $0.formUnion($1.sparseCoverage.indices) }
-            for edge in allEdges.sorted() {
-                let pc = SanCovCounters.getPC(for: Int(edge))
-                print("[EDGE_PC] \(edge)|\(pc)")
-            }
 
             #expect(
                 corpusCount <= 10,

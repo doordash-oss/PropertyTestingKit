@@ -65,14 +65,17 @@ public enum SchedulerSource: Equatable, Sendable {
 /// per-engine scheduler implementation. Built by a `SchedulerFactory`, one fresh
 /// instance per engine, so the captured state needs no synchronization.
 ///
-/// The engine consults it through exactly two calls per iteration:
+/// The engine consults it through three calls:
 /// - `next()` — produce the next input to run (generate fresh or mutate one of
 ///   the scheduler's own retained inputs).
 /// - `observe(...)` — report what just ran (the typed input + the per-execution
-///   `RawExecutionContext`); the scheduler folds the signals into its state and
-///   returns a signature to persist when the input should be retained in the
-///   corpus, or `nil` to retain nothing. The scheduler stores the input in its
-///   own working set as it sees fit; the engine only persists the corpus entry.
+///   `RawExecutionContext`); the scheduler folds the signals into its own state
+///   and working set as it sees fit. It returns nothing: retention is no longer
+///   a per-iteration corpus write. The engine names no signal and owns no pool.
+/// - `snapshot()` — vend the inputs the scheduler currently retains. The engine
+///   calls this ONCE, after the run loop, to build the corpus. The corpus is the
+///   scheduler's retained set serialized; it is no longer maintained as the run
+///   proceeds, and coverage is no longer a corpus concern.
 public struct AnyScheduler<each Input: Codable & Sendable> {
     /// The instrumentation signals this scheduler reads. The engine installs
     /// only these probes, so a scheduler that wants nothing exotic pays for
@@ -80,18 +83,23 @@ public struct AnyScheduler<each Input: Codable & Sendable> {
     public let requiredProbes: [any InstrumentationKey.Type]
     /// Produce the next input to run.
     public let next: () -> ScheduledInput<repeat each Input>
-    /// Report one executed iteration; return the signature to persist if the
-    /// input should be retained in the corpus, else `nil`.
-    public let observe: ((repeat each Input), RawExecutionContext, SchedulerSource) -> SparseCoverage?
+    /// Report one executed iteration; the scheduler folds the signals into its
+    /// own state. No return: the engine persists nothing per iteration.
+    public let observe: ((repeat each Input), RawExecutionContext, SchedulerSource) -> Void
+    /// The inputs the scheduler currently retains, vended once at run-end to
+    /// build the corpus. A pool-less scheduler returns `[]`.
+    public let snapshot: () -> [(repeat each Input)]
 
     public init(
         requiredProbes: [any InstrumentationKey.Type],
         next: @escaping () -> ScheduledInput<repeat each Input>,
-        observe: @escaping ((repeat each Input), RawExecutionContext, SchedulerSource) -> SparseCoverage?
+        observe: @escaping ((repeat each Input), RawExecutionContext, SchedulerSource) -> Void,
+        snapshot: @escaping () -> [(repeat each Input)]
     ) {
         self.requiredProbes = requiredProbes
         self.next = next
         self.observe = observe
+        self.snapshot = snapshot
     }
 }
 

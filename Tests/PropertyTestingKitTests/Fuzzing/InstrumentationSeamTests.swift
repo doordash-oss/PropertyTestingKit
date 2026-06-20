@@ -93,12 +93,15 @@ struct InstrumentationSeamTests {
 
     /// A scheduler that reads the count probe and retains inputs that covered
     /// something — proving a scheduler decides admission purely from a view it
-    /// asked for, owns its own production, and erases behind `AnyScheduler` with
-    /// the engine naming no signal. Generic over the pack, like any real
+    /// asked for, owns its own production and working set, and erases behind
+    /// `AnyScheduler` with the engine naming no signal. `observe` folds into its
+    /// own `retained` set; `snapshot` vends that set (which the engine reads back
+    /// at run-end to build the corpus). Generic over the pack, like any real
     /// scheduler that owns the typed inputs it schedules.
     final class CountThresholdScheduler<each Input: Codable & Sendable> {
         let requiredProbes: [any InstrumentationKey.Type] = [CountKey.self]
         private(set) var observedEdges: [Int] = []
+        private(set) var retained: [(repeat each Input)] = []
         private let produce: () -> ScheduledInput<repeat each Input>
 
         init(produce: @escaping () -> ScheduledInput<repeat each Input>) {
@@ -111,43 +114,49 @@ struct InstrumentationSeamTests {
             _ input: (repeat each Input),
             _ context: RawExecutionContext,
             source: SchedulerSource
-        ) -> SparseCoverage? {
-            guard let view = context[CountKey.self] else { return nil }
+        ) {
+            guard let view = context[CountKey.self] else { return }
             observedEdges.append(view.edges)
-            guard view.edges > 0 else { return nil }
-            return SparseCoverage()  // a non-nil signature ⇒ retain
+            guard view.edges > 0 else { return }
+            retained.append((repeat each input))  // covered something ⇒ retain
         }
+
+        func snapshot() -> [(repeat each Input)] { retained }
 
         func erased() -> AnyScheduler<repeat each Input> {
             AnyScheduler(
                 requiredProbes: requiredProbes,
                 next: { self.next() },
-                observe: { self.observe($0, $1, source: $2) }
+                observe: { self.observe($0, $1, source: $2) },
+                snapshot: { self.snapshot() }
             )
         }
     }
 
-    @Test("A scheduler reads its required probe and signals admission")
+    @Test("A scheduler reads its required probe and retains on admission")
     func schedulerReadsProbeAndAdmits() {
         let sched = CountThresholdScheduler<Int>(
             produce: { ScheduledInput(input: 0, poolParentID: nil) })
 
         var hit = RawExecutionContext()
         hit.set(CountKey.self, CountView(edges: 3))
-        #expect(sched.observe(0, hit, source: .scheduled) != nil)
+        sched.observe(0, hit, source: .scheduled)
         #expect(sched.observedEdges == [3])
+        #expect(sched.snapshot().count == 1)  // covered ⇒ retained
 
         var miss = RawExecutionContext()
         miss.set(CountKey.self, CountView(edges: 0))
-        #expect(sched.observe(0, miss, source: .scheduled) == nil)
+        sched.observe(0, miss, source: .scheduled)
+        #expect(sched.snapshot().count == 1)  // covered nothing ⇒ not retained
     }
 
     @Test("A scheduler retains nothing when its probe is absent")
     func schedulerIgnoresAbsentProbe() {
         let sched = CountThresholdScheduler<Int>(
             produce: { ScheduledInput(input: 0, poolParentID: nil) })
-        #expect(sched.observe(0, RawExecutionContext(), source: .external) == nil)
+        sched.observe(0, RawExecutionContext(), source: .external)
         #expect(sched.observedEdges.isEmpty)
+        #expect(sched.snapshot().isEmpty)
     }
 
     @Test("requiredProbes advertises the scheduler's instrumentation needs")

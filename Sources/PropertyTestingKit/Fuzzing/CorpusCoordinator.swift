@@ -517,34 +517,38 @@ private func mergeResults<each Input: Codable & Sendable>(
     )
 }
 
-/// Merges multiple corpus snapshots into one, combining coverage.
-private func mergeCorpusSnapshots<each Input: Codable & Sendable>(
+/// Merges multiple parallel engines' corpus snapshots into one, deduplicating by
+/// input identity.
+///
+/// Coverage is no longer a corpus concern, so the dedup key is the entry's
+/// encoded input bytes — two engines that retained the same input keep one copy.
+/// `CorpusEntry.encode` writes exactly the input array, so identical inputs
+/// encode identically; an entry that fails to encode is kept rather than dropped.
+///
+/// Internal (not private) so the dedup contract can be unit-tested directly.
+func mergeCorpusSnapshots<each Input: Codable & Sendable>(
     _ snapshots: [CorpusSnapshot<repeat each Input>]
 ) -> CorpusSnapshot<repeat each Input> {
-    @Dependency(\.corpusRegistry) var corpusRegistry
-
     guard let first = snapshots.first else {
-        return CorpusSnapshot<repeat each Input>(
-            entries: []
-        )
+        return CorpusSnapshot<repeat each Input>(entries: [])
     }
 
     guard snapshots.count > 1 else {
         return first
     }
 
-    // Create a temporary corpus to deduplicate entries
-    let mergedCorpus: Corpus<repeat each Input> = corpusRegistry.getCorpus()
+    let encoder = JSONEncoder()
+    var seen = Set<Data>()
+    var merged: [CorpusEntry<repeat each Input>] = []
 
-    // Use a local signature hash set for deduplication
-    var signatureHashes = Set<Int>()
-
-    // Add all entries - addIfInteresting handles deduplication by coverage
     for snapshot in snapshots {
         for entry in snapshot.entries {
-            _ = mergedCorpus.addIfInteresting(input: entry.input, sparse: entry.sparseCoverage, signatureHashes: &signatureHashes)
+            if let key = try? encoder.encode(entry), !seen.insert(key).inserted {
+                continue  // an identical input from another engine already kept
+            }
+            merged.append(entry)
         }
     }
 
-    return mergedCorpus.snapshot()
+    return CorpusSnapshot<repeat each Input>(entries: merged)
 }

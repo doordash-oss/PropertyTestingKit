@@ -261,20 +261,17 @@ public enum FuzzPluginAction<each T: Sendable>: Sendable {
         public let input: (repeat each T)
         /// Schedule bytes for this corpus entry.
         public let scheduleBytes: [UInt8]?
-        public let sparseCoverage: SparseCoverage
         public let entryType: CorpusEntryType
         public let failureInfo: FailureInfo?
 
         public init(
             input: consuming (repeat each T),
             scheduleBytes: [UInt8]? = nil,
-            sparseCoverage: SparseCoverage,
             entryType: CorpusEntryType,
             failureInfo: FailureInfo? = nil
         ) {
             self.input = input
             self.scheduleBytes = scheduleBytes
-            self.sparseCoverage = sparseCoverage
             self.entryType = entryType
             self.failureInfo = failureInfo
         }

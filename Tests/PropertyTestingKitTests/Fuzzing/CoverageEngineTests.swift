@@ -138,8 +138,8 @@ struct CoverageEngineTests {
             sancov_dispatch_edge(&g31)
             sancov_dispatch_edge(&g32)
             let sparse = evaluator.evaluate(context, coverageClient)
-            if let s = sparse?.sparse {
-                corpus.mergeCoverageAndAdd(input: input, scheduleBytes: nil, sparse: s)
+            if sparse != nil {
+                corpus.add(input: input)
             }
             return sparse != nil
         }
@@ -166,16 +166,14 @@ struct CoverageEngineTests {
         let evaluator: CoverageEvaluator = strategy.makeEvaluator()
 
         let sparse = evaluator.evaluate(context, coverageClient)
-        if let s = sparse?.sparse {
-            corpus.mergeCoverageAndAdd(input: 7, scheduleBytes: [9, 9], sparse: s)
+        if sparse != nil {
+            corpus.add(input: 7, scheduleBytes: [9, 9])
         }
 
         #expect(sparse != nil, "An always-true decision is interesting")
         #expect(corpus.count == 1, "The engine records the interesting input")
         #expect(corpus.entries.first?.scheduleBytes == [9, 9],
                 "Schedule bytes ride with the entry as a storage concern")
-        #expect(corpus.entries.first?.sparseCoverage == sparse?.sparse,
-                "The entry carries the run's judged coverage")
     }
 
     /// The aggregate covered-edge set used to live on the `Corpus` as a bitmap;
@@ -312,14 +310,13 @@ struct CoverageEngineTests {
         let strategy = CoverageStrategy { coverage in !coverage.indices.isEmpty }
         let evaluator: CoverageEvaluator = strategy.makeEvaluator()
         let sparse = evaluator.evaluate(context, client)
-        if let s = sparse?.sparse {
-            corpus.mergeCoverageAndAdd(input: 1, scheduleBytes: nil, sparse: s)
+        if sparse != nil {
+            corpus.add(input: 1)
         }
 
         #expect(snapshots.value == 1,
-                "the decision's snapshot is reused for the corpus add")
-        #expect(corpus.entries.first?.sparseCoverage == sparse?.sparse,
-                "the entry carries the judged coverage")
+                "evaluating the decision takes the one coverage snapshot; storage takes none")
+        #expect(corpus.count == 1, "the interesting input is stored")
     }
 
     /// `decide` may live in instrumented code (a user's test target). Edges it
