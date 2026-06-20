@@ -30,11 +30,28 @@
 /// applies, whoever caused it.
 import FuzzCore
 
-/// Namespace for the library's built-in scheduler factories. Not a scheduler
-/// itself — each static method returns a concrete `any SchedulerFactory`, so the
+/// Decides which inputs the engine mutates and when it generates fresh ones, and
+/// vends the instrumentation the chosen signal needs. Wrapping `any SchedulerFactory`
+/// (rather than being one concrete factory) keeps the design's promise that a
+/// `MutationScheduler` can vend any scheduler, not only the weighted pool. The
 /// signal config (coverage strategy, and in future a cmp source) travels with the
 /// scheduler the caller picks rather than being a top-level `fuzz()` knob.
-public enum MutationScheduler {
+public struct MutationScheduler: SchedulerFactory {
+    let factory: any SchedulerFactory
+
+    /// Build this engine's scheduler at its input pack by forwarding to the
+    /// wrapped factory (one fresh scheduler per engine).
+    public func makeScheduler<each Input: Codable & Sendable>(
+        mutators: repeat Mutator<each Input>
+    ) -> AnyScheduler<repeat each Input> {
+        factory.makeScheduler(mutators: repeat each mutators)
+    }
+
+    /// Forward the wrapped factory's instrumentation providers (e.g. the weighted
+    /// pool's coverage provider).
+    public func makeProviders() -> [any InstrumentationProvider] {
+        factory.makeProviders()
+    }
 
     /// A weighted mutation pool that picks generation vs mutation by a ratio.
     ///
@@ -65,13 +82,13 @@ public enum MutationScheduler {
         generationRatio: Double = 0.1,
         capacity: Int? = nil,
         coverageStrategy: CoverageStrategy = .pathTrie
-    ) -> any SchedulerFactory {
-        WeightedPoolFactory(
+    ) -> MutationScheduler {
+        MutationScheduler(factory: WeightedPoolFactory(
             admission: admission,
             makePolicies: policies,
             generationRatio: generationRatio,
             capacity: capacity,
             coverageStrategy: coverageStrategy
-        )
+        ))
     }
 }
