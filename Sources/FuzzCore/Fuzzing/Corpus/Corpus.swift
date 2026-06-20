@@ -63,25 +63,15 @@ public final class Corpus<each Input: Codable & Sendable>: @unchecked Sendable {
 
     // MARK: - Adding Entries
 
-    /// Add an entry unconditionally with metadata.
-    ///
-    /// The engine's storage entry point: it appends the scheduler's retained
-    /// inputs at run-end, and plugins submit tagged entries (e.g. failures)
-    /// during the run. Membership is the scheduler's (or a plugin's) decision —
-    /// the corpus no longer judges interestingness or tags entries with coverage.
+    /// Append an input. Membership is the scheduler's decision — the corpus is a
+    /// plain store and judges nothing. (A value builder used by tests and the
+    /// merge path; the engine materializes its result as a `CorpusSnapshot`
+    /// directly.)
     public func add(
         input: (repeat each Input),
-        scheduleBytes: [UInt8]? = nil,
-        entryType: CorpusEntryType = .coverage,
-        failure: FailureInfo? = nil
+        scheduleBytes: [UInt8]? = nil
     ) {
-        let entry = CorpusEntry(
-            input: repeat each input,
-            scheduleBytes: scheduleBytes,
-            entryType: entryType,
-            failure: failure
-        )
-        entries.append(entry)
+        entries.append(CorpusEntry(input: repeat each input, scheduleBytes: scheduleBytes))
     }
 }
 

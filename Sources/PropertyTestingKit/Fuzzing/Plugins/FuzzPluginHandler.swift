@@ -164,14 +164,12 @@ extension FuzzPlugin {
                         print(message)
                     }
 
-                    // Return actions: select for mutation, add to corpus, and record issue
+                    // Return actions: bias mutation toward the bug's neighbourhood
+                    // and record the issue. The minimized input is NOT persisted to
+                    // the corpus — failure retention for regression is tracked
+                    // separately (corpus is now purely the scheduler's retained set).
                     return [
                         .selectForMutation(.init(input: minimized, scheduleBytes: context.scheduleBytes)),
-                        .submitToCorpus(.init(
-                            input: minimized,
-                            scheduleBytes: context.scheduleBytes,
-                            entryType: .failure
-                        )),
                         .recordIssue(.init(
                             comment: Comment(rawValue: message),
                             sourceLocation: context.sourceLocation

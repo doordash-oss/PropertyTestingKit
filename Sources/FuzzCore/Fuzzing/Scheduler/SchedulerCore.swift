@@ -105,10 +105,10 @@ public struct AnyScheduler<each Input: Codable & Sendable> {
 
 /// Builds a fresh per-engine scheduler at the engine's input pack.
 ///
-/// Pack-generic so the produced `AnyScheduler` can own typed inputs — mirrors
-/// `CorpusRegistryProtocol.getCorpus<each T>()`. `Sendable` because one factory
-/// is shared across parallel engines (each calls `makeScheduler` to get its own
-/// scheduler); the produced scheduler is per-engine and not shared.
+/// Pack-generic so the produced `AnyScheduler` can own the typed inputs it
+/// schedules. `Sendable` because one factory is shared across parallel engines
+/// (each calls `makeScheduler` to get its own scheduler); the produced scheduler
+/// is per-engine and not shared.
 public protocol SchedulerFactory: Sendable {
     func makeScheduler<each Input: Codable & Sendable>(
         mutators: repeat Mutator<each Input>

@@ -66,9 +66,7 @@ func peelScheduleResult<each Input: Codable & Sendable>(
         // exactly as before the flattening.
         CorpusEntry<repeat each Input>(
             input: repeat each entry.input.1,
-            scheduleBytes: entry.input.0,
-            entryType: entry.entryType,
-            failure: entry.failure
+            scheduleBytes: entry.input.0
         )
     }
 

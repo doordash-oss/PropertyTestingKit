@@ -38,9 +38,7 @@ struct FlattenedScheduleTests {
     func peelMovesElementZeroToScheduleBytes() throws {
         let entry = CorpusEntry<[UInt8], Int, String>(
             input: [9, 8, 7], 42, "hi",
-            scheduleBytes: nil,
-            entryType: .coverage,
-            failure: nil
+            scheduleBytes: nil
         )
         let extended = FuzzResult<[UInt8], Int, String>(
             corpus: CorpusSnapshot(entries: [entry]),
@@ -85,9 +83,7 @@ struct FlattenedScheduleTests {
         let entry = CorpusEntry<[UInt8], Int>(
             input: schedule, 42,
             // The engine sets this from the element-0 extractor during a scheduled run.
-            scheduleBytes: schedule,
-            entryType: .coverage,
-            failure: nil
+            scheduleBytes: schedule
         )
         let snapshot = CorpusSnapshot<[UInt8], Int>(entries: [entry])
 

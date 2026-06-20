@@ -218,11 +218,7 @@ struct CorpusEntryPropertyTests {
 
     @Test("CorpusEntry preserves input through Codable")
     func testCorpusEntryCodable() async throws {
-        let entry = CorpusEntry(
-            input: "test input",
-            entryType: .coverage,
-            failure: nil
-        )
+        let entry = CorpusEntry(input: "test input")
 
         let encoder = JSONEncoder.corpusEncoder()
         let decoder = JSONDecoder.corpusDecoder()
@@ -231,8 +227,7 @@ struct CorpusEntryPropertyTests {
         let decoded = try decoder.decode(CorpusEntry<String>.self, from: data)
 
         #expect(decoded.input == entry.input)
-        #expect(decoded.entryType == .coverage, "Defaults to .coverage on decode")
-        #expect(decoded.failure == nil)
+        #expect(decoded.scheduleBytes == nil, "Schedule bytes are not persisted")
     }
 }
 

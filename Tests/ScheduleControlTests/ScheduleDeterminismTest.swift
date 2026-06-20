@@ -126,9 +126,7 @@ struct ScheduleDeterminismTest {
 
         let entry = CorpusEntry<[UInt8], Int>(
             input: bytes, 0,
-            scheduleBytes: bytes,
-            entryType: .coverage,
-            failure: nil
+            scheduleBytes: bytes
         )
         let snapshot = CorpusSnapshot<[UInt8], Int>(entries: [entry])
         try persistence.save(snapshot, to: dir)

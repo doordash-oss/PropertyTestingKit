@@ -191,8 +191,6 @@ public enum FuzzPluginAction<each T: Sendable>: Sendable {
     case queueInputs(QueueInputsAction)
     /// Select an input for mutation (e.g., shrunk input).
     case selectForMutation(SelectForMutationAction)
-    /// Submit an input to the corpus.
-    case submitToCorpus(SubmitToCorpusAction)
 
     /// Action to stop fuzzing.
     public struct StopAction: Sendable {
@@ -255,27 +253,6 @@ public enum FuzzPluginAction<each T: Sendable>: Sendable {
         }
     }
 
-    /// Action to submit an input to the corpus.
-    public struct SubmitToCorpusAction: Sendable {
-        /// The input to submit to the corpus.
-        public let input: (repeat each T)
-        /// Schedule bytes for this corpus entry.
-        public let scheduleBytes: [UInt8]?
-        public let entryType: CorpusEntryType
-        public let failureInfo: FailureInfo?
-
-        public init(
-            input: consuming (repeat each T),
-            scheduleBytes: [UInt8]? = nil,
-            entryType: CorpusEntryType,
-            failureInfo: FailureInfo? = nil
-        ) {
-            self.input = input
-            self.scheduleBytes = scheduleBytes
-            self.entryType = entryType
-            self.failureInfo = failureInfo
-        }
-    }
 }
 
 // MARK: - Analysis Actions (regression-valid subset)
@@ -285,7 +262,7 @@ public enum FuzzPluginAction<each T: Sendable>: Sendable {
 /// A replay runs a fixed set of inputs (the saved corpus) and treats the on-disk
 /// corpus as authoritative, so the only meaningful actions are *control* and
 /// *observation* — `stop` and `recordIssue`. The *write* actions that mutate the
-/// run (`queueInputs`, `selectForMutation`, `submitToCorpus`) are deliberately
+/// run (`queueInputs`, `selectForMutation`) are deliberately
 /// absent: a handler typed to emit `AnalysisAction` literally cannot name them, so
 /// `regress(...)` can only ever be handed plugins that emit valid actions. This is
 /// the compile-time guarantee — there is no runtime gate.

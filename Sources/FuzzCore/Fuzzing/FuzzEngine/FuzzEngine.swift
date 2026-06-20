@@ -41,7 +41,6 @@ import Testing
 ///
 public final class FuzzEngine<each Input: Codable & Sendable>: @unchecked Sendable {
     @Dependency(\.dateClient) private var dateClient
-    @Dependency(\.corpusRegistry) private var corpusRegistry
 
     // Type alias for the combined input tuple
     public typealias InputTuple = (repeat each Input)
@@ -172,13 +171,10 @@ public final class FuzzEngine<each Input: Codable & Sendable>: @unchecked Sendab
             )
         }
 
-        let corpus: Corpus<repeat each Input> = corpusRegistry.getCorpus()
-
         let stateMachine = FuzzStateMachine<repeat each Input>(
             seeds: seeds,
             mutators: mutators,
             inputSize: inputSize,
-            corpus: corpus,
             instrumentationProviders: makeInstrumentationProviders(),
             scheduler: schedulerFactory.makeScheduler(mutators: repeat each mutators),
             processSyncPlugins: processSyncPlugins,
@@ -191,12 +187,11 @@ public final class FuzzEngine<each Input: Codable & Sendable>: @unchecked Sendab
 
         let stateMachineResult = await stateMachine.start()
 
-        // Extract copyable fields
+        // Extract copyable fields. The corpus is already a value snapshot,
+        // materialized by the state machine from the scheduler at run-end.
         let stats = stateMachineResult.stats
         let failures = stateMachineResult.failures
-        let resultCorpus = stateMachineResult.corpus
-
-        let finalSnapshot = resultCorpus.snapshot()
+        let finalSnapshot = stateMachineResult.corpus
 
         // Send .end event to plugins (for coverage gap analysis, etc.). The
         // run-spanning summary is assembled from the installed probes (e.g. the
