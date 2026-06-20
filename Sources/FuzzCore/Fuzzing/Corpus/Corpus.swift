@@ -12,73 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//  Storage and serialization of the inputs a scheduler chose to retain.
+//  The corpus: a serializable snapshot of the inputs a scheduler chose to retain.
+//
+//  There is no mutable corpus type. The engine holds no corpus during a run; it
+//  materializes this snapshot once, at run-end, from the scheduler's retained set
+//  (`AnyScheduler.snapshot()`). The corpus makes no retention decision and carries
+//  no coverage — interestingness is the scheduler's call, and the aggregate
+//  covered-edge set is the coverage probe's.
 //
 
-import Dependencies
 import Foundation
 
-// MARK: - Corpus Coding Keys
-
-/// A collection of test inputs the scheduler chose to retain.
-///
-/// The corpus is the engine's input store: it holds the inputs a scheduler
-/// retained (read back from the scheduler's working set at run-end) plus any
-/// entries plugins submitted during the run (e.g. tagged failures). It makes no
-/// retention decision and carries no coverage: interestingness is the
-/// scheduler's call, and the aggregate covered-edge set is the coverage probe's.
-///
-/// Thread safety: Access is serialized by `FuzzStateMachine`, so this
-/// class does not need its own synchronization.
-public final class Corpus<each Input: Codable & Sendable>: @unchecked Sendable {
-
-    /// All entries in the corpus.
-    public internal(set) var entries: [CorpusEntry<repeat each Input>]
-
-    public init(entries: [CorpusEntry<repeat each Input>]) {
-        self.entries = entries
-    }
-
-    public init() {
-        self.entries = []
-    }
-
-    // MARK: - Serialization
-
-    /// Create a snapshot of the corpus state for encoding.
-    public func snapshot() -> CorpusSnapshot<repeat each Input> {
-        return CorpusSnapshot(entries: entries)
-    }
-
-    /// Number of entries in the corpus.
-    public var count: Int { entries.count }
-
-    /// Whether the corpus is empty.
-    public var isEmpty: Bool { entries.isEmpty }
-
-    /// All inputs in the corpus.
-    public var inputs: [(repeat each Input)] {
-        entries.map(\.input)
-    }
-
-    // MARK: - Adding Entries
-
-    /// Append an input. Membership is the scheduler's decision — the corpus is a
-    /// plain store and judges nothing. (A value builder used by tests and the
-    /// merge path; the engine materializes its result as a `CorpusSnapshot`
-    /// directly.)
-    public func add(
-        input: (repeat each Input),
-        scheduleBytes: [UInt8]? = nil
-    ) {
-        entries.append(CorpusEntry(input: repeat each input, scheduleBytes: scheduleBytes))
-    }
-}
-
-// MARK: - Corpus Snapshot
-
-/// A serializable snapshot of corpus state.
-/// On disk this is a plain JSON array of entries: `[{input: ...}, ...]`
+/// A serializable snapshot of the retained corpus.
+/// On disk this is a plain JSON array of entries: `[[42], ["hello", 3]]`.
 public struct CorpusSnapshot<each Input: Codable & Sendable>: Sendable, Codable {
     public let entries: [CorpusEntry<repeat each Input>]
 
@@ -91,6 +37,11 @@ public struct CorpusSnapshot<each Input: Codable & Sendable>: Sendable, Codable 
     public var count: Int { entries.count }
     public var isEmpty: Bool { entries.isEmpty }
 
+    /// All inputs in the corpus.
+    public var inputs: [(repeat each Input)] {
+        entries.map(\.input)
+    }
+
     public func encode(to encoder: any Encoder) throws {
         var container = encoder.singleValueContainer()
         try container.encode(entries)
@@ -99,12 +50,5 @@ public struct CorpusSnapshot<each Input: Codable & Sendable>: Sendable, Codable 
     public init(from decoder: any Decoder) throws {
         let container = try decoder.singleValueContainer()
         self.entries = try container.decode([CorpusEntry<repeat each Input>].self)
-    }
-}
-
-extension Corpus {
-    /// Create a corpus from a snapshot.
-    public convenience init(from snapshot: CorpusSnapshot<repeat each Input>) {
-        self.init(entries: snapshot.entries)
     }
 }

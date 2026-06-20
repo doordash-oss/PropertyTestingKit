@@ -194,7 +194,6 @@ private func measureDeterminism(
     let evaluator: CoverageEvaluator = CoverageStrategy.pathTrie.makeEvaluator()
     evaluator.setup?(ctx)
     let coverageClient = CoverageCountersClient.liveValue
-    let corpus = Corpus<Int>()
 
     var uniqueCount = 0
 
@@ -407,7 +406,6 @@ struct PathTrieReuseTest {
         let evaluator: CoverageEvaluator = CoverageStrategy.pathTrie.makeEvaluator()
         evaluator.setup?(ctx)
         let coverageClient = CoverageCountersClient.liveValue
-        let corpus = Corpus<Int>()
 
         // Run 1: first path should be unique
         Self.stableCode()
@@ -452,7 +450,6 @@ struct PathTrieReuseTest {
         let evaluator: CoverageEvaluator = CoverageStrategy.pathTrie.makeEvaluator()
         evaluator.setup?(ctx)
         let coverageClient = CoverageCountersClient.liveValue
-        let corpus = Corpus<Int>()
 
         // Run 3 times in a loop using the same closure + same call site
         var results: [Bool] = []

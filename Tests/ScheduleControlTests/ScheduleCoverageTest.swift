@@ -148,7 +148,6 @@ struct ScheduleCoverageTest {
         let evaluator: CoverageEvaluator = CoverageStrategy.pathTrie.makeEvaluator()
         evaluator.setup?(ctx)
         let coverageClient = CoverageCountersClient.liveValue
-        let corpus = Corpus<Int>()
 
         // Two runs over DIFFERENT branches. If g_target_context routes edges
         // into the context, both paths advance the trie and both judge

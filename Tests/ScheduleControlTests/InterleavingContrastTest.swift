@@ -122,7 +122,6 @@ struct InterleavingContrastTest {
         let evaluator: CoverageEvaluator = CoverageStrategy.pathTrie.makeEvaluator()
         evaluator.setup?(ctx)
         let coverageClient = CoverageCountersClient.liveValue
-        let corpus = Corpus<Int>()
 
         var unique = 0
         let iters = 500
@@ -160,7 +159,6 @@ struct InterleavingContrastTest {
         let evaluator: CoverageEvaluator = CoverageStrategy.pathTrie.makeEvaluator()
         evaluator.setup?(ctx)
         let coverageClient = CoverageCountersClient.liveValue
-        let corpus = Corpus<Int>()
 
         var unique = 0
         let iters = 200

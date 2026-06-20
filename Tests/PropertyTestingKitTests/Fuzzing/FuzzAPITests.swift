@@ -292,10 +292,8 @@ struct FuzzAPITests {
 
     @Test("fuzz reads existing corpus from filesystem")
     func testFuzzReadsCorpus() async throws {
-        // Create a mock corpus with known entries
-        var existingCorpus = Corpus<String>()
-        existingCorpus.add(input: ("from_corpus"))
-        let corpusSnapshot = existingCorpus.snapshot()
+        // Create a mock corpus snapshot with a known entry
+        let corpusSnapshot = CorpusSnapshot<String>(entries: [CorpusEntry(input: "from_corpus")])
         let corpusData = try JSONEncoder.corpusEncoder().encode(corpusSnapshot)
 
         let (loadSpy, loadFn) = spy { (_: URL) -> Data in

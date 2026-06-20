@@ -185,30 +185,6 @@ struct CorpusPropertyTests {
                 "each distinct input survives exactly once")
     }
 
-    @Test("Corpus isEmpty property")
-    func testCorpusIsEmpty() throws {
-        var corpus = Corpus<String>()
-        var isEmpty = corpus.isEmpty
-        #expect(isEmpty, "New corpus should be empty")
-
-        corpus.add(input: ("a"))
-        isEmpty = corpus.isEmpty
-        #expect(!isEmpty, "Corpus with entry should not be empty")
-    }
-
-    @Test("Corpus inputs property")
-    func testCorpusInputs() throws {
-        var corpus = Corpus<String>()
-
-        corpus.add(input: ("hello"))
-        corpus.add(input: ("world"))
-
-        let inputs = corpus.inputs
-        #expect(inputs.count == 2, "Should have 2 inputs")
-        #expect(inputs[0] == "hello", "First input should match")
-        #expect(inputs[1] == "world", "Second input should match")
-    }
-
 }
 
 // MARK: - CorpusEntry Property Tests
@@ -265,17 +241,6 @@ struct FuzzErrorTests {
 @Suite("Edge Cases")
 struct EdgeCaseTests {
 
-    @Test("Corpus with complex input types")
-    func testCorpusComplexTypes() throws {
-        var corpus = Corpus<[String]>()
-
-        corpus.add(input: (["a", "b", "c"]))
-        corpus.add(input: ([]))
-        corpus.add(input: (["single"]))
-
-        let count = corpus.count
-        #expect(count == 3)
-    }
 
 }
 

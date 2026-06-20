@@ -260,8 +260,7 @@ struct CoverageGapDetectorTests {
     @Test("Coverage gap detection in fuzz result")
     func fuzzResultIncludesGapReport() async throws {
         // Verify that FuzzResult has the coverageGapReport computed property
-        let emptyCorpus = Corpus<Int>()
-        let emptySnapshot = await emptyCorpus.snapshot()
+        let emptySnapshot = CorpusSnapshot<Int>(entries: [])
         let stats = FuzzStats(
             totalInputs: 0,
             seeds: 0,
@@ -284,7 +283,10 @@ struct CoverageGapDetectorTests {
 
     @Test("Realistic coverage gap test")
     func realisticCoverageGapTest() async throws {
-        // Use a hash-based check that value profile can't solve easily
+        // Use a hash-based check that value profile can't solve easily.
+        // `funcAnchor` pins the expected gap line to the function below via `#line`,
+        // so edits ELSEWHERE in this file can't shift it (only edits to the body do).
+        let funcAnchor = #line
         @Sendable
         func partiallyCoveredFunction(input: Int) {
             // Simple hash to defeat value profile guidance
@@ -305,8 +307,9 @@ struct CoverageGapDetectorTests {
 
         // This test intentionally creates a coverage gap to verify detection works.
         // The detector reports the edge AFTER the unreachable body — i.e. the line
-        // of the `} else if input < 0 {` above. Update if the function above is edited.
-        let expectedLine = 299
+        // of the `} else if input < 0 {`, which is `funcAnchor + 12`. Update the
+        // offset only if the function body above is edited.
+        let expectedLine = funcAnchor + 12
 
         // Realistic regression test: replay the on-disk corpus
         // (Corpus/realisticCoverageGapTest/corpus.json = [[0],[-1]]; 0 → `else`,

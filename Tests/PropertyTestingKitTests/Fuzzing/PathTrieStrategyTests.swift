@@ -31,7 +31,6 @@ struct PathTrieStrategyTests {
         // lifetime pinning needed even though edges dispatch until the end.
         defer { SanCovCounters.endMeasurement(context) }
         let coverageClient = CoverageCountersClient.liveValue
-        let corpus = Corpus<Int>()
 
         // Call setup BEFORE recording edges — this attaches the trie
         strategy.setup?(context)
@@ -45,14 +44,9 @@ struct PathTrieStrategyTests {
         sancov_dispatch_edge(&g2)
 
         // Evaluate the strategy
-        let firstSparse = strategy.evaluate(context, coverageClient)
-        if firstSparse != nil {
-            corpus.add(input: 42)
-        }
-        let didAdd = firstSparse != nil
+        let didAdd = strategy.evaluate(context, coverageClient) != nil
 
         #expect(didAdd, "First iteration should be interesting")
-        #expect(corpus.entries.count == 1, "Should have one corpus entry")
 
         // Second iteration with the SAME edges should be a duplicate.
         // If the trie recorded the path on iteration 1, this is not novel.
