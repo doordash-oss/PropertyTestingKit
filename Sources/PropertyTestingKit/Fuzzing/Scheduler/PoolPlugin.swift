@@ -44,16 +44,24 @@ public struct PoolIterationOutcome: Sendable {
     /// back to the covered-edge count as its REDUCE/eviction size metric.
     public let inputSize: Int?
 
+    /// Per-comparison-site distance witnessed by the accepted run: site `pc`
+    /// → the lowest `|arg1 - arg2|` it drove the operands to. `featureOwnership`'s
+    /// `BoundaryDistanceEvaluator` owns over these (lowest distance per site
+    /// wins). `nil` when the strategy publishes none.
+    public let boundaryDistances: [UInt64: UInt64]?
+
     public init(
         source: PoolIterationSource,
         newCoverage: SparseCoverage?,
         features: [UInt64]? = nil,
-        inputSize: Int? = nil
+        inputSize: Int? = nil,
+        boundaryDistances: [UInt64: UInt64]? = nil
     ) {
         self.source = source
         self.newCoverage = newCoverage
         self.features = features
         self.inputSize = inputSize
+        self.boundaryDistances = boundaryDistances
     }
 
     /// The one vocabulary every pool component accounts in: the strategy's
@@ -73,7 +81,11 @@ public enum PoolEvent {
     case iteration(PoolIterationOutcome)
     /// An entry was admitted to the pool. `features` is the entry's resolved
     /// culling vocabulary (strategy-defined, or widened edge indices).
-    case inserted(id: Int, coverage: SparseCoverage, features: [UInt64])
+    /// `parent` is the pool entry this input was mutated from (`nil` if it was
+    /// freshly generated or came off the queue), and `claimed` is how many
+    /// features it newly OWNED — together these let a draw-weight policy credit
+    /// the right parent by how much its mutant found.
+    case inserted(id: Int, coverage: SparseCoverage, features: [UInt64], parent: Int?, claimed: Int)
     /// An entry left the pool (its ID is never reused).
     case removed(id: Int)
     /// The owner is about to draw a new focus entry. The moment for lazy
@@ -93,6 +105,11 @@ public enum PoolAction {
     /// Set an entry's draw weight. Negative values clamp to zero; an
     /// all-zero pool falls back to uniform draws.
     case setWeight(id: Int, Double)
+    /// Set how many times the mutator is chained when this entry is mutated
+    /// (depth-d = mutate∘mutate∘… d times). Clamped to ≥ 1; defaults to 1
+    /// (single-step) for entries no policy has set. Lets a policy escalate
+    /// depth on a seed whose shallow neighborhood has been mined out.
+    case setMutationDepth(id: Int, depth: Int)
 }
 
 /// A composable policy attached to the mutation pool.
@@ -115,11 +132,13 @@ public struct PoolAdmission: Sendable {
         let admit: Bool
         /// Existing entries this admission displaces from the pool.
         let evict: [Int]
+        /// How many features this input newly owned (the draw-weight signal).
+        let claimed: Int
     }
 
-    /// Builds a fresh per-engine judge over the accepted input's resolved
-    /// features and its size metric (real input size when a mutator
-    /// measures it, covered-edge count otherwise).
+    /// Builds a fresh per-engine judge over one accepted iteration: its
+    /// resolved features, its size metric (real input size when a mutator
+    /// measures it, covered-edge count otherwise), and any per-site distances.
     ///
     /// Admission bookkeeping deliberately outlives pool membership: an
     /// entry evicted for capacity stays a *ghost owner* of its features.
@@ -127,38 +146,51 @@ public struct PoolAdmission: Sendable {
     /// claims was measured to turn a capacity-bounded pool into a revolving
     /// door of re-claimers); only genuinely new features, or strictly
     /// smaller witnesses, win residence.
-    let makeJudge: @Sendable () -> (_ features: [UInt64], _ size: Int) -> Verdict
+    let makeJudge: @Sendable () -> (_ outcome: PoolIterationOutcome) -> Verdict
 
-    init(makeJudge: @escaping @Sendable () -> ([UInt64], Int) -> Verdict) {
+    init(makeJudge: @escaping @Sendable () -> (PoolIterationOutcome) -> Verdict) {
         self.makeJudge = makeJudge
+    }
+
+    /// The size metric for an accepted outcome: the mutator-measured input
+    /// size when present, the covered-edge count otherwise.
+    static func size(of outcome: PoolIterationOutcome) -> Int {
+        outcome.inputSize ?? outcome.newCoverage?.count ?? 0
     }
 
     /// Every strategy-accepted input joins the pool, nothing ever leaves.
     /// The behavior of the classic corpus-mutation loop.
     public static let everyDiscovery = PoolAdmission(
-        makeJudge: { { _, _ in Verdict(admit: true, evict: []) } })
+        makeJudge: { { outcome in
+            Verdict(admit: true, evict: [], claimed: outcome.resolvedFeatures.count)
+        } })
 
-    /// libFuzzer's corpus model: an input joins the pool only by *owning*
-    /// coverage features — claiming unowned ones, or stealing from a larger
-    /// owner (REDUCE; the size metric is the mutator-measured input size
-    /// when available, the covered-edge count otherwise; ties don't
-    /// steal). An entry that loses its last feature leaves the pool. Bounds
-    /// the pool by the feature space regardless of how often the coverage
-    /// strategy says "interesting"; rejected accepts get no burst and no
-    /// residence (strict semantics).
+    /// libFuzzer's corpus model: an input joins the pool only by *owning* a
+    /// feature. Ownership is decided by per-signal evaluators and recorded in
+    /// one generic `OwnershipLedger`; an entry that loses its last feature
+    /// across all signals leaves the pool. Bounds the pool by the feature space
+    /// regardless of how often the coverage strategy says "interesting".
     ///
-    /// Ownership is accounted in the strategy's own vocabulary when it
-    /// publishes one (today only `.pathTrie(gramLength:)`'s path k-grams), and
-    /// the covered edge indices otherwise — so the pool retains exactly the
-    /// diversity the strategy accepts for. (The default `.pathTrie` and
-    /// `.hitCountBuckets` publish none and cull on edges; an (edge, bucket)
-    /// vocabulary equal to hcb's acceptance criterion would be a tautology
-    /// that disables culling.)
+    /// Two evaluators feed the ledger:
+    /// - `EdgeOwnershipEvaluator` — edges (the strategy's vocabulary when it
+    ///   publishes one, the covered edge indices otherwise) owned by the
+    ///   SMALLEST input (REDUCE; ties don't steal).
+    /// - `BoundaryDistanceEvaluator` — each comparison site (`pc`) owned by the
+    ///   input that drove its operands closest (lowest `|arg1 - arg2|`; ties
+    ///   break toward the smaller input). Inert unless the strategy publishes
+    ///   `boundaryDistances` (`.boundaryDistance`, a `-sanitize-coverage=…,trace-cmp`
+    ///   target) — so this admission subsumes the former `boundaryDistanceOwnership`:
+    ///   add the cmp signal and the same admission culls over it too.
     public static let featureOwnership = PoolAdmission(makeJudge: {
-        var ledger = FeatureOwnershipLedger()
-        return { features, size in
-            let verdict = ledger.judge(features: features, size: size)
-            return Verdict(admit: verdict.admit, evict: verdict.evict)
+        var edges = EdgeOwnershipEvaluator()
+        var boundaries = BoundaryDistanceEvaluator()
+        var ledger = OwnershipLedger()
+        return { outcome in
+            let size = size(of: outcome)
+            var claimed = edges.claims(edges: outcome.resolvedFeatures, size: size)
+            claimed += boundaries.claims(distances: outcome.boundaryDistances ?? [:], size: size)
+            let verdict = ledger.record(claimed: claimed)
+            return Verdict(admit: verdict.admit, evict: verdict.evict, claimed: verdict.claimed)
         }
     })
 }

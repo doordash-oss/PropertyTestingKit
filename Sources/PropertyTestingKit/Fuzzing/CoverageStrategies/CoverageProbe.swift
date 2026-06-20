@@ -17,6 +17,7 @@
 //  per-execution verdict view through the generic `RawExecutionContext` seam.
 //
 
+import Foundation
 import FuzzCore
 import SanCovHooks
 
@@ -37,10 +38,19 @@ public struct CoverageVerdict {
     /// publishes none — the scheduler then falls back to the covered edge
     /// indices.
     public let features: [UInt64]?
+    /// The run's per-comparison-site distances (`pc` → lowest `|arg1 - arg2|`)
+    /// when the strategy publishes them (`.boundaryDistance`); `nil` otherwise.
+    /// The scheduler's boundary-distance ownership ledger culls over these.
+    public let boundaryDistances: [UInt64: UInt64]?
 
-    public init(coverage: SparseCoverage?, features: [UInt64]? = nil) {
+    public init(
+        coverage: SparseCoverage?,
+        features: [UInt64]? = nil,
+        boundaryDistances: [UInt64: UInt64]? = nil
+    ) {
         self.coverage = coverage
         self.features = features
+        self.boundaryDistances = boundaryDistances
     }
 }
 
@@ -69,6 +79,14 @@ final class CoverageProbe: InstrumentationProbe {
     /// `tearDown`. `nil` before setup / after teardown.
     private var context: SanCovCounters.MeasurementContext?
 
+    /// Per-engine input-to-state dictionary, non-nil only when I2S is enabled
+    /// and the strategy left the comparison-recorder slot free. Populated by an
+    /// observer attached in `setUp`, bound as `ComparisonDictionary.current` for
+    /// the loop in `withCampaignScope`, and sampled by the numeric mutators. The
+    /// measurement context owns the recording observer, so I2S rides the same
+    /// per-engine context as coverage rather than allocating a second one.
+    private var i2sDictionary: ComparisonDictionary?
+
     /// Union of edge indices across every run this probe judged interesting,
     /// accumulated from the verdicts (not from retained entries, so pool culling
     /// does not shrink the reported total coverage). Surfaced at campaign end for
@@ -90,6 +108,29 @@ final class CoverageProbe: InstrumentationProbe {
         let ctx = client.beginMeasurement()
         context = ctx
         evaluator.setup?(ctx)
+
+        // Input-to-state (I2S): when enabled AND the strategy left the cmp
+        // recorder slot free (i.e. not `.comparisonCoverage`, which uses it
+        // itself), attach an observer that feeds each instrumented comparison's
+        // operands into a per-engine dictionary the numeric mutators sample
+        // from — so mutation can jump straight to a value a comparison cared
+        // about (magic constants, boundary cutoffs). Opt-in via the task-local
+        // or the PTK_INPUT_TO_STATE env var; only bites on targets built with
+        // the cmp channel. `getenv` reads the live environ, not ProcessInfo's
+        // snapshot. The dictionary is bound for the loop in `withCampaignScope`.
+        let i2sEnabled =
+            ComparisonDictionary.inputToStateEnabled || getenv("PTK_INPUT_TO_STATE") != nil
+        if i2sEnabled, sancov_context_get_cmp_recorder_data(ctx.rawContext) == nil {
+            let dict = ComparisonDictionary()
+            i2sDictionary = dict
+            SanCovCounters.attachComparisonObserver(
+                ComparisonObserver(onCompare: { _, arg1, arg2, _ in
+                    dict.record(arg1)
+                    dict.record(arg2)
+                }),
+                to: ctx
+            )
+        }
     }
 
     func tearDown() {
@@ -108,9 +149,15 @@ final class CoverageProbe: InstrumentationProbe {
         // inside the test body are attributed to this engine's context via the
         // inheritance task-local, set once for the whole loop.
         let bits = context.inheritanceHandle
-        try await CoverageInheritance.$context.withValue(bits) {
-            CoverageInheritance.captureKeyIfNeeded(contextBits: bits)
-            try await body()
+        // Bind the I2S dictionary for the whole loop in the engine's task so
+        // every mutate/generate call sees it (the task-local follows thread
+        // hops). `nil` when I2S is disabled — the numeric mutators' I2S branch
+        // then stays inert.
+        try await ComparisonDictionary.$current.withValue(i2sDictionary) {
+            try await CoverageInheritance.$context.withValue(bits) {
+                CoverageInheritance.captureKeyIfNeeded(contextBits: bits)
+                try await body()
+            }
         }
     }
 
@@ -126,7 +173,9 @@ final class CoverageProbe: InstrumentationProbe {
         if let coverage = acceptance?.sparse {
             coveredIndices.formUnion(coverage.indices)
         }
-        return CoverageVerdict(coverage: acceptance?.sparse, features: acceptance?.features)
+        return CoverageVerdict(
+            coverage: acceptance?.sparse, features: acceptance?.features,
+            boundaryDistances: acceptance?.boundaryDistances)
     }
 
     /// Surface the union of every interesting run's covered edges to the

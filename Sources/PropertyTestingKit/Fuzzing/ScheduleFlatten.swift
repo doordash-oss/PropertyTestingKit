@@ -66,10 +66,7 @@ func peelScheduleResult<each Input: Codable & Sendable>(
         // exactly as before the flattening.
         CorpusEntry<repeat each Input>(
             input: repeat each entry.input.1,
-            scheduleBytes: entry.input.0,
-            sparseCoverage: entry.sparseCoverage,
-            entryType: entry.entryType,
-            failure: entry.failure
+            scheduleBytes: entry.input.0
         )
     }
 
@@ -105,7 +102,6 @@ func runFlattenedSchedule<each Input: Codable & Sendable>(
     persistence: CorpusPersistence,
     duration: Duration,
     verbose: Bool,
-    coverageStrategy: CoverageStrategy,
     scheduler: any SchedulerFactory,
     projectPath: String?,
     sourceFileID: String,
@@ -143,7 +139,6 @@ func runFlattenedSchedule<each Input: Codable & Sendable>(
         parallelism: 1,
         duration: duration,
         verbose: verbose,
-        coverageStrategy: coverageStrategy,
         scheduler: scheduler,
         projectPath: projectPath,
         sourceFileID: sourceFileID,

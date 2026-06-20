@@ -38,10 +38,7 @@ struct FlattenedScheduleTests {
     func peelMovesElementZeroToScheduleBytes() throws {
         let entry = CorpusEntry<[UInt8], Int, String>(
             input: [9, 8, 7], 42, "hi",
-            scheduleBytes: nil,
-            sparseCoverage: SparseCoverage(indices: [1, 2]),
-            entryType: .coverage,
-            failure: nil
+            scheduleBytes: nil
         )
         let extended = FuzzResult<[UInt8], Int, String>(
             corpus: CorpusSnapshot(entries: [entry]),
@@ -59,7 +56,6 @@ struct FlattenedScheduleTests {
         #expect(ei == 42)
         #expect(es == "hi")
         #expect(e.scheduleBytes == [9, 8, 7])
-        #expect(e.sparseCoverage.indices == [1, 2])
 
         // Failure: input peeled to (Int, String); the schedule that triggered it is
         // lifted from element 0 onto the `scheduleBytes` slot so it can be reproduced.
@@ -87,10 +83,7 @@ struct FlattenedScheduleTests {
         let entry = CorpusEntry<[UInt8], Int>(
             input: schedule, 42,
             // The engine sets this from the element-0 extractor during a scheduled run.
-            scheduleBytes: schedule,
-            sparseCoverage: SparseCoverage(indices: [1, 2]),
-            entryType: .coverage,
-            failure: nil
+            scheduleBytes: schedule
         )
         let snapshot = CorpusSnapshot<[UInt8], Int>(entries: [entry])
 
@@ -179,8 +172,7 @@ struct FlattenedScheduleTests {
                     using: Mutator<Int>(seeds: [1, 2, 3], mutate: { v, _ in v &+ 1 }),
                     duration: .milliseconds(200),
                     persistence: .ephemeral,
-                    coverageStrategy: custom,
-                    scheduler: MutationScheduler.weightedPool(admission: .everyDiscovery),
+                    scheduler: MutationScheduler.weightedPool(admission: .everyDiscovery, coverageStrategy: custom),
                     scheduleFuzzing: true
                 ) { (_: Int) in }
             }

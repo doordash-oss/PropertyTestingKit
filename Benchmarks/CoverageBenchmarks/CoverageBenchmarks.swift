@@ -93,7 +93,7 @@ let benchmarks: @Sendable () -> Void = {
             let result = try await fuzz(
                 duration: .seconds(0.1),
                 persistence: .ephemeral,
-                coverageStrategy: .newEdge
+                scheduler: MutationScheduler.weightedPool(coverageStrategy: .newEdge)
             ) { (input: Int) in
                 blackHole(input)
             }
@@ -140,7 +140,7 @@ let benchmarks: @Sendable () -> Void = {
             let result = try await fuzz(
                 duration: .seconds(0.1),
                 persistence: .ephemeral,
-                coverageStrategy: CoverageStrategy(onEdge: { edge, _ in blackHole(edge) }) { _ in false }
+                scheduler: MutationScheduler.weightedPool(coverageStrategy: CoverageStrategy(onEdge: { edge, _ in blackHole(edge) }) { _ in false })
             ) { (input: Int) in
                 blackHole(input)
             }
@@ -182,7 +182,7 @@ let benchmarks: @Sendable () -> Void = {
             let result = try await fuzz(
                 duration: .seconds(0.1),
                 persistence: .ephemeral,
-                coverageStrategy: .pathTrie
+                scheduler: MutationScheduler.weightedPool(coverageStrategy: .pathTrie)
             ) { (input: Int) in
                 blackHole(input)
             }

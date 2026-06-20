@@ -38,7 +38,6 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
     /// Async plugin processor closure for rare events.
     private let processAsyncPlugins: AsyncPluginProcessorFn
     private let config: FuzzEngineConfig
-    private var corpus: Corpus<repeat each Input>
     private let mutators: (repeat Mutator<each Input>)
     private let inputSize: Int
     private let seeds: [(repeat each Input)]
@@ -96,7 +95,6 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
         seeds: [(repeat each Input)],
         mutators: (repeat Mutator<each Input>),
         inputSize: Int,
-        corpus: Corpus<repeat each Input>,
         instrumentationProviders: [any InstrumentationProvider],
         scheduler: AnyScheduler<repeat each Input>,
         processSyncPlugins: @escaping SyncPluginProcessorFn,
@@ -120,7 +118,6 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
         self.processSyncPlugins = processSyncPlugins
         self.processAsyncPlugins = processAsyncPlugins
         self.config = config
-        self.corpus = corpus
         self.test = test
         self.scheduleBytesExtractor = scheduleBytesExtractor
         self.pendingInputs = SimpleRingBuffer(minimumCapacity: 16)
@@ -137,7 +134,10 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
 
     struct FuzzStateMachineResult {
         let stats: FuzzStats
-        let corpus: Corpus<repeat each Input>
+        /// The corpus, materialized once at run-end from the scheduler's retained
+        /// set — the engine holds no corpus during the run. A value snapshot, not
+        /// a live store.
+        let corpus: CorpusSnapshot<repeat each Input>
         let failures: [(input: (repeat each Input), error: Error, timeElapsed: TimeInterval, scheduleBytes: [UInt8]?)]
         /// Run-spanning instrumentation summary, assembled from the installed
         /// probes at campaign end and surfaced to the `.end` event. The engine
@@ -224,6 +224,16 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
                     let input: (repeat each Input)
                     let parentID: Int?
                     let source: SchedulerSource
+                    // Suppress coverage dispatch while PRODUCING the input: the
+                    // scheduler's generate/mutate runs instrumented SUT code
+                    // (e.g. a type-directed generator calling getTyp), but that
+                    // is not the property under test and is reset away below —
+                    // dispatching and recording it wasted ~25% of the process
+                    // (Finding 41p). Straight-line synchronous (no await → no
+                    // thread hop), cleared before resetCoverage so the test is
+                    // always measured. Per-thread, so concurrent engines never
+                    // suppress each other.
+                    sancov_set_dispatch_suppressed(true)
                     if !pendingInputs.isEmpty {
                         assert(
                             pendingParents.count == pendingInputs.count,
@@ -254,6 +264,9 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
                         }
                     }
                     let currentScheduleBytes: [UInt8]? = scheduleBytesExtractor(input)
+                    // Done producing — re-enable dispatch so the test below is
+                    // measured (must precede every probe's reset and the test).
+                    sancov_set_dispatch_suppressed(false)
 
                     // Inputs still queued after taking this one. A plugin can use
                     // `queueCount == 0` to detect that the queue has drained — e.g. to
@@ -297,19 +310,12 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
                     for probe in probes { probe.contribute(to: &execContext) }
 
                     // Retention is the scheduler's call. `observe` reads whatever
-                    // signals it needs out of the context, folds them into its
-                    // own state (and its own working set, if any), and returns
-                    // the signature to persist when the input should be retained
-                    // in the corpus — or nil to retain nothing. The engine names
-                    // no signal and owns no pool: it only persists the corpus
-                    // entry (the result/dedup/cross-engine-merge store).
-                    if let signature = scheduler.observe(input, execContext, source) {
-                        corpus.mergeCoverageAndAdd(
-                            input: input,
-                            scheduleBytes: currentScheduleBytes,
-                            sparse: signature
-                        )
-                    }
+                    // signals it needs out of the context and folds them into its
+                    // own state and working set. The engine persists nothing here:
+                    // the corpus is built once, after the loop, from the
+                    // scheduler's retained set (`snapshot()`). The engine names no
+                    // signal and owns no pool.
+                    scheduler.observe(input, execContext, source)
 
                     // Iteration event (sync, hot path) before failure event.
                     // Dispatched directly — not via an `[PluginEvent]` array — to
@@ -373,6 +379,16 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
                 "[FUZZ] FuzzStateMachine.start() finished: totalInputs=\(stats.totalInputs), duration=\(stats.duration), stopReason=\(stats.stopReason)"
             )
         }
+        // Materialize the corpus from the scheduler's retained set, now that the
+        // run is over. The corpus is the scheduler's working set serialized as a
+        // value snapshot — the engine holds no corpus during the run and there
+        // are no per-iteration writers. Evicted inputs are already absent.
+        let corpus = CorpusSnapshot<repeat each Input>(
+            entries: scheduler.snapshot().map { (input: (repeat each Input)) in
+                CorpusEntry(input: repeat each input)
+            }
+        )
+
         // Assemble the run-spanning summary from the installed probes (e.g. the
         // coverage probe contributes its union of covered edges). The engine
         // names no signal — each probe contributes its own aggregate by key.
@@ -465,15 +481,6 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
                 )
             }
             enqueuePending(mutants, parent: mutationAction.originID)
-
-        case .submitToCorpus(let corpusAction):
-            addToCorpus(
-                corpusAction.input,
-                scheduleBytes: corpusAction.scheduleBytes,
-                sparse: corpusAction.sparseCoverage,
-                type: corpusAction.entryType,
-                failureInfo: corpusAction.failureInfo
-            )
         }
     }
 
@@ -490,13 +497,6 @@ final class FuzzStateMachine<each Input: Codable & Sendable>: @unchecked Sendabl
         haltReason = reason
         // A campaign-scoped stop wins; never downgrade once requested.
         if scope == .campaign { haltScope = .campaign }
-    }
-
-    private func addToCorpus(
-        _ input: (repeat each Input), scheduleBytes: [UInt8]? = nil, sparse: SparseCoverage,
-        type: CorpusEntryType, failureInfo: FailureInfo?
-    ) {
-        corpus.add(input: input, scheduleBytes: scheduleBytes, sparse: sparse, entryType: type, failure: failureInfo)
     }
 
 }

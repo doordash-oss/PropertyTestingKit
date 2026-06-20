@@ -82,7 +82,7 @@ private func makePathTrieEngine(gramLength: Int?) -> CoverageEngine {
     // Grams are collected inside decide's critical section (the trie resets
     // before decide returns); the stash carries them to the engine's
     // `features` call.
-    let lastGrams = SyncBox<[UInt64]>([])
+    let lastGrams = UncheckedBox<[UInt64]>([])
 
     return CoverageEngine(
         onEdge: hooks.onEdge,

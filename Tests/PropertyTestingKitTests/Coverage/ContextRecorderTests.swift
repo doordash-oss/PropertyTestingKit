@@ -342,7 +342,6 @@ struct ContextRecorderTests {
         let context = SanCovCounters.beginMeasurement()
         defer { SanCovCounters.endMeasurement(context) }
         let coverageClient = CoverageCountersClient.liveValue
-        let corpus = Corpus<Int>()
 
         // The PRODUCTION .pathTrie engine: setup attaches its trie observer,
         // evaluate judges (and marks) the run's path in one critical section.
@@ -388,7 +387,6 @@ struct ContextRecorderTests {
         let context = SanCovCounters.beginMeasurement()
         defer { SanCovCounters.endMeasurement(context) }
         let coverageClient = CoverageCountersClient.liveValue
-        let corpus = Corpus<Int>()
 
         let evaluator: CoverageEvaluator = CoverageStrategy.pathTrie.makeEvaluator()
         evaluator.setup?(context)

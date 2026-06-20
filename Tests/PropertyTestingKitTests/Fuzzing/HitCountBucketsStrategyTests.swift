@@ -32,21 +32,15 @@ struct HitCountBucketsStrategyTests {
         _ evaluator: CoverageEvaluator,
         edge: UInt32,
         hits: Int,
-        input: Int,
         _ context: SanCovCounters.MeasurementContext,
-        _ coverageClient: CoverageCountersClient,
-        _ corpus: Corpus<Int>
+        _ coverageClient: CoverageCountersClient
     ) -> Bool {
         SanCovCounters.resetCoverage(context)
         var guardValue = edge
         for _ in 0..<hits {
             sancov_dispatch_edge(&guardValue)
         }
-        let sparse = evaluator.evaluate(context, coverageClient)
-        if let s = sparse?.sparse {
-            corpus.mergeCoverageAndAdd(input: input, scheduleBytes: nil, sparse: s)
-        }
-        return sparse != nil
+        return evaluator.evaluate(context, coverageClient) != nil
     }
 
     @Test("First sight of an edge is interesting")
@@ -54,14 +48,12 @@ struct HitCountBucketsStrategyTests {
         let context = SanCovCounters.beginMeasurement()
         defer { SanCovCounters.endMeasurement(context) }
         let coverageClient = CoverageCountersClient.liveValue
-        let corpus = Corpus<Int>()
 
         let evaluator: CoverageEvaluator = CoverageStrategy.hitCountBuckets.makeEvaluator()
         evaluator.setup?(context)
 
-        #expect(firePass(evaluator, edge: 61, hits: 1, input: 1, context, coverageClient, corpus),
+        #expect(firePass(evaluator, edge: 61, hits: 1, context, coverageClient),
                 "An unseen edge's first bucket is always new")
-        #expect(corpus.count == 1, "The interesting run joins the corpus")
     }
 
     @Test("An identical replay lands in known buckets and is not interesting")
@@ -69,14 +61,13 @@ struct HitCountBucketsStrategyTests {
         let context = SanCovCounters.beginMeasurement()
         defer { SanCovCounters.endMeasurement(context) }
         let coverageClient = CoverageCountersClient.liveValue
-        let corpus = Corpus<Int>()
 
         let evaluator: CoverageEvaluator = CoverageStrategy.hitCountBuckets.makeEvaluator()
         evaluator.setup?(context)
 
-        #expect(firePass(evaluator, edge: 62, hits: 1, input: 1, context, coverageClient, corpus),
+        #expect(firePass(evaluator, edge: 62, hits: 1, context, coverageClient),
                 "First pass covers unseen buckets")
-        #expect(!firePass(evaluator, edge: 62, hits: 1, input: 2, context, coverageClient, corpus),
+        #expect(!firePass(evaluator, edge: 62, hits: 1, context, coverageClient),
                 "A replay with identical hit counts brings no new bucket — and proves per-run counts reset between iterations")
     }
 
@@ -85,14 +76,13 @@ struct HitCountBucketsStrategyTests {
         let context = SanCovCounters.beginMeasurement()
         defer { SanCovCounters.endMeasurement(context) }
         let coverageClient = CoverageCountersClient.liveValue
-        let corpus = Corpus<Int>()
 
         let evaluator: CoverageEvaluator = CoverageStrategy.hitCountBuckets.makeEvaluator()
         evaluator.setup?(context)
 
-        #expect(firePass(evaluator, edge: 63, hits: 1, input: 1, context, coverageClient, corpus),
+        #expect(firePass(evaluator, edge: 63, hits: 1, context, coverageClient),
                 "Count 1 = bucket {1}, unseen")
-        #expect(firePass(evaluator, edge: 63, hits: 2, input: 2, context, coverageClient, corpus),
+        #expect(firePass(evaluator, edge: 63, hits: 2, context, coverageClient),
                 "Count 2 = bucket {2}: a new bucket on a KNOWN edge must be interesting — this is what .newEdge cannot see")
     }
 
@@ -101,16 +91,15 @@ struct HitCountBucketsStrategyTests {
         let context = SanCovCounters.beginMeasurement()
         defer { SanCovCounters.endMeasurement(context) }
         let coverageClient = CoverageCountersClient.liveValue
-        let corpus = Corpus<Int>()
 
         let evaluator: CoverageEvaluator = CoverageStrategy.hitCountBuckets.makeEvaluator()
         evaluator.setup?(context)
 
-        #expect(firePass(evaluator, edge: 64, hits: 4, input: 1, context, coverageClient, corpus),
+        #expect(firePass(evaluator, edge: 64, hits: 4, context, coverageClient),
                 "Count 4 = bucket {4-7}, unseen")
-        #expect(!firePass(evaluator, edge: 64, hits: 5, input: 2, context, coverageClient, corpus),
+        #expect(!firePass(evaluator, edge: 64, hits: 5, context, coverageClient),
                 "Count 5 is still bucket {4-7} — only the observed bucket was marked, not a threshold")
-        #expect(firePass(evaluator, edge: 64, hits: 2, input: 3, context, coverageClient, corpus),
+        #expect(firePass(evaluator, edge: 64, hits: 2, context, coverageClient),
                 "Count 2 = bucket {2} was never observed (buckets below a seen one are not implied)")
     }
 
@@ -119,20 +108,19 @@ struct HitCountBucketsStrategyTests {
         let context = SanCovCounters.beginMeasurement()
         defer { SanCovCounters.endMeasurement(context) }
         let coverageClient = CoverageCountersClient.liveValue
-        let corpus = Corpus<Int>()
 
         let strategy = CoverageStrategy.hitCountBuckets
         let engine1: CoverageEvaluator = strategy.makeEvaluator()
         let engine2: CoverageEvaluator = strategy.makeEvaluator()
         engine1.setup?(context)
 
-        #expect(firePass(engine1, edge: 65, hits: 1, input: 1, context, coverageClient, corpus),
+        #expect(firePass(engine1, edge: 65, hits: 1, context, coverageClient),
                 "Engine 1: first sight")
-        #expect(!firePass(engine1, edge: 65, hits: 1, input: 2, context, coverageClient, corpus),
+        #expect(!firePass(engine1, edge: 65, hits: 1, context, coverageClient),
                 "Engine 1: replay brings nothing new")
 
         engine2.setup?(context)
-        #expect(firePass(engine2, edge: 65, hits: 1, input: 3, context, coverageClient, corpus),
+        #expect(firePass(engine2, edge: 65, hits: 1, context, coverageClient),
                 "Engine 2 judges with its OWN bucket state — engine 1 having seen these buckets must not decide for it")
     }
 
@@ -218,7 +206,7 @@ struct HitCountBucketsStrategyTests {
         let result = try await fuzzWithMaxIterations(
             maxIterations: 50,
             persistence: .ephemeral,
-            coverageStrategy: .hitCountBuckets,
+            scheduler: MutationScheduler.weightedPool(coverageStrategy: .hitCountBuckets),
             parallelism: 2
         ) { (input: Int) in
             // Input-dependent loop so hit counts actually vary across inputs.

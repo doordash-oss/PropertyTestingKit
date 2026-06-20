@@ -216,7 +216,7 @@ struct StrategyFeatureTests {
         final class CapturePolicy: PoolPlugin {
             var insertedFeatures: [[UInt64]] = []
             func handle(event: PoolEvent) -> [PoolAction] {
-                if case let .inserted(_, _, features) = event {
+                if case let .inserted(_, _, features, _, _) = event {
                     insertedFeatures.append(features)
                 }
                 return []

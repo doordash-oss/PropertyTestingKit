@@ -245,7 +245,6 @@ struct TrieEdgeHookTests {
         // The dispatched edges must have advanced the engine's trie: a first
         // sight of this path judges unique.
         let coverageClient = CoverageCountersClient.liveValue
-        let corpus = Corpus<Int>()
         #expect(evaluator.evaluate(context, coverageClient) != nil)
 
         // Also verify coverage map was written

@@ -15,7 +15,7 @@
 import Foundation
 import Dependencies
 
-/// A single entry in the corpus: an input and its coverage data.
+/// A single entry in the corpus: an input the scheduler chose to retain.
 public struct CorpusEntry<each Input: Codable & Sendable>: Sendable, Codable {
     /// The test input.
     public let input: (repeat each Input)
@@ -24,28 +24,12 @@ public struct CorpusEntry<each Input: Codable & Sendable>: Sendable, Codable {
     /// Non-nil when schedule fuzzing is enabled.
     public let scheduleBytes: [UInt8]?
 
-    /// The sparse coverage data.
-    public let sparseCoverage: SparseCoverage
-
-    /// The reason this entry was added to the corpus.
-    public let entryType: CorpusEntryType
-
-    // TODO: Move failureInfo into corpus entry type
-    /// Failure information if this entry caused a test failure.
-    public let failure: FailureInfo?
-
     public init(
         input: repeat each Input,
-        scheduleBytes: [UInt8]? = nil,
-        sparseCoverage: consuming SparseCoverage,
-        entryType: CorpusEntryType = .coverage,
-        failure: FailureInfo? = nil
+        scheduleBytes: [UInt8]? = nil
     ) {
         self.input = (repeat each input)
         self.scheduleBytes = scheduleBytes
-        self.sparseCoverage = sparseCoverage
-        self.entryType = entryType
-        self.failure = failure
     }
 
     /// Encodes as a plain JSON array of the input pack: `[42]` or `["hello", 3]`.
@@ -70,8 +54,5 @@ public struct CorpusEntry<each Input: Codable & Sendable>: Sendable, Codable {
         var container = try decoder.unkeyedContainer()
         self.scheduleBytes = nil
         self.input = (repeat try container.decode((each Input).self))
-        self.sparseCoverage = SparseCoverage()
-        self.entryType = .coverage
-        self.failure = nil
     }
 }

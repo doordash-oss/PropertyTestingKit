@@ -194,7 +194,6 @@ private func measureDeterminism(
     let evaluator: CoverageEvaluator = CoverageStrategy.pathTrie.makeEvaluator()
     evaluator.setup?(ctx)
     let coverageClient = CoverageCountersClient.liveValue
-    let corpus = Corpus<Int>()
 
     var uniqueCount = 0
 
@@ -230,9 +229,8 @@ struct DeterminismIsolationTest {
     @Test("GenericTimerPoller coverage is deterministic under schedule control (1000 runs)",
           .timeLimit(.minutes(2)))
     func pollerDeterminism1000() async throws {
-        // Apply edge filter (same as production fuzz API)
-        SanCovCounters.applyEdgeFilter()
-
+        // Compiler-generated edges (incl. async TQ/TY) are filtered at compile
+        // time by the TagCompilerGenerated pass plugin — no runtime call needed.
         let pollerBody: @Sendable () async -> Void = {
             await withDependencies {
                 $0.continuousClock = ImmediateClock()
@@ -408,7 +406,6 @@ struct PathTrieReuseTest {
         let evaluator: CoverageEvaluator = CoverageStrategy.pathTrie.makeEvaluator()
         evaluator.setup?(ctx)
         let coverageClient = CoverageCountersClient.liveValue
-        let corpus = Corpus<Int>()
 
         // Run 1: first path should be unique
         Self.stableCode()
@@ -442,9 +439,8 @@ struct PathTrieReuseTest {
             }
         }
 
-        // Apply edge filter to remove TQ/TY/TA/Wl noise
-        SanCovCounters.applyEdgeFilter()
-
+        // TQ/TY/TA/Wl noise is filtered at compile time by the
+        // TagCompilerGenerated pass plugin — no runtime filter call needed.
         // Warmup using the SAME closure
         try await ScheduleController.run(scheduleBytes: bytes) {
             await body()
@@ -454,7 +450,6 @@ struct PathTrieReuseTest {
         let evaluator: CoverageEvaluator = CoverageStrategy.pathTrie.makeEvaluator()
         evaluator.setup?(ctx)
         let coverageClient = CoverageCountersClient.liveValue
-        let corpus = Corpus<Int>()
 
         // Run 3 times in a loop using the same closure + same call site
         var results: [Bool] = []

@@ -34,7 +34,6 @@ struct CoverageEngineTests {
         let context = SanCovCounters.beginMeasurement()
         defer { SanCovCounters.endMeasurement(context) }
         let coverageClient = CoverageCountersClient.liveValue
-        let corpus = Corpus<Int>()
 
         // The engine's state: a per-engine iteration counter. Only the FIRST
         // iteration of EACH engine is "interesting".
@@ -62,7 +61,6 @@ struct CoverageEngineTests {
         let context = SanCovCounters.beginMeasurement()
         defer { SanCovCounters.endMeasurement(context) }
         let coverageClient = CoverageCountersClient.liveValue
-        let corpus = Corpus<Int>()
 
         let strategy = CoverageStrategy(makeEngine: {
             let edges = PropertyTestingKit.SyncBox<Set<UInt32>>([])
@@ -110,7 +108,6 @@ struct CoverageEngineTests {
         let context = SanCovCounters.beginMeasurement()
         defer { SanCovCounters.endMeasurement(context) }
         let coverageClient = CoverageCountersClient.liveValue
-        let corpus = Corpus<Int>()
 
         let strategy = CoverageStrategy(makeEngine: {
             // Novelty state is the STRATEGY's own — no corpus access at all.
@@ -131,51 +128,40 @@ struct CoverageEngineTests {
         // Identical instrumented code in both passes, reset through evaluate
         // (see the trie dispatch test for why): pass 1 brings new edges,
         // pass 2 replays exactly the same set.
-        func firePass(_ input: Int) -> Bool {
+        func firePass() -> Bool {
             SanCovCounters.resetCoverage(context)
             var g31: UInt32 = 31
             var g32: UInt32 = 32
             sancov_dispatch_edge(&g31)
             sancov_dispatch_edge(&g32)
-            let sparse = evaluator.evaluate(context, coverageClient)
-            if let s = sparse?.sparse {
-                corpus.mergeCoverageAndAdd(input: input, scheduleBytes: nil, sparse: s)
-            }
-            return sparse != nil
+            return evaluator.evaluate(context, coverageClient) != nil
         }
 
-        let first = firePass(1)
-        let second = firePass(2)
+        let first = firePass()
+        let second = firePass()
 
         #expect(first, "First pass covers unseen edges")
         #expect(!second, "An identical replay brings no new edge")
-        #expect(corpus.count == 1, "Only the novel run joins the corpus")
     }
 
     /// Strategies are pure judgement: they never see the corpus or the typed
-    /// input. When decide says yes, the ENGINE records the input — with its
-    /// coverage and schedule bytes — in the corpus.
-    @Test("The engine, not the strategy, records interesting inputs")
-    func engineOwnsStorage() {
+    /// input. An always-true decision is interesting, and a retained input's
+    /// schedule bytes ride with its corpus entry as a storage concern.
+    @Test("An always-true strategy judges interesting; schedule bytes ride with the entry")
+    func alwaysTrueJudgesInteresting() {
         let context = SanCovCounters.beginMeasurement()
         defer { SanCovCounters.endMeasurement(context) }
         let coverageClient = CoverageCountersClient.liveValue
-        let corpus = Corpus<Int>()
 
         let strategy = CoverageStrategy { _ in true }
         let evaluator: CoverageEvaluator = strategy.makeEvaluator()
 
         let sparse = evaluator.evaluate(context, coverageClient)
-        if let s = sparse?.sparse {
-            corpus.mergeCoverageAndAdd(input: 7, scheduleBytes: [9, 9], sparse: s)
-        }
 
         #expect(sparse != nil, "An always-true decision is interesting")
-        #expect(corpus.count == 1, "The engine records the interesting input")
-        #expect(corpus.entries.first?.scheduleBytes == [9, 9],
+        let entry = CorpusEntry<Int>(input: 7, scheduleBytes: [9, 9])
+        #expect(entry.scheduleBytes == [9, 9],
                 "Schedule bytes ride with the entry as a storage concern")
-        #expect(corpus.entries.first?.sparseCoverage == sparse?.sparse,
-                "The entry carries the run's judged coverage")
     }
 
     /// The aggregate covered-edge set used to live on the `Corpus` as a bitmap;
@@ -247,7 +233,6 @@ struct CoverageEngineTests {
         let context = SanCovCounters.beginMeasurement()
         defer { SanCovCounters.endMeasurement(context) }
         let coverageClient = CoverageCountersClient.liveValue
-        let corpus = Corpus<Int>()
 
         let strategy = CoverageStrategy.newEdge
         let engine1: CoverageEvaluator = strategy.makeEvaluator()
@@ -283,7 +268,6 @@ struct CoverageEngineTests {
                 return SparseCoverage(indices: [1])
             }
         )
-        let corpus = Corpus<Int>()
 
         let strategy = CoverageStrategy { _ in false }
         let evaluator: CoverageEvaluator = strategy.makeEvaluator()
@@ -307,19 +291,14 @@ struct CoverageEngineTests {
                 return SparseCoverage(indices: [5])
             }
         )
-        let corpus = Corpus<Int>()
 
         let strategy = CoverageStrategy { coverage in !coverage.indices.isEmpty }
         let evaluator: CoverageEvaluator = strategy.makeEvaluator()
         let sparse = evaluator.evaluate(context, client)
-        if let s = sparse?.sparse {
-            corpus.mergeCoverageAndAdd(input: 1, scheduleBytes: nil, sparse: s)
-        }
 
+        #expect(sparse != nil, "a non-empty coverage decision is interesting")
         #expect(snapshots.value == 1,
-                "the decision's snapshot is reused for the corpus add")
-        #expect(corpus.entries.first?.sparseCoverage == sparse?.sparse,
-                "the entry carries the judged coverage")
+                "evaluating the decision takes exactly one coverage snapshot")
     }
 
     /// `decide` may live in instrumented code (a user's test target). Edges it
@@ -332,7 +311,6 @@ struct CoverageEngineTests {
         let context = SanCovCounters.beginMeasurement()
         defer { SanCovCounters.endMeasurement(context) }
         let coverageClient = CoverageCountersClient.liveValue
-        let corpus = Corpus<Int>()
 
         let observed = PropertyTestingKit.SyncBox<Set<UInt32>>([])
         let strategy = CoverageStrategy(makeEngine: {
@@ -369,7 +347,7 @@ struct CoverageEngineTests {
         _ = try await fuzzWithMaxIterations(
             maxIterations: 8,
             persistence: .ephemeral,
-            coverageStrategy: strategy,
+            scheduler: MutationScheduler.weightedPool(coverageStrategy: strategy),
             parallelism: 4
         ) { (_: Int) in }
 

@@ -30,19 +30,27 @@
 /// applies, whoever caused it.
 import FuzzCore
 
+/// Decides which inputs the engine mutates and when it generates fresh ones, and
+/// vends the instrumentation the chosen signal needs. Wrapping `any SchedulerFactory`
+/// (rather than being one concrete factory) keeps the design's promise that a
+/// `MutationScheduler` can vend any scheduler, not only the weighted pool. The
+/// signal config (coverage strategy, and in future a cmp source) travels with the
+/// scheduler the caller picks rather than being a top-level `fuzz()` knob.
 public struct MutationScheduler: SchedulerFactory {
-    /// The underlying factory. Wrapping `any SchedulerFactory` (rather than
-    /// being one concrete factory) keeps the design's promise that a
-    /// `MutationScheduler` can vend any scheduler, not only the weighted pool.
     let factory: any SchedulerFactory
 
     /// Build this engine's scheduler at its input pack by forwarding to the
-    /// wrapped factory. One fresh scheduler per engine (the factory captures the
-    /// engine's mutators so the scheduler owns input production).
+    /// wrapped factory (one fresh scheduler per engine).
     public func makeScheduler<each Input: Codable & Sendable>(
         mutators: repeat Mutator<each Input>
     ) -> AnyScheduler<repeat each Input> {
         factory.makeScheduler(mutators: repeat each mutators)
+    }
+
+    /// Forward the wrapped factory's instrumentation providers (e.g. the weighted
+    /// pool's coverage provider).
+    public func makeProviders() -> [any InstrumentationProvider] {
+        factory.makeProviders()
     }
 
     /// A weighted mutation pool that picks generation vs mutation by a ratio.
@@ -63,17 +71,24 @@ public struct MutationScheduler: SchedulerFactory {
     ///     vocabulary distinguishes inputs from how many of them may stay —
     ///     without it, a fine vocabulary silently raises the population
     ///     ceiling.
+    ///   - coverageStrategy: How a run is judged "interesting" and what culling
+    ///     vocabulary it publishes (default: `.pathTrie`). This is the scheduler's
+    ///     coverage signal — it travels with the scheduler rather than being a
+    ///     top-level `fuzz()` knob, so coverage is one battery among possible
+    ///     others, not a privileged library concept.
     public static func weightedPool(
         admission: PoolAdmission = .featureOwnership,
         policies: @escaping @Sendable () -> [any PoolPlugin] = { [] },
         generationRatio: Double = 0.1,
-        capacity: Int? = nil
+        capacity: Int? = nil,
+        coverageStrategy: CoverageStrategy = .pathTrie
     ) -> MutationScheduler {
         MutationScheduler(factory: WeightedPoolFactory(
             admission: admission,
             makePolicies: policies,
             generationRatio: generationRatio,
-            capacity: capacity
+            capacity: capacity,
+            coverageStrategy: coverageStrategy
         ))
     }
 }

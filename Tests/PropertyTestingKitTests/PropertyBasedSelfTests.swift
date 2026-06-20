@@ -166,55 +166,23 @@ struct MutatorProvidingPropertyTests {
 @Suite("Corpus Properties")
 struct CorpusPropertyTests {
 
-    @Test("Corpus addIfInteresting uses signature-based uniqueness")
-    func testAddIfInterestingSignatureBasedUniqueness() throws {
-        var corpus = Corpus<String>()
-        var signatureHashes = Set<Int>()
+    @Test("Cross-engine merge deduplicates by input identity")
+    func testMergeDeduplicatesByInput() throws {
+        // Two parallel engines retained overlapping inputs; coverage is no longer
+        // a corpus concern, so the merge keeps one copy per distinct input.
+        let engineA = CorpusSnapshot<String>(entries: [
+            CorpusEntry(input: "first"),
+            CorpusEntry(input: "second"),
+        ])
+        let engineB = CorpusSnapshot<String>(entries: [
+            CorpusEntry(input: "second"),  // identical input ⇒ dropped
+            CorpusEntry(input: "third"),
+        ])
 
-        let sparse1 = SparseCoverage(indices: [0, 1, 2])
+        let merged = mergeCorpusSnapshots([engineA, engineB])
 
-        // First add should succeed
-        let added1 = corpus.addIfInteresting(input: ("first"), sparse: sparse1, signatureHashes: &signatureHashes)
-        #expect(added1 == true, "First entry should be added")
-
-        // Different signature (subset) IS interesting - represents a different code path
-        let sparseSubset = SparseCoverage(indices: [0, 1])
-        let added2 = corpus.addIfInteresting(input: ("subset"), sparse: sparseSubset, signatureHashes: &signatureHashes)
-        #expect(added2 == true, "Different signature should be accepted (unique code path)")
-
-        // Same signature as first should be rejected
-        let sparseSame = SparseCoverage(indices: [0, 1, 2])
-        let added3 = corpus.addIfInteresting(input: ("same"), sparse: sparseSame, signatureHashes: &signatureHashes)
-        #expect(added3 == false, "Identical signature should be rejected")
-
-        // Different signature with new edges should be accepted
-        let sparseNew = SparseCoverage(indices: [3])
-        let added4 = corpus.addIfInteresting(input: ("new"), sparse: sparseNew, signatureHashes: &signatureHashes)
-        #expect(added4 == true, "New signature should be accepted")
-    }
-
-    @Test("Corpus isEmpty property")
-    func testCorpusIsEmpty() throws {
-        var corpus = Corpus<String>()
-        var isEmpty = corpus.isEmpty
-        #expect(isEmpty, "New corpus should be empty")
-
-        corpus.add(input: ("a"), sparse: SparseCoverage(indices: [0]))
-        isEmpty = corpus.isEmpty
-        #expect(!isEmpty, "Corpus with entry should not be empty")
-    }
-
-    @Test("Corpus inputs property")
-    func testCorpusInputs() throws {
-        var corpus = Corpus<String>()
-
-        corpus.add(input: ("hello"), sparse: SparseCoverage(indices: [0]))
-        corpus.add(input: ("world"), sparse: SparseCoverage(indices: [1]))
-
-        let inputs = corpus.inputs
-        #expect(inputs.count == 2, "Should have 2 inputs")
-        #expect(inputs[0] == "hello", "First input should match")
-        #expect(inputs[1] == "world", "Second input should match")
+        #expect(merged.entries.map(\.input).sorted() == ["first", "second", "third"],
+                "each distinct input survives exactly once")
     }
 
 }
@@ -226,12 +194,7 @@ struct CorpusEntryPropertyTests {
 
     @Test("CorpusEntry preserves input through Codable")
     func testCorpusEntryCodable() async throws {
-        let entry = CorpusEntry(
-            input: "test input",
-            sparseCoverage: SparseCoverage(indices: [0, 5]),
-            entryType: .coverage,
-            failure: nil
-        )
+        let entry = CorpusEntry(input: "test input")
 
         let encoder = JSONEncoder.corpusEncoder()
         let decoder = JSONDecoder.corpusDecoder()
@@ -240,9 +203,7 @@ struct CorpusEntryPropertyTests {
         let decoded = try decoder.decode(CorpusEntry<String>.self, from: data)
 
         #expect(decoded.input == entry.input)
-        #expect(decoded.sparseCoverage == SparseCoverage(), "Coverage is not persisted")
-        #expect(decoded.entryType == .coverage, "Defaults to .coverage on decode")
-        #expect(decoded.failure == nil)
+        #expect(decoded.scheduleBytes == nil, "Schedule bytes are not persisted")
     }
 }
 
@@ -280,26 +241,6 @@ struct FuzzErrorTests {
 @Suite("Edge Cases")
 struct EdgeCaseTests {
 
-    @Test("Corpus with complex input types")
-    func testCorpusComplexTypes() throws {
-        var corpus = Corpus<[String]>()
-
-        corpus.add(
-            input: (["a", "b", "c"]),
-            sparse: SparseCoverage(indices: [0])
-        )
-        corpus.add(
-            input: ([]),
-            sparse: SparseCoverage(indices: [1])
-        )
-        corpus.add(
-            input: (["single"]),
-            sparse: SparseCoverage(indices: [2])
-        )
-
-        let count = corpus.count
-        #expect(count == 3)
-    }
 
 }
 
@@ -325,7 +266,7 @@ struct FuzzAPIPropertyTests {
             try await fuzzWithMaxIterations(
                 maxIterations: 50,
                 persistence: .ephemeral,
-                coverageStrategy: .alwaysInteresting
+                scheduler: MutationScheduler.weightedPool(coverageStrategy: .alwaysInteresting)
             ) { (input: Int) in
                 _ = input > 0 ? "positive" : "non-positive"
             }
@@ -345,7 +286,7 @@ struct FuzzAPIPropertyTests {
                 maxIterations: 50,
                 seeds: ["custom1", "custom2", "custom3"],
                 persistence: .ephemeral,
-                coverageStrategy: .alwaysInteresting
+                scheduler: MutationScheduler.weightedPool(coverageStrategy: .alwaysInteresting)
             ) { (input: String) in
                 // Just exercise the input - no actor involvement
                 _ = input.count

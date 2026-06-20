@@ -38,7 +38,8 @@ struct EntropicPolicyTests {
         // The pool emits the entry's RESOLVED features; with no strategy
         // vocabulary that's the widened covered edges.
         _ = p.handle(event: .inserted(
-            id: id, coverage: SparseCoverage(indices: edges), features: edges.map(UInt64.init)))
+            id: id, coverage: SparseCoverage(indices: edges), features: edges.map(UInt64.init),
+            parent: nil, claimed: edges.count))
     }
 
     /// A pool mutant of `parent` that elicited coverage (admitted or rejected —

@@ -148,9 +148,10 @@ struct HighContentionTests {
 
     @Test("Sequential corpus and coverage operations", .timeLimit(.minutes(1)))
     func sequentialCorpusAndCoverage() async {
-        // Note: Corpus is not thread-safe. This test verifies the API works correctly
-        // in a sequential context.
-        var corpus = Corpus<Int>()
+        // Exercises repeated coverage measurement alongside building a corpus
+        // snapshot in a sequential context (the engine materializes the corpus
+        // from retained inputs the same way at run-end).
+        var entries: [CorpusEntry<Int>] = []
 
         for i in 0..<30 {
             for j in 0..<10 {
@@ -168,13 +169,13 @@ struct HighContentionTests {
                     sparse = makeSparse(indices: [i, j])
                 }
                 SanCovCounters.endMeasurement(context)
+                _ = sparse  // measurement still exercised under TSan; the corpus no longer stores it
 
-                // Add to corpus
-                corpus.add(input: (i * 100 + j), sparse: sparse)
+                entries.append(CorpusEntry(input: i * 100 + j))
             }
         }
 
-        // Verify corpus has entries
-        _ = corpus.snapshot()
+        // Materialize the snapshot, as the engine does at run-end.
+        _ = CorpusSnapshot<Int>(entries: entries)
     }
 }

@@ -382,7 +382,7 @@ struct MutatorFuzzEngineTests {
             maxIterations: 2,
             using: mutator,
             persistence: .ephemeral,
-            coverageStrategy: .alwaysInteresting
+            scheduler: MutationScheduler.weightedPool(coverageStrategy: .alwaysInteresting)
         ) { input in
             await testedInputs.update { $0.append(input) }
         }
@@ -407,7 +407,7 @@ struct MutatorFuzzEngineTests {
             maxIterations: 3,
             using: mutator,
             persistence: .ephemeral,
-            coverageStrategy: .alwaysInteresting
+            scheduler: MutationScheduler.weightedPool(coverageStrategy: .alwaysInteresting)
         ) { input in
             await testedInputs.update { $0.append(input) }
         }
@@ -438,7 +438,7 @@ struct MutatorPublicAPITests {
             maxIterations: 50,
             using: mutator,
             persistence: .ephemeral,
-            coverageStrategy: .alwaysInteresting
+            scheduler: MutationScheduler.weightedPool(coverageStrategy: .alwaysInteresting)
         ) { (input: String) in
             await testedInputs.update { $0.append(input) }
         }
@@ -457,7 +457,7 @@ struct MutatorPublicAPITests {
             maxIterations: 50,
             using: emptyStringMutator,
             persistence: .ephemeral,
-            coverageStrategy: .alwaysInteresting
+            scheduler: MutationScheduler.weightedPool(coverageStrategy: .alwaysInteresting)
         ) { (input: String) in
             await testedInputs.update { $0.append(input) }
         }
@@ -492,7 +492,7 @@ struct MutatorPublicAPITests {
             _ = try await fuzzWithMaxIterations(
                 maxIterations: 50,
                 using: stringMutator, intMutator,
-                coverageStrategy: .alwaysInteresting
+                scheduler: MutationScheduler.weightedPool(coverageStrategy: .alwaysInteresting)
             ) { (str: String, num: Int) in
                 await testedInputs.update { $0.append((str, num)) }
             }
@@ -527,7 +527,7 @@ struct MutatorPublicAPITests {
             _ = try await fuzzWithMaxIterations(
                 maxIterations: 50,
                 using: emptyStringMutator, intBoundaryMutator,
-                coverageStrategy: .alwaysInteresting
+                scheduler: MutationScheduler.weightedPool(coverageStrategy: .alwaysInteresting)
             ) { (str: String, num: Int) in
                 await testedInputs.update { $0.append((str, num)) }
             }
