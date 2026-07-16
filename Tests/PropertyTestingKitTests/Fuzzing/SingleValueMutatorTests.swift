@@ -82,6 +82,20 @@ struct SingleValueMutatorTests {
         }
     }
 
+    @Test("Double default mutator reaches ULP-adjacent neighbors from 1.0")
+    func doubleDefaultMutatorReachesULPNeighbors() {
+        var rng = FastRNG()
+        var sawULP = false
+        for _ in 0..<2000 {
+            let mutant = Double.defaultMutator.mutate(1.0, &rng)
+            if mutant == 1.0.nextUp || mutant == 1.0.nextDown {
+                sawULP = true
+                break
+            }
+        }
+        #expect(sawULP, "expected at least one nextUp/nextDown mutant from 1.0")
+    }
+
     @Test("String default mutator never returns the input for multi-byte strings")
     func stringDefaultMutatorNeverIdentityMultibyte() {
         var rng = FastRNG()

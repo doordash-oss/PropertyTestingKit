@@ -39,13 +39,19 @@ private func _doubleMutate(_ value: Double, _ rng: inout FastRNG) -> Double {
         return _doubleNonFiniteFallback[Int.random(in: 0..<_doubleNonFiniteFallback.count, using: &rng)]
     }
 
-    // Candidate neighborhood, dropping any that collapse back to `value`:
-    // `-value` is identity at 0.0 (-0.0 == 0.0), `value * 2` / `value / 2` are
-    // identity at 0.0, and the additive deltas round back when |value| is large
-    // enough that ±0.1/±1 fall below the ULP. The candidates are cheap scalars,
-    // so materialize-and-filter is the faithful way to express "non-identity".
+    // Candidate neighborhood, dropping any that collapse back to `value`.
+    // ULP steps and relative deltas give controlled fine-grained exploration;
+    // snapped tenths avoid binary-inexact ±0.1 mantissa noise. Coarse moves
+    // (±1, ×2, ÷2, negate) stay for large jumps.
+    let magnitude = abs(value)
+    let relativeScale = magnitude == 0 ? 1e-3 : magnitude * Double.random(in: 1e-6...1e-2, using: &rng)
+    let snappedTenthUp = ((value * 10).rounded() + 1) / 10
+    let snappedTenthDown = ((value * 10).rounded() - 1) / 10
     let candidates: [Double] = [
-        value + 1, value - 1, -value, value * 2, value / 2, value + 0.1, value - 0.1,
+        value + 1, value - 1, -value, value * 2, value / 2,
+        value.nextUp, value.nextDown,
+        value + relativeScale, value - relativeScale,
+        snappedTenthUp, snappedTenthDown,
     ]
     if let pick = candidates.filter({ $0 != value }).randomElement(using: &rng) {
         return pick
