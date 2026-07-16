@@ -98,6 +98,9 @@ func peelScheduleResult<each Input: Codable & Sendable>(
 ///
 /// - Note: custom bus plugins are not applied to scheduled runs; the
 ///   scheduler passes through (it drives mutation over the extended pack).
+///   Callers that supply plugins must not enable schedule fuzzing — `fuzz`
+///   throws `FuzzError.scheduleFuzzingPluginsUnsupported` rather than
+///   silently dropping them.
 func runFlattenedSchedule<each Input: Codable & Sendable>(
     mutators: (repeat Mutator<each Input>),
     seeds: [(repeat each Input)],

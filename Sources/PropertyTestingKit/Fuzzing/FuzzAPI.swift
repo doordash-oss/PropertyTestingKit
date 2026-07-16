@@ -114,7 +114,10 @@ import Dependencies
 ///     tasks. The schedule bytes are folded into the input pack as element 0
 ///     (`([UInt8], repeat each Input)`) and mutated/stored/persisted like any input;
 ///     your `test` still receives only its own `(repeat each Input)`. Forces
-///     `parallelism` to 1 (custom `plugins` are not applied to scheduled runs).
+///     `parallelism` to 1. Custom `plugins` are not yet lifted onto the extended
+///     pack — a non-empty `plugins` factory throws
+///     `FuzzError.scheduleFuzzingPluginsUnsupported` instead of silently
+///     ignoring them.
 ///   - parallelism: Number of parallel fuzz engines to run. Each engine runs
 ///     independently with its portion of seeds distributed round-robin.
 ///     Results are merged at the end. Defaults to the number of available processors.
@@ -210,6 +213,13 @@ func fuzzInternal<each Input: Codable & Sendable>(
     // not apply to scheduled runs).
     if scheduleFuzzing {
         try requireCoverage()
+        // Schedule flatten currently hardcodes makeHandlers: { [] }. Fail
+        // loudly when the caller supplied plugins instead of silently
+        // ignoring them (issue #50).
+        let suppliedPlugins = plugins()
+        guard suppliedPlugins.isEmpty else {
+            throw FuzzError.scheduleFuzzingPluginsUnsupported(count: suppliedPlugins.count)
+        }
         // Strategies are pack-agnostic (pure judgement over coverage), so the
         // user's strategy — built-in or custom — passes straight into the
         // extended-pack run; its single engine builds from the same makeEngine.
@@ -334,10 +344,12 @@ func regressInternal<each Input: Codable & Sendable>(
 ///   - scheduleFuzzing: When `true`, also fuzz the interleaving order of concurrent
 ///     tasks. The schedule bytes are folded into the input pack as element 0 and
 ///     mutated/stored/persisted like any input; your `test` still receives only its
-///     own `(repeat each Input)`. Forces `parallelism` to 1.
+///     own `(repeat each Input)`. Forces `parallelism` to 1. A non-empty `plugins`
+///     factory throws `FuzzError.scheduleFuzzingPluginsUnsupported`.
 ///   - parallelism: Number of parallel fuzz engines to run. Defaults to processor
 ///     count. Ignored (treated as 1) when `scheduleFuzzing` is enabled.
 ///   - plugins: Factory for the per-engine observer plugins (default: none).
+///     Not supported with `scheduleFuzzing: true` yet (throws instead of silent drop).
 ///   - filePath: Source file path (auto-filled).
 ///   - function: Test function name (auto-filled).
 ///   - line: Source line (auto-filled).
@@ -582,6 +594,11 @@ public enum FuzzError: Error, LocalizedError {
     /// Failed to load or save corpus.
     case corpusError(String)
 
+    /// `scheduleFuzzing: true` was combined with a non-empty `plugins` factory.
+    /// Scheduled runs do not yet lift user plugins onto the extended pack, so
+    /// this combination is rejected instead of silently dropping the plugins.
+    case scheduleFuzzingPluginsUnsupported(count: Int)
+
     public var errorDescription: String? {
         switch self {
         case .testFailed(let input, let error, _, _):
@@ -590,6 +607,8 @@ public enum FuzzError: Error, LocalizedError {
             return "Coverage instrumentation not available. Build with --enable-code-coverage"
         case .corpusError(let message):
             return "Corpus error: \(message)"
+        case .scheduleFuzzingPluginsUnsupported(let count):
+            return "scheduleFuzzing does not support custom plugins yet (\(count) supplied). Pass plugins: { [] }, or disable scheduleFuzzing."
         }
     }
 }
