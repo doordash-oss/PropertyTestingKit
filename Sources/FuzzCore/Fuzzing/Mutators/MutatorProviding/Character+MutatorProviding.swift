@@ -25,9 +25,47 @@ private let _whitespace: [Character] = [" ", "\t", "\n", "\r"]
 private let _emojis: [Character] = ["😀", "🎉", "🚀", "💡", "⚡", "🔥", "✨", "🌟"]
 
 private func _characterMutate(_ value: Character, _ rng: inout FastRNG) -> Character {
-    // Pick ONE applicable seed (any seed other than the current value).
-    let candidates = _characterSeeds.filter { $0 != value }
-    guard let mutant = candidates.randomElement(using: &rng) else { return value }
+    // Build applicable non-identity candidates, then pick uniformly — same
+    // pattern as PortMutator / EmptyStringMutator. Neighborhood + class-local
+    // steps explore near the input; class jumps reuse the generate pools so
+    // mutation can reach beyond the 8 hard-coded seeds.
+    var candidates: [Character] = []
+
+    if let scalar = value.unicodeScalars.first {
+        let code = scalar.value
+        if code < 0x10FFFF, let up = Unicode.Scalar(code + 1) {
+            candidates.append(Character(up))
+        }
+        if code > 0, let down = Unicode.Scalar(code - 1) {
+            candidates.append(Character(down))
+        }
+    }
+
+    let upperStr = String(value).uppercased()
+    if upperStr.count == 1, let upper = upperStr.first, upper != value {
+        candidates.append(upper)
+    }
+    let lowerStr = String(value).lowercased()
+    if lowerStr.count == 1, let lower = lowerStr.first, lower != value {
+        candidates.append(lower)
+    }
+
+    for pool in [_lowercaseLetters, _uppercaseLetters, _digits, _whitespace, _asciiPrintable, _emojis] {
+        if let idx = pool.firstIndex(of: value) {
+            if idx + 1 < pool.count { candidates.append(pool[idx + 1]) }
+            if idx > 0 { candidates.append(pool[idx - 1]) }
+        } else if let jump = pool.randomElement(using: &rng) {
+            candidates.append(jump)
+        }
+    }
+
+    for seed in _characterSeeds where seed != value {
+        candidates.append(seed)
+    }
+
+    guard let mutant = candidates.filter({ $0 != value }).randomElement(using: &rng) else {
+        return value
+    }
     return mutant
 }
 

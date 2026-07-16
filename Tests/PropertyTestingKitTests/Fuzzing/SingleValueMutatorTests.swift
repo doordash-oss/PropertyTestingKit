@@ -57,6 +57,24 @@ struct SingleValueMutatorTests {
         #expect(seen.count >= 4)
     }
 
+    @Test("Character default mutator explores beyond the 8 seed characters")
+    func characterDefaultMutatorReachesBeyondSeeds() {
+        var rng = FastRNG()
+        let seeds: Set<Character> = ["a", "Z", "0", " ", "\n", "\t", "😄", "\0"]
+        var seen = Set<Character>()
+        var sawNeighbor = false
+        for _ in 0..<800 {
+            let mutant = Character.defaultMutator.mutate("a", &rng)
+            #expect(mutant != "a")
+            seen.insert(mutant)
+            if mutant == "b" || mutant == "A" {
+                sawNeighbor = true
+            }
+        }
+        #expect(seen.count > seeds.count, "mutate should reach more than the 8 seed characters")
+        #expect(sawNeighbor, "expected neighborhood exploration near 'a'")
+    }
+
     @Test("String default mutator returns a changed value and varies across draws")
     func stringDefaultMutatorVaries() {
         var rng = FastRNG()
